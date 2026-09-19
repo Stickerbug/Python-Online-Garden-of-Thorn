@@ -39,7 +39,8 @@ class ModSettingsStateTests(unittest.TestCase):
         self.assertIn("casual: 'gtn_disabled_mods'", helper)
         self.assertIn("ranked: 'gtn_disabled_mods_ranked'", helper)
         self.assertIn('isRankedMatchMode(mode)', helper)
-        self.assertIn('function hasSavedDisabledModsPreference()', helper)
+        # 反馈 #158：这两个助手都带上「目标模式」，登录包才能取对那一份选择。
+        self.assertIn('function hasSavedDisabledModsPreference(mode = getSettingsModMatchMode())', helper)
 
         getter = source_between(
             GAME_JS,
@@ -61,10 +62,10 @@ class ModSettingsStateTests(unittest.TestCase):
 
         login_payload = source_between(
             GAME_JS,
-            'function getModLoginPayload()',
+            'function getModLoginPayload(',
             'function getModSettingsUpdatePayload()',
         )
-        self.assertIn('hasSavedDisabledModsPreference()', login_payload)
+        self.assertIn('hasSavedDisabledModsPreference(matchMode)', login_payload)
 
     def test_mode_switch_syncs_that_modes_selection_before_set_mode(self):
         """建议 #82：切模式前先把目标模式那份模组选择推给服务端，set_mode 才会用它重建 loadout。"""
@@ -134,12 +135,13 @@ class ModSettingsStateTests(unittest.TestCase):
     def test_login_payload_omits_disabled_mods_until_a_preference_is_saved(self):
         login_payload = source_between(
             GAME_JS,
-            'function getModLoginPayload()',
+            'function getModLoginPayload(',
             'function getModSettingsUpdatePayload()',
         )
-        # 建议 #82 起按当前模式取键（娱乐 gtn_disabled_mods / 天梯 gtn_disabled_mods_ranked）。
-        self.assertIn('hasSavedDisabledModsPreference()', login_payload)
-        self.assertIn('...(hasSavedPreference ? { disabled_mods: getDisabledMods() } : {})', login_payload)
+        # 建议 #82 起按模式取键（娱乐 gtn_disabled_mods / 天梯 gtn_disabled_mods_ranked）；
+        # 反馈 #158：模式由调用方传入（登录时用即将进入的模式）。
+        self.assertIn('hasSavedDisabledModsPreference(matchMode)', login_payload)
+        self.assertIn('...(hasSavedPreference ? { disabled_mods: getDisabledMods(matchMode) } : {})', login_payload)
 
     def test_settings_update_still_sends_an_explicit_disabled_list(self):
         settings_payload = source_between(
