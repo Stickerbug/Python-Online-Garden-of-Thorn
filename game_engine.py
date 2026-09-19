@@ -8500,6 +8500,12 @@ class GameEngine:
                 hand_cards = self._choice_request_candidate_cards(
                     choice_type, choice_params, player_id, card, choice_target_id
                 )
+                if not hand_cards:
+                    # 反馈 #168：目标区域里没有任何可选牌时，不要排队一个
+                    # 空的选择窗口——玩家无从确认，对局会一直卡在那里。
+                    # 直接放弃这次排队，让牌自己的步骤（通常已带空区保护）继续。
+                    self.pending_choice = None
+                    return None
                 self.pending_choice['hand_cards'] = self._visible_card_dicts(
                     hand_cards,
                     player_id,
