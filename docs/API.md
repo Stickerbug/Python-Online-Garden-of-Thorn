@@ -112,6 +112,14 @@
 | POST | <code>/api/story/run</code> | 创建旅程 |
 | GET | <code>/api/story/content</code> | 当前故事内容与版本 |
 | POST | <code>/api/story/run/action</code> | 提交原子操作；<code>run_id</code>、<code>action_id</code>、<code>action_type</code>、<code>state_version</code>、<code>payload</code>、<code>client_id</code> |
+
+故事内容的两个实现细节（客户端可以依赖）：
+
+- <code>GET /api/story/content</code> 带 <code>ETag</code> 与
+  <code>Cache-Control: private, no-cache</code>：内容只跟内容版本、静态资源版本和模组签名
+  有关，浏览器下次带 <code>If-None-Match</code> 会拿到 304（内容约 2.8MB，不必重复下载）。
+- <code>POST /api/story/run/action</code> 的引擎结算与存档写入在线程池执行，返回顺序不变
+  （先回新 <code>run</code> 状态，再播 <code>events</code>），客户端不需要改动。
 | POST | <code>/api/story/run/abandon</code> | 放弃当前 <code>run_id</code> |
 | GET | <code>/api/story/run/saves</code> | 列出 <code>run_id</code> 的手动存档 |
 | POST | <code>/api/story/run/save</code> | 保存 <code>run_id</code> 与 <code>state_version</code> |

@@ -21281,18 +21281,52 @@ def api_story_run_create():
         raise
 
 
+# 故事内容约 2.8MB、每次现建要 ~150ms（deepcopy 全部卡牌/敌人/事件），而它只跟内容版本、
+# 静态资源版本和模组签名有关，与玩家无关。这里按版本缓存「序列化好的 JSON 字符串」，
+# 并用 ETag 让浏览器复用（304 只回几十字节），冷构建则丢到线程池，别占事件循环。
+_STORY_CONTENT_CACHE = {'key': None, 'json': '', 'etag': ''}
+
+
+def _story_content_cached_json():
+    try:
+        reload_mod_card_defs()
+    except Exception as exc:
+        admin_event('error', f'failed to reload mod card defs for story content: {exc}')
+    key = (STORY_CONTENT_VERSION, GTN_STATIC_VERSION, current_mods_signature())
+    cached = _STORY_CONTENT_CACHE
+    if cached.get('key') == key and cached.get('json'):
+        return cached['json'], cached['etag']
+    payload = story_content_payload(CARD_DEFS, asset_version=GTN_STATIC_VERSION)
+    content_json = json.dumps(payload, ensure_ascii=False, separators=(',', ':'))
+    etag = hashlib.sha256(content_json.encode('utf-8')).hexdigest()[:32]
+    cached.update({'key': key, 'json': content_json, 'etag': etag})
+    return content_json, etag
+
+
 @app.route('/api/story/content', methods=['GET'])
 def api_story_content_get():
     user_id, _, error = _require_account_json()
     if error:
         return error
-    return jsonify({
-        'success': True,
-        'content_version': STORY_CONTENT_VERSION,
-        'content': story_content_payload(CARD_DEFS, asset_version=GTN_STATIC_VERSION),
-        'progress': _story_progress_without_blocking(user_id),
-        'discoveries': _list_story_discoveries_without_blocking(user_id),
-    })
+    content_json, etag = run_off_event_loop(_story_content_cached_json)
+    if request.if_none_match.contains(etag):
+        response = app.response_class(status=304, mimetype='application/json')
+        response.set_etag(etag)
+        response.headers['Cache-Control'] = 'private, no-cache'
+        return response
+    progress = _story_progress_without_blocking(user_id)
+    discoveries = _list_story_discoveries_without_blocking(user_id)
+    body = (
+        '{"success":true,"content_version":' + json.dumps(STORY_CONTENT_VERSION)
+        + ',"content":' + content_json
+        + ',"progress":' + json.dumps(progress or {}, ensure_ascii=False)
+        + ',"discoveries":' + json.dumps(discoveries or [], ensure_ascii=False)
+        + '}'
+    )
+    response = app.response_class(body, mimetype='application/json')
+    response.set_etag(etag)
+    response.headers['Cache-Control'] = 'private, no-cache'
+    return response
 
 
 @app.route('/api/story/run/action', methods=['POST'])
@@ -21376,25 +21410,32 @@ def api_story_run_action():
                 )
 
         run_state = run.get('state') or {}
-        run_state['event_bank'] = get_story_bank(user_id)
-        next_state, events = apply_story_action(
-            run_state,
-            action_type,
-            payload,
-            run.get('seed') or '',
-        )
-        next_state['event_bank'] = int(
-            next_state.get('event_bank') or get_story_bank(user_id)
-        )
-        updated, outcome = commit_story_run_action(
-            user_id,
-            run_id,
-            expected_version,
-            action_id,
-            action_type,
-            payload,
-            next_state,
-        )
+
+        def _apply_and_commit():
+            """引擎结算 + 写库整段放到线程池：DB 写锁等待（busy_timeout 1.5s）不再卡事件循环。"""
+            state = dict(run_state)
+            state['event_bank'] = get_story_bank(user_id)
+            next_state, events = apply_story_action(
+                state,
+                action_type,
+                payload,
+                run.get('seed') or '',
+            )
+            next_state['event_bank'] = int(
+                next_state.get('event_bank') or get_story_bank(user_id)
+            )
+            updated, outcome = commit_story_run_action(
+                user_id,
+                run_id,
+                expected_version,
+                action_id,
+                action_type,
+                payload,
+                next_state,
+            )
+            return next_state, events, updated, outcome
+
+        next_state, events, updated, outcome = run_off_event_loop(_apply_and_commit)
         if outcome == 'not_found':
             return _json_error('没有进行中的故事旅程', 404, code='RUN_NOT_FOUND')
         if outcome == 'version':

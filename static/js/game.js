@@ -9782,8 +9782,47 @@ function beginPendingServerAction(name, options = {}) {
         pendingPlayCard = null;
         clearSelectedPlayCard();
         if (gameState && gameState.phase) renderGame(gameState);
-        if (stillPending) flashStatus(UI.server_no_response || UI.operation_failed, 3200, 'error');
+        if (stillPending) {
+            // 6 秒没等到回应时先分清「请求丢了」还是「服务器慢」：只要连接还在，
+            // 就补发一次状态查询；等它带回 state_update 就说明对局没丢，否则再报错。
+            if (socket && socket.connected) {
+                requestResyncAfterActionTimeout();
+            } else {
+                flashStatus(UI.server_no_response || UI.operation_failed, 3200, 'error');
+            }
+        }
     }, timeoutMs);
+}
+
+let actionResyncTimer = null;
+
+function clearActionResyncTimer() {
+    if (actionResyncTimer) {
+        clearTimeout(actionResyncTimer);
+        actionResyncTimer = null;
+    }
+}
+
+function requestResyncAfterActionTimeout() {
+    if (!socket || !socket.connected) return;
+    flashStatus(lt({
+        zh: '正在重新同步对局状态…',
+        en: 'Re-syncing match state…',
+        fr: 'Resynchronisation de la partie…',
+        ja: '対戦状態を再同期中…',
+    }), 2200);
+    try {
+        socket.emit('request_game_state');
+    } catch (_) {
+        /* 交给下面的兜底提示 */
+    }
+    clearActionResyncTimer();
+    actionResyncTimer = setTimeout(() => {
+        actionResyncTimer = null;
+        if (socket && socket.connected) {
+            flashStatus(UI.server_no_response || UI.operation_failed, 3200, 'error');
+        }
+    }, 4000);
 }
 
 function getOptimisticResourceCost(cardDict, ownerState = null) {
@@ -17035,6 +17074,8 @@ function connectSocket(serverUrl) {
     });
     bindSocketEvent('state_update', (data) => {
         debugLog('[client] state_update: phase=', data.phase, 'current_player=', data.current_player, 'your_id=', data.your_id, 'pending_response=', data.pending_response != null, 'spectating=', data.spectating);
+        // 超时补发的状态查询回来了：对局没丢，撤掉「服务器没有响应」的兜底提示。
+        if (data && !data.spectating) clearActionResyncTimer();
         if (data && data.spectating && pendingSpectateRoomId != null && data.room_id != null && Number(data.room_id) !== Number(pendingSpectateRoomId)) {
             debugLog('[client] ignored stale spectate state for room=', data.room_id, 'pending=', pendingSpectateRoomId);
             return;
