@@ -2059,8 +2059,6 @@ class GameEngine2v2(GameEngine):
                                                    {'source_id': owner_id, 'target_id': player_id}) or handled
                 if handled or eq.card_def.effects:
                     continue
-        if not self.game_over:
-            self._apply_jungle_turn_start_regen(player_id)
         self._drain_turn_start_event_sources(player_id)
         if self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
             return
@@ -2204,8 +2202,6 @@ class GameEngine2v2(GameEngine):
                                                    {'source_id': owner_id, 'target_id': player_id}) or handled
                 if handled or eq.card_def.effects:
                     continue
-        if not self.game_over:
-            self._apply_jungle_turn_start_regen(player_id)
         self._drain_turn_start_event_sources(player_id)
         if self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
             return

@@ -1,4 +1,7 @@
 import unittest
+import json
+import pathlib
+import zipfile
 
 from cards import CardInstance
 from game_engine import GameEngine
@@ -7,6 +10,20 @@ from game_engine_urf import GameEngineInfiniteFire
 
 
 ENGINE_TYPES = (GameEngine, GameEngine2v2, GameEngineInfiniteFire)
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+
+def jungle_status_defs() -> dict:
+    """真实对局里由加载器填 ``engine.v2_status_defs``；测试里直接读官方包。
+
+    Round 102 / 批次 CX：回合回复的结算改成**状态自带的 on_turn_start 事件**之后，
+    测试必须能看到状态定义，否则事件根本不存在。
+    """
+
+    with zipfile.ZipFile(ROOT / "mods" / "Jungle Cards Addition.gtnmod") as archive:
+        data = json.loads(archive.read("mod.json").decode("utf-8"))
+    return {status["id"]: status for status in data["registries"].get("statuses") or []
+            if isinstance(status, dict) and status.get("id")}
 
 
 class StatusImmunityApplicationTests(unittest.TestCase):
@@ -181,6 +198,7 @@ class StatusImmunityApplicationTests(unittest.TestCase):
             with self.subTest(engine=engine_type.__name__):
                 engine = engine_type()
                 player = engine.players[0]
+                engine.v2_status_defs = jungle_status_defs()
                 player.health = 50
                 player.max_health = 100
                 self.grant_status_immunity(engine)
@@ -204,7 +222,9 @@ class StatusImmunityApplicationTests(unittest.TestCase):
                     2,
                 )
                 player.custom_statuses.pop("status_immune", None)
-                engine._apply_jungle_turn_start_regen(0)
+                # Round 102 / 批次 CX：回合回复的结算已从引擎函数搬进**状态自带的
+                # on_turn_start 事件**——这里改走通用触发点（与引擎回合开始同一条路）。
+                engine._trigger_v2_status_events_for_player(0, "on_turn_start", {"player_id": 0})
                 self.assertEqual(player.health, 53)
                 self.assertEqual(
                     engine._custom_status_value(

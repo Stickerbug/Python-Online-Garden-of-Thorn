@@ -5726,34 +5726,10 @@ class GameEngine:
         if shield > 0 and not self._garden_has_sunflower_targeting(player_id):
             self._set_custom_status_alias_group(player_id, 'jungle:shield', shield_keys, shield // 2)
 
-    def _apply_jungle_turn_start_regen(self, player_id: int):
-        if not (0 <= player_id < len(self.players)):
-            return
-        ps = self.players[player_id]
-        immune = self._is_status_immune(player_id)
-        heal_turn_keys = ('jungle:turn_heal_turns', 'turn_heal_turns')
-        heal_power_keys = ('jungle:turn_heal_power', 'turn_heal_power')
-        heal_turns = self._custom_status_value(player_id, *heal_turn_keys)
-        heal_power = self._custom_status_value(player_id, *heal_power_keys)
-        if heal_turns > 0 and heal_power > 0:
-            if not immune:
-                ps.heal(heal_power)
-                self.log_msg(f"{self.pn(player_id)}的回合回复：+{heal_power}H")
-            self._set_custom_status_alias_group(player_id, 'jungle:turn_heal_turns', heal_turn_keys, heal_turns - 1)
-            if heal_turns - 1 <= 0:
-                self._set_custom_status_alias_group(player_id, 'jungle:turn_heal_power', heal_power_keys, 0)
-        magic_turn_keys = ('jungle:turn_magic_turns', 'turn_magic_turns')
-        magic_power_keys = ('jungle:turn_magic_power', 'turn_magic_power')
-        magic_turns = self._custom_status_value(player_id, *magic_turn_keys)
-        magic_power = self._custom_status_value(player_id, *magic_power_keys)
-        if magic_turns > 0 and magic_power > 0:
-            if not immune:
-                ps.gain_magic(magic_power)
-                self.log_msg(f"{self.pn(player_id)}的魔力回合回复：+{magic_power}M")
-            self._set_custom_status_alias_group(player_id, 'jungle:turn_magic_turns', magic_turn_keys, magic_turns - 1)
-            if magic_turns - 1 <= 0:
-                self._set_custom_status_alias_group(player_id, 'jungle:turn_magic_power', magic_power_keys, 0)
-
+    # Round 102 / 批次 CX：``_apply_jungle_turn_start_regen`` 已删除——「回合回复 / 魔力回合回复」
+    # 的每回合结算改由**状态自带的 on_turn_start 事件**执行（数据在 Jungle 包的
+    # registries.statuses 里，状态 id / 名字 / 描述 / 装等一律没动）。
+    # 于是"每回合造成伤害 / 回能量 / 抽牌"这类需求不用再写引擎函数，改状态事件即可。
     def _apply_electric_web_draw_damage(self, player_id: int, drawn_count: int):
         if not (0 <= player_id < len(self.players)):
             return
@@ -17739,8 +17715,6 @@ class GameEngine:
                     owner_id, eq.card_instance, 'owner_turn_start', None,
                     {'source_id': owner_id, 'target_id': effect_target_id}):
                 continue
-        if not self.game_over:
-            self._apply_jungle_turn_start_regen(player_id)
         self._drain_turn_start_event_sources(player_id)
         if self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
             return
@@ -17866,8 +17840,6 @@ class GameEngine:
                     owner_id, eq.card_instance, 'owner_turn_start', None,
                     {'source_id': owner_id, 'target_id': effect_target_id}):
                 continue
-        if not self.game_over:
-            self._apply_jungle_turn_start_regen(player_id)
         self._drain_turn_start_event_sources(player_id)
         if self.pending_choice is not None or getattr(self, 'pending_v2_ui', None):
             return

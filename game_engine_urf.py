@@ -562,8 +562,6 @@ class GameEngineInfiniteFire(GameEngine):
                 elif eq.def_id == 'GoldenLeaf':
                     self._draw_cards_with_v2_hooks(player_id, DRAW_PER_TURN, 'golden_leaf')
                     self.log_msg(f"{self.pn(player_id)}的黄金叶效果：补充手牌")
-            if not self.game_over:
-                self._apply_jungle_turn_start_regen(player_id)
         finally:
             self._defer_turn_start_death_checks = False
         if ps.health <= 0:

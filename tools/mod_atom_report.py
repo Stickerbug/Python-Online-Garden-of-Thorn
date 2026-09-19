@@ -47,6 +47,11 @@ import zipfile
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+# 本文件被 importlib 直接加载时（tests/test_mod_atom_report.py 就是这么干的），
+# tools/ 不在 sys.path 上，`step_op_catalog` 会找不到。
+TOOLS_DIR = pathlib.Path(__file__).resolve().parent
+if str(TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(TOOLS_DIR))
 
 import atomic_registry  # noqa: E402
 import mod_runtime_v2  # noqa: E402
