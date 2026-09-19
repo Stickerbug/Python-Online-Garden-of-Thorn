@@ -1424,7 +1424,8 @@ def admin_event(kind, message, **extra):
             pass
 
 
-ADMIN_EVENT_DURABLE_KINDS = frozenset({'error', 'warning', 'mod_error'})
+# 'suspicious'：事件循环卡顿看门狗的告警，必须能在日志里事后检索（带 activity 归因）。
+ADMIN_EVENT_DURABLE_KINDS = frozenset({'error', 'warning', 'mod_error', 'suspicious'})
 _ADMIN_EVENT_TRACEBACK_LINES = 8
 
 
@@ -3062,6 +3063,28 @@ def _same_origin_mutation_allowed():
     if referer:
         return _normalized_http_origin(referer) in allowed
     return True
+
+
+@app.before_request
+def begin_request_activity_scope():
+    """事件循环归因：HTTP 请求也打上标签（静态资源由 nginx 直出，不走这里）。"""
+    try:
+        scope = activity_scope(f'http:{request.method} {request.path}')
+        scope.__enter__()
+        g._gtn_activity_scope = scope
+    except Exception:
+        g._gtn_activity_scope = None
+
+
+@app.teardown_request
+def end_request_activity_scope(_exc=None):
+    scope = getattr(g, '_gtn_activity_scope', None)
+    if scope is not None:
+        g._gtn_activity_scope = None
+        try:
+            scope.__exit__(None, None, None)
+        except Exception:
+            pass
 
 
 @app.before_request
@@ -10040,6 +10063,83 @@ def record_event_loop_lag(lag_ms):
     })
 
 
+# ---- 事件循环归因 -------------------------------------------------------------
+# 单进程 eventlet 里所有请求共用一条事件循环：任何一个「在循环里跑的慢活」都会让
+# 别人的 socket 动作排队、客户端 6 秒超时弹「服务器没有响应」。这里记录「此刻在跑
+# 什么、跑了多久」，看门狗超时时就能直接说出原因，而不是只报一个 lag 数字。
+_CURRENT_ACTIVITY = {'label': '', 'started': 0.0, 'depth': 0}
+_ACTIVITY_RECENT = deque(maxlen=40)
+_ACTIVITY_SLOW_MS = _env_float('GTN_ACTIVITY_SLOW_MS', 300)
+_LAST_LOOP_LAG_EVENT = {}
+
+
+class activity_scope:
+    """with activity_scope('socket:play_card'): ... —— 给当前这段工作打标签。"""
+
+    __slots__ = ('label',)
+
+    def __init__(self, label):
+        self.label = str(label or '')
+
+    def __enter__(self):
+        if int(_CURRENT_ACTIVITY.get('depth') or 0) <= 0:
+            _CURRENT_ACTIVITY['label'] = self.label
+            _CURRENT_ACTIVITY['started'] = time.perf_counter()
+        _CURRENT_ACTIVITY['depth'] = int(_CURRENT_ACTIVITY.get('depth') or 0) + 1
+        return self
+
+    def __exit__(self, *_exc):
+        depth = max(0, int(_CURRENT_ACTIVITY.get('depth') or 0) - 1)
+        _CURRENT_ACTIVITY['depth'] = depth
+        if depth == 0:
+            started = float(_CURRENT_ACTIVITY.get('started') or 0.0)
+            elapsed_ms = (time.perf_counter() - started) * 1000.0 if started else 0.0
+            if elapsed_ms >= _ACTIVITY_SLOW_MS:
+                _ACTIVITY_RECENT.append({
+                    'ts': iso_now(),
+                    'label': self.label or str(_CURRENT_ACTIVITY.get('label') or ''),
+                    'ms': round(elapsed_ms, 1),
+                })
+            _CURRENT_ACTIVITY['label'] = ''
+            _CURRENT_ACTIVITY['started'] = 0.0
+        return False
+
+
+def current_activity_snapshot():
+    """返回当前活动与最近几条慢活动，供看门狗和 /api/health/full 使用。"""
+    label = str(_CURRENT_ACTIVITY.get('label') or '')
+    started = float(_CURRENT_ACTIVITY.get('started') or 0.0)
+    running_ms = round((time.perf_counter() - started) * 1000.0, 1) if label and started else 0.0
+    return {
+        'label': label or 'idle',
+        'running_ms': running_ms,
+        'recent_slow': [dict(item) for item in list(_ACTIVITY_RECENT)[-5:]],
+    }
+
+
+def loop_lag_health_payload(window_seconds=300):
+    samples = [
+        float(item.get('lag_ms') or 0.0)
+        for item in _recent_samples(EVENT_LOOP_LAG_SAMPLES, window_seconds)
+    ]
+    payload = {
+        'samples': len(samples),
+        'warn_ms': _env_float('GTN_EVENT_LOOP_LAG_WARN_MS', 3000),
+        'window_seconds': window_seconds,
+    }
+    if samples:
+        ordered = sorted(samples)
+        payload.update({
+            'last_ms': round(samples[-1], 1),
+            'max_ms': round(ordered[-1], 1),
+            'avg_ms': round(sum(samples) / len(samples), 1),
+            'p95_ms': round(ordered[max(0, int(len(ordered) * 0.95) - 1)], 1),
+        })
+    if _LAST_LOOP_LAG_EVENT:
+        payload['last_warning'] = dict(_LAST_LOOP_LAG_EVENT)
+    return payload
+
+
 def _event_loop_watchdog_worker():
     interval = _env_float('GTN_EVENT_LOOP_WATCHDOG_INTERVAL', 1.0)
     warn_ms = _env_float('GTN_EVENT_LOOP_LAG_WARN_MS', 3000)
@@ -10057,7 +10157,23 @@ def _event_loop_watchdog_worker():
             record_event_loop_lag(lag_ms)
             if lag_ms >= warn_ms and time.time() - last_warn >= 30:
                 last_warn = time.time()
-                admin_event('suspicious', f'event loop lag {lag_ms:.0f}ms; Socket.IO may disconnect clients')
+                # 卡顿要能事后查：带上「当时在跑什么」，并落进 journal（kind 见
+                # ADMIN_EVENT_DURABLE_KINDS）。以前只有一句 lag 警告，无从归因。
+                activity = current_activity_snapshot()
+                detail = str(activity.get('label') or 'idle')
+                if activity.get('running_ms'):
+                    detail = f"{detail} running={activity['running_ms']:.0f}ms"
+                _LAST_LOOP_LAG_EVENT.update({
+                    'ts': iso_now(),
+                    'lag_ms': round(lag_ms, 1),
+                    'activity': detail,
+                })
+                admin_event(
+                    'suspicious',
+                    f'event loop lag {lag_ms:.0f}ms (during {detail}); Socket.IO may disconnect clients',
+                    activity=detail,
+                    lag_ms=round(lag_ms, 1),
+                )
             if now - last_ai_reap >= 30.0:
                 last_ai_reap = now
                 try:
@@ -10172,7 +10288,9 @@ def measure_socket_action(event_name):
                 except Exception:
                     pass
             try:
-                return fn(*args, **kwargs)
+                # 事件循环归因：慢 socket 处理器会被看门狗直接点名。
+                with activity_scope(f'socket:{event_name}'):
+                    return fn(*args, **kwargs)
             except Exception as exc:
                 ok = False
                 traceback.print_exc()
@@ -22570,6 +22688,9 @@ def health_full():
         'pending_choice_count': pending_choice_count,
         'pending_v2_ui_count': pending_v2_ui_count,
         'uptime_seconds': max(0, int(time.time() - SERVER_STARTED_AT)),
+        # 卡顿诊断：最近 5 分钟的事件循环延迟分布 + 当前/最近在跑什么。
+        'loop_lag': loop_lag_health_payload(),
+        'current_activity': current_activity_snapshot(),
     })
 
 
@@ -34534,6 +34655,9 @@ if __name__ == '__main__':
         name='public-cache-prewarm',
         daemon=True,
     ).start()
+    # 卡顿看门狗从启动就开始跑：第一次连接/预热的卡顿也要有记录，
+    # 而不是等第一个 socket 连上才有样本。
+    ensure_event_loop_watchdog_started()
     if GTN_AI_1V1_TEST_ENABLED:
         threading.Thread(
             target=_prewarm_local_ai_worker,
