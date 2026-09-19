@@ -3,6 +3,7 @@ from pathlib import Path
 
 from cards import CARD_DEFS, CardInstance
 from damage_types import (
+    DAMAGE_TAG_FIRE,
     DAMAGE_TAG_FRACTURE,
     DAMAGE_TAG_PHYSICAL,
     DAMAGE_TYPE_MAGIC,
@@ -96,6 +97,23 @@ class CoconutDamageTrackingTests(unittest.TestCase):
 
         self.assertEqual(dealt, 7)
         self.assertEqual(coconut.custom_vars.get("layers"), 7)
+
+    def test_burn_magic_damage_does_not_add_layers(self):
+        """反馈 #163：灼烧（gtn:fire）的魔法伤害不该计入椰子层数。"""
+        engine = self.action_engine()
+        coconut = self.equip_for_target(engine, "Coconut", 0, 0)
+
+        dealt = engine._deal_direct_damage(
+            0,
+            5,
+            "灼烧",
+            0,
+            damage_type=DAMAGE_TYPE_MAGIC,
+            damage_tag=DAMAGE_TAG_FIRE,
+        )
+
+        self.assertEqual(dealt, 5)
+        self.assertEqual(coconut.custom_vars.get("layers", 0), 0)
 
     def test_fully_absorbed_damage_does_not_add_layers(self):
         engine = self.action_engine()
