@@ -85,8 +85,6 @@ class DarkMatterGuardTests(unittest.TestCase):
         self.assertIsNotNone(self._pending(engine))
 
     def test_magic_dark_matter_still_asks_for_a_deck_card(self):
-        # 注意：空牌堆的卡死还没修好（需要引擎对 deck/discard/exile 这些区域
-        # 也做「没有候选就不排队」的通用判断），这里只锁住正常路径不回归。
         engine = self._engine()
         engine.players[1].hand = [CardInstance('Basic')]
         engine.players[1].deck = [CardInstance('Basic')]
@@ -95,6 +93,15 @@ class DarkMatterGuardTests(unittest.TestCase):
 
         self.assertTrue(result.get('success'), result)
         self.assertIsNotNone(self._pending(engine))
+
+    def test_magic_dark_matter_on_empty_deck_does_not_hang(self):
+        engine = self._engine()
+        engine.players[1].hand = [CardInstance('Basic')]
+
+        result = self._play(engine, 'MagicDarkMatter')
+
+        self.assertTrue(result.get('success'), result)
+        self.assertIsNone(self._pending(engine))
 
 
 if __name__ == '__main__':

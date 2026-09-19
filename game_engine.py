@@ -8512,6 +8512,22 @@ class GameEngine:
                     choice_target_id,
                     choice_list=True,
                 )
+        # 反馈 #168（牌堆/弃牌/放逐部分）：区域里没有任何候选牌时同样不排队空窗口，
+        # 否则玩家会卡在一个「无从选择」的窗口上。
+        zone_name = str((choice_params or {}).get('zone') or '').strip().lower()
+        if zone_name in ('deck', 'discard', 'exile'):
+            owner_id = choice_target_id if self._valid_player_id(choice_target_id) else player_id
+            if self._valid_player_id(owner_id):
+                filter_spec = choice_params.get('filter') if isinstance(choice_params, dict) else None
+                if isinstance(filter_spec, dict) and filter_spec:
+                    zone_cards = self._filter_candidates(
+                        filter_spec, player_id, source_card=card, default_owner_id=owner_id,
+                    )
+                else:
+                    zone_cards = self._zone_list(owner_id, 'self', zone_name)
+                if not zone_cards:
+                    self.pending_choice = None
+                    return None
         keep_paid_choice = choice_type == 'magic_salt_reflect'
         if already_paid and not keep_paid_choice:
             self._undo_pending_choice_play_side_effects(player_id, card)
