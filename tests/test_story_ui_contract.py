@@ -1504,7 +1504,8 @@ def test_story_blind_masks_piles_and_removes_damage_predictions():
     assert 'function createStoryPileTile(card, count = 1, options = {})' in STORY_JS
     assert 'const blinded = options.blinded === true;' in STORY_JS
     assert 'createStoryPileTile(card, 1, { blinded: true })' in STORY_JS
-    assert 'const blindActive = Boolean(combat && combat.blind_active);' in STORY_JS
+    # 反馈 #173：失明只在战斗阶段生效；奖励/结算阶段不该继续遮住牌库。
+    assert "const blindActive = Boolean(state?.phase === 'combat' && combat && combat.blind_active);" in STORY_JS
     # 失明卡不挂真实卡数据，长按/详情面板不能绕过遮罩。
     assert 'if (!blinded) storyCardElementData.set(element, card);' in STORY_JS
     # 引擎侧：失明时不计算/不下发手牌伤害预测。

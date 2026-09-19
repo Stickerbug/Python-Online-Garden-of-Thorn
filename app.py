@@ -1414,6 +1414,35 @@ def admin_event(kind, message, **extra):
     if extra:
         entry.update(extra)
     ADMIN_EVENTS.appendleft(entry)
+    # 反馈 #157/#162：玩家只会看到「模组执行出现了一个意外错误」这类字样，
+    # 而 ADMIN_EVENTS 只是内存里的环形缓冲，进程一重启就没了。把重要的
+    # 事件同时写进 stdout（systemd 落盘 journal），事后才查得到原因。
+    if kind in ADMIN_EVENT_DURABLE_KINDS:
+        try:
+            print(admin_event_log_line(entry), flush=True)
+        except Exception:
+            pass
+
+
+ADMIN_EVENT_DURABLE_KINDS = frozenset({'error', 'warning', 'mod_error'})
+_ADMIN_EVENT_TRACEBACK_LINES = 8
+
+
+def admin_event_log_line(entry):
+    """把一条 admin 事件压成单行，便于直接进 journal 检索。"""
+    parts = [f"[admin:{entry.get('kind') or '-'}] {entry.get('message') or ''}"]
+    for key, value in entry.items():
+        if key in ('time', 'kind', 'message') or value is None or value == '':
+            continue
+        text = str(value)
+        if key == 'traceback':
+            text = ' | '.join(
+                line.strip()
+                for line in text.strip().splitlines()[-_ADMIN_EVENT_TRACEBACK_LINES:]
+                if line.strip()
+            )
+        parts.append(f'{key}={text}')
+    return ' '.join(parts)
 
 
 def _admin_identity_for_log():
@@ -33084,7 +33113,13 @@ def on_play_card(data):
         emit_or_resolve_pending_response(room, reason='play_card')
     elif result.get('needs_choice'):
         broadcast_game_state(room)
-        choice_payload = build_choice_request_payload(result)
+        # 反馈 #167：把真正的 pending_choice 作为请求内容（而不是用 resolve 的返回值），
+        # 否则引擎只回 ``needs_choice`` 时这里会发出一份空的选择请求，把客户端上
+        # 刚弹出的真实选择窗口顶掉。
+        live_pending = getattr(engine, 'pending_choice', None)
+        choice_payload = build_choice_request_payload(
+            live_pending if isinstance(live_pending, dict) and live_pending else result
+        )
         choice_payload.update(room_event_context(room))
         socketio.emit('choice_request', choice_payload, room=sid)
     elif result.get('needs_v2_ui'):

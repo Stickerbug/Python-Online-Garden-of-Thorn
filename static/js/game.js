@@ -34514,6 +34514,26 @@ function shuffledCardChoiceGroups(cards) {
     return result;
 }
 
+// 反馈 #170：牌堆/弃牌堆/放逐区是「看一眼」的清单，分组必须按实际显示出来的样子来算。
+// cardChoiceIdentity 面向选牌逻辑，会把持有回合、额外命中、费用覆盖、拟态折扣这些
+// 实例上的非展示差异也算成分组键，于是同一张看起来一样的牌会被拆成两条。这里只保留
+// 卡牌的可见信息：卡 id、实例名、显示费用、卡图与实例徽标。
+function cardPileDisplayIdentity(cardDict, ownerState = null) {
+    if (!cardDict) return '';
+    const defId = cardDict.def_id || '';
+    const cardDef = getCardDef(defId) || getUnknownCardDisplayDef(cardDict, defId);
+    if (!cardDef) return `unknown|${defId}`;
+    const costs = getCardDisplayCosts(cardDict, cardDef, ownerState);
+    return [
+        defId,
+        getCardInstanceName(cardDict, cardDef),
+        getCardDisplayCostELabel(cardDict, cardDef, costs.totalE),
+        costs.totalM,
+        getCardArtUrl(cardDict, cardDef) || '',
+        buildInstanceOnlyFlagHtml(cardDict, cardDef),
+    ].join('|');
+}
+
 function isCompassChoiceCard(card, cardDef) {
     return cardMatchesAnyLocalId(card || {}, cardDef, ['Compass'])
         || !!(cardDef && (cardDef.name_cn === '指南针' || cardDef.name_en === 'Compass'));
@@ -36626,7 +36646,7 @@ function showGardenInitialDeckReveal(data, reveal, revealKey) {
     list.className = 'deck-list pile-tile-grid';
     const groups = new Map();
     cards.forEach(card => {
-        const key = cardChoiceIdentity(card);
+        const key = cardPileDisplayIdentity(card, targetState);
         const group = groups.get(key) || { card, count: 0 };
         group.count += 1;
         groups.set(key, group);
@@ -36812,7 +36832,7 @@ function onViewPile(pileType = 'deck') {
         } else {
             const groups = new Map();
             pile.forEach(c => {
-                const key = cardChoiceIdentity(c);
+                const key = cardPileDisplayIdentity(c, pilePlayer);
                 const group = groups.get(key) || { card: c, count: 0 };
                 group.count += 1;
                 groups.set(key, group);

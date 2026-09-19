@@ -12772,7 +12772,20 @@ class GameEngine:
             ps.hand[index] = replacement
             self.log_msg(f"{self.pn(player_id)}的DNA完成一次手牌变换，并使该牌获得1层暂时迅捷")
         if self._bio_queue_next_dna_choice(player_id):
-            return {'success': True, 'needs_choice': True}
+            # 反馈 #167：这里必须把「下一个 DNA 选择」的完整内容一起返回。
+            # 只回 ``needs_choice`` 的话，服务端会再发一次空的 choice_request
+            # （下一个选择的实际内容是从 broadcast 里带过去的），客户端会被这个
+            # 空请求顶掉真实窗口，于是多个 DNA 每回合只能变换一次。
+            pending = self.pending_choice or {}
+            return {
+                'success': True,
+                'needs_choice': True,
+                'choice_type': pending.get('choice_type', ''),
+                'choice_params': pending.get('choice_params', {}),
+                'card': pending.get('card', {}),
+                'target_player_id': pending.get('target_player_id'),
+                'hand_cards': pending.get('hand_cards', []),
+            }
         self._bio_finish_dna_turn_start(player_id)
         return {'success': True}
 

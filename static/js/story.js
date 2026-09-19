@@ -8432,7 +8432,8 @@
         if (kind !== 'deck' && !combat) return;
         const source = Array.isArray(config.source) ? config.source : [];
         const cards = config.reverse ? [...source].reverse() : [...source];
-        const blindActive = Boolean(combat && combat.blind_active);
+        // 反馈 #173：失明只在战斗进行中生效；奖励/结算阶段（以及旧存档残留的标记）不应遮住牌库。
+        const blindActive = Boolean(state?.phase === 'combat' && combat && combat.blind_active);
         setText('story-pile-title', config.title);
         setText('story-pile-total', t.pileTotal(config.title, cards.length));
         const grid = $('story-pile-grid');

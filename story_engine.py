@@ -4414,9 +4414,13 @@ def _targets_from_repeat_ids(combat, target_ids):
 
 def _resolve_card_effects_once(
         state, card, values, targets, payload, seed, events, base_context,
-        repeat_index):
+        repeat_index, validate_selections=True):
     combat = state['combat']
-    _validate_card_selections(combat, card, values, payload)
+    # 反馈 #60/#165：重复结算是「这张牌已经打出过、选择也已经用过」的后续段，
+    # 不能再按玩家的新出牌去校验一次选择，否则带主动丢弃类效果的攻击牌（护身符、
+    # 火把等）在残暴/穿刺这类重复结算里会被判成「请选择1张牌」，整次出牌直接失败。
+    if validate_selections:
+        _validate_card_selections(combat, card, values, payload)
     context = dict(base_context or {})
     context.pop('selected_count', None)
     reserved_discard_cards = []
@@ -4549,6 +4553,7 @@ def _apply_enchantment_post_card_use(
                 events,
                 context,
                 1,
+                validate_selections=False,
             )
     modifiers = card.get('modifiers')
     if not isinstance(modifiers, dict):
@@ -4634,6 +4639,7 @@ def _apply_enchantment_post_card_use(
                 events,
                 context,
                 repeat_index,
+                validate_selections=False,
             )
             if electric and int(target.get('health') or 0) > 0:
                 _enemy_electric_damage(state, target, electric, 1, seed, events, source)
@@ -4927,6 +4933,7 @@ def _continue_repeated_card_play(
             events,
             base_context,
             repeat_index,
+            validate_selections=False,
         )
         repeat_index += 1
         pending = combat.get('pending_card_choice')
@@ -4973,6 +4980,7 @@ def _resume_repeated_card_play(state, continuation, payload, seed, events):
         events,
         base_context,
         repeat_index,
+        validate_selections=False,
     )
     _continue_repeated_card_play(
         state,
@@ -8169,6 +8177,8 @@ def _chest_claims(room):
 def _finish_combat(state, seed, events):
     from story_mode import STORY_STAGES
 
+    # 反馈 #173：战斗结束后已经进入奖励/结算，失明不该继续遮住牌库查看。
+    state['combat']['blind_active'] = False
     node = _node_lookup(state)[state['current_node_id']]
     event_resolution = state['combat'].get('event_resolution')
     if event_resolution == 'fight_help_spider':
