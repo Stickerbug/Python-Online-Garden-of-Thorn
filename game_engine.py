@@ -1664,8 +1664,11 @@ class GameEngine:
             return 0
         ps = self.players[target_id]
         status = str(status or '').strip()
-        if status in ('invincible', '无敌'):
-            return 0
+        if status in ('invincible', '无敌', 'invulnerable'):
+            # Round 103 / 批次 DD：无敌以前一律读 0（只有标签式开关，没有层数）。
+            # 现在 ``status_op`` 也能施加/清除无敌，条件里读它要能看出状态，
+            # 所以按 ``ps.invincible`` 报 1/0；它仍然不是"层数"类状态。
+            return 1 if bool(getattr(ps, 'invincible', False)) else 0
         if status in ('status_immune', 'immune', '状态免疫'):
             return 1 if self._is_status_immune(target_id) else 0
         if self._is_status_immune(target_id) and status not in ('status_immune', 'immune', '状态免疫'):
@@ -9975,60 +9978,9 @@ class GameEngine:
     # Round 32 / 批次 AA：``set_health`` 已并入 ``health_op(mode:"set")``
     # （见 ``_atomic_health_op`` 的 ``set`` 分支，上限截断逐字保留）。
 
-    def _atomic_player_status_layers(self, player_id, card, params, log, choice, context):
-        """Round 31 / 批次 Z：玩家状态层数族三合一。
-
-        覆盖 ``set_untargetable`` / ``untargetable_layers`` / ``set_invincible``：
-        ``status`` 选要叠加的玩家状态（默认 ``untargetable``），``amount`` 给层数
-        （默认 1），``shovel`` 追加"无法使用卡牌"（旧 ``set_untargetable`` 的
-        cannot-play 状态）。
-
-        三段实现逐条搬过来，默认战报也逐字保留：
-
-        * ``untargetable``：目标玩家 ``untargetable`` 层数 +amount（先过
-          ``_status_application_blocked``），``shovel: true`` 时同时点亮
-          ``shovel_active``；``shovel`` 缺省沿用旧 ``untargetable_layers`` 的
-          "只加层"行为，默认战报也随之分叉（层数句 / 旧 ``set_untargetable``
-          那句"无法被攻击选中"）；
-        * ``invincible``：走 ``_set_invincible_until_next_own_turn_end``（带
-          回合簿记，与 ``player_prop_change(property:"invincible")`` 只写字段
-          不同），``log: false`` 静音。
-        """
-
-        status = str(params.get('status') or params.get('prop') or 'untargetable').strip().lower()
-        if status in ('invincible', '无敌', 'invulnerable'):
-            target_id = self._resolve_target(player_id, params.get('target', 'self'))
-            if not self._valid_player_id(target_id):
-                return
-            self._set_invincible_until_next_own_turn_end(target_id)
-            if log is False:
-                return
-            self.log_msg(self._format_step_log(
-                log or f"{self.pn(target_id)}获得无敌直到下一个自己回合结束",
-                target=self.pn(target_id),
-                source=self.pn(player_id),
-            ))
-            return
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
-        if not self._valid_player_id(target_id):
-            return
-        if self._status_application_blocked(target_id, 'untargetable'):
-            return
-        amount = max(0, self._eval_int(player_id, params.get('amount', 1), card, 1))
-        if amount <= 0:
-            return
-        players = self.players[target_id]
-        players.untargetable = max(0, int(getattr(players, 'untargetable', 0) or 0)) + amount
-        shovel = params.get('shovel') is True or params.get('block_actions') is True
-        if shovel:
-            players.shovel_active = True
-        self._note_achievement_status_peak(target_id)
-        default_log = (
-            f"{self.pn(target_id)}无法被攻击选中" if shovel
-            else f"{self.pn(target_id)}获得{amount}层无法选中"
-        )
-        self.log_msg(log or default_log)
-
+    # Round 103 / 批次 DD（反馈 #177）：``_atomic_player_status_layers`` 已删除——
+    # 无法选中走 ``status_op(status:"untargetable")``、无敌走 ``status_op(status:"invincible")``、
+    # 「无法出牌」走 ``player_prop_change(property:"shovel_active")``；旧名进 REMOVED_ATOMIC_OPS。
     def _equipment_op_armor_payload(self, player_id, card, params, log, choice, context):
         # Round 33 / 批次 AC：``equipment_op(mode:"armor")`` 的实现体
         # Round 33 / 批次 AC：``equipment_op(mode:"armor")`` 的实现体
@@ -23554,6 +23506,26 @@ class GameEngine:
                 ps.custom_statuses['status_immune'] = 1
             elif mode == 'remove' and before - layers > 0:
                 ps.custom_statuses['status_immune'] = 1
+        elif status_key in ('invincible', 'invulnerable', '无敌'):
+            # Round 103 / 批次 DD：无敌从 ``player_status_layers`` 并进 ``status_op``
+            # （反馈 #177：两个原子功能几乎重复）。语义逐条照搬旧实现：
+            # 施加走 ``_set_invincible_until_next_own_turn_end``（带回合簿记），
+            # ``log: false`` 静音；清除时把开关和簿记一起复位。
+            ps = self.players[target_id]
+            if mode in ('remove', 'clear'):
+                ps.invincible = False
+                ps.invincible_until_player = None
+                if log_value is not False and isinstance(log_value, str) and log_value:
+                    self.log_msg(self._format_step_log(
+                        log_value, target=self.pn(target_id), source=self.pn(player_id),
+                        status='无敌'))
+            else:
+                self._set_invincible_until_next_own_turn_end(target_id)
+                if log_value is not False:
+                    self.log_msg(self._format_step_log(
+                        log_value if isinstance(log_value, str) and log_value
+                        else f"{self.pn(target_id)}获得无敌直到下一个自己回合结束",
+                        target=self.pn(target_id), source=self.pn(player_id), amount=layers))
         else:
             definition = self._get_v2_status_def(status_text)
             definition = definition if isinstance(definition, dict) else {}

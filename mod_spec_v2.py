@@ -295,9 +295,10 @@ _CORE_LOGIC_OPS = {
     # 后者写的四个玩家字段全部由 ``player_prop_change`` / ``status_op`` 覆盖。
     # 旧名与两个伞名都在 REMOVED_ATOMIC_OPS 里给了替代写法。
     # Round 31 / 批次 Z：``set_invincible`` / ``set_untargetable`` /
-    # ``untargetable_layers`` 三条玩家状态层数原子并成 ``player_status_layers``
-    # （``status`` 选 untargetable/invincible），旧名进 REMOVED_ATOMIC_OPS。
-    "player_status_layers",
+    # ``untargetable_layers`` 三条玩家状态层数原子先并成 ``player_status_layers``；
+    # Round 103 / 批次 DD（反馈 #177）它自己也并进了 ``status_op``
+    # （``status:"untargetable"`` / ``"invincible"``，「无法出牌」走
+    # ``player_prop_change(property:"shovel_active")``），旧名进 REMOVED_ATOMIC_OPS。
     # Round 38 / 批次 AD-3：``skip_turn`` / ``extra_turn`` / ``force_end_turn``
     # 三条回合控制原子并成 ``turn_control``（``mode`` 选 end/skip/extra），
     # 旧名进 REMOVED_ATOMIC_OPS（带替代 JSON）。
@@ -1444,10 +1445,16 @@ REMOVED_ATOMIC_OPS = {
     "clear_status": '{"op":"status_op","action":"remove","target":"self","status":"poison","amount":"all","log":"{target}的{status}已清除"}',
     "set_status_named": '{"op":"status_op","action":"set","mode":"set","target":"self","status":"poison","amount":1,"stack":1}',
     "resolve_status_once": '{"op":"status_op","action":"settle","target":"target","status":"fire","reduce":1,"log":"{target}的灼烧结算{amount}点并减少1层"}',
-    #   * 玩家状态层数族 → player_status_layers(status=untargetable|invincible)
-    "set_untargetable": '{"op":"player_status_layers","status":"untargetable","target":"self","amount":1,"shovel":true}',
-    "untargetable_layers": '{"op":"player_status_layers","status":"untargetable","target":"self","amount":1}',
-    "set_invincible": '{"op":"player_status_layers","status":"invincible","target":"self"}',
+    #   * 玩家状态层数族 → status_op（Round 103 / 批次 DD 起，反馈 #177 合并）：
+    #     无法选中 = status_op(status:"untargetable")，「无法出牌」用
+    #     player_prop_change(property:"shovel_active")，无敌 = status_op(status:"invincible")。
+    "player_status_layers": '{"op":"status_op","action":"add","status":"untargetable","target":"self","amount":1}'
+                            '（无敌写 status:"invincible"；「无法出牌」另写 '
+                            'player_prop_change(property:"shovel_active", value:true)）',
+    "set_untargetable": '{"op":"status_op","action":"add","status":"untargetable","target":"self","amount":1}'
+                        ' + player_prop_change(property:"shovel_active", value:true)',
+    "untargetable_layers": '{"op":"status_op","action":"add","status":"untargetable","target":"self","amount":1}',
+    "set_invincible": '{"op":"status_op","action":"add","status":"invincible","target":"self","amount":1}',
     #   * 摧毁装备族 → destroy_equipment(mode=..., filter=..., record_count=...)
     "destroy_self_equipment": '{"op":"equipment_op","mode":"destroy","pick":"self"}',
     "destroy_current_equipment": '{"op":"equipment_op","mode":"destroy","pick":"self"}',

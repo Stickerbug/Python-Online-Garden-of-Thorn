@@ -166,7 +166,8 @@ ADVANCED_ATOMIC_OPS = {
     # 有自己的 ``_atomic_*`` 实现，这里登记只是保持"伞原子在契约白名单里"的
     # 既有口径。旧名进 REMOVED_ATOMIC_OPS，写出来是显式报错。
     "turn_control",
-    "player_status_layers",
+    # Round 103 / 批次 DD：``player_status_layers`` 已并进 ``status_op``
+    # （untargetable / invincible；「无法出牌」走 player_prop_change）。
     # Round 42 / 批次 AF：``mark_self_damage_source`` / ``fission`` / ``fusion``
     # 已删除（前者的字段零读取方；裂变 = card_prop_change(fission_level)；
     # 聚变 = vanilla:fusion 的卡数据组合）。

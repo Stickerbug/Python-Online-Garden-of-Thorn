@@ -76,8 +76,6 @@ CATALOG: dict[str, tuple[str, str, dict, str]] = {
     # ---- 状态 ----
     "status_op": ("状态操作（加/减/清除）", "status",
                   {"action": "add", "target": "target", "status": "fire", "amount": 2}, "action 也可写 remove/clear"),
-    "player_status_layers": ("玩家状态层数", "status",
-                             {"target": "self", "status": "fire", "amount": 1}, "直接读写某个状态的层数"),
     # ---- 资源与生命 ----
     "resource_op": ("资源增减（体力/魔力/生命）", "resource",
                     {"resource": "e", "target": "self", "delta": 1}, "resource 认 e / m / health"),
