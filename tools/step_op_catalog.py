@@ -83,8 +83,6 @@ CATALOG: dict[str, tuple[str, str, dict, str]] = {
                     {"resource": "e", "target": "self", "delta": 1}, "resource 认 e / m / health"),
     "health_op": ("生命操作（治疗/扣血/设值）", "resource",
                   {"mode": "heal", "target": "self", "amount": 5}, "mode 认 heal / damage / set"),
-    "apply_turn_regen": ("每回合回复", "resource",
-                         {"target": "self", "kind": "heal", "power": 1, "turns": 3}, "kind 认 heal / magic"),
     "draw": ("抽牌", "resource", {"target": "self", "count": 1}, "count 可写表达式"),
     "shuffle": ("洗牌", "resource", {"target": "self", "zone": "discard", "to": "deck"}, "把某个区域洗回牌堆"),
     # ---- 牌与区域 ----

@@ -26,6 +26,19 @@ def jungle_status_defs() -> dict:
             if isinstance(status, dict) and status.get("id")}
 
 
+def jungle_card_steps(card_id: str) -> list:
+    """取官方包里某张卡的 ``on_play`` 步骤（Round 102 / 批次 CX-2 起，「回合回复」
+    的施加端就是这些步骤，不再有 ``apply_turn_regen`` 原子）。"""
+
+    with zipfile.ZipFile(ROOT / "mods" / "Jungle Cards Addition.gtnmod") as archive:
+        data = json.loads(archive.read("mod.json").decode("utf-8"))
+    for card in data["registries"].get("cards") or []:
+        if card.get("id") == card_id:
+            event = (card.get("events") or {}).get("on_play") or {}
+            return event.get("steps") if isinstance(event, dict) else list(event)
+    raise AssertionError(f"包里没有卡 {card_id}")
+
+
 class StatusImmunityApplicationTests(unittest.TestCase):
     @staticmethod
     def grant_status_immunity(engine, player_id=0):
@@ -203,13 +216,15 @@ class StatusImmunityApplicationTests(unittest.TestCase):
                 player.max_health = 100
                 self.grant_status_immunity(engine)
 
-                engine._atomic_apply_turn_regen(
-                    0,
-                    CardInstance("Basic"),
-                    {"target": "self", "kind": "heal", "turns": 3, "power": 3},
-                    "",
-                    None,
-                    {},
+                # Round 102 / 批次 CX-2：施加端改成**真实卡步骤**（Data over code），
+                # 这里直接跑大丽花的 on_play，测的就不再是引擎函数而是线上那份数据。
+                from mod_runtime_v2 import run_v2_steps
+
+                run_v2_steps(
+                    engine,
+                    {"source_player": 0, "target_player": 0, "vars": {},
+                     "card": CardInstance("Basic"), "current_event": "on_play"},
+                    jungle_card_steps("jungle:dahila"),
                 )
 
                 self.assertEqual(player.health, 50)

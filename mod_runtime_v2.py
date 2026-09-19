@@ -4387,13 +4387,39 @@ def _format_message(message: str, context: Dict[str, Any], engine=None, card=Non
         fields.setdefault("source", engine.pn(source_id))
     target_id = context.get("target_player", context.get("target_id"))
     if target is not None and engine is not None:
+        resolved_id = None
         try:
             resolved = resolve_v2_target(engine, context, target)
             resolved_list = _as_player_list(engine, resolved)
             if resolved_list:
-                target_id = resolved_list[0]
+                resolved_id = resolved_list[0]
         except Exception:
-            pass
+            resolved_id = None
+        if resolved_id is None:
+            # Round 102 / 批次 CX-2：``choice_target`` 这类**引擎侧选择器**运行时解析器
+            # 认不出（``target_player`` 还没写进上下文）或解析为空，回落到引擎的
+            # 步骤目标解析（``_data_step_targets`` → ``_list_effect_targets``）与
+            # ``_resolve_target``——与步骤的目标解析同一口径。以前这一步静默失败，
+            # 战报里的 ``{target}`` 会渲染成 ``玩家0``（兜底），日志与旧实现对不上。
+            step_targets = getattr(engine, "_data_step_targets", None)
+            if callable(step_targets):
+                try:
+                    ids = step_targets(context.get("source_player"), card, target, context)
+                    if ids:
+                        resolved_id = int(ids[0])
+                except Exception:
+                    resolved_id = None
+            if resolved_id is None:
+                fallback = getattr(engine, "_resolve_target", None)
+                if callable(fallback):
+                    try:
+                        candidate = fallback(context.get("source_player"), target)
+                        if isinstance(candidate, int) and candidate >= 0:
+                            resolved_id = candidate
+                    except Exception:
+                        resolved_id = None
+        if resolved_id is not None:
+            target_id = resolved_id
     if isinstance(target_id, int) and callable(getattr(engine, "pn", None)):
         fields.setdefault("target", engine.pn(target_id))
     if amount is None:

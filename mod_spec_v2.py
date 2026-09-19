@@ -395,7 +395,6 @@ _CORE_LOGIC_OPS = {
     # 通用步骤组合（request 选牌 → move_card 放逐 → random_choice 奖励表 →
     # move_card(mode:"give") 造牌 → card_prop_change 迅捷 → status_op 碎片 →
     # log），旧名进 REMOVED_ATOMIC_OPS。
-    "apply_turn_regen",
     # Round 33 / 批次 AB：``create_copies_to_deck_top`` 已并入
     # ``copy_card(to_zone:"deck_top", count:N)``。
     # Round 43 / 批次 AG：``plank_immunity``（实现是 ``return None`` 的空步骤）已删除
@@ -993,6 +992,15 @@ _FAMILY_HINT = {
 #
 # ``None`` 表示没有等价替代（原本就是空实现或未实现过的声明性名字）。
 REMOVED_ATOMIC_OPS = {
+    # Round 102 / 批次 CX-2：「回合回复」整条下沉成数据——施加端是卡步骤
+    # （status_op 合并 + health_op/resource_op 立刻回复 + log 战报），结算端是两个状态的
+    # events.on_turn_start。官方数据已全部迁移（Jungle 的大丽花 / 魔法大丽花）。
+    "apply_turn_regen": '{"op":"status_op","action":"set","target":"choice_target",'
+                        '"status":"jungle:turn_heal_power","amount":{"op":"max","values":['
+                        '{"op":"status_stack","target":"choice_target",'
+                        '"status":"jungle:turn_heal_power","ignore_immunity":true},3]}}'
+                        ' + status_op(set turns) + health_op(heal) + log（完整写法见'
+                        '.codex-tmp/round102/regen_steps.py）',
     # Round 44 / 批次 AH：弹射从专用原子改成"目标选择器 + 逐段参数"。
     # 替代写法是 ``deal_damage`` 的 ``target`` 写成 ``{"selector":"bounce",...}``：
     # 预抽时机、响应/预知可见的目标集合、每段的伤害与段数、``last_damage``

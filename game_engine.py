@@ -6237,23 +6237,8 @@ class GameEngine:
             if current > 0:
                 self._set_custom_status_value(player_id, name, current - 1)
 
-    def _merge_turn_regen_status(self, player_id: int, kind: str, turns: int, power: int):
-        if not (0 <= player_id < len(self.players)):
-            return (0, 0)
-        turns = max(0, int(turns or 0))
-        power = max(0, int(power or 0))
-        if kind == 'magic':
-            turns_key = 'jungle:turn_magic_turns'
-            power_key = 'jungle:turn_magic_power'
-        else:
-            turns_key = 'jungle:turn_heal_turns'
-            power_key = 'jungle:turn_heal_power'
-        merged_turns = self._custom_status_value(player_id, turns_key) + turns
-        merged_power = max(self._custom_status_value(player_id, power_key), power)
-        self._set_custom_status_value(player_id, turns_key, merged_turns)
-        self._set_custom_status_value(player_id, power_key, merged_power)
-        return (merged_turns, merged_power)
-
+    # Round 102 / 批次 CX-2：``_merge_turn_regen_status`` 随 ``apply_turn_regen`` 一起删除——
+    # "合并"（turns 相加 / power 取大）现在写在卡的步骤里（``status_stack`` + ``max``/``add``）。
     def _apply_universal_damage_shields(self, target_id: int, damage: int, source_id: Optional[int], source: str, damage_type: str) -> int:
         if damage <= 0 or not (0 <= target_id < len(self.players)):
             return max(0, int(damage or 0))
@@ -21360,35 +21345,9 @@ class GameEngine:
     # 记账走统一的 :meth:`_discard_card_and_note`（与 ``move_to_discard`` /
     # ``discard_hand_by_paid_e`` 同一份实现）。A/B 见 docs/引擎原子与数据步骤清单.md §25。
 
-    def _atomic_apply_turn_regen(self, player_id, card, params, log, choice, context):
-        target_id = self._resolve_target(player_id, params.get('target', 'self'))
-        if self._status_application_blocked(target_id, 'turn_magic_turns' if str(params.get('kind', 'heal')) == 'magic' else 'turn_heal_turns'):
-            return
-        turns = self._eval_int(player_id, params.get('turns', 1), card, 1)
-        power = self._eval_int(player_id, params.get('power', 1), card, 1)
-        kind = str(params.get('kind', 'heal'))
-        suppressed = self._is_status_immune(target_id)
-        if kind == 'magic':
-            merged_turns, merged_power = self._merge_turn_regen_status(target_id, 'magic', turns, power)
-            if not suppressed:
-                self.players[target_id].gain_magic(power)
-            remaining_turns = max(0, merged_turns - 1)
-            self._set_custom_status_alias_group(target_id, 'jungle:turn_magic_turns', ('jungle:turn_magic_turns', 'turn_magic_turns'), remaining_turns)
-            if remaining_turns <= 0:
-                self._set_custom_status_alias_group(target_id, 'jungle:turn_magic_power', ('jungle:turn_magic_power', 'turn_magic_power'), 0)
-            suffix = '' if suppressed else f'，+{power}M'
-            self.log_msg(log or f"{self.pn(target_id)}获得魔力回合回复：{remaining_turns};{merged_power}{suffix}")
-        else:
-            merged_turns, merged_power = self._merge_turn_regen_status(target_id, 'heal', turns, power)
-            if not suppressed:
-                self.players[target_id].heal(power)
-            remaining_turns = max(0, merged_turns - 1)
-            self._set_custom_status_alias_group(target_id, 'jungle:turn_heal_turns', ('jungle:turn_heal_turns', 'turn_heal_turns'), remaining_turns)
-            if remaining_turns <= 0:
-                self._set_custom_status_alias_group(target_id, 'jungle:turn_heal_power', ('jungle:turn_heal_power', 'turn_heal_power'), 0)
-            suffix = '' if suppressed else f'，+{power}H'
-            self.log_msg(log or f"{self.pn(target_id)}获得回合回复：{remaining_turns};{merged_power}{suffix}")
-
+    # Round 102 / 批次 CX-2：``_atomic_apply_turn_regen`` 已删除。整条「回合回复」现在是
+    # **纯数据**：施加端=卡步骤（status_op + health_op/resource_op + log，见 Jungle 包两张
+    # 大丽花），结算端=两个状态的 ``events.on_turn_start``。旧名进 REMOVED_ATOMIC_OPS。
     def _copy_copies_to_deck_top_payload(self, player_id, card, params, log, choice, context):
         # Round 33 / 批次 AB：``copy_card(to_zone:"deck_top", count:N)`` 的实现体
         # （``def_id`` 造牌、``flags``/``swift_value``/``magic_swift_value`` 等
@@ -23321,12 +23280,17 @@ class GameEngine:
             'untargetable': 'untargetable', '无法选中': 'untargetable',
         }.get(str(status or '').strip(), '')
 
-    def _status_stack_value(self, target_id: int, status_id) -> int:
+    def _status_stack_value(self, target_id: int, status_id, *, ignore_immunity: bool = False) -> int:
         """Layers of *status_id* as the engine reads them (immunity suppresses).
 
         Reading through the engine helpers (frost / nazar / unable-counter alias
         groups included) is what lets both execution paths observe the same
         stack, including for old rooms whose alias keys are still spread out.
+
+        ``ignore_immunity=True`` 读的是**存储口径**（免疫不压制）。状态事件的
+        0↔正层数边沿判定用它——免疫时写入照常发生，边沿自然也该照常触发
+        （Round 102 / 批次 CX-2：以前边沿用读侧口径，免疫期间 on_apply/on_remove
+        永远不触发）。
         """
 
         if not self._valid_player_id(target_id):
@@ -23337,7 +23301,7 @@ class GameEngine:
         immune_key = status_text.split(':')[-1] in ('status_immune', 'immune', '状态免疫')
         if immune_key:
             return 1 if self._is_status_immune(target_id) else 0
-        if self._is_status_immune(target_id):
+        if self._is_status_immune(target_id) and not ignore_immunity:
             # 状态免疫只压制生效：写入照常，读取按 0 计（两条路径一致）。
             return 0
         if status_text in self._arctic_frost_keys():
@@ -23352,6 +23316,10 @@ class GameEngine:
             # ``attack_blocked`` / ``vulnerable`` / ``装备保护`` 这类属性不在
             # ``_get_status_count`` 的硬编码表里，必须按同一张属性表读。
             return max(0, int(getattr(self.players[target_id], attr, 0) or 0))
+        if ignore_immunity:
+            # 存储口径：直接读 ``custom_statuses``（``_get_status_count`` 自己会按免疫压制）
+            store = getattr(self.players[target_id], "custom_statuses", {}) or {}
+            return max(0, int(store.get(status_text, 0) or 0))
         return max(0, int(self._get_status_count(target_id, status_text) or 0))
 
     def _fire_status_change_events(self, target_id: int, status_id: str, before: int, after: int) -> None:
@@ -23481,6 +23449,8 @@ class GameEngine:
         ps = self.players[target_id]
         status_key = status_text.split(':')[-1]
         before = self._status_stack_value(target_id, status_text)
+        # 状态事件边沿用**存储口径**（免疫不压制）：免疫时写入照常，事件也该照常触发。
+        event_before = self._status_stack_value(target_id, status_text, ignore_immunity=True)
 
         # 霜冻：别名组与 60 层上限由 arctic 助手掌管（默认文案也在那里）。
         if mode == 'add' and status_text in self._arctic_frost_keys():
@@ -23584,7 +23554,8 @@ class GameEngine:
         if status_text in self._unable_counter_keys():
             self._apply_unable_counter_to_current_hand(target_id)
         after = self._status_stack_value(target_id, status_text)
-        self._fire_status_change_events(target_id, status_text, before, after)
+        event_after = self._status_stack_value(target_id, status_text, ignore_immunity=True)
+        self._fire_status_change_events(target_id, status_text, event_before, event_after)
         if mode != 'clear':
             line = self._status_op_log_line(
                 op, log_value, player_id, target_id, status_text, mode,

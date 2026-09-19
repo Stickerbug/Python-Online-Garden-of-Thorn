@@ -1087,7 +1087,9 @@ KEPT_EXPLICIT = {
     "declare_forced_target": "声明强制目标窗口（Light Bulb）",
     # Round 49 / 批次 AM：add_charge_to_hand 已删除（for_each(zone_cards) +
     # ceil(div(total, 手牌数)) + card_prop_change(charge_value) + log）。
-    "apply_turn_regen": "回合回复（Jungle）",
+    # Round 102 / 批次 CX-2：apply_turn_regen 已删除——整条「回合回复」下沉成数据
+    # （卡步骤 status_op 合并 + 状态的 events.on_apply/on_turn_start，见 Jungle 包两张
+    #  大丽花与 docs/引擎原子与数据步骤清单.md §88）。
     "cogwheel_mark": "齿轮标记（Factory）",
     "crit_multiplier_add": "Round 43 复核留：写 custom_vars 的 hel_crit_multiplier_turn_bonus 后还要调 "
                            "_hel_sync_crit_multiplier_display 刷新显示变量（值 == 2.0 时删除该键），"
