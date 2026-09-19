@@ -6708,6 +6708,7 @@
             values.cost_m = Math.max(0,
                 Number(values.cost_m)
                 + Number(modifiers.cost_m_delta || 0)
+                + Number(modifiers.temporary_cost_m_delta || 0)
                 - Number(modifiers.magic_swift || 0));
         }
         if (modifiers.free_play) {
@@ -6715,6 +6716,16 @@
             values.cost_m = 0;
         } else if (modifiers.temporary_free_e) {
             values.cost_e = 0;
+        }
+        // 反馈 #166：魔法量子（temporary_swap_costs）把本回合所有牌的 E/M 消耗互换，
+        // 引擎侧早就这么算了；客户端不算的话牌面与资源预览都还是旧费用，看起来「没作用」。
+        if (modifiers.temporary_swap_costs) {
+            const currentE = Number(values.cost_e);
+            const currentM = Number(values.cost_m);
+            if (Number.isFinite(currentE) && Number.isFinite(currentM)) {
+                values.cost_e = currentM;
+                values.cost_m = currentE;
+            }
         }
         const boostEffects = (types, amount, multiplier = 1) => {
             if (!Number(amount)) return;

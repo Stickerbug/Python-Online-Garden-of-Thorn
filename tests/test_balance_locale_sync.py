@@ -2,7 +2,7 @@ import json
 import zipfile
 from pathlib import Path
 
-from mod_loader import load_mod
+from mod_loader import load_all_mods, load_mod
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -66,3 +66,31 @@ def test_sewers_locales_keep_formula_placeholders_in_sync():
         loaded = load_mod(str(MODS / package))
         assert not loaded.errors
         assert not loaded.warnings
+
+
+def _has_cjk(text) -> bool:
+    return any("\u4e00" <= ch <= "\u9fff" for ch in str(text or ""))
+
+
+def test_official_card_names_are_translated_in_the_chinese_locale():
+    """反馈 #176：mod.json 有中文名时，locales/zh.json 里不能仍留着英文名。"""
+    offenders = []
+    for loaded in load_all_mods():
+        if loaded.errors:
+            continue
+        for card in loaded.cards:
+            name_cn = str(getattr(card, "name_cn", "") or "")
+            if not _has_cjk(name_cn):
+                continue
+            zh_name = str((getattr(card, "name_i18n", {}) or {}).get("zh") or "")
+            if not _has_cjk(zh_name):
+                offenders.append(f"{loaded.filename}:{card.id}={zh_name!r} (应为 {name_cn})")
+    assert offenders == []
+
+
+def test_feedback_176_dlc_cards_use_their_chinese_names():
+    assert localized_card("Bio Cards DLC.gtnmod", "zh", "bio:cyanide_pill")["name"] == "氰化物药丸"
+    assert localized_card("Bio Cards DLC.gtnmod", "zh", "bio:stem_cell")["name"] == "干细胞"
+    assert localized_card("Bio Cards DLC.gtnmod", "zh", "bio:mitochondria")["name"] == "线粒体"
+    assert localized_card("Factory Cards DLC.gtnmod", "zh", "factory:lithium")["name"] == "锂"
+    assert localized_card("Bio Cards DLC.gtnmod", "ja", "bio:mitochondria")["name"] == "ミトコンドリア"
