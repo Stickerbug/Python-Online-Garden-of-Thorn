@@ -301,6 +301,12 @@ def test_story_enchantment_book_discard_requires_confirmation():
     assert "discardBookCopy: '丢弃“{0}”后无法找回。'" in STORY_JS
 
 
+def test_story_ambiguous_status_words_need_an_explicit_reference():
+    """反馈 #164：描述里的「力量」这类常用词不能被误链接成状态。"""
+    assert "const AMBIGUOUS_STORY_STATUS_IDS = new Set(['power']);" in STORY_JS
+    assert 'if (AMBIGUOUS_STORY_STATUS_IDS.has(statusId)) {' in STORY_JS
+
+
 def test_story_equipment_matches_classic_orbit_preview_and_terms():
     assert "visual.className = 'story-equipment-visual';" in STORY_JS
     assert "icon.className = 'story-equipment-icon';" in STORY_JS

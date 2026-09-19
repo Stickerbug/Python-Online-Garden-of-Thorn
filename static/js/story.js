@@ -8912,6 +8912,9 @@
     }
 
     function storyCardTermItems(card) {
+        // 反馈 #164：这些状态名本身就是常用词，只按子串匹配会把描述里的普通用词
+        // 也链接成状态（例如「祈求更大力量」里的「力量」）。
+        const AMBIGUOUS_STORY_STATUS_IDS = new Set(['power']);
         const values = cardValues(card);
         if (!values) return [];
         const items = [];
@@ -8939,7 +8942,22 @@
                 || definition?.name?.zh
                 || '',
             ).trim();
-            if (localizedName && description.includes(localizedName)) statusIds.add(statusId);
+            if (!localizedName || !description.includes(localizedName)) return;
+            // 反馈 #164：「力量」这类常用词不能只按子串判定，否则事件/卡面描述里的
+            // 普通用词也会被当成状态。这些状态必须写成「N层力量」「力量:X」或显式
+            // 的 [[status:…]] 标记才算相关。
+            if (AMBIGUOUS_STORY_STATUS_IDS.has(statusId)) {
+                const escapedName = localizedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const escapedId = statusId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const explicit = new RegExp(`\\[\\[(?:status|term):${escapedId}(?:\\|[^\\]]*)?\\]\\]`, 'i').test(description);
+                const stack = new RegExp(
+                    `(?:\\d+|[一二三四五六七八九十]+)\\s*(?:层|層)?\\s*${escapedName}`
+                    + `|${escapedName}\\s*[:：]\\s*(?:\\d+|[一二三四五六七八九十]+)`,
+                    'i',
+                ).test(description);
+                if (!explicit && !stack) return;
+            }
+            statusIds.add(statusId);
         });
         statusIds.forEach((statusId) => {
             add('status', statusId, storyContent?.statuses?.[statusId]);
