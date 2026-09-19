@@ -223,6 +223,8 @@ a { font: inherit; }
 .story-app {
   position: relative;
   isolation: isolate;
+  /* 反馈 #153：老引擎不认 dvh 时整套布局会塌掉（地图最后几行滚不到），留 vh 兜底。 */
+  height: 100vh;
   height: 100dvh;
   min-height: 0;
   display: grid;
@@ -749,10 +751,12 @@ a { font: inherit; }
 
 .story-dialog.story-coop-preview-dialog {
   width: min(640px, calc(100vw - 30px));
+  max-height: min(820px, calc(100vh - 28px));
   max-height: min(820px, calc(100dvh - 28px));
 }
 
 .story-coop-preview-dialog #story-coop-lobby-form {
+  max-height: min(772px, calc(100vh - 76px));
   max-height: min(772px, calc(100dvh - 76px));
   display: grid;
   gap: 14px;
@@ -1032,6 +1036,7 @@ a { font: inherit; }
   position: relative;
   isolation: isolate;
   width: min(1180px, calc(100vw - 28px));
+  height: min(860px, calc(100vh - 28px));
   height: min(860px, calc(100dvh - 28px));
   max-width: none;
   max-height: none;
@@ -1537,9 +1542,11 @@ a { font: inherit; }
 @media (max-width: 620px) {
   .story-dialog.story-coop-preview-dialog {
     width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
     max-height: calc(100dvh - 16px);
   }
   .story-coop-preview-dialog #story-coop-lobby-form {
+    max-height: calc(100vh - 62px);
     max-height: calc(100dvh - 62px);
     padding: 15px;
   }
@@ -1551,6 +1558,7 @@ a { font: inherit; }
   .story-coop-run-summary > div { grid-template-columns: 94px minmax(0, 1fr); }
   .story-coop-combat-dialog {
     width: calc(100vw - 8px);
+    height: calc(100vh - 8px);
     height: calc(100dvh - 8px);
   }
   .story-coop-combat-shell {
@@ -1597,6 +1605,7 @@ a { font: inherit; }
   right: 14px;
   z-index: 45;
   width: min(340px, calc(100vw - 28px));
+  max-height: calc(100vh - 54px);
   max-height: calc(100dvh - 54px);
   overflow: auto;
   padding: 14px;
@@ -2622,6 +2631,7 @@ button.story-settings-row:hover:not(:disabled) { border-color: var(--story-green
   .story-status-actions { gap: 5px; }
   #story-status-online { font-size: 10px; }
   .story-dev-toggle { min-height: 20px; padding: 1px 5px; font-size: 9px; }
+  .story-dev-panel { right: 8px; bottom: 34px; width: min(320px, calc(100vw - 16px)); max-height: calc(100vh - 46px); }
   .story-dev-panel { right: 8px; bottom: 34px; width: min(320px, calc(100vw - 16px)); max-height: calc(100dvh - 46px); }
   .story-run { grid-template-columns: minmax(0, 1fr); }
   .story-run-sidebar { gap: 10px; padding: 12px 10px; }
@@ -2636,6 +2646,7 @@ button.story-settings-row:hover:not(:disabled) { border-color: var(--story-green
 
 @media (max-width: 560px) and (orientation: portrait) {
   body { overflow: hidden; }
+  .story-app { height: 100vh; min-height: 0; }
   .story-app { height: 100dvh; min-height: 0; }
   .story-main { min-height: 0; }
   .story-run { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr); }
@@ -4253,6 +4264,7 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 
 .story-enchantment-books-dialog {
   width: min(940px, calc(100vw - 28px));
+  max-height: min(760px, calc(100vh - 28px));
   max-height: min(760px, calc(100dvh - 28px));
   padding: 0;
   border: 1px solid var(--story-line);
@@ -6679,6 +6691,7 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   left: 50%;
   z-index: 30020;
   width: min(640px, calc(100vw - 32px));
+  height: min(560px, calc(100vh - 96px));
   height: min(560px, calc(100dvh - 96px));
   overflow: hidden;
   transform: translate(-50%, -50%);

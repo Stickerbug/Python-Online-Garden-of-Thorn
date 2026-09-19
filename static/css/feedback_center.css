@@ -965,6 +965,20 @@ button.fc-account-popover-link:focus-visible {
   background: rgba(9, 30, 66, 0.45);
 }
 
+/* 反馈 #138：手机端弹键盘时浏览器会滚动文档来露出输入框，收起键盘后背景就停在
+   滚动后的位置。对话框打开期间把文档锁住，关闭时再还原原来的滚动位置。 */
+html.fc-scroll-locked,
+html.fc-scroll-locked body {
+  overflow: hidden;
+}
+
+html.fc-scroll-locked body {
+  position: fixed;
+  left: 0;
+  right: 0;
+  width: 100%;
+}
+
 .fc-dialog form {
   padding: 20px 22px 18px;
 }

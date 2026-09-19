@@ -16300,7 +16300,7 @@ function emitSocketLogin() {
         beta_mode: GTN_BETA_MODE,
         skin: getCurrentSkinConfig(),
         ...activeMatchRouteLoginPayload(),
-        ...getModLoginPayload(),
+        ...getModLoginPayload(preferredMode),
     });
     return true;
 }
@@ -37155,10 +37155,14 @@ function getSettingsModSourceTab() {
     return getCommunityModSelection().mod_source;
 }
 
-function getModLoginPayload() {
-    const hasSavedPreference = hasSavedDisabledModsPreference();
+function getModLoginPayload(matchMode = getSettingsModMatchMode()) {
+    // 反馈 #158：登录/重进大厅要带上「即将进入的那个模式」的模组选择。
+    // 默认的 getSettingsModMatchMode() 在多人流程之外恒为 casual_1v1，
+    // 于是从天梯回主页再进多人时，客户端会拿着娱乐那份选择去申请天梯，
+    // 服务端就按娱乐的选择建了天梯 loadout（玩家看到「选择的模组炸掉」）。
+    const hasSavedPreference = hasSavedDisabledModsPreference(matchMode);
     return {
-        ...(hasSavedPreference ? { disabled_mods: getDisabledMods() } : {}),
+        ...(hasSavedPreference ? { disabled_mods: getDisabledMods(matchMode) } : {}),
         ...getCommunityModSelection(),
     };
 }
@@ -38181,9 +38185,9 @@ function disabledModsStorageKey(mode = getSettingsModMatchMode()) {
         : DISABLED_MODS_STORAGE_KEYS.casual;
 }
 
-function hasSavedDisabledModsPreference() {
+function hasSavedDisabledModsPreference(mode = getSettingsModMatchMode()) {
     try {
-        const storageKey = disabledModsStorageKey();
+        const storageKey = disabledModsStorageKey(mode);
         if (localStorage.getItem(storageKey) !== null) return true;
         return storageKey === DISABLED_MODS_STORAGE_KEYS.ranked
             && localStorage.getItem(DISABLED_MODS_STORAGE_KEYS.casual) !== null;

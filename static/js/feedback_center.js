@@ -1286,6 +1286,38 @@
     else if (dialog) dialog.removeAttribute('open');
   }
 
+  // 反馈 #138：手机端软键盘弹出时浏览器会滚动文档露出输入框，键盘收起后背景就留在
+  // 滚动后的位置。打开任何对话框时锁定文档滚动，全部关闭后还原原来的滚动位置。
+  let feedbackScrollLockY = null;
+
+  function lockFeedbackBackgroundScroll() {
+    if (feedbackScrollLockY !== null) return;
+    feedbackScrollLockY = window.scrollY || window.pageYOffset || 0;
+    document.body.style.top = `-${feedbackScrollLockY}px`;
+    document.documentElement.classList.add('fc-scroll-locked');
+  }
+
+  function releaseFeedbackBackgroundScroll() {
+    if (feedbackScrollLockY === null) return;
+    const restoreY = feedbackScrollLockY;
+    feedbackScrollLockY = null;
+    document.documentElement.classList.remove('fc-scroll-locked');
+    document.body.style.top = '';
+    window.scrollTo(0, restoreY);
+  }
+
+  function bindDialogScrollLock() {
+    document.addEventListener('toggle', (event) => {
+      const target = event.target;
+      if (!target || String(target.tagName || '').toUpperCase() !== 'DIALOG') return;
+      if (target.open) {
+        lockFeedbackBackgroundScroll();
+        return;
+      }
+      if (!document.querySelector('dialog[open]')) releaseFeedbackBackgroundScroll();
+    }, true);
+  }
+
   function bindEvents() {
     let searchTimer = null;
     $('fc-tab-bug').addEventListener('click', () => {
@@ -1409,6 +1441,7 @@
 
   document.addEventListener('DOMContentLoaded', async () => {
     bindEvents();
+    bindDialogScrollLock();
     await loadAccount();
     await loadNotifications();
     await applyLocationRoute();

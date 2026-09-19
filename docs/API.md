@@ -362,7 +362,7 @@ Socket.IO 使用默认命名空间与 <code>/socket.io/</code> 传输路径。�
 | 1v1 邀请 | <code>invite</code>、<code>accept_invite</code>、<code>decline_invite</code> |
 | 2v2 队伍 | <code>form_team</code>、<code>accept_team</code>、<code>decline_team</code>、<code>leave_team</code>、<code>invite_team</code>、<code>accept_team_match</code>、<code>decline_team_match</code> |
 | 断线重连 | <code>reconnect_accept</code>、<code>reconnect_decline</code> |
-| 聊天 | <code>chat</code>、<code>story_chat_join</code>、<code>story_chat_send</code> |
+| 聊天 | <code>chat</code>、<code>admin_chat_recall</code>、<code>story_chat_join</code>、<code>story_chat_send</code> |
 | 开局流程 | <code>mod_draw_update_bans</code>、<code>mod_draw_submit</code>、<code>draft_pick</code>、<code>select_opening_event</code>、<code>confirm_opening_reveal</code>、<code>reroll_opening_event</code>、<code>submit_event_sub_choice</code> |
 | 正式对局 | <code>play_card</code>、<code>response</code>、<code>ally_consent_response</code>、<code>resolve_choice</code>、<code>v2_ui_response</code>、<code>use_trigger</code>、<code>end_turn</code> |
 | 无限火力 | <code>urf_replace_card</code>、<code>urf_sell_equipment</code> |
