@@ -26,12 +26,18 @@ import json
 import pathlib
 import re
 import shutil
+import sys
 import zipfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 GAME_JS = ROOT / "static" / "js" / "game.js"
 EDITOR = ROOT.parent / "模组编辑器" / "src" / "generated"
 MODS = ROOT / "mods"
+
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+import official_statuses  # noqa: E402
 
 
 def extract_card_index() -> dict:
@@ -123,12 +129,23 @@ def extract_demo_cards(limit: int = 14) -> list:
 
 
 def extract_status_labels() -> dict:
-    """各模组在 registries.statuses 里定义的状态名（含中文），例如 hel:luck → 幸运。
+    """状态 id → 中文名，供编辑器把内部 id 翻成玩家看的词。
 
-    卡面描述里不能出现内部 id，所以编辑器要把这些 id 翻成玩家看的词。
+    来源有两层：
+
+    1. **引擎内置的官方状态表**（``official_statuses.py``）——Round 107 / 批次 DE 起
+       17 条官方状态不再写在官方包里，编辑器下拉必须直接带上它们；
+    2. 包内 ``registries.statuses`` —— 第三方模组 + 形式逻辑 DLC 的自定义状态。
     """
 
     labels = {}
+    for entry in official_statuses.OFFICIAL_STATUSES:
+        name = str((entry.get("name_i18n") or {}).get("zh") or "")
+        status_id = str(entry.get("id") or "")
+        if not status_id or not name:
+            continue
+        labels[status_id] = name
+        labels.setdefault(str(entry.get("alias") or status_id.split(":")[-1]), name)
     for path in sorted(glob.glob(str(MODS / "*.gtnmod"))):
         try:
             with zipfile.ZipFile(path) as archive:
@@ -218,6 +235,12 @@ def extract_status_catalog() -> tuple:
         catalog.update(raw_labels)
     # 官方包定义的状态不进下拉（编辑器会按当前草稿里的 registries.statuses 追加），
     # 只留别名关系：短 id → 带命名空间的 id。
+    # Round 107 / 批次 DE：内置的 17 条官方状态也要留同样的别名关系（包内声明已删）。
+    for entry in official_statuses.OFFICIAL_STATUSES:
+        alias = str(entry.get("alias") or "")
+        status_id = str(entry.get("id") or "")
+        if alias and status_id and alias != status_id:
+            aliases.setdefault(alias, status_id)
     for key, value in extract_status_labels().items():
         if ":" in key:
             aliases.setdefault(key.split(":")[-1], key)

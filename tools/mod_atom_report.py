@@ -56,6 +56,7 @@ if str(TOOLS_DIR) not in sys.path:
 import atomic_registry  # noqa: E402
 import mod_runtime_v2  # noqa: E402
 import mod_spec_v2  # noqa: E402
+import official_statuses  # noqa: E402
 import step_op_catalog  # noqa: E402
 
 # 运行时执行 / 校验器检查的嵌套步骤容器。
@@ -162,41 +163,69 @@ def scan_package(path: pathlib.Path, report, *, package: str = "") -> None:
     }
 
     for registry, resource in iter_registry_resources(payload):
-        lists = []
-        root_step_lists(resource, lists)
-        if not lists:
+        count_resource_steps(report, name, registry, resource)
+
+
+def count_resource_steps(report, package: str, registry: str, resource) -> None:
+    """把一个资源（卡/状态/事件钩子…）的步骤统计合并进 report。"""
+
+    lists = []
+    root_step_lists(resource, lists)
+    if not lists:
+        return
+    resource_id = str(resource.get("id") or "")
+    uses = set()
+    legacy = 0
+    step_total = 0
+
+    def visit(step, op):
+        nonlocal legacy, step_total
+        step_total += 1
+        if op:
+            uses.add(op)
+        if op and is_legacy_encoding(step):
+            legacy += 1
+
+    for steps in lists:
+        walk_steps(steps, visit)
+
+    for op in uses:
+        entry = report["op_usage"].setdefault(op, {"cards": 0, "packages": set(), "legacy": 0})
+        entry["cards"] += 1
+        entry["packages"].add(package)
+    if legacy:
+        report["legacy_steps"].append(
+            {
+                "package": package,
+                "registry": registry,
+                "resource": resource_id,
+                "steps": legacy,
+            }
+        )
+    report["resources_with_logic"] += 1
+    report["steps_total"] += step_total
+
+
+BUILTIN_STATUS_SOURCE = "（内置状态表 official_statuses.py）"
+
+
+def scan_builtin_statuses(report) -> None:
+    """Round 107 / 批次 DE：官方状态的 ``events`` 从包里搬进了内置表。
+
+    这些步骤仍然是引擎要执行的数据步骤；不在这儿补扫的话，本报告的
+    "op 使用次数"会突然少一截，以后还可能把只有状态事件在用的 op 当零引用删掉。
+    """
+
+    for entry in official_statuses.OFFICIAL_STATUSES:
+        events = entry.get("events")
+        if not events:
             continue
-        resource_id = str(resource.get("id") or "")
-        uses = set()
-        legacy = 0
-        step_total = 0
-
-        def visit(step, op, _uses=uses, _registry=registry):
-            nonlocal legacy, step_total
-            step_total += 1
-            if op:
-                _uses.add(op)
-            if op and is_legacy_encoding(step):
-                legacy += 1
-
-        for steps in lists:
-            walk_steps(steps, visit)
-
-        for op in uses:
-            entry = report["op_usage"].setdefault(op, {"cards": 0, "packages": set(), "legacy": 0})
-            entry["cards"] += 1
-            entry["packages"].add(name)
-        if legacy:
-            report["legacy_steps"].append(
-                {
-                    "package": name,
-                    "registry": registry,
-                    "resource": resource_id,
-                    "steps": legacy,
-                }
-            )
-        report["resources_with_logic"] += 1
-        report["steps_total"] += step_total
+        count_resource_steps(
+            report,
+            BUILTIN_STATUS_SOURCE,
+            "statuses",
+            {"id": entry["id"], "events": events},
+        )
 
 
 def is_legacy_encoding(step) -> bool:
@@ -216,6 +245,7 @@ def collect(mods_dir: pathlib.Path, *, only: str = "") -> dict:
         if only and not fnmatch.fnmatch(path.name, only):
             continue
         scan_package(path, report)
+    scan_builtin_statuses(report)
     return report
 
 
@@ -736,19 +766,49 @@ def _engine_status_words() -> set:
     """``_status_attr_field`` 的字符串常量（引擎内建状态 + 中文别名）。"""
 
     path = ROOT / "game_engine.py"
+    words = set()
     if not path.is_file():
-        return set()
+        return official_statuses.status_words()
     try:
         tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
     except SyntaxError:
-        return set()
-    words = set()
+        return official_statuses.status_words()
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef) and node.name == "_status_attr_field":
             for item in ast.walk(node):
                 if isinstance(item, ast.Constant) and isinstance(item.value, str):
                     words.add(item.value.strip().lower())
-    return words | {name.lower() for name in EXTRA_ENGINE_STATUS_NAMES}
+    # Round 107 / 批次 DE：17 条官方状态收进内置表（official_statuses.py），
+    # 包内声明删除后，它们的 id / 别名 / 四语言名字也属于"引擎认得的词"。
+    return words | {name.lower() for name in EXTRA_ENGINE_STATUS_NAMES} | official_statuses.status_words()
+
+
+def builtin_status_declarations(mods_dir: pathlib.Path) -> dict:
+    """Round 107 / 批次 DE（方案 B）：官方状态内置化之后，包内不许再声明。
+
+    内置表是唯一来源（``official_statuses.py``＋客户端 ``CORE_STATUS_DEFS``）。
+    包里再写一份同名声明＝又出现第二个来源，文案/颜色/图标迟早对不上，
+    所以这里按失败处理（第三方包想定义自定义状态请用别的 id）。
+    """
+
+    builtin = {str(item["id"]) for item in official_statuses.OFFICIAL_STATUSES}
+    seen = []
+    for path in sorted(mods_dir.glob("*.gtnmod")):
+        try:
+            with zipfile.ZipFile(path) as archive:
+                payload = json.loads(archive.read("mod.json"))
+        except Exception:
+            continue
+        for item in (payload.get("registries") or {}).get("statuses") or []:
+            if isinstance(item, dict) and str(item.get("id") or "") in builtin:
+                seen.append({"package": path.name, "id": str(item.get("id"))})
+    problems = []
+    if seen:
+        summary = "、".join(f"{item['package']}::{item['id']}" for item in seen[:6])
+        problems.append(
+            f"包内重复声明了内置官方状态（应删掉，改由 official_statuses.py 提供）：{summary}"
+        )
+    return {"builtin": len(builtin), "declared": seen, "problems": problems}
 
 
 def status_id_consistency(mods_dir: pathlib.Path) -> dict:
@@ -1110,6 +1170,10 @@ def build_summary(report: dict, *, corpus=None, mods_dir: pathlib.Path | None = 
         "step_catalog": step_catalog_consistency(),
         # Round 81 / 批次 CA：卡数据的 status id 必须有声明（引擎内建或包 statuses）。
         "status_ids": status_id_consistency(mods_dir if mods_dir is not None else ROOT / "mods"),
+        # Round 107 / 批次 DE：17 条官方状态改为引擎内置，包内不许再声明（第二个来源）。
+        "builtin_statuses": builtin_status_declarations(
+            mods_dir if mods_dir is not None else ROOT / "mods"
+        ),
         # Round 87 / 批次 CI：卡面文案里的 [[card:ID]] / [[icon:KEY]] 必须真实存在。
         "card_text_refs": card_text_reference_consistency(
             mods_dir if mods_dir is not None else ROOT / "mods"
@@ -1407,6 +1471,8 @@ def main(argv=None) -> int:
         or (summary.get("step_catalog") or {}).get("problems")
         # Round 81 / 批次 CA：卡数据的 status id 必须有声明（没人声明的按拼错处理）。
         or (summary.get("status_ids") or {}).get("problems")
+        # Round 107 / 批次 DE：官方状态内置之后，包内不许再声明同名状态。
+        or (summary.get("builtin_statuses") or {}).get("problems")
         # Round 87 / 批次 CI：卡面文案引用的卡/图标必须存在。
         or (summary.get("card_text_refs") or {}).get("problems")
         # Round 91 / 批次 CN：官方包声明的 capability 必须在白名单里。

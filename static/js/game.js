@@ -8460,6 +8460,10 @@ function normalizeStatusIntroKey(statusId) {
 function getCustomStatusDef(statusId) {
     const raw = String(statusId || '').trim();
     const normalized = normalizeStatusIntroKey(raw);
+    /* Round 107 / 批次 DE：官方状态已内置（包内声明删除）。内置表按 id / 别名 /
+       四语言名字都能认，优先级高于包声明——同一 id 只有一份权威定义。 */
+    const builtin = getCoreStatusDef(raw);
+    if (builtin) return builtin;
     const definitions = CUSTOM_STATUS_DEFS || {};
     const direct = definitions[raw] || definitions[normalized];
     if (direct) return direct;
@@ -8538,6 +8542,153 @@ const CORE_REGISTRY_I18N = {
         },
     },
 };
+
+// ==== CORE_STATUS_DEFS BEGIN（由 tools/sync_core_status_defs.py 生成，勿手改）====
+const CORE_STATUS_DEFS = [
+    {
+        id: 'arctic:frost', alias: 'frost',
+        name_i18n: { zh: '霜冻', en: 'Frost', fr: 'Gel', ja: '凍結' },
+        description_i18n: { zh: '上限为60层；每有10层，卡牌E消耗+1。自己回合结束时层数向下取整减半。', en: 'Maximum 60 stacks; every 10 stacks increases a card\'s E cost by 1. At the end of your turn, halve the stacks rounded down.', fr: 'Maximum 60 charges ; tous les 10 cumuls, le coût E des cartes augmente de 1. À la fin de votre tour, divisez les cumuls par deux en arrondissant à l\'inférieur.', ja: '上限60層；10層ごとにカードのEコストが1増える。自分のターン終了時、層数を切り捨てで半減する。' },
+        color: '#4E9DCC', icon: 'frost', stacking: 'stack', visible: true,
+    },
+    {
+        id: 'bio:debt', alias: 'debt',
+        name_i18n: { zh: '负债', en: 'Debt', fr: 'Dette', ja: '負債' },
+        description_i18n: { zh: '自己回合开始时，在正常回复[[icon:E]]后失去1[[icon:E]]，然后层数-1。', en: 'At the start of your turn, lose 1[[icon:E]] after normal [[icon:E]] recovery, then remove 1 stack.', fr: 'Au début de votre tour, après la récupération normale de [[icon:E]], perdez 1[[icon:E]], puis retirez 1 charge.', ja: '自分のターン開始時、通常の[[icon:E]]回復後に1[[icon:E]]を失い、その後1層減少します。' },
+        color: '#B36B32', icon: 'debt', stacking: 'stack', visible: true,
+    },
+    {
+        id: 'bio:extra_healing', alias: 'extra_healing',
+        name_i18n: { zh: '额外回复', en: 'Extra Healing', fr: 'Soin supplémentaire', ja: '追加回復' },
+        description_i18n: { zh: '每次回复[[icon:H]]后，额外回复等同于层数的[[icon:H]]；不自动减少。', en: 'After recovering [[icon:H]], recover additional [[icon:H]] equal to its stacks. Does not decay.', fr: 'Après avoir récupéré des [[icon:H]], récupérez des [[icon:H]] supplémentaires égaux aux charges. Ne diminue pas automatiquement.', ja: '[[icon:H]]を回復した後、層数と同じ値の[[icon:H]]を追加で回復します。自然減少しません。' },
+        color: '#D56A9B', icon: 'extra_healing', stacking: 'stack', visible: true,
+    },
+    {
+        id: 'bio:shield_conversion', alias: 'shield_conversion',
+        name_i18n: { zh: '护盾转化', en: 'Shield Conversion', fr: 'Conversion de bouclier', ja: 'シールド変換' },
+        description_i18n: { zh: '下次将回复[[icon:H]]时，若原回复量大于0，改为获得(原回复量×护盾转化层数)层护盾，然后清空护盾转化。', en: 'The next time [[icon:H]] would be restored, if the original amount is greater than 0, gain Shield equal to (original amount × Shield Conversion stacks) instead, then clear Shield Conversion.', fr: 'La prochaine fois que des [[icon:H]] devraient être récupérés, si la quantité initiale est supérieure à 0, gagnez à la place un Bouclier égal à (quantité initiale × charges de Conversion de bouclier), puis retirez toutes ses charges.', ja: '次に[[icon:H]]を回復する時、元の回復量が0より大きければ、代わりに(元の回復量×シールド変換の層数)のシールドを得て、その後シールド変換を全て消去します。' },
+        color: '#2E7D7D', icon: 'shield_conversion', stacking: 'stack', visible: true,
+    },
+    {
+        id: 'hel:luck', alias: 'luck',
+        name_i18n: { zh: '幸运', en: 'Luck', fr: 'Chance', ja: '幸運' },
+        description_i18n: { zh: '即将造成一段[[icon:D]]时，若幸运层数不少于该段减伤前伤害，则消耗等量幸运，使该段伤害暴击。', en: 'Before a single hit of [[icon:D]] is dealt, if its stacks are at least that hit\'s pre-mitigation damage, consume that many stacks to make the hit critical.', fr: 'Avant qu\'un coup de [[icon:D]] ne soit infligé, si ses charges sont au moins égales aux dégâts avant réduction de ce coup, consommez autant de charges pour rendre ce coup critique.', ja: '[[icon:D]]を1回与える直前に、幸運の層数がその1回の軽減前ダメージ以上なら、同じ層数を消費してそのダメージを暴击させます。' },
+        color: '#63B85C', icon: 'luck', stacking: 'stack', visible: true,
+    },
+    {
+        id: 'hel:blazing_fire', alias: 'blazing_fire',
+        name_i18n: { zh: '烈火', en: 'Blazing Fire', fr: 'Feu ardent', ja: '烈火' },
+        description_i18n: { zh: '自己回合开始时，对自己施加等同于烈火层数的[[icon:F]]；不自动减少。', en: 'At the start of your turn, apply [[icon:F]] equal to its stacks to yourself. Does not decay.', fr: 'Au début de votre tour, appliquez-vous [[icon:F]] égal à ses charges. Ne diminue pas automatiquement.', ja: '自分のターン開始時、層数と同じ[[icon:F]]を自分に付与します。自然減少しません。' },
+        color: '#FF5D2E', icon: 'blazing_fire', stacking: 'stack', visible: true,
+    },
+    {
+        id: 'jungle:fragile', alias: 'fragile',
+        name_i18n: { zh: '易损', en: 'Fragile', fr: 'Fragile', ja: '脆弱' },
+        description_i18n: { zh: '护甲降低对应层数；若护甲被降到负数，会让受到的物理伤害增加。自己回合开始时清除。', en: 'Reduces armor by its stacks. Negative armor increases physical damage taken. Clears at your turn start.', fr: 'Réduit l\'armure de ses charges. Une armure négative augmente les dégâts physiques reçus. Disparaît au début de votre tour.', ja: '護甲を層数分減らします。護甲が負なら受ける物理ダメージが増えます。自分ターン開始時に消えます。' },
+        color: '#8E5A2A', icon: 'fragile', stacking: 'stack', visible: true,
+    },
+    {
+        id: 'jungle:shield', alias: 'shield',
+        name_i18n: { zh: '护盾', en: 'Shield', fr: 'Bouclier', ja: 'シールド' },
+        description_i18n: { zh: '受到伤害时先消耗护盾层数抵扣等量伤害，包括魔法伤害。自己回合开始时层数减半。', en: 'When damage would be taken, consume stacks to block that much damage first, including magic damage. Halves at your turn start.', fr: 'Quand des dégâts devraient être subis, consomme ses charges pour en bloquer autant, y compris les dégâts magiques. Est divisé par deux au début de votre tour.', ja: 'ダメージを受ける時、まず層数を消費して同量のダメージを防ぎます（魔法ダメージも含む）。自分ターン開始時に半減します。' },
+        color: '#66A6A6', icon: 'shield', stacking: 'stack', visible: true,
+    },
+    {
+        id: 'jungle:turn_heal_turns', alias: 'turn_heal_turns',
+        name_i18n: { zh: '回合回复', en: 'Turn Heal', fr: 'Soin de tour', ja: 'ターン回復' },
+        description_i18n: { zh: '回合回复:X;Y：出现时及自己回合开始时回复Y[[icon:H]]，然后X-1；X为0时移除。', en: 'Shown as Turn Heal:X;Y. When applied and at your turn start, heal Y H, then X decreases by 1. Removed at X=0.', fr: 'Affiché Soin de tour:X;Y. À l\'application et au début de votre tour, soigne Y H, puis X diminue de 1. Retiré à X=0.', ja: '回合回复:X;Y と表示。付与時とターン開始時にY H回復し、Xが1減ります。X=0で消えます。' },
+        color: '#F48FB1', icon: 'turn_heal', stacking: 'stack', visible: true,
+    },
+    {
+        id: 'jungle:turn_magic_turns', alias: 'turn_magic_turns',
+        name_i18n: { zh: '魔力回合回复', en: 'Turn Magic Regen', fr: 'Régénération magique', ja: '魔力ターン回復' },
+        description_i18n: { zh: '魔力回合回复:X;Y：出现时及自己回合开始时回复Y[[icon:M]]，然后X-1；X为0时移除。', en: 'Shown as Turn Magic Regen:X;Y. When applied and at turn start, recover Y M, then X decreases by 1. Removed at X=0.', fr: 'Affiché Régénération magique:X;Y. À l\'application et au début du tour, récupère Y M, puis X diminue de 1. Retiré à X=0.', ja: '魔力回合回复:X;Y と表示。付与時とターン開始時にY M回復し、Xが1減ります。X=0で消えます。' },
+        color: '#6C5CE7', icon: 'turn_magic', stacking: 'stack', visible: true,
+    },
+    {
+        id: 'jungle:root_status', alias: 'root_status',
+        name_i18n: { zh: '树根', en: 'Root', fr: 'Racine', ja: '根' },
+        description_i18n: { zh: '树根层数显示在对应装备上，并计入目标护甲；目标受到[[icon:D]]时，对应装备减少1层树根。', en: 'Increases armor. Loses 1 stack when physical damage is taken. The Root equipment that created it clears its own stacks when leaving play.', fr: 'Augmente l\'armure. Perd 1 charge quand des dégâts physiques sont subis. L\'équipement Racine qui l\'a créé retire ses propres charges en quittant le jeu.', ja: '護甲を増やします。物理ダメージを受けると1層減ります。生成元のRoot装備が離場すると対応分を消します。' },
+        color: '#6E8B3D', icon: 'root_status', stacking: 'stack', visible: true,
+    },
+    {
+        id: 'jungle:toxic_poison', alias: 'toxic_poison',
+        name_i18n: { zh: '剧毒', en: 'Toxic Poison', fr: 'Poison virulent', ja: '劇毒' },
+        description_i18n: { zh: '中毒结算后，对自己施加等同于剧毒层数的[[icon:P]]；不自动减少。', en: 'After Poison resolves, applies that many additional P.', fr: 'Après la résolution du Poison, applique autant de P supplémentaires.', ja: '毒の解決後、同じ層数のPを追加付与します。' },
+        color: '#5E8C31', icon: 'toxic_poison', stacking: 'stack', visible: true,
+    },
+    {
+        id: 'jungle:turn_heal_power', alias: 'turn_heal_power',
+        name_i18n: { zh: '回合回复量', en: 'Turn Heal Power', fr: 'Puissance de soin de tour', ja: 'ターン回復量' },
+        description_i18n: { zh: '由「回合回复 / 魔力回合回复」携带的每次回复量（内部使用）。', en: 'Internal stack carried by Turn Heal / Turn Magic Regen (the per-turn amount).', fr: 'Charge interne portée par Soin de tour / Régénération magique (la quantité par tour).', ja: '「ターン回復 / 魔力ターン回復」が持つ内部層数（1回あたりの回復量）。' },
+        color: '', icon: 'turn_heal', stacking: 'stack', visible: false,
+    },
+    {
+        id: 'jungle:turn_magic_power', alias: 'turn_magic_power',
+        name_i18n: { zh: '魔力回合回复量', en: 'Turn Magic Power', fr: 'Puissance de régénération magique', ja: '魔力ターン回復量' },
+        description_i18n: { zh: '由「回合回复 / 魔力回合回复」携带的每次回复量（内部使用）。', en: 'Internal stack carried by Turn Heal / Turn Magic Regen (the per-turn amount).', fr: 'Charge interne portée par Soin de tour / Régénération magique (la quantité par tour).', ja: '「ターン回復 / 魔力ターン回復」が持つ内部層数（1回あたりの回復量）。' },
+        color: '', icon: 'turn_magic', stacking: 'stack', visible: false,
+    },
+    {
+        id: 'ocean:blood_debt', alias: 'blood_debt',
+        name_i18n: { zh: '血债', en: 'Blood Debt', fr: 'Dette de sang', ja: '血債' },
+        description_i18n: { zh: '受到[[icon:D]]时清除；攻击者获得等同于血债层数的[[icon:E]]。', en: 'When physical damage is taken, this effect clears and the attacker gains E equal to its stacks.', fr: 'Quand des dégâts physiques sont subis, cet effet disparaît et l\'attaquant gagne E égal aux charges.', ja: '物理ダメージを受けるとこの効果は消え、攻撃者は層数分のEを得ます。' },
+        color: '#8E1B2A', icon: 'blood_debt', stacking: 'stack', visible: true,
+    },
+    {
+        id: 'ocean:unable_counter', alias: 'unable_counter',
+        name_i18n: { zh: '无法反制', en: 'Unable to Counter', fr: 'Contre impossible', ja: '反制不能' },
+        description_i18n: { zh: '从左到右将层数张反制牌置入弃牌堆，然后减少对应层数。若层数不为0，抽到反制牌时自动将其置入弃牌堆并降低层数。', en: 'Discards counter cards from left to right equal to its stacks, then reduces those stacks. If stacks remain, drawn counter cards are discarded and reduce stacks.', fr: 'Défausse de gauche à droite autant de contres que de charges, puis réduit ces charges. S\'il en reste, les contres piochés sont défaussés et réduisent les charges.', ja: '層数分だけ左から反制牌を弃牌に置き、その分層数を減らします。層数が残る間、引いた反制牌も弃牌に置かれ層数が減ります。' },
+        color: '#536878', icon: '', stacking: 'stack', visible: true,
+    },
+    {
+        id: 'sewers:sealed', alias: 'sealed',
+        name_i18n: { zh: '尘封', en: 'Sealed', fr: 'Scellé', ja: '封印' },
+        description_i18n: { zh: '存在时，此装备的效果不生效、不能触发，且已装备回合数不增加；装备护甲仍然生效。装备拥有者回合开始时，先跳过本次应执行的效果，再减少1层。', en: 'While present, this equipment\'s effects are inactive, it cannot be triggered, and its equipped-turn count does not increase; Equipment Armor remains active. At the start of its owner\'s turn, skip its effects for that start, then remove 1 stack.', fr: 'Tant que cet effet est présent, les effets de cet équipement sont inactifs, il ne peut pas être déclenché et son nombre de tours équipés n\'augmente pas ; l\'Armure d\'équipement reste active. Au début du tour de son propriétaire, ignorez ses effets de ce début de tour, puis retirez 1 cumul.', ja: '存在する間、この装備の効果は発動せず、手動発動もできず、装備ターン数も増えない。装備アーマーは有効。装備者のターン開始時、その開始時効果を無効にした後、1層減少する。' },
+        color: '#8C6B43', icon: '', stacking: 'stack', visible: true,
+    },
+];
+// ==== CORE_STATUS_DEFS END ====
+
+/* 官方状态内置表（Round 107 / 批次 DE，方案 B）：17 条官方状态原先由 7 个官方包在
+   `registries.statuses` 里声明，现在收进引擎单表（`official_statuses.py`）并由
+   `tools/sync_core_status_defs.py` 生成上面这段。图鉴、状态提示、战斗内状态条、
+   卡面着色都从这里取，包内不再重复声明；同 id 的模组声明一律让位给内置表。 */
+let coreStatusDefMapCache = null;
+function getCoreStatusDefMap() {
+    if (coreStatusDefMapCache) return coreStatusDefMapCache;
+    const map = new Map();
+    (Array.isArray(CORE_STATUS_DEFS) ? CORE_STATUS_DEFS : []).forEach(def => {
+        if (def && def.id) map.set(String(def.id), def);
+    });
+    coreStatusDefMapCache = map;
+    return map;
+}
+
+function getCoreStatusDef(statusId) {
+    const raw = String(statusId || '').trim();
+    if (!raw) return null;
+    const defs = getCoreStatusDefMap();
+    const direct = defs.get(raw);
+    if (direct) return direct;
+    const comparable = raw.toLowerCase().replace(/[\s-]+/g, '_');
+    if (!comparable) return null;
+    for (const def of defs.values()) {
+        if (String(def.alias || '').toLowerCase() === comparable) return def;
+        if (String(def.id).split(':').pop().toLowerCase() === comparable) return def;
+    }
+    for (const def of defs.values()) {
+        const names = Object.values((def && def.name_i18n) || {});
+        if (names.some(name => String(name || '').trim().toLowerCase().replace(/[\s-]+/g, '_') === comparable)) {
+            return def;
+        }
+    }
+    return null;
+}
+
+function getCoreStatusIds() {
+    return [...getCoreStatusDefMap().keys()];
+}
 
 function getRegistryText(def, field, fallback = '') {
     if (!def) return fallback;
@@ -9248,6 +9399,7 @@ function getAllStatusDefs() {
         'hel:luck',
         'hel:blazing_fire',
         'troll_cards:magic_blocked',
+        ...getCoreStatusIds(),
     ]);
     const statusGalleryAliases = new Map([
         ['jungle:root_status', 'root_status'],
@@ -9321,8 +9473,25 @@ function getAllStatusDefs() {
         if (term.desc) status.desc = term.desc;
     }
     builtInList.forEach(s => result.set(s.key, { ...s, source: s.source || 'vanilla' }));
+    /* 官方状态内置表（17 条）：直接进图鉴；visible:false 的内部层（回合回复量 /
+       魔力回合回复量）只参与数据，不展示。命名空间 id 会按别名表归到短名条目。 */
+    (Array.isArray(CORE_STATUS_DEFS) ? CORE_STATUS_DEFS : []).forEach(def => {
+        if (!def || !def.id || def.visible === false) return;
+        const targetId = statusGalleryAliases.get(String(def.id)) || String(def.id);
+        const existing = result.get(targetId);
+        result.set(targetId, {
+            key: targetId,
+            label: getRegistryText(def, 'name', String(def.id)),
+            desc: getRegistryText(def, 'description', existing ? existing.desc : ''),
+            color: safeRegistryColor(def.color, existing ? existing.color : '#1F618D'),
+            iconKey: normalizeStatusIconKey(def.icon || targetId),
+            source: 'vanilla',
+        });
+    });
     if (CUSTOM_STATUS_DEFS && typeof CUSTOM_STATUS_DEFS === 'object') {
         Object.entries(CUSTOM_STATUS_DEFS).forEach(([id, def]) => {
+            /* 官方状态以内置表为准：包（含第三方模组）再声明同 id 也不覆盖、不重复。 */
+            if (getCoreStatusDef(id)) return;
             const aliasKey = statusGalleryAliases.get(String(id)) || '';
             const targetId = aliasKey || id;
             const existing = result.get(targetId);
@@ -39343,4 +39512,3 @@ if (window.__GTN_CARD_EXPORTER_RENDERER__) {
     document.addEventListener('focusout', onBattleMobileInputFocusOut, true);
     debugLog('[LOAD] game.js loaded, onEndTurn=', typeof onEndTurn);
 }
-

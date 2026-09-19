@@ -18,6 +18,7 @@ from cards import (
     card_trigger_ready_turns, YGGDRASIL_HEAL,
 )
 from runtime_errors import MOD_RUNTIME_ERROR_MESSAGE, record_mod_runtime_error
+import official_statuses
 from mod_runtime_v2 import (
     ATOMIC_OP_MACROS,
     apply_param_synonyms,
@@ -1737,6 +1738,10 @@ class GameEngine:
         status = str(status or '').strip()
         if not status:
             return None
+        # Round 107 / 批次 DE：17 条官方状态已内置（包内声明删除），先查内置表。
+        builtin = official_statuses.engine_status_def(status)
+        if isinstance(builtin, dict):
+            return builtin
         v2_status = (getattr(self, 'v2_status_defs', {}) or {}).get(status)
         if isinstance(v2_status, dict):
             return v2_status
@@ -2375,6 +2380,11 @@ class GameEngine:
         return max(0, int(damage or 0))
 
     def _get_v2_status_def(self, status_id: str) -> Optional[dict]:
+        # 官方状态的行为（含两条回合回复的 events）来自内置表：包声明删掉也不会掉功能，
+        # 第三方包想同名覆盖也不行——id 是官方的，只有一份权威定义。
+        builtin = official_statuses.engine_status_def(status_id)
+        if isinstance(builtin, dict):
+            return builtin
         defs = getattr(self, 'v2_status_defs', {}) or {}
         status = defs.get(str(status_id or ''))
         return status if isinstance(status, dict) else None

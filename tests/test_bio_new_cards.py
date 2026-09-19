@@ -9,6 +9,8 @@ from game_engine import EquipmentInstance, GameEngine
 from game_engine_2v2 import GameEngine2v2
 from mod_loader import load_mod
 
+import official_statuses
+
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "mods" / "Bio Cards Addition.gtnmod"
@@ -99,11 +101,21 @@ class BioNewCardsTests(unittest.TestCase):
                 jurassic.read("card-art/amulet.svg"),
             )
             spec = json.loads(archive.read("mod.json"))
-            statuses = {item["id"]: item for item in spec["registries"]["statuses"]}
-            self.assertEqual(statuses["bio:shield_conversion"]["icon"], "shield_conversion")
+            # Round 107 / 批次 DE：护盾转化改成内置状态（声明与四语言文案搬进
+            # official_statuses.py），包里不再重复声明。
+            self.assertEqual(
+                official_statuses.get_status("bio:shield_conversion")["icon"], "shield_conversion"
+            )
+            declared = {
+                item["id"] for item in (spec.get("registries") or {}).get("statuses") or []
+            }
+            self.assertNotIn("bio:shield_conversion", declared)
             for locale in ("zh", "en", "fr", "ja"):
                 translated = json.loads(archive.read(f"locales/{locale}.json"))
-                self.assertIn("bio:shield_conversion", translated["statuses"])
+                self.assertNotIn("bio:shield_conversion", translated.get("statuses") or {})
+                status_text = official_statuses.get_status("bio:shield_conversion")
+                self.assertTrue(status_text["name_i18n"].get(locale))
+                self.assertTrue(status_text["desc_i18n"].get(locale))
                 for card_id in ("bio:cyanide_pill", "bio:stem_cell", "bio:mitochondria"):
                     self.assertIn(card_id, translated["cards"])
 

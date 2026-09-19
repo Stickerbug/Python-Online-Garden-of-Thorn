@@ -605,29 +605,13 @@ def update_bio_dlc(assets):
         "zh": "生化卡DLC包", "en": "Bio Cards DLC", "fr": "DLC de cartes bio", "ja": "生化カードDLC",
         "en_description": "Additional cards for Bio Cards Addition.",
     }
-    status_translations = {
-        "zh": {
-            "name": "护盾转化",
-            "description": "下次将回复[[icon:H]]时，若原回复量大于0，改为获得(原回复量×护盾转化层数)层护盾，然后清空护盾转化。",
-        },
-        "en": {
-            "name": "Shield Conversion",
-            "description": "The next time [[icon:H]] would be restored, if the original amount is greater than 0, gain Shield equal to (original amount × Shield Conversion stacks) instead, then clear Shield Conversion.",
-        },
-        "fr": {
-            "name": "Conversion de bouclier",
-            "description": "La prochaine fois que des [[icon:H]] devraient être récupérés, si la quantité initiale est supérieure à 0, gagnez à la place un Bouclier égal à (quantité initiale × charges de Conversion de bouclier), puis retirez toutes ses charges.",
-        },
-        "ja": {
-            "name": "シールド変換",
-            "description": "次に[[icon:H]]を回復する時、元の回復量が0より大きければ、代わりに(元の回復量×シールド変換の層数)のシールドを得て、その後シールド変換を全て消去します。",
-        },
-    }
+    # Round 107 / 批次 DE（方案 B）：`bio:shield_conversion` 的四语言文案已经进内置表
+    # （Python联机版/official_statuses.py），包里不再写 statuses 声明/文案——否则重新
+    # 生成这个 DLC 会把第二个来源又写回去。
     base_locales = {}
     for language in LANGUAGES:
         key = f"locales/{language}.json"
         base = json.loads(members[key].decode("utf-8-sig")) if key in members else {}
-        base.setdefault("statuses", {})["bio:shield_conversion"] = status_translations[language]
         base_locales[language] = base
     status_icon = members.get("status-icons/shield_conversion.svg")
     if status_icon is None:

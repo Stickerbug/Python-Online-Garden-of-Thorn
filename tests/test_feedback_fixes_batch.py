@@ -9,6 +9,8 @@ from pathlib import Path
 from game_engine import GameEngine
 from mod_loader import load_mod
 
+import official_statuses
+
 
 ROOT = Path(__file__).resolve().parents[1]
 VANILLA_PACKAGE = ROOT / 'mods' / 'Vanilla Cards.gtnmod'
@@ -87,16 +89,22 @@ class MagicLeafSelfTargetTests(unittest.TestCase):
 
 class BioStatusLocaleTests(unittest.TestCase):
     def test_chinese_locale_covers_every_bio_status(self):
-        """反馈 #159：中文缺少状态翻译时客户端会退回显示 `bio:extra_healing`。"""
+        """反馈 #159 + Round 107 / 批次 DE：生化状态的中文文案由内置表提供。
+
+        以前靠包内 `registries.statuses` + `locales/zh.json`；现在这两处都不再声明，
+        文案统一在 `official_statuses.py`（客户端同步表由 sync_core_status_defs 生成）。
+        """
+
+        for status_id in ('bio:debt', 'bio:extra_healing', 'bio:shield_conversion'):
+            entry = official_statuses.get_status(status_id)
+            self.assertIsNotNone(entry)
+            for lang in ('zh', 'en', 'fr', 'ja'):
+                self.assertTrue(entry['name_i18n'].get(lang), f'{status_id} 缺 {lang} 名字')
+                self.assertTrue(entry['desc_i18n'].get(lang), f'{status_id} 缺 {lang} 描述')
         with zipfile.ZipFile(BIO_PACKAGE) as archive:
             data = json.loads(archive.read('mod.json').decode('utf-8'))
-            ids = [str(item.get('id')) for item in (data.get('registries') or {}).get('statuses') or []]
-            zh = json.loads(archive.read('locales/zh.json').decode('utf-8'))
-        statuses = zh.get('statuses') or {}
-        for status_id in ids:
-            self.assertIn(status_id, statuses)
-            self.assertTrue(statuses[status_id].get('name'))
-            self.assertTrue(statuses[status_id].get('description'))
+        ids = [str(item.get('id')) for item in (data.get('registries') or {}).get('statuses') or []]
+        self.assertEqual(ids, [])
 
 
 if __name__ == '__main__':

@@ -30,6 +30,7 @@ if str(ROOT) not in sys.path:
 
 import atomic_registry  # noqa: E402
 import mod_spec_v2  # noqa: E402
+import official_statuses  # noqa: E402
 
 DEFAULT_OUT = ROOT / "docs" / "原子全量清单.md"
 MODS_DIR = ROOT / "mods"
@@ -1141,17 +1142,34 @@ def usage_map() -> dict:
         text = json.dumps(payload, ensure_ascii=False)
         for name in atoms:
             usage[name] += len(re.findall(r'"op"\s*:\s*"%s"' % re.escape(name), text))
+    # Round 107 / 批次 DE：官方状态的事件步骤搬进了内置表（包内声明删除），
+    # 用量口径要跟着算上，否则本表数字会凭空掉一截。
+    text = json.dumps(builtin_status_events(), ensure_ascii=False)
+    for name in atoms:
+        usage[name] += len(re.findall(r'"op"\s*:\s*"%s"' % re.escape(name), text))
     return usage
+
+
+def builtin_status_events() -> list:
+    """内置状态表里带 ``events`` 的状态（它们的步骤算引擎侧数据步骤）。"""
+
+    return [
+        {"id": entry["id"], "events": entry["events"]}
+        for entry in official_statuses.OFFICIAL_STATUSES
+        if entry.get("events")
+    ]
 
 
 def any_position_usage() -> dict:
     """与 ``tools/op_long_tail_report.py`` 同口径：``op`` / ``type`` / ``ref`` 三键全位置计数。"""
 
     counter: collections.Counter = collections.Counter()
+    texts = [json.dumps(builtin_status_events(), ensure_ascii=False)]
     for package in sorted(MODS_DIR.glob("*.gtnmod")):
         with zipfile.ZipFile(package) as archive:
             payload = json.loads(archive.read("mod.json"))
-        text = json.dumps(payload, ensure_ascii=False)
+        texts.append(json.dumps(payload, ensure_ascii=False))
+    for text in texts:
         for name in set(mod_spec_v2.VALID_LOGIC_OPS):
             counter[name] += len(
                 re.findall(r'"(?:op|type|ref)"\s*:\s*"%s"' % re.escape(name), text)
