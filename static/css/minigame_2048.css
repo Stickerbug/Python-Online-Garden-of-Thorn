@@ -7,16 +7,27 @@
    1. 方块显示**稀有度英文名**（可选叠加数值），所以方块字号按最长名称收敛；
    2. 方块底色用本站规格里的 17 档稀有度色板（行内变量注入），不是原版的数字色阶。
 
-   字体：原版用 Rubik（SIL OFL 1.1，已随包放在 static/fonts/）。
-   中文界面文字回退到系统 CJK 字体（Rubik 不含汉字）。 */
+   字体：按用户要求用**荆棘花园自己的字体 Kreadon**（原版外观、本站字体），
+   中文界面文字回退到系统 CJK 字体。 */
 
 @font-face {
-  font-family: 'Rubik';
-  src: url('/static/fonts/Rubik-VariableWeight.woff2') format('woff2');
-  font-weight: 300 900;
+  font-family: 'Kreadon';
+  src: url('/fonts/Kreadon-Regular.subset.woff2?v=3') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: optional;
+}
+
+@font-face {
+  font-family: 'Kreadon';
+  src: url('/fonts/Kreadon-Demi.subset.woff2?v=3') format('woff2');
+  font-weight: 700;
   font-style: normal;
   font-display: swap;
 }
+
+/* 隐藏元素必须是**真的**不显示：类选择器里的 display 会盖掉 UA 的 [hidden] */
+[hidden] { display: none !important; }
 
 :root {
   /* 原版配色 */
@@ -51,8 +62,8 @@
   min-height: 100vh;
   background: var(--g-bg);
   color: var(--g-text);
-  font-family: 'Rubik', 'Clear Sans', 'Helvetica Neue', Arial,
-    'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', sans-serif;
+  font-family: 'Kreadon', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC',
+    system-ui, sans-serif;
   font-size: 16px;
   -webkit-text-size-adjust: 100%;
 }
@@ -79,7 +90,7 @@
   margin: 0;
   font-size: 64px;
   line-height: 1;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: -0.02em;
 }
 
@@ -116,7 +127,7 @@
 .mg-score-value {
   display: block;
   font-size: 24px;
-  font-weight: 800;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1.15;
 }
@@ -128,7 +139,7 @@
   right: 0;
   top: 6px;
   font-size: 22px;
-  font-weight: 800;
+  font-weight: 700;
   color: rgba(119, 110, 101, 0.9);
   pointer-events: none;
   animation: mg-float 600ms ease-in forwards;
@@ -226,6 +237,7 @@
 }
 
 .mg-cell {
+  container-type: size;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -244,20 +256,32 @@
 }
 
 .mg-tile-name {
-  font-size: clamp(12px, 3.2vw, 17px);
-  font-weight: 800;
+  /* 按**文字长度**自动缩放（原版 2048 的数字也是长的更小）：
+     --mg-chars 由 JS 按名称长度写进方块；容器尺寸用 cqw/cqh，随格子大小一起变。 */
+  font-size: clamp(9px, min(
+    calc((100cqw - 12px) / (0.62 * var(--mg-chars, 5))),
+    calc((100cqh - 12px) / 2.3)
+  ), 34px);
+  font-weight: 700;
   line-height: 1.04;
   letter-spacing: -0.01em;
   text-align: center;
   overflow-wrap: anywhere;
   max-width: 100%;
+  /* 用 inline-block：盒子贴着文字宽度，JS 才能按"真实文字宽度"自适应字号 */
+  display: inline-block;
 }
 
 .mg-tile-value {
-  font-size: clamp(10px, 2.4vw, 13px);
-  font-weight: 600;
+  font-size: clamp(9px, 2.2vw, 12px);
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
-  opacity: 0.85;
+  opacity: 0.8;
+}
+
+/* 不支持容器查询单位的浏览器：退回按视口估算（名字长的一样会自动换行） */
+@supports not (container-type: size) {
+  .mg-tile-name { font-size: clamp(11px, 3.2vw, 17px); }
 }
 
 .mg-tile-new { animation: mg-appear 160ms ease 100ms backwards; }
@@ -295,7 +319,7 @@
 .mg-overlay-card h2 {
   margin: 0 0 18px;
   font-size: 44px;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--g-text);
 }
 
@@ -343,7 +367,7 @@
   color: var(--g-text);
 }
 
-.mg-hint strong { font-weight: 800; }
+.mg-hint strong { font-weight: 700; }
 
 .mg-legend-grid {
   display: grid;
@@ -372,7 +396,7 @@
   background: var(--mg-tile-bg);
   color: var(--mg-tile-fg);
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .mg-legend-name {
@@ -427,7 +451,7 @@
   gap: 10px;
 }
 
-.mg-modal-head strong { font-size: 16px; font-weight: 800; }
+.mg-modal-head strong { font-size: 16px; font-weight: 700; }
 .mg-modal-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
 .mg-modal-body { padding: 12px 16px 18px; overflow: auto; }
 
@@ -437,7 +461,7 @@
   text-align: left;
   padding: 6px 8px;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--g-text);
   border-bottom: 2px solid #d8cdbf;
 }
@@ -455,7 +479,7 @@
 
 [data-theme="dark"] .mg-rank-table tr.me td { background: #3a332b; }
 
-.mg-rank-table .mg-rank-no { font-weight: 800; }
+.mg-rank-table .mg-rank-no { font-weight: 700; }
 
 @media (max-width: 520px) {
   .mg-title { font-size: 48px; }

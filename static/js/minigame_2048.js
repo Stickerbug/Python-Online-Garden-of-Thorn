@@ -138,10 +138,15 @@ function renderBoard(animate) {
       tile.style.setProperty('--mg-tile-border', item ? item.border : '#7d8783');
       tile.style.setProperty('--mg-tile-fg', item ? item.fg : '#15201B');
       const name = tileLabel(value);
-      tile.innerHTML = name
-        ? `<span class="mg-tile-name">${name}</span>`
-          + (showNumbers ? `<span class="mg-tile-value">${value}</span>` : '')
-        : `<span class="mg-tile-value">${value}</span>`;
+      if (name) {
+        // 名称越长字号越小：CSS 用 --mg-chars 算 cqw/cqh 比例（见 minigame_2048.css）
+        tile.style.setProperty('--mg-chars', String(name.length));
+        tile.innerHTML = `<span class="mg-tile-name">${name}</span>`
+          + (showNumbers ? `<span class="mg-tile-value">${value}</span>` : '');
+      } else {
+        tile.style.setProperty('--mg-chars', String(String(value).length));
+        tile.innerHTML = `<span class="mg-tile-name">${value}</span>`;
+      }
       tile.classList.add('mg-tile');
       if (animate && state.lastSpawn === index) tile.classList.add('mg-tile-new');
       if (animate && state.lastMerges && state.lastMerges.includes(index)) tile.classList.add('mg-tile-merged');
@@ -150,6 +155,7 @@ function renderBoard(animate) {
   });
   scoreEl.textContent = String(state.score);
   bestEl.textContent = String(state.best);
+  scheduleTileFit();
   if (pending > 0) {
     setSyncText(`待同步 ${pending} 步${navigator.onLine ? '' : '（离线，本地已保存）'}`,
       navigator.onLine ? 'pending' : 'offline');
@@ -157,6 +163,49 @@ function renderBoard(animate) {
     setSyncText(state.lastSyncLabel || '已同步', 'ok');
   }
 }
+
+let tileFitFrame = null;
+
+function fitTileNames() {
+  const cells = boardEl.querySelectorAll('.mg-cell.filled');
+  cells.forEach((cell) => {
+    const name = cell.querySelector('.mg-tile-name');
+    if (!name) return;
+    const availW = Math.max(18, cell.clientWidth - 10);
+    const availH = Math.max(14, cell.clientHeight - 10);
+    const fits = (size) => {
+      name.style.fontSize = `${size}px`;
+      const rect = name.getBoundingClientRect();
+      return rect.width <= availW + 0.5 && rect.height <= availH + 0.5;
+    };
+    // 二分找出"能放下"的最大字号：短名更大、长名自动变小，且尽量占满格子。
+    const MAX_SIZE = 40;
+    const MIN_SIZE = 9;
+    let low = MIN_SIZE;
+    let high = MAX_SIZE;
+    if (fits(high)) {
+      name.style.fontSize = `${high}px`;
+      return;
+    }
+    while (high - low > 0.5) {
+      const mid = (low + high) / 2;
+      if (fits(mid)) low = mid;
+      else high = mid;
+    }
+    name.style.fontSize = `${Math.floor(low * 10) / 10}px`;
+  });
+}
+
+function scheduleTileFit() {
+  if (tileFitFrame) window.cancelAnimationFrame(tileFitFrame);
+  tileFitFrame = window.requestAnimationFrame(() => {
+    tileFitFrame = null;
+    fitTileNames();
+  });
+}
+
+// 便于自动化检查（也方便以后调试）：手动触发一次"字号自适应"
+window.__mgFit = fitTileNames;
 
 function buildLegend() {
   const host = el('mg-legend-grid');
@@ -629,6 +678,8 @@ async function boot() {
   boardEl.focus();
   window.addEventListener('online', () => { retryDelay = RETRY_BASE_MS; scheduleSync(200); });
   window.addEventListener('offline', () => setSyncText('离线，本地已保存', 'offline'));
+  window.addEventListener('resize', () => scheduleTileFit());
+  window.addEventListener('orientationchange', () => scheduleTileFit());
   document.addEventListener('visibilitychange', () => { if (!document.hidden) scheduleSync(200); });
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/minigame/2048/sw.js', { scope: '/minigame/2048' })
@@ -645,6 +696,7 @@ el('mg-rank').addEventListener('click', () => { void openLeaderboard('14d'); });
 el('mg-show-numbers').addEventListener('change', (event) => {
   showNumbers = event.target.checked;
   renderBoard(false);
+  scheduleTileFit();
   void savePrefs();
 });
 el('mg-decline-invites').addEventListener('change', () => { void savePrefs(); });
