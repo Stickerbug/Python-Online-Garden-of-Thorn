@@ -26931,11 +26931,22 @@ function renderLobby(data) {
         row.className = 'lobby-player-row';
         const isMe = p.sid === mySid;
         const isSpectatingPlayer = p.status === 'spectating';
+        const isMinigamePlayer = p.status === 'minigame';
         row.classList.toggle('is-spectating', isSpectatingPlayer);
+        row.classList.toggle('is-minigame', isMinigamePlayer);
         const nameSpan = document.createElement('span');
         nameSpan.className = isMe ? 'player-name player-self' : 'player-name';
         setPlayerNameContent(nameSpan, p, { adminPrefix: true });
         row.appendChild(nameSpan);
+        if (isMinigamePlayer) {
+          const badge = document.createElement('span');
+          badge.className = 'lobby-minigame-badge';
+          const label = p.minigame === '2048' ? '2048' : (p.minigame || '');
+          badge.textContent = currentLang === 'zh'
+            ? `小游戏中${label ? ` · ${label}` : ''}`
+            : `Minigame${label ? ` · ${label}` : ''}`;
+          row.appendChild(badge);
+        }
         if (isSpectatingPlayer) {
             const badge = document.createElement('span');
             badge.className = 'lobby-spectating-badge';

@@ -414,6 +414,7 @@ Socket.IO 使用默认命名空间与 <code>/socket.io/</code> 传输路径。�
 服务端推送属于 UI 内部协议，字段不承诺稳定。当前事件包括：
 
 - 状态：<code>lobby_update</code>、<code>state_update</code>、<code>solo_state</code>、<code>draft_state</code>、<code>game_phase</code>、<code>pregame_status_update</code>、<code>mod_draw_state</code>、<code>mod_draw_skipped</code>、<code>mod_unlock_required</code>、<code>mod_unlock_updated</code>。
+- 休闲花园（2048，内测）：客户端发 <code>minigame_presence</code>（进入小游戏，标"小游戏中"）、<code>minigame_leave</code>（回到大厅）；服务端回 <code>minigame_status</code>，权限不足或处于对局/观战/重连中时回 <code>server_error</code>（<code>reason=minigame_denied</code> / <code>minigame_lower_priority</code>）。这两个事件只改在线状态，不参与登录接管。
 - 选择：<code>choice_request</code>、<code>response_request</code>、<code>v2_ui_request</code>、<code>ally_consent_request</code>。
 - 邀请/队伍：<code>invite_received</code>、<code>invite_confirm_required</code>、<code>invite_gr_preview</code>、<code>team_invite</code>、<code>team_match_invite</code>、<code>team_match_confirm_required</code>、<code>team_formed</code>、<code>team_disbanded</code>。
 - 断线/计时：<code>opponent_disconnected</code>、<code>opponent_reconnected</code>、<code>reconnect_available</code>、<code>reconnect_timeout</code>、<code>turn_timer_update</code>、<code>pregame_timer_update</code>。

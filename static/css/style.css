@@ -21477,6 +21477,25 @@ html[data-ui-style="minimal"][data-theme="dark"] .card,
   white-space: nowrap;
 }
 
+/* Round 110：大厅里显示"小游戏中 · 2048"（表现与观战状态同级，不易被忽略） */
+.lobby-player-row.is-minigame .player-name {
+  opacity: 0.72;
+}
+
+.lobby-minigame-badge {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, var(--accent, #2563eb) 45%, transparent);
+  border-radius: 4px;
+  color: var(--accent, #2563eb);
+  background: color-mix(in srgb, var(--bg-card) 82%, transparent);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
 .battle-panel-tabs {
   display: flex;
   align-items: stretch;

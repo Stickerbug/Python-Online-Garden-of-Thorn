@@ -85,6 +85,20 @@
 .mg-sync[data-state="denied"], .mg-sync[data-state="conflict"], .mg-sync[data-state="error"] { color: var(--mg-danger); }
 
 .mg-board-wrap { position: relative; }
+
+.mg-invite {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--mg-accent);
+  background: color-mix(in srgb, var(--mg-accent) 12%, var(--mg-surface));
+  font-size: 13px;
+  font-weight: 600;
+}
 .mg-board {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

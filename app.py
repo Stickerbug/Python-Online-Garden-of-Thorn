@@ -5132,15 +5132,39 @@ def player_accepts_game_invites(player):
     return bool(player) and player.get('accept_game_invites', True) is not False
 
 
+def minigame_2048_player_declines_invites(player) -> bool:
+    """小游戏里的「拒绝对局邀请」偏好（按账号存，在邀请处理处判定）。
+
+    Round 110：只有当前正在玩小游戏的玩家才受这条偏好约束；回到大厅后恢复
+    正常的对局邀请行为。数据库不可用时按"不拒绝"处理（宁可放行也不误伤）。
+    """
+
+    if not isinstance(player, dict) or player.get('status') != 'minigame':
+        return False
+    user_id = player.get('user_id')
+    if not user_id or not DB_AVAILABLE:
+        return False
+    try:
+        with get_db_connection() as conn:
+            return minigame_2048_service.prefs_decline_invites(conn, int(user_id))
+    except Exception as exc:
+        admin_event('error', f'2048 invite preference check failed: {exc}')
+        return False
+
+
 def player_is_lobby_match_available(sid):
     """Return whether a connected player is genuinely free for a lobby invite.
 
     Status and room membership can briefly arrive out of order during reconnects,
     so invitation checks must not rely on the public lobby status alone.
+
+    Round 110：在大厅里玩小游戏（``status='minigame'``）的玩家**默认可被邀请**，
+    只要他没有真正在房间里（下面几条检查照旧）。是否接受由邀请处理处再按
+    小游戏偏好（拒绝对局邀请）判定。
     Callers hold ``_lock`` while using this helper.
     """
     player = players.get(sid)
-    if not player or player.get('status') != 'lobby':
+    if not player or player.get('status') not in ('lobby', 'minigame'):
         return False
     if player.get('room_id') is not None or player.get('spectating_room') is not None:
         return False
@@ -5388,6 +5412,7 @@ def public_player_info(sid, player=None):
         'nickname': p.get('nickname', '?'),
         'mode': p.get('mode', '1v1'),
         'status': status,
+        'minigame': p.get('minigame') if status == 'minigame' else None,
         'spectating_room': spectating_room,
         'spectating_mode': spectating_mode,
         'match_type': match_type,
@@ -9367,10 +9392,12 @@ def get_lobby_list(beta_mode=None):
     for sid, p in players.items():
         if beta_mode is not None and bool(p.get('beta_mode')) != bool(beta_mode):
             continue
-        if p.get('status') in {'lobby', 'spectating'}:
+        # 'minigame'（休闲花园）跟 'spectating' 同级：仍然出现在大厅里，状态另标。
+        if p.get('status') in {'lobby', 'spectating', 'minigame'}:
             lobby.append(public_player_info(sid, p))
     lobby.sort(key=lambda item: (
         item.get('status') == 'spectating',
+        item.get('status') == 'minigame',
         item.get('special_role_sort', 99),
         item.get('nickname', '').lower(),
     ))
@@ -13051,6 +13078,7 @@ def zh_status(value):
         'lobby': '大厅',
         'in_game': '对局中',
         'spectating': '观战中',
+        'minigame': '小游戏中',
         'reconnecting': '重连中',
         'solo': '单人训练',
         'story': '故事模式',
@@ -26649,6 +26677,84 @@ def on_connect():
             print(f'socket_event event=connect elapsed_ms={elapsed_ms:.1f} sid={sid} ok={ok}', flush=True)
 
 
+@socketio.on('minigame_presence')
+def on_minigame_presence(data=None):
+    """休闲花园小游戏的在线状态（Round 110 / 用户第九节）。
+
+    * 只标状态，不参与登录接管：后台的 2048 标签页不能把正在对局的人改回可邀请；
+    * 权限用 **服务端会话 + 角色表** 判定，客户端自报的角色无效；
+    * 断线时走正常 disconnect 清理，不会为了支持离线游玩伪造在线。
+    """
+
+    sid = request.sid
+    payload = data if isinstance(data, dict) else {}
+    game_key = str(payload.get('game') or '').strip()[:32]
+    if game_key != '2048':
+        _security_illegal(sid, 'minigame_presence', '未知小游戏', emit_error=False, severity='low')
+        return
+    user_id = session.get('user_id')
+    username = str(session.get('username') or '')
+    if not user_id:
+        emit('server_error', {'message': '请先登录', 'reason': 'minigame_login_required'})
+        return
+    if not MINIGAME_2048_ENABLED:
+        emit('server_error', {'message': '小游戏暂不可用', 'reason': 'minigame_disabled'})
+        return
+    try:
+        allowed = minigame_2048_service.can_access_minigame(user_id, username)
+    except Exception as exc:
+        admin_event('error', f'2048 presence permission check failed: {exc}')
+        allowed = False
+    if not allowed:
+        emit('server_error', {'message': '2048 内测中：目前仅 staff / admin 可进入',
+                              'reason': 'minigame_denied'})
+        return
+    changed = False
+    blocked_reason = ''
+    with _lock:
+        player = players.get(sid)
+        if player is None:
+            return
+        status = player.get('status')
+        if status == 'lobby':
+            player['status'] = 'minigame'
+            player['minigame'] = '2048'
+            player['minigame_since'] = time.time()
+            changed = True
+        elif status == 'minigame':
+            player['minigame'] = '2048'
+            player['minigame_since'] = time.time()
+        else:
+            # 正式对局 / 观战 / 重连中优先：小游戏标签页不许改写这些状态
+            blocked_reason = 'minigame_lower_priority'
+    if blocked_reason:
+        emit('server_error', {
+            'message': '当前状态优先于小游戏（对局 / 观战 / 重连中），小游戏状态未生效',
+            'reason': blocked_reason,
+        })
+        return
+    emit('minigame_status', {'ok': True, 'game': '2048', 'status': 'minigame'})
+    if changed:
+        broadcast_lobby()
+
+
+@socketio.on('minigame_leave')
+def on_minigame_leave(data=None):
+    """离开小游戏（页面内返回大厅时）：状态回到大厅并按需要广播。"""
+
+    sid = request.sid
+    changed = False
+    with _lock:
+        player = players.get(sid)
+        if player and player.get('status') == 'minigame':
+            player['status'] = 'lobby'
+            player.pop('minigame', None)
+            player.pop('minigame_since', None)
+            changed = True
+    if changed:
+        broadcast_lobby()
+
+
 @socketio.on('latency_ping')
 def on_latency_ping(data=None):
     sid = request.sid
@@ -28803,6 +28909,13 @@ def on_invite(data):
             return
         if not player_accepts_game_invites(target):
             emit('server_error', {'message': '该玩家已关闭对局邀请', 'reason': 'game_invites_disabled'})
+            return
+        # 小游戏内的「拒绝对局邀请」：服务端在邀请处理处执行，不是把按钮变灰。
+        if minigame_2048_player_declines_invites(target):
+            emit('server_error', {
+                'message': '对方正在玩 2048，暂不接受对局邀请',
+                'reason': 'minigame_invites_declined',
+            })
             return
         if not same_runtime_scope_players(inviter, target):
             emit('server_error', {'message': runtime_scope_mismatch_message()})

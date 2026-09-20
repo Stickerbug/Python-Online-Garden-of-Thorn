@@ -422,6 +422,73 @@ boardEl.addEventListener('touchend', () => { touchStart = null; }, { passive: tr
 
 /* ---------------- 排行榜 / 偏好 ---------------- */
 
+/* ---------------- 大厅在线状态 + 对局邀请 ----------------
+   小游戏页只"标状态"：服务端据此在大厅显示「小游戏中 · 2048」，
+   正式对局 / 观战 / 重连中的状态优先，后台标签页改不动它们。
+   断线（关页、断网）走正常清理，不会伪造在线。 */
+
+let socket = null;
+
+function connectPresence() {
+  if (typeof io !== 'function') return;
+  socket = io({ transports: ['websocket', 'polling'], withCredentials: true });
+  socket.on('connect', () => {
+    socket.emit('minigame_presence', { game: '2048' });
+    setSyncText('在线：正在校验本机进度…');
+    scheduleSync(200);
+  });
+  socket.on('minigame_status', () => { /* 状态已生效 */ });
+  socket.on('server_error', (payload) => {
+    const reason = payload && payload.reason;
+    if (reason === 'minigame_denied' || reason === 'minigame_login_required') {
+      identityRejected = true;
+      setSyncText((payload && payload.message) || '身份或权限失效（本地进度仍在）', 'denied');
+      return;
+    }
+    if (reason === 'minigame_lower_priority') {
+      setSyncText('你正在对局 / 观战中：小游戏状态未生效', 'denied');
+    }
+  });
+  socket.on('invite_received', (payload) => {
+    // 邀请只做提示，不自动离开棋盘；接受前先保存本地进度并尝试同步。
+    showInvitePrompt(payload || {});
+  });
+  socket.on('invite_cancelled', () => hideInvitePrompt());
+}
+
+function showInvitePrompt(payload) {
+  const box = el('mg-invite');
+  const text = el('mg-invite-text');
+  if (!box || !text) return;
+  text.textContent = `${payload.from || '对方'} 邀请你对局${payload.mode ? `（${payload.mode}）` : ''}`;
+  box.hidden = false;
+}
+
+function hideInvitePrompt() {
+  const box = el('mg-invite');
+  if (box) box.hidden = true;
+}
+
+async function acceptInvite() {
+  hideInvitePrompt();
+  saveLocal();
+  try {
+    // 不无限阻塞：给同步最多 3 秒，没传完也继续（队列随后自动续传）。
+    await Promise.race([syncNow(), new Promise((resolve) => window.setTimeout(resolve, 3000))]);
+  } catch (_) { /* 同步失败也继续 */ }
+  if (socket) {
+    socket.emit('minigame_leave', { game: '2048' });
+    socket.emit('accept_invite', {});
+  }
+  setSyncText('正在进入对局…（进度已保存，未传完的操作会继续同步）');
+  window.setTimeout(() => { window.location.href = '/'; }, 600);
+}
+
+function declineInvite() {
+  hideInvitePrompt();
+  if (socket) socket.emit('decline_invite', {});
+}
+
 async function openLeaderboard(windowMode = '14d') {
   const modal = el('mg-rank-modal');
   const body = el('mg-rank-body');
@@ -550,10 +617,13 @@ async function boot() {
     navigator.serviceWorker.register('/minigame/2048/sw.js', { scope: '/minigame/2048' })
       .catch(() => { /* 缓存不可用不影响游玩 */ });
   }
+  connectPresence();
   void syncNow();
 }
 
 el('mg-new').addEventListener('click', () => { void restartGame(); });
+el('mg-invite-accept').addEventListener('click', () => { void acceptInvite(); });
+el('mg-invite-decline').addEventListener('click', () => { declineInvite(); });
 el('mg-rank').addEventListener('click', () => { void openLeaderboard('14d'); });
 el('mg-show-numbers').addEventListener('change', (event) => {
   showNumbers = event.target.checked;

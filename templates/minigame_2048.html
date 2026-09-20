@@ -59,6 +59,11 @@
   </section>
 
   <section class="mg-board-wrap">
+    <div id="mg-invite" class="mg-invite" hidden>
+      <span id="mg-invite-text">收到对局邀请</span>
+      <button id="mg-invite-accept" class="mg-btn primary small" type="button">接受</button>
+      <button id="mg-invite-decline" class="mg-btn small" type="button">拒绝</button>
+    </div>
     <div id="mg-board" class="mg-board" role="grid" aria-label="2048 棋盘（方向键 / WASD / 触摸滑动）" tabindex="0"></div>
     <div id="mg-overlay" class="mg-overlay" hidden>
       <div class="mg-overlay-card">
@@ -115,6 +120,7 @@
   'championMinAccounts': champion_min_accounts,
 } | tojson }}</script>
 <script nonce="{{ csp_nonce }}" type="application/json" id="mg-palette">{{ rarity_table | tojson }}</script>
+<script src="/static/vendor/socket.io.min.js?v=4.7.2"></script>
 <script type="module" src="/static/js/minigame_2048.js?v={{ static_version|default('dev')|urlencode }}"></script>
 </body>
 </html>
