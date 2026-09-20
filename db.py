@@ -897,6 +897,13 @@ def init_db(
         os.makedirs(parent, exist_ok=True)
     with get_db_connection() as conn:
         conn.execute('PRAGMA journal_mode=WAL;')
+        # 休闲花园小游戏（2048）的表：只做增量建表，幂等；失败不影响主库初始化。
+        try:
+            import minigame_2048_service
+            minigame_2048_service.ensure_schema(conn)
+        except Exception as exc:  # pragma: no cover - 建表失败时主功能照常
+            print(f'[startup] minigame2048 schema init failed: {type(exc).__name__}: {exc}',
+                  flush=True)
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS users (

@@ -51,6 +51,8 @@ except Exception:
 from flask import Flask, render_template, jsonify, request, send_from_directory, send_file, session, g, redirect
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from werkzeug.security import check_password_hash, generate_password_hash
+import minigame_2048
+import minigame_2048_service
 from ai_local_bridge import LocalAiBridgeError, get_local_ai_worker
 from ai_training_capture import (
     append_public_history as append_ai_training_public_history,
@@ -34712,6 +34714,233 @@ def _prewarm_local_ai_worker():
         admin_event('error', f'Phelren prewarm failed: {type(exc).__name__}: {exc}')
 
 
+"""--------------------------------------------------------------- 休闲花园：2048
+
+内测：只有 staff / admin 能用（权限取自服务端角色表，不看客户端自报）。
+规则核心在 ``minigame_2048.py``，存档 / 同步 / 排行榜 / 每周冠军荆露在
+``minigame_2048_service.py``；这一层只做会话归属、限流与 JSON 编解码。
+"""
+
+MINIGAME_2048_ENABLED = str(os.environ.get('GTN_MINIGAME_2048', '1')).lower() not in (
+    '0', 'false', 'no', 'off')
+
+_MINIGAME_2048_SETTLEMENT_STARTED = False
+_MINIGAME_2048_SETTLE_INTERVAL = 900        # 15 分钟扫一次（补做也走这条）
+
+
+def _minigame_2048_identity():
+    user_id = session.get('user_id')
+    username = str(session.get('username') or '').strip()
+    if not user_id or not username:
+        return None
+    return int(user_id), username
+
+
+def _minigame_2048_guard():
+    """返回 ``(identity, None)`` 或 ``(None, 响应)``：页面与所有接口共用。"""
+
+    if not MINIGAME_2048_ENABLED:
+        return None, _json_error('小游戏暂不可用', 503)
+    identity = _minigame_2048_identity()
+    if identity is None:
+        return None, _json_error('请先登录', 401)
+    try:
+        allowed = minigame_2048_service.can_access_minigame(identity[0], identity[1])
+    except Exception as exc:
+        admin_event('error', f'2048 permission check failed: {exc}')
+        allowed = False
+    if not allowed:
+        return None, _json_error('2048 内测中：目前仅 staff / admin 可进入', 403)
+    return identity, None
+
+
+def _minigame_2048_rate_limited(ip, key, limit, window=300):
+    try:
+        return _rate_limited(ip, key, limit=limit, window=window)
+    except Exception:
+        return False
+
+
+def _minigame_2048_settlement_worker():
+    while True:
+        try:
+            if DB_AVAILABLE:
+                with get_db_connection() as conn:
+                    minigame_2048_service.ensure_schema(conn)
+                    results = minigame_2048_service.settle_due(conn)
+                for item in results:
+                    if item.get("status") == "paid":
+                        print(f"[minigame2048] settled {item['period_key']} "
+                              f"participants={item.get('participants')}", flush=True)
+        except Exception as exc:
+            admin_event('error', f'2048 settlement worker error: {exc}')
+        time.sleep(max(60, _MINIGAME_2048_SETTLE_INTERVAL))
+
+
+def ensure_minigame_2048_settlement_worker():
+    """起一次后台结算线程（幂等；多实例下靠数据库唯一约束兜底）。"""
+
+    global _MINIGAME_2048_SETTLEMENT_STARTED
+    if _MINIGAME_2048_SETTLEMENT_STARTED or not MINIGAME_2048_ENABLED:
+        return
+    _MINIGAME_2048_SETTLEMENT_STARTED = True
+    try:
+        socketio.start_background_task(_minigame_2048_settlement_worker)
+    except Exception:
+        threading.Thread(target=_minigame_2048_settlement_worker,
+                         name='minigame2048-settlement', daemon=True).start()
+
+
+@app.route('/minigame/2048')
+def minigame_2048_page():
+    identity, denied = _minigame_2048_guard()
+    if denied is not None:
+        return denied
+    return render_template(
+        'minigame_2048.html',
+        username=identity[1],
+        user_id=identity[0],
+        static_version=GTN_STATIC_VERSION,
+        rarity_table=minigame_2048.rarity_table_payload(),
+        minigame_window_days=minigame_2048_service.RULES_WINDOW_DAYS,
+        champion_pool=minigame_2048_service.CHAMPION_POOL,
+        champion_min_accounts=minigame_2048_service.CHAMPION_MIN_ACCOUNTS,
+    )
+
+
+@app.route('/minigame/2048/sw.js')
+def minigame_2048_service_worker():
+    """局部 Service Worker（scope=/minigame/2048），只缓存这一页的外壳。"""
+
+    response = send_from_directory(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'minigame-2048'),
+        'sw.js',
+        mimetype='application/javascript',
+    )
+    response.headers['Service-Worker-Allowed'] = '/minigame/2048'
+    response.headers['Cache-Control'] = 'no-cache'
+    return response
+
+
+@app.route('/api/minigame/2048/state')
+def api_minigame_2048_state():
+    identity, denied = _minigame_2048_guard()
+    if denied is not None:
+        return denied
+    if _minigame_2048_rate_limited(request.remote_addr or 'unknown',
+                                   'minigame2048_state', limit=240):
+        return _json_error('请求过于频繁，请稍后再试', 429)
+    try:
+        with get_db_connection() as conn:
+            state = minigame_2048_service.load_state(conn, identity[0])
+        return jsonify({'success': True, **state})
+    except Exception as exc:
+        admin_event('error', f'2048 state failed: {exc}')
+        return _json_error('读取存档失败', 500)
+
+
+@app.route('/api/minigame/2048/sync', methods=['POST'])
+def api_minigame_2048_sync():
+    identity, denied = _minigame_2048_guard()
+    if denied is not None:
+        return denied
+    if _minigame_2048_rate_limited(request.remote_addr or 'unknown',
+                                   'minigame2048_sync', limit=600):
+        return _json_error('请求过于频繁，请稍后再试', 429)
+    payload = request.get_json(silent=True) or {}
+    ops = payload.get('ops')
+    if isinstance(ops, str):
+        ops_text = ops[:minigame_2048_service.MAX_SYNC_OPS]
+    elif isinstance(ops, list):
+        ops_text = ops
+    else:
+        return _json_error('ops 必须是字符串或数组', 400)
+    source = str(payload.get('source') or 'online')
+    try:
+        with get_db_connection() as conn:
+            result = minigame_2048_service.sync_progress(
+                conn, identity[0], str(payload.get('game_uid') or ''),
+                payload.get('from_index') or 0, ops_text,
+                claimed_score=payload.get('claimed_score'),
+                claimed_cells=payload.get('claimed_cells'),
+                source=source,
+                reached_2048=bool(payload.get('reached_2048')),
+                continued=payload.get('continued'),
+            )
+    except Exception as exc:
+        admin_event('error', f'2048 sync failed: {exc}')
+        return _json_error('同步失败，本地进度已保留', 500)
+    status = result.get('status')
+    if status == 'ok':
+        return jsonify({'success': True, **result})
+    if status in ('conflict', 'gap', 'stale_game'):
+        state = None
+        try:
+            with get_db_connection() as conn:
+                state = minigame_2048_service.load_state(conn, identity[0])
+        except Exception:
+            state = None
+        return jsonify({'success': False, 'conflict': True, **result,
+                        'state': state}), 409
+    if status == 'no_game':
+        return jsonify({'success': False, 'no_game': True, **result}), 409
+    return _json_error(result.get('reason') or '同步被拒绝', 422)
+
+
+@app.route('/api/minigame/2048/restart', methods=['POST'])
+def api_minigame_2048_restart():
+    identity, denied = _minigame_2048_guard()
+    if denied is not None:
+        return denied
+    payload = request.get_json(silent=True) or {}
+    seed = payload.get('seed') if payload.get('client_seed') is None else payload.get('client_seed')
+    source = str(payload.get('source') or 'online')
+    try:
+        with get_db_connection() as conn:
+            state = minigame_2048_service.restart_game(
+                conn, identity[0], seed=seed, source=source)
+        return jsonify({'success': True, **state})
+    except Exception as exc:
+        admin_event('error', f'2048 restart failed: {exc}')
+        return _json_error('重新开始失败，本地进度已保留', 500)
+
+
+@app.route('/api/minigame/2048/prefs', methods=['GET', 'POST'])
+def api_minigame_2048_prefs():
+    identity, denied = _minigame_2048_guard()
+    if denied is not None:
+        return denied
+    with get_db_connection() as conn:
+        if request.method == 'GET':
+            return jsonify({'success': True, 'prefs': minigame_2048_service.get_prefs(conn, identity[0])})
+        payload = request.get_json(silent=True) or {}
+        prefs = minigame_2048_service.set_prefs(
+            conn, identity[0],
+            decline_invites=payload.get('decline_invites'),
+            show_numbers=payload.get('show_numbers'),
+        )
+    return jsonify({'success': True, 'prefs': prefs})
+
+
+@app.route('/api/minigame/2048/leaderboard')
+def api_minigame_2048_leaderboard():
+    identity, denied = _minigame_2048_guard()
+    if denied is not None:
+        return denied
+    window = str(request.args.get('window') or '14d')
+    try:
+        limit = int(request.args.get('limit') or minigame_2048_service.DEFAULT_LEADERBOARD_LIMIT)
+    except ValueError:
+        limit = minigame_2048_service.DEFAULT_LEADERBOARD_LIMIT
+    if window not in ('14d', 'all'):
+        return _json_error('window 只能是 14d 或 all', 400)
+    with get_db_connection() as conn:
+        table = minigame_2048_service.leaderboard(conn, window=window, limit=limit)
+        me = minigame_2048_service.self_entry(conn, identity[0], window=window)
+        periods = minigame_2048_service.period_history(conn, limit=4)
+    return jsonify({'success': True, 'leaderboard': table, 'me': me, 'periods': periods})
+
+
 if __name__ == '__main__':
     print(
         f"Starting GTN instance={GTN_INSTANCE} id={GTN_INSTANCE_ID} "
@@ -34719,6 +34948,8 @@ if __name__ == '__main__':
         f"bind={GTN_BIND_HOST}:{GTN_PORT} draining={is_instance_draining()}",
         flush=True,
     )
+    # 休闲花园 2048 的周结算：不依赖有人打开小游戏，错过时点会补做。
+    ensure_minigame_2048_settlement_worker()
     threading.Thread(
         target=_prewarm_public_card_cache_worker,
         name='public-cache-prewarm',

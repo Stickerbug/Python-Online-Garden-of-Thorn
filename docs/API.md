@@ -49,6 +49,21 @@
 | GET | <code>/api/hidden-features/status</code> | 公开 | 当前会话是否已解锁隐藏入口 |
 | GET | <code>/api/ai-1v1/status</code> | 公开 | Phelren 模型状态、公共入口开关与容量；`enabled` 表示模型功能，`public_entry_enabled` 表示玩家入口，只有登录账号且两者均开启时 `available=true` |
 
+### 休闲花园 · 2048（内测，仅 staff / admin）
+
+入口页面 <code>/minigame/2048</code>（未登录 401、无权限 403，均由服务端角色表判定；
+普通账号知道地址也进不去）。规则与随机数在客户端与服务端同源，服务端会重放验证后才计分。
+
+| 方法 | 路径 | 权限 | 说明 |
+|------|------|------|------|
+| GET | <code>/minigame/2048</code> | staff/admin | 小游戏页面；内测未通过返回 401/403 |
+| GET | <code>/minigame/2048/sw.js</code> | 同页面 | 局部 Service Worker（scope=/minigame/2048），只缓存页面外壳，不缓存接口/身份响应 |
+| GET | <code>/api/minigame/2048/state</code> | staff/admin | 读取当前活动局（棋盘、分数、已验证进度、色板、偏好）；没有活动局时开一局 |
+| POST | <code>/api/minigame/2048/sync</code> | staff/admin | 增量同步：<code>game_uid</code>、<code>from_index</code>、<code>ops</code>（l/r/u/d 串或数组）、可选 <code>claimed_score</code>/<code>claimed_cells</code>、<code>source=online|offline</code>；服务端从检查点重放验证，冲突返回 409 + 服务器分支快照 |
+| POST | <code>/api/minigame/2048/restart</code> | staff/admin | 关闭旧局并开新局（旧局记录与未同步操作保留） |
+| GET/POST | <code>/api/minigame/2048/prefs</code> | staff/admin | 读取/保存偏好：<code>decline_invites</code>（服务端邀请处生效）、<code>show_numbers</code> |
+| GET | <code>/api/minigame/2048/leaderboard</code> | staff/admin | <code>window=14d|all</code>、<code>limit</code>（默认 100）；返回榜单、自己的名次与最近奖期 |
+
 公开读取只覆盖页面渲染所需资料，不包含账号私有数据、完整回放、服务器诊断或写入能力。
 
 ## 账号与身份

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <title>2048 · 休闲花园</title>
+  <link rel="icon" href="/static/assets/favicon.ico">
+  <link rel="stylesheet" href="/static/css/minigame_2048.css?v={{ static_version|default('dev')|urlencode }}">
+  <script nonce="{{ csp_nonce }}">
+  (() => {
+    const read = (key) => {
+      try { return window.localStorage.getItem(key); } catch (_) { return null; }
+    };
+    const theme = read('gtn_theme') === 'dark' || read('gtn_beta_theme') === 'dark' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', theme);
+  })();
+  </script>
+</head>
+<body class="mg-body">
+<main class="mg-shell">
+  <header class="mg-head">
+    <div class="mg-title">
+      <a class="mg-back" href="/" title="返回大厅">← 大厅</a>
+      <h1>2048</h1>
+      <span class="mg-badge">休闲花园 · 内测</span>
+    </div>
+    <div class="mg-scores">
+      <div class="mg-score-box">
+        <span>分数</span>
+        <strong id="mg-score">0</strong>
+      </div>
+      <div class="mg-score-box">
+        <span>最高纪录（本机）</span>
+        <strong id="mg-best">0</strong>
+      </div>
+      <div class="mg-score-box mg-score-box-server">
+        <span>已验证上榜分</span>
+        <strong id="mg-verified">0</strong>
+      </div>
+    </div>
+  </header>
+
+  <section class="mg-toolbar">
+    <button id="mg-new" class="mg-btn" type="button">重新开始</button>
+    <button id="mg-rank" class="mg-btn" type="button">排行榜</button>
+    <label class="mg-switch" title="方块上同时显示数值">
+      <input type="checkbox" id="mg-show-numbers">
+      <span>显示对应数字</span>
+    </label>
+    <label class="mg-switch" title="开启后其他人无法在服务器侧邀请你">
+      <input type="checkbox" id="mg-decline-invites">
+      <span>拒绝对局邀请</span>
+    </label>
+    <label class="mg-switch" title="关闭移动/合并动画">
+      <input type="checkbox" id="mg-animations" checked>
+      <span>动画</span>
+    </label>
+    <span id="mg-sync" class="mg-sync" role="status" aria-live="polite">正在读取存档…</span>
+  </section>
+
+  <section class="mg-board-wrap">
+    <div id="mg-board" class="mg-board" role="grid" aria-label="2048 棋盘（方向键 / WASD / 触摸滑动）" tabindex="0"></div>
+    <div id="mg-overlay" class="mg-overlay" hidden>
+      <div class="mg-overlay-card">
+        <h2 id="mg-overlay-title">游戏结束</h2>
+        <p id="mg-overlay-text">没有空格也没有可以合并的相邻方块了。</p>
+        <div class="mg-overlay-actions">
+          <button id="mg-overlay-primary" class="mg-btn primary" type="button">再来一局</button>
+          <button id="mg-overlay-secondary" class="mg-btn" type="button" hidden>继续游戏</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mg-help">
+    <p class="mg-hint">
+      方向键 / WASD / 触摸滑动移动方块。同值方块相撞会合并，分数增加新方块的数值；
+      只有棋盘真的变了才会生成新方块。成绩**自动同步**，不需要手动提交。
+    </p>
+    <details class="mg-legend" open>
+      <summary>合成顺序与色板（17 档）</summary>
+      <div id="mg-legend-grid" class="mg-legend-grid"></div>
+      <p class="mg-hint">稀有度名称是这个小游戏的固定顺序，不代表其他作品里的等级关系。超出色表的数值按数字显示，不影响合并规则。</p>
+    </details>
+    <p class="mg-hint mg-pool">
+      每周一 00:00（UTC+8）按最近 {{ minigame_window_days }} 天已验证成绩结算：冠军总奖池 {{ champion_pool }} 荆露，
+      至少 {{ champion_min_accounts }} 个有效账号才发放；并列冠军平分奖池。
+    </p>
+  </section>
+</main>
+
+<div id="mg-rank-modal" class="mg-modal" hidden>
+  <div class="mg-modal-backdrop" data-mg-close></div>
+  <div class="mg-modal-panel" role="dialog" aria-label="2048 排行榜">
+    <header class="mg-modal-head">
+      <div>
+        <strong>排行榜</strong>
+        <p class="mg-hint">最近 {{ minigame_window_days }} 天滚动榜 / 历史最高；成绩由服务器重放验证后入库。</p>
+      </div>
+      <div class="mg-modal-tabs">
+        <button class="mg-btn small active" data-mg-window="14d" type="button">最近 14 天</button>
+        <button class="mg-btn small" data-mg-window="all" type="button">历史最高</button>
+        <button class="mg-btn small" data-mg-close type="button">关闭</button>
+      </div>
+    </header>
+    <div id="mg-rank-body" class="mg-modal-body">正在读取…</div>
+  </div>
+</div>
+
+<script type="application/json" id="mg-config">{{ {
+  'username': username,
+  'userId': user_id,
+  'windowDays': minigame_window_days,
+  'championPool': champion_pool,
+  'championMinAccounts': champion_min_accounts,
+} | tojson }}</script>
+<script nonce="{{ csp_nonce }}" type="application/json" id="mg-palette">{{ rarity_table | tojson }}</script>
+<script type="module" src="/static/js/minigame_2048.js?v={{ static_version|default('dev')|urlencode }}"></script>
+</body>
+</html>
