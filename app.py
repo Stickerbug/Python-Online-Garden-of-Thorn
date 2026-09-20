@@ -4667,7 +4667,9 @@ def lobby_chat_history_payloads_locked(limit=LOBBY_CHAT_VISIBLE_LIMIT, beta_mode
     histories = {}
     payloads = []
     for sid, player in players.items():
-        if player.get('status') != 'lobby':
+        # 休闲花园（status='minigame'）用的是**同一条大厅聊天**：收消息靠历史推送，
+        # 所以这里也要把它算进接收名单，否则小游戏里的人只发不接。
+        if player.get('status') not in ('lobby', 'minigame'):
             continue
         player_beta = bool(player.get('beta_mode', False))
         if beta_mode is not None and player_beta != bool(beta_mode):

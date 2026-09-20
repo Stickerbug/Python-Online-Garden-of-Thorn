@@ -105,6 +105,20 @@
       </label>
     </div>
   </details>
+
+  <button id="mg-chat-toggle" class="mg-chat-toggle" type="button" aria-expanded="false">聊天</button>
+  <aside id="mg-chat" class="mg-chat" hidden aria-label="大厅聊天">
+    <header class="mg-chat-head">
+      <strong>大厅聊天</strong>
+      <span class="mg-chat-hint">与多人游戏共用</span>
+      <button id="mg-chat-close" class="mg-chat-close" type="button" aria-label="关闭聊天">×</button>
+    </header>
+    <div id="mg-chat-log" class="mg-chat-log" role="log" aria-live="polite"></div>
+    <form id="mg-chat-form" class="mg-chat-form">
+      <input id="mg-chat-input" type="text" maxlength="200" autocomplete="off" placeholder="说点什么…">
+      <button class="mg-btn small" type="submit">发送</button>
+    </form>
+  </aside>
 </main>
 
 <div id="mg-rank-modal" class="mg-modal" hidden>

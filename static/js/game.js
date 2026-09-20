@@ -26967,8 +26967,8 @@ function renderLobby(data) {
           badge.className = 'lobby-minigame-badge';
           const label = p.minigame === '2048' ? '2048' : (p.minigame || '');
           badge.textContent = currentLang === 'zh'
-            ? `小游戏中${label ? ` · ${label}` : ''}`
-            : `Minigame${label ? ` · ${label}` : ''}`;
+            ? `休闲${label ? ` · ${label}` : ''}`
+            : `Casual${label ? ` · ${label}` : ''}`;
           row.appendChild(badge);
         }
         if (isSpectatingPlayer) {

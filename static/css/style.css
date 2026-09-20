@@ -12255,6 +12255,25 @@ html.blind-level-4 .card-prediction-part.magic {
   border-color: var(--magic);
 }
 
+/* 休闲花园（小游戏）入口：砂金色，和故事（紫）/训练场（蓝）/多人（青绿）区分开 */
+.btn-leisure {
+  background: #C2A26B;
+  color: #2B241A;
+  border-color: #A98B57;
+}
+
+.btn-leisure:hover:not(:disabled) {
+  background: #CFAF78;
+  color: #2B241A;
+  border-color: #B8965F;
+}
+
+[data-theme="dark"] .btn-leisure {
+  background: #8A7448;
+  color: #F6EFE1;
+  border-color: #A98B57;
+}
+
 .btn-magic:hover:not(:disabled) {
   background: #5dade2;
 }

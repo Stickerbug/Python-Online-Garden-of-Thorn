@@ -685,11 +685,40 @@ let socket = null;
 function connectPresence() {
   if (typeof io !== 'function') return;
   socket = io({ transports: ['websocket', 'polling'], withCredentials: true });
+  window.__mgSocket = socket;                  // 便于排查（也是自动化检查用的入口）
+  window.__mgEventLog = window.__mgEventLog || [];
+  ['login_ok', 'login_fail', 'minigame_status', 'lobby_chat_history', 'server_error'].forEach((name) => {
+    socket.on(name, (payload) => {
+      try {
+        window.__mgEventLog.push({ name, payload: JSON.stringify(payload || {}).slice(0, 200) });
+      } catch (_) { /* 忽略 */ }
+    });
+  });
   socket.on('connect', () => {
+    // 方案 A：小游戏页也走一次正常登录握手（同账号会接管大厅标签页），
+    // 这样才有 players[sid] 条目 —— 大厅聊天、在线状态、邀请都依赖它。
+    socket.emit('login', {
+      nickname: CONFIG.username || '',
+      mode: '1v1',
+      match_mode: 'casual_1v1',
+      account_login: true,
+      beta_mode: false,
+      skin: {},
+    });
+  });
+  socket.on('login_ok', () => {
     socket.emit('minigame_presence', { game: '2048' });
     setSyncText('在线：正在校验本机进度…');
     scheduleSync(200);
   });
+  socket.on('login_fail', (payload) => {
+    setSyncText(`聊天/在线不可用：${(payload && payload.reason) || '登录失败'}`, 'denied');
+  });
+  // 大厅聊天（与多人游戏同一条）：历史 + 新消息
+  socket.on('lobby_chat_history', (payload) => {
+    renderChatHistory(payload && payload.items);
+  });
+  socket.on('chat', (payload) => { appendChatLine(payload); });
   socket.on('minigame_status', () => { /* 状态已生效 */ });
   socket.on('server_error', (payload) => {
     const reason = payload && payload.reason;
@@ -720,6 +749,53 @@ function showInvitePrompt(payload) {
 function hideInvitePrompt() {
   const box = el('mg-invite');
   if (box) box.hidden = true;
+}
+
+/* ---------------- 大厅聊天（与多人游戏共用同一条） ---------------- */
+
+function chatLineHtml(item) {
+  const system = !!(item && item.system);
+  const name = escapeHtml((item && item.nickname) || '');
+  const text = escapeHtml((item && item.text) || '');
+  return `<div class="mg-chat-line${system ? ' system' : ''}">`
+    + (system ? '' : `<span class="mg-chat-name">${name}</span>`)
+    + `${text}</div>`;
+}
+
+function renderChatHistory(items) {
+  const log = el('mg-chat-log');
+  if (!log) return;
+  const list = Array.isArray(items) ? items : [];
+  log.innerHTML = list.map(chatLineHtml).join('')
+    || '<p class="mg-hint">还没有人说话。</p>';
+  log.scrollTop = log.scrollHeight;
+}
+
+function appendChatLine(item) {
+  const log = el('mg-chat-log');
+  if (!log || !item) return;
+  if (log.querySelector('p.mg-hint')) log.innerHTML = '';
+  log.insertAdjacentHTML('beforeend', chatLineHtml(item));
+  log.scrollTop = log.scrollHeight;
+}
+
+function toggleChat(force) {
+  const panel = el('mg-chat');
+  const toggle = el('mg-chat-toggle');
+  if (!panel) return;
+  const open = force === undefined ? panel.hidden : !!force;
+  panel.hidden = !open;
+  if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (open) el('mg-chat-input')?.focus();
+}
+
+function sendChat() {
+  const input = el('mg-chat-input');
+  if (!input || !socket) return;
+  const text = input.value.trim();
+  if (!text) return;
+  socket.emit('chat', { text });
+  input.value = '';
 }
 
 async function acceptInvite() {
@@ -878,6 +954,12 @@ async function boot() {
 }
 
 el('mg-new').addEventListener('click', () => { void restartGame(); });
+el('mg-chat-toggle').addEventListener('click', () => toggleChat());
+el('mg-chat-close').addEventListener('click', () => toggleChat(false));
+el('mg-chat-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  sendChat();
+});
 el('mg-invite-accept').addEventListener('click', () => { void acceptInvite(); });
 el('mg-invite-decline').addEventListener('click', () => { declineInvite(); });
 el('mg-rank').addEventListener('click', () => { void openLeaderboard('14d'); });
