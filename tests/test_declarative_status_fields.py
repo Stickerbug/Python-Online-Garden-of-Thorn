@@ -12,6 +12,7 @@
 import pytest
 
 import official_statuses
+from cards import CardInstance
 from game_engine import ELIXIR_RECOVERY, GameEngine
 from game_engine_2v2 import GameEngine2v2
 from game_engine_urf import GameEngineInfiniteFire
@@ -263,3 +264,123 @@ def test_official_toxic_poison_declares_stack_keys_and_resolved_event():
         assert engine.players[0].poison == 5, storage_key
         assert engine.players[0].health == 96, storage_key
         assert any('剧毒施加3层中毒' in str(line) for line in engine.log), storage_key
+
+
+def test_custom_status_on_cost_modifies_extra_card_cost():
+    engine = make_engine()
+    engine.v2_status_defs = {
+        STATUS_ID: {
+            'id': STATUS_ID,
+            'stacking': 'stack',
+            'events': {
+                'on_cost': [
+                    {
+                        'op': 'add_var',
+                        'name': 'cost_extra',
+                        'value': {'op': 'div', 'values': [
+                            {'op': 'status_stack', 'status': STATUS_ID}, 3,
+                        ], 'round': 'floor'},
+                    }
+                ],
+            },
+        },
+    }
+    engine.players[0].custom_statuses[STATUS_ID] = 7
+    card = CardInstance('Basic')
+
+    assert engine._get_extra_e_for_card(0, card) == 2
+
+
+def test_custom_status_modifiers_armor_is_passive():
+    engine = make_engine()
+    engine.v2_status_defs = {
+        STATUS_ID: {
+            'id': STATUS_ID,
+            'stacking': 'stack',
+            'modifiers': {'armor': {'op': 'add', 'value': {'op': 'stack'}}},
+        },
+    }
+    engine.players[1].armor = 2
+    engine.players[1].custom_statuses[STATUS_ID] = 3
+
+    assert engine._effective_armor(1) == 5
+
+    engine.players[1].custom_statuses['status_immune'] = 1
+    assert engine._effective_armor(1) == 2
+
+
+def test_custom_status_on_damage_pre_modifies_damage():
+    engine = make_engine()
+    engine.v2_status_defs = {
+        STATUS_ID: {
+            'id': STATUS_ID,
+            'stacking': 'stack',
+            'events': {
+                'on_damage_pre': [
+                    {
+                        'op': 'set_var',
+                        'name': 'damage_amount',
+                        'value': {'op': 'max', 'values': [
+                            0,
+                            {'op': 'sub', 'values': [
+                                {'op': 'var', 'name': 'damage_amount'}, 2,
+                            ]},
+                        ]},
+                    }
+                ],
+            },
+        },
+    }
+    engine.players[0].custom_statuses[STATUS_ID] = 1
+
+    assert engine._run_declared_damage_pre(0, 5) == 3
+
+
+def test_official_value_hooks_are_declared():
+    frost = official_statuses.engine_status_def('arctic:frost')
+    assert frost['events']['on_cost']['priority'] == 10
+    fragile = official_statuses.engine_status_def('jungle:fragile')
+    assert fragile['modifiers']['armor']['op'] == 'sub'
+    root = official_statuses.engine_status_def('jungle:root_status')
+    assert root['modifiers']['armor']['op'] == 'add'
+    shield = official_statuses.engine_status_def('jungle:shield')
+    assert shield['events']['on_damage_pre']['priority'] == 10
+    conversion = official_statuses.engine_status_def('bio:shield_conversion')
+    assert conversion['events']['on_heal_pre']['priority'] == 20
+
+
+def test_official_frost_cost_and_shield_absorb_through_declarations():
+    engine = make_engine()
+    card = CardInstance('Basic')
+    engine.players[0].custom_statuses['arctic:frost'] = 25
+    assert engine._get_extra_e_for_card(0, card) == 2
+
+    engine.players[1].health = 100
+    engine.players[1].custom_statuses['jungle:shield'] = 10
+    engine._deal_direct_damage(1, 6, '测试', 0)
+    assert engine.players[1].health == 100
+    assert engine.players[1].custom_statuses.get('jungle:shield') == 4
+
+
+def test_official_fragile_and_root_armor_go_through_modifiers():
+    engine = make_engine()
+    engine.players[1].armor = 5
+    engine.players[1].custom_statuses['jungle:fragile'] = 3
+    assert engine._effective_armor(1) == 2
+
+    engine.players[1].custom_statuses = {'jungle:root_status': 4}
+    assert engine._effective_armor(1) == 9
+
+
+def test_official_shield_conversion_uses_pre_heal_hook():
+    engine = make_engine()
+    player = engine.players[1]
+    player.health = 50
+    engine._bio_set_status_value(1, 'extra_healing', 2)
+    engine._bio_set_status_value(1, 'shield_conversion', 2)
+
+    player.heal(5)
+
+    assert player.health == 50
+    assert engine._custom_status_value(1, 'jungle:shield', 'shield') == 14
+    assert engine._bio_status_value(1, 'shield_conversion') == 0

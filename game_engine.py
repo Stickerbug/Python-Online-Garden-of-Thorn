@@ -2568,35 +2568,71 @@ class GameEngine:
                 return left_id == right_id
         return str(left) == str(right)
 
-    def _run_declared_heal_modifiers(self, player_id: int, amount: int) -> int:
-        """Run ``on_heal_pre`` status events and return the modified heal amount.
+    @staticmethod
+    def _positive_status_layers(value) -> bool:
+        try:
+            return int(value or 0) > 0
+        except (TypeError, ValueError):
+            return False
 
-        Declarations read/write the shared ``heal_amount`` variable, e.g.::
+    def _canonical_status_entries(self, player_id: int):
+        """``custom_statuses`` 去重后的 ``(规范 id, 有效层数)`` 列表。"""
 
-            {"op": "add_var", "name": "heal_amount",
-             "value": {"op": "status_stack", "status": "bio:extra_healing"}}
+        if not (0 <= player_id < len(self.players)):
+            return []
+        statuses = getattr(self.players[player_id], 'custom_statuses', {}) or {}
+        entries: Dict[str, int] = {}
+        for key in list(statuses):
+            definition = self._get_v2_status_def(key)
+            canonical = str((definition or {}).get('id') or key).strip() or str(key)
+            if canonical in entries:
+                continue
+            layers = self._get_status_count(player_id, canonical)
+            if layers > 0:
+                entries[canonical] = int(layers)
+        return list(entries.items())
 
-        This is the data-driven replacement for the old hardcoded extra-healing
-        lines in the Jurassic heal callback, and it runs at the same point:
-        after ``heal_block`` and before shield conversion.  Re-entry is blocked
-        so a badly-authored event that heals cannot recurse forever.
+    @staticmethod
+    def _status_event_priority(event_def) -> int:
+        if isinstance(event_def, dict):
+            try:
+                return int(event_def.get('priority') or 0)
+            except (TypeError, ValueError):
+                return 0
+        return 0
+
+    def _run_status_phase_context(self, player_id: int, phase: str,
+                                  extra_vars: Optional[dict] = None,
+                                  extra_action: Optional[dict] = None):
+        """Run one shared-context status phase; return the mutable context.
+
+        This is the numeric-hook counterpart of ``_trigger_v2_status_events_for_player``:
+        the declaration reads and writes variables in the same ``context['vars']``
+        (``heal_amount`` / ``damage_amount`` / ``cost_extra``), so events compose
+        like atoms.  Events run by ``priority`` (default 0, lower first) and then
+        by canonical status id for deterministic ordering.  Re-entering the same
+        phase is blocked so a badly-authored event cannot recurse forever.
         """
 
-        try:
-            amount = max(0, int(amount or 0))
-        except (TypeError, ValueError):
-            amount = 0
-        if amount <= 0 or not (0 <= player_id < len(self.players)):
-            return amount
-        if getattr(self, '_in_heal_modifiers', False):
-            return amount
-        statuses = getattr(self.players[player_id], 'custom_statuses', {}) or {}
-        if not any(
-            self._get_v2_status_event(str(status_id), 'on_heal_pre')
-            for status_id, value in list(statuses.items())
-            if self._positive_status_layers(value)
-        ):
-            return amount
+        if not (0 <= player_id < len(self.players)):
+            return None
+        phase = str(phase or '').strip()
+        if not phase:
+            return None
+        candidates = []
+        for status_id, _layers in self._canonical_status_entries(player_id):
+            event_def = self._get_v2_status_event(status_id, phase)
+            if event_def:
+                candidates.append((self._status_event_priority(event_def), status_id, event_def))
+        if not candidates:
+            return None
+        active = getattr(self, '_active_status_phases', None)
+        if not isinstance(active, set):
+            active = set()
+            self._active_status_phases = active
+        if phase in active:
+            return None
+        active.add(phase)
         context = {
             'source_player': player_id,
             'target_player': player_id,
@@ -2606,20 +2642,13 @@ class GameEngine:
             'card': None,
             'room': getattr(self, 'room', None),
             'loadout': getattr(self, 'v2_loadout', None),
-            'vars': {'heal_amount': amount, 'player_id': player_id},
+            'vars': {'player_id': player_id, **dict(extra_vars or {})},
             'last_damage': 0,
-            'current_event': 'on_heal_pre',
-            'current_action': {'player_id': player_id, 'amount': amount},
+            'current_event': phase,
+            'current_action': {'player_id': player_id, **dict(extra_action or {})},
         }
-        self._in_heal_modifiers = True
         try:
-            for status_id, value in list(statuses.items()):
-                if not self._positive_status_layers(value):
-                    continue
-                status_id = str(status_id)
-                event_def = self._get_v2_status_event(status_id, 'on_heal_pre')
-                if not event_def:
-                    continue
+            for _priority, status_id, event_def in sorted(candidates, key=lambda item: (item[0], item[1])):
                 context['vars']['status_id'] = status_id
                 context['vars']['status_stack'] = self._get_status_count(player_id, status_id)
                 result = run_v2_event(self, context, event_def)
@@ -2629,18 +2658,170 @@ class GameEngine:
                 if getattr(self, 'game_over', False) or getattr(self, 'pending_v2_ui', None):
                     break
         finally:
-            self._in_heal_modifiers = False
+            active.discard(phase)
+        return context
+
+    def _run_declared_heal_modifiers(self, player_id: int, amount: int) -> int:
+        """Run ``on_heal_pre`` status events and return the modified heal amount.
+
+        Declarations read/write the shared ``heal_amount`` variable, e.g.::
+
+            {"op": "add_var", "name": "heal_amount",
+             "value": {"op": "status_stack", "status": "bio:extra_healing"}}
+
+        This is the data-driven replacement for the old hardcoded extra-healing
+        and shield-conversion lines in the Jurassic heal callback, and it runs at
+        the same point: after ``heal_block`` and before the tooth redirect.
+        """
+
+        try:
+            amount = max(0, int(amount or 0))
+        except (TypeError, ValueError):
+            amount = 0
+        if amount <= 0:
+            return amount
+        context = self._run_status_phase_context(
+            player_id, 'on_heal_pre',
+            {'heal_amount': amount},
+            {'amount': amount},
+        )
+        if context is None:
+            return amount
         try:
             return max(0, int(context.get('vars', {}).get('heal_amount', amount) or 0))
         except (TypeError, ValueError):
             return amount
 
-    @staticmethod
-    def _positive_status_layers(value) -> bool:
+    def _run_declared_cost_modifiers(self, player_id: int, card, currency: str = 'e') -> int:
+        """Run ``on_cost`` status events; return the signed extra cost."""
+
+        currency = str(currency or 'e').strip().lower() or 'e'
+        context = self._run_status_phase_context(
+            player_id, 'on_cost',
+            {'cost_extra': 0, 'currency': currency},
+            {'currency': currency, 'card_id': getattr(card, 'def_id', '')},
+        )
+        if context is None:
+            return 0
         try:
-            return int(value or 0) > 0
+            return int(context.get('vars', {}).get('cost_extra', 0) or 0)
         except (TypeError, ValueError):
-            return False
+            return 0
+
+    def _run_declared_damage_pre(self, target_id: int, damage: int,
+                                 source_id: Optional[int] = None, source: str = '',
+                                 damage_type: str = '', damage_tag: str = '') -> int:
+        """Run ``on_damage_pre`` status events; return the modified damage.
+
+        Hooked at the post-armor damage-shield point (``_apply_universal_damage_shields``),
+        which is where the old hardcoded shield absorption lived.
+        """
+
+        try:
+            damage = max(0, int(damage or 0))
+        except (TypeError, ValueError):
+            damage = 0
+        if damage <= 0:
+            return damage
+        context = self._run_status_phase_context(
+            target_id, 'on_damage_pre',
+            {
+                'damage_amount': damage,
+                'damage_type': str(damage_type or ''),
+                'damage_tag': str(damage_tag or ''),
+                'source_label': str(source or ''),
+            },
+            {
+                'amount': damage,
+                'damage_type': str(damage_type or ''),
+                'damage_tag': str(damage_tag or ''),
+                'source_player': source_id,
+            },
+        )
+        if context is None:
+            return damage
+        try:
+            return max(0, int(context.get('vars', {}).get('damage_amount', damage) or 0))
+        except (TypeError, ValueError):
+            return damage
+
+    def _declared_status_modifiers(self, player_id: int, key: str) -> int:
+        """Sum passive ``modifiers[key]`` deltas from a player's statuses."""
+
+        if not (0 <= player_id < len(self.players)):
+            return 0
+        if self._is_status_immune(player_id):
+            return 0
+        total = 0
+        for status_id, layers in self._canonical_status_entries(player_id):
+            definition = self._get_v2_status_def(status_id)
+            if not isinstance(definition, dict):
+                continue
+            modifiers = definition.get('modifiers')
+            spec = modifiers.get(key) if isinstance(modifiers, dict) else None
+            if spec is None:
+                continue
+            total += self._declared_modifier_delta(spec, layers)
+        return int(total)
+
+    def _declared_modifier_delta(self, spec, layers: int) -> int:
+        if isinstance(spec, bool):
+            return 0
+        if isinstance(spec, (int, float)):
+            return int(spec)
+        if not isinstance(spec, dict):
+            return 0
+        op = str(spec.get('op') or spec.get('type') or 'add').strip().lower()
+        value = self._status_modifier_operand(
+            spec.get('value', spec.get('amount', 0)), layers,
+        )
+        if op in ('add', '+', 'increase'):
+            return int(value)
+        if op in ('sub', '-', 'reduce', 'subtract'):
+            return -int(value)
+        return int(value)
+
+    def _status_modifier_operand(self, raw, layers: int) -> int:
+        if isinstance(raw, bool):
+            return 0
+        if isinstance(raw, (int, float)):
+            return int(raw)
+        if not isinstance(raw, dict):
+            return 0
+        op = str(raw.get('op') or raw.get('ref') or raw.get('type') or '').strip().lower()
+        if op in ('stack', 'status_stack', 'layers', 'status_layers'):
+            return int(layers)
+        if op in ('const', 'literal'):
+            try:
+                return int(raw.get('value', 0) or 0)
+            except (TypeError, ValueError):
+                return 0
+        if op in ('add', 'sub', 'mul', 'min', 'max'):
+            values = raw.get('values')
+            if values is None:
+                values = [raw.get('a', 0), raw.get('b', 0)]
+            nums = [self._status_modifier_operand(value, layers) for value in values]
+            if op == 'add':
+                return sum(nums)
+            if op == 'sub':
+                return nums[0] - sum(nums[1:]) if nums else 0
+            if op == 'mul':
+                out = 1
+                for num in nums:
+                    out *= num
+                return out
+            if op == 'min':
+                return min(nums) if nums else 0
+            return max(nums) if nums else 0
+        return 0
+
+    def _effective_armor(self, target_id: int) -> int:
+        """Base armor plus declared passive status modifiers (Fragile / Root)."""
+
+        if not (0 <= target_id < len(self.players)):
+            return 0
+        base = int(getattr(self.players[target_id], 'armor', 0) or 0)
+        return base + self._declared_status_modifiers(target_id, 'armor')
 
     def _v2_hooks_for(self, hook_name: str) -> List[dict]:
         # 同义钩子名分组（Round 57 / 批次 AU）：组内任意名字注册，组内任意名字触发。
@@ -6453,13 +6634,11 @@ class GameEngine:
                     self.log_msg(f"{self.pn(target_id)}的遗物将{transfer}点伤害转给{self.pn(mate_id)}")
                     self._deal_direct_damage(mate_id, transfer, '遗物转移', target_id, damage_type=damage_type, damage_tag=DAMAGE_TAG_DIRECT)
                 damage = max(0, kept)
-        shield_keys = ('jungle:shield', 'shield')
-        shield = self._custom_status_value(target_id, *shield_keys)
-        if shield > 0 and not self._is_status_immune(target_id):
-            blocked = min(shield, damage)
-            damage -= blocked
-            self._set_custom_status_alias_group(target_id, 'jungle:shield', shield_keys, shield - blocked)
-            self.log_msg(f"{self.pn(target_id)}的护盾抵扣{blocked}点伤害")
+        # 护盾抵扣现在由 ``jungle:shield`` 的 ``events.on_damage_pre`` 执行；
+        # 其它状态也能在同一阶段读写 ``damage_amount``。
+        damage = self._run_declared_damage_pre(
+            target_id, damage, source_id, source, damage_type, '',
+        )
         if damage > 0 and self._has_flag_equipment(target_id, 'absorb_damage_with_magic'):
             magic = max(0, int(getattr(ps, 'magic', 0) or 0))
             if magic > 0:
@@ -7534,8 +7713,9 @@ class GameEngine:
             except Exception:
                 other_bamboo = 0
             extra -= other_bamboo
-        if not self._is_status_immune(player_id):
-            extra += self._arctic_frost_value(player_id) // 10
+        # 霜冻的「每 10 层 +1E」现在写在 official_statuses.py 的
+        # ``events.on_cost`` 里；自定义状态也能用同一钩子改卡牌消耗。
+        extra += self._run_declared_cost_modifiers(player_id, card, 'e')
         return extra
 
     def _card_local_id_values(self, card_or_def) -> Set[str]:
@@ -13148,13 +13328,8 @@ class GameEngine:
         amount = self._run_declared_heal_modifiers(player_id, amount)
         if amount <= 0:
             return 0
-        shield_conversion = self._bio_status_value(player_id, 'shield_conversion')
-        if shield_conversion > 0 and not self._is_status_immune(player_id):
-            shield = amount * shield_conversion
-            self._bio_set_status_value(player_id, 'shield_conversion', 0)
-            self._add_custom_status_value(player_id, 'jungle:shield', shield)
-            self.log_msg(f"{self.pn(player_id)}的护盾转化将{amount}H转化为{shield}层护盾")
-            return 0
+        # 护盾转化也走 ``on_heal_pre``（priority 20），转换后 heal_amount 归 0，
+        # 因此这里直接返回，不会走到牙齿改判。
         tooth = next(self._active_equipment_targeting_flag(player_id, 'heal_redirect_to_attack'), None)
         if tooth is None:
             return amount
@@ -18227,13 +18402,9 @@ class GameEngine:
             before_halving = max(0, int(dmg or 0))
             dmg = self._apply_attack_damage_halving(target_id, dmg, precision_dodged)
             self._record_achievement_damage_output(attacker_id, max(0, before_halving - dmg))
-            if immune:
-                root_armor = 0
-                fragile = 0
-            else:
-                root_armor = self._custom_status_value(target_id, 'jungle:root', 'jungle:root_status', 'root_status')
-                fragile = self._custom_status_value(target_id, 'jungle:fragile', 'fragile')
-            effective_armor = int(ps.armor) + root_armor - fragile
+            # 护甲的被动增减（树根 +层数、易损 -层数）由状态声明的
+            # ``modifiers.armor`` 提供；免疫时自动读 0。
+            effective_armor = self._effective_armor(target_id)
             before_armor = max(0, int(dmg or 0))
             dmg = max(0, dmg - effective_armor)
             self._record_achievement_damage_output(attacker_id, max(0, before_armor - dmg))

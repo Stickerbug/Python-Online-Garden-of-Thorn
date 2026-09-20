@@ -30,7 +30,7 @@ from typing import Dict, Iterable, List, Optional
 _FIELDS = {"id", "alias", "name_i18n", "desc_i18n", "color", "icon",
            "stacking", "visible", "events", "package",
            "max_stack", "decay", "decay_timing", "decay_log",
-           "keep_when_zero", "show_stack", "stack_keys"}
+           "keep_when_zero", "show_stack", "stack_keys", "modifiers"}
 
 OFFICIAL_STATUSES: tuple = (
     {
@@ -52,7 +52,25 @@ OFFICIAL_STATUSES: tuple = (
         "stacking": "stack",
         "visible": True,
         "max_stack": 60,
+        "stack_keys": ["arctic:frost", "frost", "霜冻"],
         "decay": {"timing": "turn_end", "mode": "half", "log": "zero"},
+        # 每 10 层卡牌 E 消耗 +1；旧实现在 ``_get_extra_e_for_card`` 里写死。
+        "events": {
+            "on_cost": {
+                "priority": 10,
+                "steps": [
+                    {
+                        "op": "add_var",
+                        "name": "cost_extra",
+                        "value": {
+                            "op": "div",
+                            "values": [{"op": "status_stack", "status": "arctic:frost"}, 10],
+                            "round": "floor",
+                        },
+                    }
+                ],
+            },
+        },
     },
     {
         "id": "bio:debt",
@@ -71,6 +89,7 @@ OFFICIAL_STATUSES: tuple = (
         "icon": "debt",
         "stacking": "stack",
         "visible": True,
+        "stack_keys": ["bio:debt", "debt", "负债"],
         # 「正常回 E 之后失去 1E，再减 1 层」——旧实现是引擎函数
         # ``_bio_apply_debt_after_recovery``，现在由回合阶段事件执行。
         "events": {
@@ -129,13 +148,16 @@ OFFICIAL_STATUSES: tuple = (
         # 现在由 ``on_heal_pre`` 修改本次治疗量；触发点在 heal_block 之后、
         # shield_conversion 之前，与旧顺序逐字一致。
         "events": {
-            "on_heal_pre": [
-                {
-                    "op": "add_var",
-                    "name": "heal_amount",
-                    "value": {"op": "status_stack", "status": "bio:extra_healing"},
-                }
-            ],
+            "on_heal_pre": {
+                "priority": 10,
+                "steps": [
+                    {
+                        "op": "add_var",
+                        "name": "heal_amount",
+                        "value": {"op": "status_stack", "status": "bio:extra_healing"},
+                    }
+                ],
+            },
         },
     },
     {
@@ -160,6 +182,69 @@ OFFICIAL_STATUSES: tuple = (
         "icon": "shield_conversion",
         "stacking": "stack",
         "visible": True,
+        "stack_keys": ["bio:shield_conversion", "shield_conversion", "护盾转化"],
+        # 治疗量修正：先让额外回复（priority 10）加完，再把整段回复转成护盾。
+        "events": {
+            "on_heal_pre": {
+                "priority": 20,
+                "steps": [
+                    {
+                        "op": "set_var",
+                        "name": "conversion_stacks",
+                        "value": {"op": "status_stack", "status": "bio:shield_conversion"},
+                    },
+                    {
+                        "op": "if_else",
+                        "condition": {
+                            "op": "compare",
+                            "a": {"op": "var", "name": "conversion_stacks"},
+                            "operator": ">",
+                            "b": 0,
+                        },
+                        "then": [
+                            {
+                                "op": "set_var",
+                                "name": "converted_heal",
+                                "value": {"op": "var", "name": "heal_amount"},
+                            },
+                            {
+                                "op": "set_var",
+                                "name": "converted_shield",
+                                "value": {
+                                    "op": "mul",
+                                    "values": [
+                                        {"op": "var", "name": "heal_amount"},
+                                        {"op": "var", "name": "conversion_stacks"},
+                                    ],
+                                },
+                            },
+                            {"op": "set_var", "name": "heal_amount", "value": 0},
+                            {
+                                "op": "status_op",
+                                "action": "add",
+                                "status": "jungle:shield",
+                                "target": "self",
+                                "amount": {"op": "var", "name": "converted_shield"},
+                                "log": False,
+                                "bypass_mask": True,
+                            },
+                            {
+                                "op": "status_op",
+                                "action": "remove",
+                                "status": "bio:shield_conversion",
+                                "log": False,
+                                "bypass_mask": True,
+                            },
+                            {
+                                "op": "log",
+                                "message": "{source}的护盾转化将{converted_heal}H转化为{converted_shield}层护盾",
+                            },
+                        ],
+                        "else": [],
+                    },
+                ],
+            },
+        },
     },
     {
         "id": "hel:luck",
@@ -181,6 +266,7 @@ OFFICIAL_STATUSES: tuple = (
         "icon": "luck",
         "stacking": "stack",
         "visible": True,
+        "stack_keys": ["hel:luck", "luck", "幸运"],
     },
     {
         "id": "hel:blazing_fire",
@@ -199,6 +285,7 @@ OFFICIAL_STATUSES: tuple = (
         "icon": "blazing_fire",
         "stacking": "stack",
         "visible": True,
+        "stack_keys": ["hel:blazing_fire", "blazing_fire", "烈火"],
         # 自己回合开始（状态伤害结算前）把层数转成灼烧。旧实现是引擎函数
         # ``_hel_apply_blazing_fire_turn_start``。
         "events": {
@@ -251,7 +338,10 @@ OFFICIAL_STATUSES: tuple = (
         "icon": "fragile",
         "stacking": "stack",
         "visible": True,
+        "stack_keys": ["jungle:fragile", "fragile"],
         "decay": {"timing": "turn_start", "mode": "clear"},
+        # 护甲按层数扣减；旧实现在伤害管线里写 ``root_armor - fragile``。
+        "modifiers": {"armor": {"op": "sub", "value": {"op": "stack"}}},
     },
     {
         "id": "jungle:shield",
@@ -271,6 +361,65 @@ OFFICIAL_STATUSES: tuple = (
         "icon": "shield",
         "stacking": "stack",
         "visible": True,
+        "stack_keys": ["jungle:shield", "shield"],
+        # 减甲/拿扎尔之后的伤害在此被护盾抵扣；旧实现在
+        # ``_apply_universal_damage_shields`` 里写死。
+        "events": {
+            "on_damage_pre": {
+                "priority": 10,
+                "steps": [
+                    {
+                        "op": "set_var",
+                        "name": "shield_absorb",
+                        "value": {
+                            "op": "min",
+                            "values": [
+                                {"op": "status_stack", "status": "jungle:shield"},
+                                {"op": "var", "name": "damage_amount"},
+                            ],
+                        },
+                    },
+                    {
+                        "op": "if_else",
+                        "condition": {
+                            "op": "compare",
+                            "a": {"op": "var", "name": "shield_absorb"},
+                            "operator": ">",
+                            "b": 0,
+                        },
+                        "then": [
+                            {
+                                "op": "set_var",
+                                "name": "damage_amount",
+                                "value": {
+                                    "op": "max",
+                                    "values": [
+                                        0,
+                                        {
+                                            "op": "sub",
+                                            "values": [
+                                                {"op": "var", "name": "damage_amount"},
+                                                {"op": "var", "name": "shield_absorb"},
+                                            ],
+                                        },
+                                    ],
+                                },
+                            },
+                            {
+                                "op": "status_op",
+                                "action": "remove",
+                                "status": "jungle:shield",
+                                "amount": {"op": "var", "name": "shield_absorb"},
+                                "log": False,
+                                "bypass_mask": True,
+                            },
+                            {"op": "log", "message": "{source}的护盾抵扣{shield_absorb}点伤害"},
+                        ],
+                        "else": [],
+                    },
+                ],
+            },
+        },
     },
     {
         "id": "jungle:turn_heal_turns",
@@ -463,6 +612,9 @@ OFFICIAL_STATUSES: tuple = (
         "icon": "root_status",
         "stacking": "stack",
         "visible": True,
+        "stack_keys": ["jungle:root_status", "jungle:root", "root_status"],
+        # 护甲按层数增加；受击时扣装备层数的部分仍留在引擎里（要找到对应装备）。
+        "modifiers": {"armor": {"op": "add", "value": {"op": "stack"}}},
     },
     {
         "id": "jungle:toxic_poison",
@@ -567,6 +719,7 @@ OFFICIAL_STATUSES: tuple = (
         "icon": "blood_debt",
         "stacking": "stack",
         "visible": True,
+        "stack_keys": ["ocean:blood_debt", "blood_debt", "血债"],
     },
     {
         "id": "ocean:unable_counter",
@@ -588,6 +741,7 @@ OFFICIAL_STATUSES: tuple = (
         "icon": "",
         "stacking": "stack",
         "visible": True,
+        "stack_keys": ["ocean:unable_counter", "unable_counter", "无法反制"],
     },
     {
         "id": "sewers:sealed",
@@ -705,7 +859,7 @@ def engine_status_defs() -> Dict[str, dict]:
             "source": "builtin",
         }
         for key in ("max_stack", "decay", "decay_timing", "decay_log",
-                    "keep_when_zero", "show_stack", "stack_keys"):
+                    "keep_when_zero", "show_stack", "stack_keys", "modifiers"):
             if item.get(key) not in (None, ""):
                 payload[key] = copy.deepcopy(item[key])
         if item.get("events"):

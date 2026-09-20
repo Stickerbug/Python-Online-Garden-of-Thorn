@@ -2338,13 +2338,9 @@ class GameEngine2v2(GameEngine):
                 attacker_id, dmg, source_card, crit_bonus_damage
             )
             dmg = self._apply_attack_damage_halving(target_id, dmg, precision_dodged)
-            if immune:
-                root_armor = 0
-                fragile = 0
-            else:
-                root_armor = self._custom_status_value(target_id, 'jungle:root', 'jungle:root_status', 'root_status')
-                fragile = self._custom_status_value(target_id, 'jungle:fragile', 'fragile')
-            effective_armor = int(ps.armor) + root_armor - fragile
+            # 护甲的被动增减（树根 +层数、易损 -层数）由状态声明的
+            # ``modifiers.armor`` 提供；免疫时自动读 0。
+            effective_armor = self._effective_armor(target_id)
             dmg = max(0, dmg - effective_armor)
             # Nazar transforms the physical damage remaining after armor and Fragile.
             nazar_stacks = 0 if immune else self._nazar_status_value(target_id)

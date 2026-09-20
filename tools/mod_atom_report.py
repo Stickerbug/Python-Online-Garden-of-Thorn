@@ -204,6 +204,15 @@ def count_resource_steps(report, package: str, registry: str, resource) -> None:
         )
     report["resources_with_logic"] += 1
     report["steps_total"] += step_total
+    # 包级小计：``steps_total`` 全局还包含内置状态表的步骤，测试/报告想只看
+    # 某个包时不能拿全局数相减。
+    package_entry = report["packages"].setdefault(
+        package, {"mod_id": "", "default_language": ""},
+    )
+    package_entry["steps_total"] = int(package_entry.get("steps_total", 0) or 0) + step_total
+    package_entry["resources_with_logic"] = (
+        int(package_entry.get("resources_with_logic", 0) or 0) + 1
+    )
 
 
 BUILTIN_STATUS_SOURCE = "（内置状态表 official_statuses.py）"

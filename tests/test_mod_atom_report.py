@@ -85,7 +85,8 @@ def test_package_scan_counts_steps_and_flags_legacy_encoding(tmp_path):
     report = atom_report.collect(tmp_path)
     summary = atom_report.build_summary(report)
 
-    assert summary["steps_total"] == 2
+    # 全局 steps_total 还包含内置状态表的步骤，这里只看 demo 包自己的小计。
+    assert report["packages"]["Demo.gtnmod"]["steps_total"] == 2
     assert summary["legacy_step_count"] == 1
     assert summary["legacy_steps"][0]["resource"] == "demo:beta"
     assert summary["errors"] == []
