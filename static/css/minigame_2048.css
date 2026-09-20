@@ -135,22 +135,24 @@
 /* 原版的 "+N" 飘分 */
 .mg-score-float {
   position: absolute;
-  left: 0;
-  right: 0;
-  top: 6px;
-  font-size: 22px;
+  right: 8px;
+  top: 25px;
+  font-size: 25px;
   font-weight: 700;
+  line-height: 25px;
   color: rgba(119, 110, 101, 0.9);
   pointer-events: none;
-  animation: mg-float 600ms ease-in forwards;
+  z-index: 100;
+  /* 原版 .score-addition：move-up 600ms ease-in + fill both（top 25px → -50px） */
+  animation: mg-float 600ms ease-in both;
 }
 
 [data-theme="dark"] .mg-score-float { color: rgba(255, 255, 255, 0.85); }
 .mg-no-anim .mg-score-float { display: none; }
 
 @keyframes mg-float {
-  0% { opacity: 1; transform: translateY(0); }
-  100% { opacity: 0; transform: translateY(-30px); }
+  0% { top: 25px; opacity: 1; }
+  100% { top: -50px; opacity: 0; }
 }
 
 .mg-subline {
@@ -224,6 +226,12 @@
 .mg-board-wrap { position: relative; margin-top: 16px; }
 
 .mg-board {
+  position: relative;
+  /* 滑动/合并的方块会临时"探出"棋盘（最多 3 格），transform 会计入可滚动溢出，
+     于是页面会瞬间多出滚动条、棋盘被挤窄 → 方块看起来"变扁"、字号也跟着抖。
+     用 overflow: clip（不产生滚动容器）+ 40px 的裁剪余量，既稳住布局又保留光晕。 */
+  overflow: clip;
+  overflow-clip-margin: 40px;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 12px;
@@ -249,6 +257,19 @@
   background: var(--g-cell);
   border-radius: 3px;
   /* 原版：滑动 100ms ease-in-out */
+  transition: transform 100ms ease-in-out;
+}
+
+.mg-cell { position: relative; z-index: 1; }
+
+/* 合并时"滑进去"的那两块（原版会额外渲染 mergedFrom 的两块方块）。
+   注意：它带着 .mg-cell 类，选择器必须比 .mg-cell 更具体，
+   否则 position 被覆盖成 relative，就会以网格项的身份挤进 4×4 网格、把格子压扁。 */
+.mg-board > .mg-ghost,
+.mg-ghost {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
   transition: transform 100ms ease-in-out;
 }
 

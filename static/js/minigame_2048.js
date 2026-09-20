@@ -157,6 +157,33 @@ function tileLabel(value) {
   return item ? item.name : '';
 }
 
+/* 方块外观（底色 / 边框 / 字色 / 光晕）与内容，棋盘格子和合并幽灵块共用。 */
+function applyTileSkin(tile, value) {
+  const item = paletteFor(value);
+  tile.style.setProperty('--mg-tile-bg', item ? item.bg : '#9aa5a0');
+  tile.style.setProperty('--mg-tile-border', item ? item.border : '#7d8783');
+  tile.style.setProperty('--mg-tile-fg', item ? item.fg : '#15201B');
+  const glow = glowFor(value, item ? item.border : '');
+  if (glow) {
+    tile.style.setProperty('--mg-glow', glow.outer);
+    tile.style.setProperty('--mg-glow-inset', glow.inset);
+  }
+  const name = tileLabel(value);
+  // 名称越长字号越小：CSS 用 --mg-chars 算 cqw/cqh 比例（见 minigame_2048.css）
+  tile.style.setProperty('--mg-chars', String((name || String(value)).length));
+}
+
+function tileFaceHtml(value) {
+  const name = tileLabel(value);
+  if (!name) {
+    return `<span class="mg-tile-face"><span class="mg-tile-name">${value}</span></span>`;
+  }
+  return `<span class="mg-tile-face">`
+    + `<span class="mg-tile-name">${name}</span>`
+    + (showNumbers ? `<span class="mg-tile-value">${value}</span>` : '')
+    + '</span>';
+}
+
 function renderBoard(animate) {
   boardEl.innerHTML = '';
   const pending = state.ops.length - state.acked;
@@ -166,31 +193,24 @@ function renderBoard(animate) {
       .filter((move) => move && move.merged)
       .map((move) => move.to),
   );
+  /* 原版 html_actuator.addTile 的做法：合并时把"被合并掉的两块"也渲染出来，
+     让它们各自从原位滑到目标格，合并后的新块再在它们上面 pop。
+     这里用"幽灵块"实现：绝对定位在目标格，先摆回源格位置再过渡过去，动画完就移除。 */
+  const mergeSources = new Map();
+  if (animate && Array.isArray(state.lastMoves)) {
+    state.lastMoves.forEach((move) => {
+      if (!move || !move.merged) return;
+      if (!mergeSources.has(move.to)) mergeSources.set(move.to, []);
+      mergeSources.get(move.to).push(move.from);
+    });
+  }
+  const ghostTargets = new Map();   // to → [ghost 元素]
   state.cells.forEach((value, index) => {
     const tile = document.createElement('div');
     tile.className = 'mg-cell' + (value ? ' filled' : '');
     if (value) {
-      const item = paletteFor(value);
-      tile.style.setProperty('--mg-tile-bg', item ? item.bg : '#9aa5a0');
-      tile.style.setProperty('--mg-tile-border', item ? item.border : '#7d8783');
-      tile.style.setProperty('--mg-tile-fg', item ? item.fg : '#15201B');
-      const glow = glowFor(value, item ? item.border : '');
-      if (glow) {
-        tile.style.setProperty('--mg-glow', glow.outer);
-        tile.style.setProperty('--mg-glow-inset', glow.inset);
-      }
-      const name = tileLabel(value);
-      if (name) {
-        // 名称越长字号越小：CSS 用 --mg-chars 算 cqw/cqh 比例（见 minigame_2048.css）
-        tile.style.setProperty('--mg-chars', String(name.length));
-        tile.innerHTML = `<span class="mg-tile-face">`
-          + `<span class="mg-tile-name">${name}</span>`
-          + (showNumbers ? `<span class="mg-tile-value">${value}</span>` : '')
-          + '</span>';
-      } else {
-        tile.style.setProperty('--mg-chars', String(String(value).length));
-        tile.innerHTML = `<span class="mg-tile-face"><span class="mg-tile-name">${value}</span></span>`;
-      }
+      applyTileSkin(tile, value);
+      tile.innerHTML = tileFaceHtml(value);
       tile.classList.add('mg-tile');
       if (value >= 2048) tile.classList.add('mg-tile-eternal');
       if (animate && state.lastSpawn === index) tile.classList.add('mg-tile-new');
@@ -198,9 +218,30 @@ function renderBoard(animate) {
     }
     boardEl.appendChild(tile);
   });
+  // 生成合并幽灵块：源值取自"上一步的棋盘"，让它们滑进目标格
+  if (mergeSources.size && Array.isArray(state.lastPrev)) {
+    mergeSources.forEach((sources, target) => {
+      const cell = boardEl.children[target];
+      if (!cell) return;
+      const created = [];
+      sources.forEach((from) => {
+        const value = Number(state.lastPrev[from] || 0);
+        if (!value) return;
+        const ghost = document.createElement('div');
+        ghost.className = 'mg-cell filled mg-ghost';
+        applyTileSkin(ghost, value);
+        ghost.innerHTML = tileFaceHtml(value);
+        ghost.dataset.from = String(from);
+        ghost.dataset.to = String(target);
+        boardEl.insertBefore(ghost, cell);
+        created.push(ghost);
+      });
+      if (created.length) ghostTargets.set(target, created);
+    });
+  }
   // 原版那种"方块滑过去"：按上一步的移动映射把方块先摆回旧位置，再过渡回原位。
   if (animate && Array.isArray(state.lastMoves) && state.lastMoves.length) {
-    slideTiles(state.lastMoves);
+    slideTiles(state.lastMoves, ghostTargets);
   }
   scoreEl.textContent = String(state.score);
   bestEl.textContent = String(state.best);
@@ -220,6 +261,7 @@ let tileFitFrame = null;
 const tileFitCache = new Map();
 
 function fitTileNames({ force = false } = {}) {
+  // 连"合并幽灵块"一起算：它们和最终方块用同一套字号，滑进去时文字不会突然变化
   const cells = boardEl.querySelectorAll('.mg-cell.filled');
   cells.forEach((cell) => {
     const name = cell.querySelector('.mg-tile-name');
@@ -270,15 +312,18 @@ function scheduleTileFit() {
 /* 方块滑动（对应原版 `.tile` 的 `transition: 100ms ease-in-out`）：
    先把方块按"旧格子 → 新格子"的位移摆回旧位置，下一动画帧再放回原位，
    让 CSS 过渡把它滑过去；不改变最终布局，也不影响无动画模式。 */
-function slideTiles(moves) {
-  const cells = boardEl.querySelectorAll('.mg-cell');
+function slideTiles(moves, ghostTargets = new Map()) {
+  const cells = boardEl.querySelectorAll('.mg-cell:not(.mg-ghost)');
   if (cells.length !== 16) return;
   const first = cells[0].getBoundingClientRect();
   const stepX = cells[1].getBoundingClientRect().left - first.left;
   const stepY = cells[4].getBoundingClientRect().top - first.top;
   const shifted = [];
+  const mergeTargets = new Set(ghostTargets.keys());
   moves.forEach((move) => {
     if (!move || move.from === move.to) return;
+    // 合并格不滑动：原版里滑进去的是"被合并掉的两块"（下面按幽灵块处理），新块只在原位 pop
+    if (mergeTargets.has(move.to)) return;
     const target = cells[move.to];
     if (!target) return;
     const fromCol = move.from % 4;
@@ -289,10 +334,39 @@ function slideTiles(moves) {
     target.style.transform = `translate(${(fromCol - toCol) * stepX}px, ${(fromRow - toRow) * stepY}px)`;
     shifted.push(target);
   });
-  if (!shifted.length) return;
+  // 合并幽灵块：先摆到源格，再滑到目标格，动画结束后移除
+  const ghosts = [];
+  ghostTargets.forEach((list, target) => {
+    const cell = cells[target];
+    if (!cell) return;
+    const baseLeft = cell.offsetLeft;
+    const baseTop = cell.offsetTop;
+    const width = cell.offsetWidth;
+    const height = cell.offsetHeight;
+    list.forEach((ghost) => {
+      const from = Number(ghost.dataset.from || 0);
+      const fromCol = from % 4;
+      const fromRow = Math.floor(from / 4);
+      const toCol = target % 4;
+      const toRow = Math.floor(target / 4);
+      ghost.style.left = `${baseLeft}px`;
+      ghost.style.top = `${baseTop}px`;
+      ghost.style.width = `${width}px`;
+      ghost.style.height = `${height}px`;
+      ghost.style.transition = 'none';
+      ghost.style.transform = `translate(${(fromCol - toCol) * stepX}px, ${(fromRow - toRow) * stepY}px)`;
+      ghosts.push(ghost);
+    });
+  });
+  const movingGhosts = ghosts.slice();
+  if (!shifted.length && !movingGhosts.length) return;
   void boardEl.offsetHeight;   // 强制重排，让上面的初始位移先生效
   window.requestAnimationFrame(() => {
     shifted.forEach((el) => {
+      el.style.transition = 'transform 100ms ease-in-out';
+      el.style.transform = 'translate(0, 0)';
+    });
+    movingGhosts.forEach((el) => {
       el.style.transition = 'transform 100ms ease-in-out';
       el.style.transform = 'translate(0, 0)';
     });
@@ -301,6 +375,7 @@ function slideTiles(moves) {
         el.style.transition = '';
         el.style.transform = '';
       });
+      movingGhosts.forEach((el) => el.remove());
     }, 150);
   });
 }
@@ -451,6 +526,7 @@ function adoptServerState(serverState) {
 function move(direction) {
   if (!state || identityRejected) return;
   if (!overlayEl.hidden) return;
+  const previousCells = state.cells.slice();   // 合并幽灵块要用"合并前的数值"
   const result = stepMove(state.cells, state.rngState, state.score, direction);
   if (!result.changed) return;                       // 无效操作：不加分、不生成、不入队
   state.cells = result.cells;
@@ -461,10 +537,13 @@ function move(direction) {
   state.best = Math.max(state.best || 0, state.score);
   state.lastSpawn = result.spawn ? result.spawn.index : null;
   state.lastMoves = Array.isArray(result.moves) ? result.moves : [];
+  state.lastPrev = previousCells;
   if (result.gained > 0) {
     // 官方 2048 的 "+N" 反馈：飘在分数格上，不占布局。
     const box = scoreEl.parentElement;
     if (box) {
+      // 原版 updateScore 会先清空分数格，所以任何时刻只挂一个 "+N"
+      box.querySelectorAll('.mg-score-float').forEach((node) => node.remove());
       const float = document.createElement('span');
       float.className = 'mg-score-float';
       float.textContent = `+${result.gained}`;
