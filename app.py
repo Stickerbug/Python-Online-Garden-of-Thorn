@@ -5543,14 +5543,12 @@ def _friend_request_cleanup_worker():
                 time.sleep(600)
             if not DB_AVAILABLE:
                 continue
-            account_integrity.recover_reputation_daily()
-            account_integrity.expire_team_reports()
-            account_integrity.refresh_recent_account_links()
+            # 反馈（玩家「对局中突然无响应、十几秒后恢复」）：这一批维护要全库扫描
+            # （recover_reputation_daily 会遍历所有账号 + 每天一份 ledger），1.16GB 库上实测
+            # 每 10 分钟把事件循环按住 17~18 秒（看门狗记录 17078/18169/18117/18072/18168/18649ms，
+            # 间隔正好 10 分 19 秒）。它们只碰数据库，所以整批丢线程池，循环继续服务玩家。
+            expired_count, disable_error = run_off_event_loop(_account_integrity_maintenance_once)
             refresh_online_reputation()
-            ok, error = cleanup_expired_friend_requests_once(force=True)
-            if not ok and error:
-                admin_event('db', f'friend request cleanup skipped: {error}')
-            expired_count, disable_error = cleanup_expired_content_disables_once()
             if disable_error:
                 admin_event('db', f'content disable cleanup skipped: {disable_error}')
             elif expired_count:
@@ -5558,6 +5556,17 @@ def _friend_request_cleanup_worker():
                 admin_event('admin', f'expired content disables cleared: {expired_count}')
         except Exception as exc:
             admin_event('error', f'friend request cleanup worker error: {exc}')
+
+
+def _account_integrity_maintenance_once():
+    """账户健康度与好友请求的批量维护（纯数据库，放线程池里跑）。"""
+    account_integrity.recover_reputation_daily()
+    account_integrity.expire_team_reports()
+    account_integrity.refresh_recent_account_links()
+    ok, error = cleanup_expired_friend_requests_once(force=True)
+    if not ok and error:
+        admin_event('db', f'friend request cleanup skipped: {error}')
+    return cleanup_expired_content_disables_once()
 
 
 def ensure_friend_request_cleanup_started():
@@ -5583,7 +5592,8 @@ def _dm_cleanup_worker():
                 time.sleep(1800)
             if not DB_AVAILABLE:
                 continue
-            ok, error = cleanup_old_dm_messages_once()
+            # 同上一批维护：批量删旧私信也是全库操作，放线程池别按住事件循环。
+            ok, error = run_off_event_loop(cleanup_old_dm_messages_once)
             if not ok and error:
                 admin_event('db', f'dm cleanup skipped: {error}')
         except Exception as exc:
