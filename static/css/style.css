@@ -6345,6 +6345,9 @@ body {
 
 /* 单人训练场：按模组折叠的卡牌目录（反馈：训练场不再需要模组设置） */
 .solo-mod-group {
+  /* 反馈 #185：列表是 flex column，折叠组默认会被压缩到几像素高，既看不出内容
+     也没法用滚轮滚动——这里禁止收缩，让列表真正溢出后靠 .solo-card-list 滚动。 */
+  flex: 0 0 auto;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-sm);
   background: var(--bg-primary);
@@ -6393,6 +6396,7 @@ body {
 }
 
 .solo-mod-cards {
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -6400,6 +6404,7 @@ body {
 }
 
 .solo-mod-cards .solo-card-row {
+  flex: 0 0 auto;
   background: var(--bg-card);
 }
 
