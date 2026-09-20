@@ -268,7 +268,9 @@
 .mg-board > .mg-ghost,
 .mg-ghost {
   position: absolute;
-  z-index: 0;
+  /* 滑动过程中压在普通格子**上面**：否则它会被别的方块挡住，看起来像"穿透"。
+     动画结束后 JS 会把 z-index 降回 0，让合并后的新块盖住它（与原版一致）。 */
+  z-index: 2;
   pointer-events: none;
   transition: transform 100ms ease-in-out;
 }

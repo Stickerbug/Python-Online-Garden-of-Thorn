@@ -368,7 +368,9 @@ function slideTiles(moves, ghostTargets = new Map()) {
   const movingGhosts = ghosts.slice();
   if (!shifted.length && !movingGhosts.length) return;
   void boardEl.offsetHeight;   // 强制重排，让上面的初始位移先生效
+  // 双 rAF：保证"旧位置"这一帧真的提交了，再改到新位置，避免偶发直接跳到终点
   window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
     shifted.forEach((el) => {
       el.style.transition = 'transform 100ms ease-in-out';
       el.style.transform = 'translate(0, 0)';
@@ -382,8 +384,15 @@ function slideTiles(moves, ghostTargets = new Map()) {
         el.style.transition = '';
         el.style.transform = '';
       });
-      movingGhosts.forEach((el) => el.remove());
+      /* 幽灵块**不删除**：让它停在目标格、压在合并后的方块下面（和原版一样，
+         被合并的那两块会一直留在 DOM 里，直到下一次重绘才被清掉）。
+         提前 remove 会让"两块滑进来"看起来中途消失。 */
+      movingGhosts.forEach((el) => {
+        el.style.transition = '';
+        el.style.zIndex = '0';
+      });
     }, 150);
+    });
   });
 }
 
