@@ -255,6 +255,8 @@ def main(argv=None) -> int:
                 "alias": item["alias"],
                 "name_zh": item["name_i18n"]["zh"],
                 "name_en": item["name_i18n"]["en"],
+                "desc_zh": item["desc_i18n"]["zh"],
+                "desc_en": item["desc_i18n"]["en"],
                 "color": item["color"],
                 "icon": item["icon"],
                 "stacking": item["stacking"],
