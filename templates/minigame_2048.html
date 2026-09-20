@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <title>2048 · 休闲花园</title>
   <link rel="icon" href="/static/assets/favicon.ico">
-  <link rel="stylesheet" href="/static/css/style.css?v={{ static_version|default('dev')|urlencode }}">
   <link rel="stylesheet" href="/static/css/minigame_2048.css?v={{ static_version|default('dev')|urlencode }}">
   <script nonce="{{ csp_nonce }}">
   (() => {
@@ -14,14 +13,6 @@
     };
     const theme = read('gtn_theme') === 'dark' || read('gtn_beta_theme') === 'dark' ? 'dark' : 'light';
     document.documentElement.setAttribute('data-theme', theme);
-    // 这一页不加载 game.js，字体就绪后自己把 --font-main 切到 Kreadon（与游戏其他地方一致）。
-    const enableFont = () => document.documentElement.classList.add('fonts-loaded-main');
-    if (document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(enableFont).catch(enableFont);
-      window.setTimeout(enableFont, 1500);
-    } else {
-      enableFont();
-    }
   })();
   </script>
 </head>
@@ -53,15 +44,15 @@
   </header>
 
   <div class="mg-actions">
-    <button id="mg-new" class="btn btn-primary" type="button">新游戏</button>
-    <button id="mg-rank" class="btn btn-secondary" type="button">排行榜</button>
+    <button id="mg-new" class="mg-btn" type="button">新游戏</button>
+    <button id="mg-rank" class="mg-btn secondary" type="button">排行榜</button>
   </div>
 
   <div id="mg-invite" class="mg-invite" hidden>
     <span id="mg-invite-text">收到对局邀请</span>
     <span class="mg-invite-actions">
-      <button id="mg-invite-accept" class="btn btn-primary btn-small" type="button">接受</button>
-      <button id="mg-invite-decline" class="btn btn-secondary btn-small" type="button">拒绝</button>
+      <button id="mg-invite-accept" class="mg-btn small" type="button">接受</button>
+      <button id="mg-invite-decline" class="mg-btn secondary small" type="button">拒绝</button>
     </span>
   </div>
 
@@ -72,8 +63,8 @@
         <h2 id="mg-overlay-title">游戏结束</h2>
         <p id="mg-overlay-text">没有空格也没有可以合并的相邻方块了。</p>
         <div class="mg-overlay-actions">
-          <button id="mg-overlay-primary" class="btn btn-primary" type="button">再来一局</button>
-          <button id="mg-overlay-secondary" class="btn btn-secondary" type="button" hidden>继续游戏</button>
+          <button id="mg-overlay-primary" class="mg-btn" type="button">再来一局</button>
+          <button id="mg-overlay-secondary" class="mg-btn secondary" type="button" hidden>继续游戏</button>
         </div>
       </div>
     </div>

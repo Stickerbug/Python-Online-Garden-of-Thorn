@@ -161,9 +161,11 @@ function renderBoard(animate) {
 function buildLegend() {
   const host = el('mg-legend-grid');
   if (!host) return;
+  // 排版参考 AK IOI 的 oi-2048：左边一块"方块"，右边写名称（这里是稀有度名）。
   host.innerHTML = PALETTE.map((item) => `
-    <span class="mg-legend-item" style="--mg-tile-bg:${item.bg};--mg-tile-border:${item.border};--mg-tile-fg:${item.fg}">
-      <b>${item.value}</b>${item.name}
+    <span class="mg-legend-item" style="--mg-tile-bg:${item.bg};--mg-tile-fg:${item.fg}">
+      <span class="mg-legend-swatch">${item.value}</span>
+      <span class="mg-legend-name">${item.name}</span>
     </span>`).join('');
 }
 
