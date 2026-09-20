@@ -350,8 +350,11 @@ function fitTileNames({ force = false } = {}) {
     const availH = Math.max(14, cell.clientHeight - 10);
     const fits = (size) => {
       name.style.fontSize = `${size}px`;
-      const rect = name.getBoundingClientRect();
-      return rect.width <= availW + 0.5 && rect.height <= availH + 0.5;
+      /* 用 scrollWidth/scrollHeight（**布局尺寸**）而不是 getBoundingClientRect：
+         合并/出现的元素此刻正被 CSS 缩放动画（scale 0 → 1.18 → 1）作用着，
+         rect 会随动画变化（延迟期甚至是 0），据此量出的字号会偏大并被缓存下来，
+         表现为"某个名字突然变得很大/溢出"。布局尺寸不受 transform 影响。 */
+      return name.scrollWidth <= availW + 0.5 && name.scrollHeight <= availH + 0.5;
     };
     // 二分找出"能放下"的最大字号：短名更大、长名自动变小，且尽量占满格子。
     const MAX_SIZE = 40;
