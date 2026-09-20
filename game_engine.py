@@ -7445,6 +7445,44 @@ class GameEngine:
             return True
         return self._card_has_mark(getattr(eq, 'card_def', None), mark)
 
+    def _card_is(self, card_or_def, *names) -> bool:
+        """已废弃的「按名字判定」兼容层（Round 5c 删除后外部调用方仍在用）。
+
+        引擎内部一律走数据驱动的 ``_card_has_mark`` / ``_card_has_flag``，但 GTN-AI 的
+        训练采集仍在调 ``engine._card_is(card, "Fusion", "vanilla:fusion")`` —— 线上表现
+        就是每局 AI 对局刷 ``AttributeError: 'GameEngine' object has no attribute
+        '_card_is'``（提示 ai_training_capture_failed），所以这里保留一个窄兼容层：
+        先按 mark 命中，再退回 def_id / 本地 id / 英文名 / 中文名比对（忽略命名空间前缀与大小写）。
+        新代码不要再使用；GTN-AI 换用 ``_card_has_mark`` 之后可以再删掉。
+        """
+        if card_or_def is None or not names:
+            return False
+        wanted = set()
+        for name in names:
+            text = str(name or '').strip().lower()
+            if not text:
+                continue
+            wanted.add(text)
+            wanted.add(text.split(':')[-1])
+        if not wanted:
+            return False
+        for name in wanted:
+            try:
+                if self._card_has_mark(card_or_def, name):
+                    return True
+            except Exception:
+                continue
+        card_def = getattr(card_or_def, 'card_def', None) or card_or_def
+        candidates = set()
+        for source in (card_or_def, card_def):
+            for key in ('def_id', 'id', 'legacy_id', 'name_en', 'name_cn'):
+                value = getattr(source, key, None)
+                if value:
+                    text = str(value).strip().lower()
+                    candidates.add(text)
+                    candidates.add(text.split(':')[-1])
+        return bool(candidates & wanted)
+
     # ------------------------------------------------------------------
     # Round 10: declarative reads + engine built-in fallbacks (docs §13.1)
     # ------------------------------------------------------------------
