@@ -34979,6 +34979,8 @@ def api_minigame_2048_sync():
                 source=source,
                 reached_2048=bool(payload.get('reached_2048')),
                 continued=payload.get('continued'),
+                new_game=bool(payload.get('new_game')),
+                seed=payload.get('seed'),
             )
     except Exception as exc:
         admin_event('error', f'2048 sync failed: {exc}')

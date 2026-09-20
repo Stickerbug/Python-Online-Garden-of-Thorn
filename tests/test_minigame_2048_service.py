@@ -144,6 +144,41 @@ class SyncTests(unittest.TestCase):
         self.assertTrue(svc.prefs_decline_invites(self.conn, 1))
         self.assertTrue(svc.get_prefs(self.conn, 1)["show_numbers"])
 
+    def test_offline_started_game_is_adopted_and_verified(self):
+        """离线自开的局：带种子+完整操作补传，服务端从起点重放后才入库。"""
+
+        client_seed = 777001
+        ops = valid_ops(client_seed, 5)
+        truth = g.replay(client_seed, ops)
+        result = svc.sync_progress(
+            self.conn, 1, "local-777001", 0, ops,
+            claimed_score=truth["score"], claimed_cells=truth["cells"],
+            source="offline", new_game=True, seed=client_seed,
+            now="2026-09-20T09:00:00Z",
+        )
+        self.assertEqual(result["status"], "ok", result)
+        self.assertEqual(result["score"], truth["score"])
+        game = svc.load_state(self.conn, 1)["game"]
+        self.assertEqual(game["game_uid"], "local-777001")
+        self.assertEqual(game["source"], "offline")
+        record = self.conn.execute("SELECT * FROM minigame_2048_records").fetchone()
+        self.assertEqual(record["source"], "offline")
+        self.assertEqual(record["score"], truth["score"])
+        kinds = {row["kind"] for row in self.conn.execute("SELECT * FROM minigame_2048_audit")}
+        self.assertIn("adopt_client_game", kinds)
+
+    def test_offline_adopt_rejects_tampered_score(self):
+        client_seed = 555111
+        ops = valid_ops(client_seed, 4)
+        truth = g.replay(client_seed, ops)
+        bad = svc.sync_progress(
+            self.conn, 2, "local-555111", 0, ops,
+            claimed_score=truth["score"] + 999, source="offline",
+            new_game=True, seed=client_seed, now="2026-09-20T09:05:00Z",
+        )
+        self.assertEqual(bad["status"], "rejected")
+        self.assertEqual(svc.load_state(self.conn, 2)["game"]["op_index"], 0)
+
 
 class LeaderboardTests(unittest.TestCase):
     def setUp(self):

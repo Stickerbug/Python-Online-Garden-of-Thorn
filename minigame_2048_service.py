@@ -255,7 +255,8 @@ def _replay_state(state: Dict[str, object]) -> Dict[str, object]:
     return g.replay(seed, tail, start_state=checkpoint)
 
 
-def create_game(conn, user_id: int, *, seed=None, source: str = "online", now=None) -> Dict[str, object]:
+def create_game(conn, user_id: int, *, seed=None, source: str = "online", now=None,
+                game_uid: Optional[str] = None) -> Dict[str, object]:
     """开新局：关闭旧活动局（旧局记录与未同步操作都保留，不被删除）。"""
 
     source = source if source in SYNC_SOURCES else "online"
@@ -264,7 +265,7 @@ def create_game(conn, user_id: int, *, seed=None, source: str = "online", now=No
         seed = g.seed_from_text(f"{user_id}:{stamp}:{os.urandom(8).hex()}")
     seed_value = g.normalize_seed(seed)
     initial = g.initial_state(seed_value)
-    game_uid = f"{int(user_id)}-{seed_value:x}"
+    uid = str(game_uid or "").strip() or f"{int(user_id)}-{seed_value:x}"
     conn.execute(
         "UPDATE minigame_2048_games SET status='closed', closed_at=?, updated_at=?"
         " WHERE user_id=? AND status='active'",
@@ -276,7 +277,7 @@ def create_game(conn, user_id: int, *, seed=None, source: str = "online", now=No
             checkpoint_index, checkpoint_cells, checkpoint_score, checkpoint_rng_state,
             score, max_tile, status, reached_2048, continued, source, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, '', 0, 0, ?, 0, ?, 0, ?, 'active', 0, 0, ?, ?, ?)""",
-        (int(user_id), game_uid, seed_value, g.RULES_VERSION, g.SAVE_VERSION,
+        (int(user_id), uid, seed_value, g.RULES_VERSION, g.SAVE_VERSION,
          json.dumps(initial["cells"]), int(initial["rng_state"]),
          g.max_tile(initial["cells"]), source, stamp, stamp),
     )
@@ -347,21 +348,36 @@ def _record_progress(conn, state: Dict[str, object], board: Dict[str, object],
 
 def sync_progress(conn, user_id: int, game_uid: str, from_index: int, ops,
                   *, claimed_score=None, claimed_cells=None, source: str = "online",
-                  reached_2048: bool = False, continued=None, now=None) -> Dict[str, object]:
+                  reached_2048: bool = False, continued=None, now=None,
+                  new_game: bool = False, seed=None) -> Dict[str, object]:
     """增量同步：从 ``from_index`` 起补操作，服务端重放验证后再落库。
 
     返回 ``{"status": "ok"|"conflict"|"gap"|"rejected"|"stale_game", ...}``。
     """
 
     row = _active_game(conn, user_id)
+    if row is None and new_game and seed is not None and game_uid:
+        # 全新账号/没活动局时的离线开局补传：直接按客户端种子建档。
+        create_game(conn, user_id, seed=seed, source=source, now=now, game_uid=str(game_uid))
+        row = _active_game(conn, user_id)
     if row is None:
         return {"status": "no_game"}
     state = _game_state(row)
     if game_uid and str(game_uid) != str(state["game_uid"]):
-        _audit(conn, user_id, state["game_id"], "stale_game",
-               {"client": str(game_uid)[:80], "active": state["game_uid"]})
-        conn.commit()
-        return {"status": "stale_game", "active_game_uid": state["game_uid"]}
+        # 离线开局的补传：客户端带着自己的种子和完整操作来，服务端从起点重放验证。
+        if new_game and seed is not None:
+            create_game(conn, user_id, seed=seed, source=source, now=now, game_uid=str(game_uid))
+            row = _active_game(conn, user_id)
+            state = _game_state(row)
+            _audit(conn, user_id, state["game_id"], "adopt_client_game",
+                   {"game_uid": str(game_uid)[:80], "source": source,
+                    "seed": int(g.normalize_seed(seed))})
+            conn.commit()
+        else:
+            _audit(conn, user_id, state["game_id"], "stale_game",
+                   {"client": str(game_uid)[:80], "active": state["game_uid"]})
+            conn.commit()
+            return {"status": "stale_game", "active_game_uid": state["game_uid"]}
     text = g.ops_from_list(ops)
     if len(text) > MAX_SYNC_OPS:
         return {"status": "rejected", "reason": f"单批操作超过上限 {MAX_SYNC_OPS}"}

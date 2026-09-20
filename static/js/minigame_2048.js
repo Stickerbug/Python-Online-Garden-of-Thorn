@@ -90,6 +90,7 @@ function saveLocal() {
       reachedShown: state.reachedShown,
       continued: state.continued,
       source: state.source,
+      localNew: state.localNew === true,
       declined: state.declined,
     }));
   } catch (exc) {
@@ -214,6 +215,9 @@ async function syncNow() {
     source: state.source,
     reached_2048: maxTile(state.cells) >= 2048,
     continued: state.continued,
+    // 离线自开的局：把种子一起交上去，服务端从起点重放验证（记录离线来源）。
+    new_game: state.localNew === true,
+    seed: state.localNew === true ? state.seed : undefined,
   };
   try {
     const response = await fetch('/api/minigame/2048/sync', {
@@ -242,6 +246,7 @@ async function syncNow() {
     }
     const body = await response.json();
     state.acked = Number(body.op_index || fromIndex + pendingOps.length);
+    state.localNew = false;
     state.lastSyncLabel = body.record
       ? `已同步 · 已验证 ${body.record.score} 分`
       : '已同步（本次没有新增计分）';
@@ -278,6 +283,7 @@ function adoptServerState(serverState) {
   const game = serverState.game;
   const board = serverState.board || {};
   state.gameUid = game.game_uid;
+  state.localNew = false;
   state.seed = Number(game.seed);
   state.ops = String(game.ops || '').split('');
   state.acked = Number(serverState.verified?.op_index || 0);
@@ -370,6 +376,7 @@ function startLocalGame(seed) {
     reachedShown: false,
     continued: false,
     source: navigator.onLine ? 'online' : 'offline',
+    localNew: true,
     lastSyncLabel: '本地新局：联网后自动验证',
   };
   saveLocal();
@@ -579,6 +586,7 @@ async function boot() {
       reachedShown: !!local.reachedShown,
       continued: !!local.continued,
       source: local.source || 'online',
+      localNew: local.localNew === true,
       declined: !!local.declined,
       lastSyncLabel: '已从本机续局（联网后校验）',
     };
