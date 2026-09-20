@@ -178,3 +178,88 @@ def test_status_event_context_exposes_damage_source_and_amount():
     engine._trigger_v2_damage_status_events(1, 0, 7)
 
     assert any('probe:7:0:' in str(line) for line in engine.log)
+
+
+def test_custom_status_stack_keys_sum_and_canonicalize_on_write():
+    engine = make_engine()
+    engine.v2_status_defs = {
+        STATUS_ID: {
+            'id': STATUS_ID,
+            'stacking': 'stack',
+            'stack_keys': [STATUS_ID, 'charged', '充能探针'],
+        },
+    }
+    # 历史数据分散在两个别名键上，读取要按声明求和。
+    engine.players[0].custom_statuses['charged'] = 2
+    engine.players[0].custom_statuses['充能探针'] = 1
+    assert engine._get_status_count(0, STATUS_ID) == 3
+
+    apply_status(engine, 0, STATUS_ID, 2)
+
+    # 增删归并到第一个键，不再留下两份层数。
+    assert engine.players[0].custom_statuses == {STATUS_ID: 5}
+    assert engine._get_status_count(0, STATUS_ID) == 5
+
+
+def test_custom_status_on_heal_pre_can_modify_heal_amount():
+    engine = make_engine()
+    engine.v2_status_defs = {
+        'probe:bandage': {
+            'id': 'probe:bandage',
+            'stacking': 'stack',
+            'events': {
+                'on_heal_pre': [
+                    {
+                        'op': 'add_var',
+                        'name': 'heal_amount',
+                        'value': {'op': 'status_stack', 'status': 'probe:bandage'},
+                    }
+                ],
+            },
+        },
+    }
+    player = engine.players[1]
+    player.health = 50
+    player.custom_statuses['probe:bandage'] = 3
+
+    player.heal(5)
+
+    assert player.health == 58
+
+
+def test_official_extra_healing_declares_pre_heal_modifier():
+    definition = official_statuses.engine_status_def('bio:extra_healing')
+    assert definition['stack_keys'] == ['bio:extra_healing', 'extra_healing', '额外回复']
+    assert definition['events']['on_heal_pre']
+
+    engine = make_engine()
+    player = engine.players[1]
+    player.health = 50
+    engine._bio_set_status_value(1, 'extra_healing', 2)
+
+    player.heal(5)
+
+    assert player.health == 57
+
+    # 状态免疫只压制生效，不阻止层数存在。
+    player.custom_statuses['status_immune'] = 1
+    player.heal(5)
+    assert player.health == 62
+
+
+def test_official_toxic_poison_declares_stack_keys_and_resolved_event():
+    definition = official_statuses.engine_status_def('jungle:toxic_poison')
+    assert definition['stack_keys'] == ['jungle:toxic_poison', 'toxic_poison', '剧毒']
+    assert definition['events']['on_poison_resolved']
+
+    for storage_key in ('jungle:toxic_poison', 'toxic_poison'):
+        engine = make_engine()
+        engine.players[0].poison = 4
+        engine.players[0].custom_statuses[storage_key] = 3
+
+        engine._apply_turn_start_effects(0)
+
+        # 中毒先造成 4 点伤害并减半为 2，再被剧毒追加 3 层。
+        assert engine.players[0].poison == 5, storage_key
+        assert engine.players[0].health == 96, storage_key
+        assert any('剧毒施加3层中毒' in str(line) for line in engine.log), storage_key

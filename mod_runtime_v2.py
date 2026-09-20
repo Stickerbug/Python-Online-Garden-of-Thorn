@@ -4053,6 +4053,22 @@ def _status_stack(engine, player_id: int, status_id: str, *, ignore_immunity: bo
     attr = _builtin_status_attr(status_id)
     if attr:
         return int(getattr(ps, attr, 0) or 0)
+    # 状态声明了 ``stack_keys`` 时按声明的键求和：官方剧毒的卡数据历史上有
+    # ``jungle:toxic_poison`` 与 ``toxic_poison`` 两种写法，读取必须一致。
+    get_def = getattr(engine, "_get_v2_status_def", None)
+    if callable(get_def):
+        definition = get_def(status_id)
+        if isinstance(definition, dict):
+            stack_keys = definition.get("stack_keys")
+            if isinstance(stack_keys, (list, tuple, set)):
+                store = getattr(ps, "custom_statuses", {}) or {}
+                total = 0
+                for key in stack_keys:
+                    try:
+                        total += int(store.get(str(key), 0) or 0)
+                    except (TypeError, ValueError):
+                        continue
+                return max(0, total)
     return int(getattr(ps, "custom_statuses", {}).get(status_id, 0) or 0)
 
 

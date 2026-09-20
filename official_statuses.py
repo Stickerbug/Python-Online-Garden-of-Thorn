@@ -30,7 +30,7 @@ from typing import Dict, Iterable, List, Optional
 _FIELDS = {"id", "alias", "name_i18n", "desc_i18n", "color", "icon",
            "stacking", "visible", "events", "package",
            "max_stack", "decay", "decay_timing", "decay_log",
-           "keep_when_zero", "show_stack"}
+           "keep_when_zero", "show_stack", "stack_keys"}
 
 OFFICIAL_STATUSES: tuple = (
     {
@@ -124,6 +124,19 @@ OFFICIAL_STATUSES: tuple = (
         "icon": "extra_healing",
         "stacking": "stack",
         "visible": True,
+        "stack_keys": ["bio:extra_healing", "extra_healing", "额外回复"],
+        # 旧实现是治疗回调里的 ``_bio_status_value(player_id, 'extra_healing')``。
+        # 现在由 ``on_heal_pre`` 修改本次治疗量；触发点在 heal_block 之后、
+        # shield_conversion 之前，与旧顺序逐字一致。
+        "events": {
+            "on_heal_pre": [
+                {
+                    "op": "add_var",
+                    "name": "heal_amount",
+                    "value": {"op": "status_stack", "status": "bio:extra_healing"},
+                }
+            ],
+        },
     },
     {
         "id": "bio:shield_conversion",
@@ -466,6 +479,40 @@ OFFICIAL_STATUSES: tuple = (
         "icon": "toxic_poison",
         "stacking": "stack",
         "visible": True,
+        # 卡数据历史上两种写法都用过（``jungle:toxic_poison`` / ``toxic_poison``），
+        # 声明层数键后，读取与增删都会归并到第一个键。
+        "stack_keys": ["jungle:toxic_poison", "toxic_poison", "剧毒"],
+        "events": {
+            "on_poison_resolved": [
+                {
+                    "op": "set_var",
+                    "name": "toxic_poison_stacks",
+                    "value": {"op": "status_stack", "status": "jungle:toxic_poison"},
+                },
+                {
+                    "op": "if_else",
+                    "condition": {
+                        "op": "compare",
+                        "a": {"op": "var", "name": "toxic_poison_stacks"},
+                        "operator": ">",
+                        "b": 0,
+                    },
+                    "then": [
+                        {
+                            "op": "status_op",
+                            "action": "add",
+                            "status": "poison",
+                            "target": "self",
+                            "amount": {"op": "var", "name": "toxic_poison_stacks"},
+                            "log": False,
+                            "bypass_mask": True,
+                        },
+                        {"op": "log", "message": "{source}的剧毒施加{toxic_poison_stacks}层中毒"},
+                    ],
+                    "else": [],
+                },
+            ],
+        },
     },
     {
         "id": "jungle:turn_heal_power",
@@ -658,7 +705,7 @@ def engine_status_defs() -> Dict[str, dict]:
             "source": "builtin",
         }
         for key in ("max_stack", "decay", "decay_timing", "decay_log",
-                    "keep_when_zero", "show_stack"):
+                    "keep_when_zero", "show_stack", "stack_keys"):
             if item.get(key) not in (None, ""):
                 payload[key] = copy.deepcopy(item[key])
         if item.get("events"):

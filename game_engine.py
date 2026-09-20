@@ -1726,6 +1726,15 @@ class GameEngine:
         attr = self._status_attr_field(status)
         if attr and hasattr(ps, attr):
             return max(0, int(getattr(ps, attr, 0) or 0))
+        # 状态自己声明的层数键（``stack_keys``）：同一个状态历史上写到过多个
+        # 别名键时，读取按声明求和，增删归并到第一个键。
+        definition = self._get_v2_status_def(status)
+        if isinstance(definition, dict):
+            stack_keys = definition.get('stack_keys')
+            if isinstance(stack_keys, (list, tuple, set)):
+                names = [str(key) for key in stack_keys if str(key or '')]
+                if names:
+                    return max(0, self._custom_status_value(target_id, *names))
         return int(getattr(ps, 'custom_statuses', {}).get(status, 0) or 0)
 
     def _status_application_blocked(self, target_id: int, status: str) -> bool:
@@ -2558,6 +2567,80 @@ class GameEngine:
             if left_id and right_id:
                 return left_id == right_id
         return str(left) == str(right)
+
+    def _run_declared_heal_modifiers(self, player_id: int, amount: int) -> int:
+        """Run ``on_heal_pre`` status events and return the modified heal amount.
+
+        Declarations read/write the shared ``heal_amount`` variable, e.g.::
+
+            {"op": "add_var", "name": "heal_amount",
+             "value": {"op": "status_stack", "status": "bio:extra_healing"}}
+
+        This is the data-driven replacement for the old hardcoded extra-healing
+        lines in the Jurassic heal callback, and it runs at the same point:
+        after ``heal_block`` and before shield conversion.  Re-entry is blocked
+        so a badly-authored event that heals cannot recurse forever.
+        """
+
+        try:
+            amount = max(0, int(amount or 0))
+        except (TypeError, ValueError):
+            amount = 0
+        if amount <= 0 or not (0 <= player_id < len(self.players)):
+            return amount
+        if getattr(self, '_in_heal_modifiers', False):
+            return amount
+        statuses = getattr(self.players[player_id], 'custom_statuses', {}) or {}
+        if not any(
+            self._get_v2_status_event(str(status_id), 'on_heal_pre')
+            for status_id, value in list(statuses.items())
+            if self._positive_status_layers(value)
+        ):
+            return amount
+        context = {
+            'source_player': player_id,
+            'target_player': player_id,
+            'source_id': player_id,
+            'target_id': player_id,
+            'damage_source': player_id,
+            'card': None,
+            'room': getattr(self, 'room', None),
+            'loadout': getattr(self, 'v2_loadout', None),
+            'vars': {'heal_amount': amount, 'player_id': player_id},
+            'last_damage': 0,
+            'current_event': 'on_heal_pre',
+            'current_action': {'player_id': player_id, 'amount': amount},
+        }
+        self._in_heal_modifiers = True
+        try:
+            for status_id, value in list(statuses.items()):
+                if not self._positive_status_layers(value):
+                    continue
+                status_id = str(status_id)
+                event_def = self._get_v2_status_event(status_id, 'on_heal_pre')
+                if not event_def:
+                    continue
+                context['vars']['status_id'] = status_id
+                context['vars']['status_stack'] = self._get_status_count(player_id, status_id)
+                result = run_v2_event(self, context, event_def)
+                if isinstance(result, dict) and result.get('needs_v2_ui'):
+                    self._store_v2_ui_pause(result.get('v2_ui_pause') or {})
+                    break
+                if getattr(self, 'game_over', False) or getattr(self, 'pending_v2_ui', None):
+                    break
+        finally:
+            self._in_heal_modifiers = False
+        try:
+            return max(0, int(context.get('vars', {}).get('heal_amount', amount) or 0))
+        except (TypeError, ValueError):
+            return amount
+
+    @staticmethod
+    def _positive_status_layers(value) -> bool:
+        try:
+            return int(value or 0) > 0
+        except (TypeError, ValueError):
+            return False
 
     def _v2_hooks_for(self, hook_name: str) -> List[dict]:
         # 同义钩子名分组（Round 57 / 批次 AU）：组内任意名字注册，组内任意名字触发。
@@ -13062,9 +13145,9 @@ class GameEngine:
         amount = max(0, int(amount or 0))
         if amount <= 0:
             return 0
-        extra_healing = self._bio_status_value(player_id, 'extra_healing')
-        if extra_healing > 0 and not self._is_status_immune(player_id):
-            amount += extra_healing
+        amount = self._run_declared_heal_modifiers(player_id, amount)
+        if amount <= 0:
+            return 0
         shield_conversion = self._bio_status_value(player_id, 'shield_conversion')
         if shield_conversion > 0 and not self._is_status_immune(player_id):
             shield = amount * shield_conversion
@@ -17785,7 +17868,7 @@ class GameEngine:
                 dmg = ps.poison
                 self._deal_direct_damage(player_id, dmg, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
             self._decay_poison_after_turn_start(player_id)
-            self._apply_toxic_poison_after_poison_settlement(player_id)
+            self._trigger_v2_status_events_for_player(player_id, 'on_poison_resolved', {'player_id': player_id})
         if ps.fire > 0 and not self._is_status_immune(player_id):
             self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
         if self.round_num > 1 and not skip_draw_recovery:
@@ -17915,7 +17998,7 @@ class GameEngine:
                 dmg = ps.poison
                 self._deal_direct_damage(player_id, dmg, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
             self._decay_poison_after_turn_start(player_id)
-            self._apply_toxic_poison_after_poison_settlement(player_id)
+            self._trigger_v2_status_events_for_player(player_id, 'on_poison_resolved', {'player_id': player_id})
         if ps.fire > 0 and not self._is_status_immune(player_id):
             self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
         if self.round_num > 1:
@@ -20191,7 +20274,7 @@ class GameEngine:
             if decay:
                 self._decay_poison_after_turn_start(target_id)
                 if refill:
-                    self._apply_toxic_poison_after_poison_settlement(target_id)
+                    self._trigger_v2_status_events_for_player(target_id, 'on_poison_resolved', {'player_id': target_id})
             return dealt
         if status_key in ('burn', 'fire', '灼烧'):
             stacks = max(0, int(getattr(ps, 'fire', 0) or 0))
@@ -23452,6 +23535,14 @@ class GameEngine:
             # ``attack_blocked`` / ``vulnerable`` / ``装备保护`` 这类属性不在
             # ``_get_status_count`` 的硬编码表里，必须按同一张属性表读。
             return max(0, int(getattr(self.players[target_id], attr, 0) or 0))
+        definition = self._get_v2_status_def(status_text)
+        if isinstance(definition, dict):
+            stack_keys = definition.get('stack_keys')
+            if isinstance(stack_keys, (list, tuple, set)):
+                names = [str(key) for key in stack_keys if str(key or '')]
+                if names:
+                    # 存储口径与读侧口径都要按声明的层数键求和。
+                    return max(0, self._custom_status_value(target_id, *names))
         if ignore_immunity:
             # 存储口径：直接读 ``custom_statuses``（``_get_status_count`` 自己会按免疫压制）
             store = getattr(self.players[target_id], "custom_statuses", {}) or {}
@@ -23680,7 +23771,15 @@ class GameEngine:
             definition = definition if isinstance(definition, dict) else {}
             stacking = str(definition.get('stacking') or 'stack')
             ps.custom_statuses = getattr(ps, 'custom_statuses', {})
-            current = int(ps.custom_statuses.get(status_text, 0) or 0)
+            raw_stack_keys = definition.get('stack_keys')
+            storage_keys = [
+                str(key) for key in raw_stack_keys
+                if str(key or '')
+            ] if isinstance(raw_stack_keys, (list, tuple, set)) else []
+            if storage_keys:
+                current = self._custom_status_value(target_id, *storage_keys)
+            else:
+                current = int(ps.custom_statuses.get(status_text, 0) or 0)
             if mode == 'set':
                 value = 1 if stacking == 'unique' and layers > 0 else max(0, layers)
             elif mode == 'clear':
@@ -23701,11 +23800,24 @@ class GameEngine:
                 max_stack = 0
             if max_stack > 0 and value > max_stack:
                 value = max_stack
-            if value <= 0:
-                keep_zero = bool(
-                    definition.get('keep_when_zero') or definition.get('keep_zero')
-                    or self._status_keep_when_zero(status_text)
-                )
+            keep_zero = bool(
+                definition.get('keep_when_zero') or definition.get('keep_zero')
+                or self._status_keep_when_zero(status_text)
+            )
+            if storage_keys:
+                # 状态声明了多个层数键：写到第一个键，其余旧键清掉，读取端
+                # 之后只会在第一个键上看到层数，不会再出现"两份层数相加"。
+                primary_key = storage_keys[0]
+                for key in storage_keys[1:]:
+                    ps.custom_statuses.pop(key, None)
+                if value <= 0:
+                    if keep_zero:
+                        ps.custom_statuses[primary_key] = 0
+                    else:
+                        ps.custom_statuses.pop(primary_key, None)
+                else:
+                    ps.custom_statuses[primary_key] = value
+            elif value <= 0:
                 if keep_zero:
                     ps.custom_statuses[status_text] = 0
                 else:

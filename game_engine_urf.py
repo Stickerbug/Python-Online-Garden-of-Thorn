@@ -504,7 +504,7 @@ class GameEngineInfiniteFire(GameEngine):
                 if not self._is_status_immune(player_id):
                     self._deal_direct_damage(player_id, ps.poison, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
                 self._decay_poison_after_turn_start(player_id)
-                self._apply_toxic_poison_after_poison_settlement(player_id)
+                self._trigger_v2_status_events_for_player(player_id, 'on_poison_resolved', {'player_id': player_id})
             if ps.fire > 0 and not self._is_status_immune(player_id):
                 self._deal_direct_damage(player_id, ps.fire, '灼烧', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_FIRE)
             if self.round_num > 1:

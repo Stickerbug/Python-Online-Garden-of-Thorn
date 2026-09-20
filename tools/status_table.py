@@ -190,6 +190,9 @@ def render() -> str:
             impl_parts.append(f"声明衰减：{item['decay_timing']}/one")
         if item.get("max_stack"):
             impl_parts.append(f"层数上限 {item['max_stack']}")
+        stack_keys = item.get("stack_keys")
+        if isinstance(stack_keys, (list, tuple)) and stack_keys:
+            impl_parts.append("层数键：" + "、".join(str(key) for key in stack_keys))
         # 只列**已经迁进声明**的部分；E 消耗、护甲/伤害修正这类数值钩子
         # 仍可能留在引擎里，等后续批次迁移。
         impl = "；".join(impl_parts) if impl_parts else "引擎硬编码"
