@@ -51,6 +51,37 @@ function paletteFor(value) {
   return PALETTE_BY_VALUE.get(Number(value)) || null;
 }
 
+/* 原版 / AK IOI 的"方块光晕"细节：从 128 起，每一档光晕更亮，
+   2048 是原版那圈金色光，再往上维持最亮；同时有一圈 1px 内侧高光（rim light）。
+   数值取自两边 CSS 共用的那组透明度阶梯（0.2381 → 0.55556）。 */
+const GLOW_LADDER = [
+  [128, 0.2381], [256, 0.31746], [512, 0.39683], [1024, 0.47619], [2048, 0.55556],
+];
+const ETERNAL_GLOW_RGB = '243, 215, 116';   // 原版 .tile-2048 的金色
+
+function hexToRgb(hex) {
+  const text = String(hex || '').trim().replace('#', '');
+  if (text.length !== 6) return null;
+  const value = Number.parseInt(text, 16);
+  if (Number.isNaN(value)) return null;
+  return `${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}`;
+}
+
+function glowFor(value, borderHex) {
+  const tier = Number(value) || 0;
+  let alpha = 0;
+  for (const [threshold, step] of GLOW_LADDER) {
+    if (tier >= threshold) alpha = step;
+  }
+  if (!alpha) return null;
+  const rgb = tier >= 2048 ? ETERNAL_GLOW_RGB : (hexToRgb(borderHex) || null);
+  if (!rgb) return null;
+  return {
+    outer: `rgba(${rgb}, ${alpha})`,
+    inset: `rgba(255, 255, 255, ${(alpha * 0.6).toFixed(4)})`,
+  };
+}
+
 /* ---------------- 本地存档 ---------------- */
 
 function storage() {
@@ -129,6 +160,12 @@ function tileLabel(value) {
 function renderBoard(animate) {
   boardEl.innerHTML = '';
   const pending = state.ops.length - state.acked;
+  // 这一步里"被合并掉"的格子（用来播放合并弹一下，和原版一致）
+  const mergedIndexes = new Set(
+    (animate && Array.isArray(state.lastMoves) ? state.lastMoves : [])
+      .filter((move) => move && move.merged)
+      .map((move) => move.to),
+  );
   state.cells.forEach((value, index) => {
     const tile = document.createElement('div');
     tile.className = 'mg-cell' + (value ? ' filled' : '');
@@ -137,22 +174,34 @@ function renderBoard(animate) {
       tile.style.setProperty('--mg-tile-bg', item ? item.bg : '#9aa5a0');
       tile.style.setProperty('--mg-tile-border', item ? item.border : '#7d8783');
       tile.style.setProperty('--mg-tile-fg', item ? item.fg : '#15201B');
+      const glow = glowFor(value, item ? item.border : '');
+      if (glow) {
+        tile.style.setProperty('--mg-glow', glow.outer);
+        tile.style.setProperty('--mg-glow-inset', glow.inset);
+      }
       const name = tileLabel(value);
       if (name) {
         // 名称越长字号越小：CSS 用 --mg-chars 算 cqw/cqh 比例（见 minigame_2048.css）
         tile.style.setProperty('--mg-chars', String(name.length));
-        tile.innerHTML = `<span class="mg-tile-name">${name}</span>`
-          + (showNumbers ? `<span class="mg-tile-value">${value}</span>` : '');
+        tile.innerHTML = `<span class="mg-tile-face">`
+          + `<span class="mg-tile-name">${name}</span>`
+          + (showNumbers ? `<span class="mg-tile-value">${value}</span>` : '')
+          + '</span>';
       } else {
         tile.style.setProperty('--mg-chars', String(String(value).length));
-        tile.innerHTML = `<span class="mg-tile-name">${value}</span>`;
+        tile.innerHTML = `<span class="mg-tile-face"><span class="mg-tile-name">${value}</span></span>`;
       }
       tile.classList.add('mg-tile');
+      if (value >= 2048) tile.classList.add('mg-tile-eternal');
       if (animate && state.lastSpawn === index) tile.classList.add('mg-tile-new');
-      if (animate && state.lastMerges && state.lastMerges.includes(index)) tile.classList.add('mg-tile-merged');
+      if (animate && mergedIndexes.has(index)) tile.classList.add('mg-tile-merged');
     }
     boardEl.appendChild(tile);
   });
+  // 原版那种"方块滑过去"：按上一步的移动映射把方块先摆回旧位置，再过渡回原位。
+  if (animate && Array.isArray(state.lastMoves) && state.lastMoves.length) {
+    slideTiles(state.lastMoves);
+  }
   scoreEl.textContent = String(state.score);
   bestEl.textContent = String(state.best);
   // 同步算好字号（在下一帧绘制之前），新方块一出现就是最终大小；缓存命中时几乎零成本。
@@ -215,6 +264,44 @@ function scheduleTileFit() {
   tileFitFrame = window.requestAnimationFrame(() => {
     tileFitFrame = null;
     fitTileNames({ force: true });
+  });
+}
+
+/* 方块滑动（对应原版 `.tile` 的 `transition: 100ms ease-in-out`）：
+   先把方块按"旧格子 → 新格子"的位移摆回旧位置，下一动画帧再放回原位，
+   让 CSS 过渡把它滑过去；不改变最终布局，也不影响无动画模式。 */
+function slideTiles(moves) {
+  const cells = boardEl.querySelectorAll('.mg-cell');
+  if (cells.length !== 16) return;
+  const first = cells[0].getBoundingClientRect();
+  const stepX = cells[1].getBoundingClientRect().left - first.left;
+  const stepY = cells[4].getBoundingClientRect().top - first.top;
+  const shifted = [];
+  moves.forEach((move) => {
+    if (!move || move.from === move.to) return;
+    const target = cells[move.to];
+    if (!target) return;
+    const fromCol = move.from % 4;
+    const fromRow = Math.floor(move.from / 4);
+    const toCol = move.to % 4;
+    const toRow = Math.floor(move.to / 4);
+    target.style.transition = 'none';
+    target.style.transform = `translate(${(fromCol - toCol) * stepX}px, ${(fromRow - toRow) * stepY}px)`;
+    shifted.push(target);
+  });
+  if (!shifted.length) return;
+  void boardEl.offsetHeight;   // 强制重排，让上面的初始位移先生效
+  window.requestAnimationFrame(() => {
+    shifted.forEach((el) => {
+      el.style.transition = 'transform 100ms ease-in-out';
+      el.style.transform = 'translate(0, 0)';
+    });
+    window.setTimeout(() => {
+      shifted.forEach((el) => {
+        el.style.transition = '';
+        el.style.transform = '';
+      });
+    }, 150);
   });
 }
 
@@ -373,7 +460,7 @@ function move(direction) {
   if (state.ops.length - state.acked > MAX_PENDING_OPS) state.acked = state.ops.length - MAX_PENDING_OPS;
   state.best = Math.max(state.best || 0, state.score);
   state.lastSpawn = result.spawn ? result.spawn.index : null;
-  state.lastMerges = [];
+  state.lastMoves = Array.isArray(result.moves) ? result.moves : [];
   if (result.gained > 0) {
     // 官方 2048 的 "+N" 反馈：飘在分数格上，不占布局。
     const box = scoreEl.parentElement;

@@ -248,6 +248,18 @@
   overflow: hidden;
   background: var(--g-cell);
   border-radius: 3px;
+  /* 原版：滑动 100ms ease-in-out */
+  transition: transform 100ms ease-in-out;
+}
+
+.mg-tile-face {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  height: 100%;
 }
 
 .mg-cell.filled {
@@ -284,10 +296,21 @@
   .mg-tile-name { font-size: clamp(11px, 3.2vw, 17px); }
 }
 
-.mg-tile-new { animation: mg-appear 160ms ease 100ms backwards; }
-.mg-tile-merged { animation: mg-pop 160ms ease; }
-.mg-no-anim .mg-tile-new,
-.mg-no-anim .mg-tile-merged { animation: none; }
+/* 出现 / 合并的缩放都放在内层（原版 .tile-inner），
+   外层的 transform 留给滑动过渡，两者互不打架。 */
+.mg-tile-new .mg-tile-face { animation: mg-appear 200ms ease 100ms backwards; }
+.mg-tile-merged .mg-tile-face { animation: mg-pop 200ms ease 100ms; }
+.mg-no-anim .mg-tile-new .mg-tile-face,
+.mg-no-anim .mg-tile-merged .mg-tile-face { animation: none; }
+
+/* 高层方块的"光晕"（原版 / AK IOI 细节）：从 128 起逐档变亮，
+   2048 及以上用原版那圈金色；同时保留 1px 内侧高光。
+   具体透明度由 JS 按档位写进 --mg-glow / --mg-glow-inset。 */
+.mg-cell.filled {
+  box-shadow:
+    0 0 30px 10px var(--mg-glow, rgba(0, 0, 0, 0)),
+    inset 0 0 0 1px var(--mg-glow-inset, rgba(255, 255, 255, 0));
+}
 
 @keyframes mg-appear {
   0% { opacity: 0; transform: scale(0); }
@@ -312,7 +335,16 @@
   background: var(--g-overlay);
   border-radius: 6px;
   z-index: 100;
+  /* 原版：结束/达成提示延迟 1.2s 再淡入（让最后一步动画播完） */
+  animation: mg-fade-in 800ms ease 1200ms backwards;
 }
+
+@keyframes mg-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.mg-no-anim .mg-overlay { animation: none; }
 
 .mg-overlay-card { text-align: center; }
 

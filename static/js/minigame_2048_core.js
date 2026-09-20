@@ -48,10 +48,12 @@ export function mergeLine(line) {
   const packed = line.filter(Boolean);
   const out = [];
   let gained = 0;
+  const merges = [];
   for (let index = 0; index < packed.length; index += 1) {
     if (index + 1 < packed.length && packed[index] === packed[index + 1]) {
       const merged = packed[index] * 2;
       gained += merged;
+      merges.push(merged);
       out.push(merged);
       index += 1;
     } else {
@@ -59,7 +61,7 @@ export function mergeLine(line) {
     }
   }
   while (out.length < 4) out.push(0);
-  return { line: out, gained };
+  return { line: out, gained, merges };
 }
 
 export function lineIndices(direction) {
@@ -83,18 +85,42 @@ export function lineIndices(direction) {
 export function applyMove(cells, direction) {
   const out = new Array(16).fill(0);
   let gained = 0;
+  const moves = [];   // [{from, to, merged}]：给界面做"滑过去"动画用（与棋盘结果同源）
   for (const indexes of lineIndices(direction)) {
-    const merged = mergeLine(indexes.map((index) => cells[index]));
-    gained += merged.gained;
-    indexes.forEach((index, offset) => { out[index] = merged.line[offset]; });
+    const packed = [];
+    indexes.forEach((index, offset) => {
+      const value = cells[index];
+      if (value) packed.push({ value, from: index, order: offset });
+    });
+    let cursor = 0;
+    for (let i = 0; i < packed.length; i += 1) {
+      const to = indexes[cursor];
+      if (i + 1 < packed.length && packed[i].value === packed[i + 1].value) {
+        const merged = packed[i].value * 2;
+        gained += merged;
+        out[to] = merged;
+        moves.push({ from: packed[i].from, to, merged: true });
+        moves.push({ from: packed[i + 1].from, to, merged: true });
+        i += 1;
+      } else {
+        out[to] = packed[i].value;
+        moves.push({ from: packed[i].from, to, merged: false });
+      }
+      cursor += 1;
+    }
   }
-  return { cells: out, gained, changed: out.some((value, index) => value !== cells[index]) };
+  return {
+    cells: out,
+    gained,
+    moves,
+    changed: out.some((value, index) => value !== cells[index]),
+  };
 }
 
 export function stepMove(cells, rngState, score, direction) {
   const move = applyMove(cells, direction);
   if (!move.changed) {
-    return { cells, rngState, score, gained: 0, changed: false, spawn: null };
+    return { cells, rngState, score, gained: 0, changed: false, spawn: null, moves: [] };
   }
   const spawned = spawnTile(move.cells, rngState);
   return {
@@ -104,6 +130,7 @@ export function stepMove(cells, rngState, score, direction) {
     gained: move.gained,
     changed: true,
     spawn: spawned.info,
+    moves: move.moves,
   };
 }
 
