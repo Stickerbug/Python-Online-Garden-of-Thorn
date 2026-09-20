@@ -570,6 +570,8 @@ EXPRESSION_OPS = frozenset({
     "turn_player",
     # 状态
     "status_count", "status_stack", "visible_status_count",
+    "status_tag_count", "statuses_with_tag", "status_tag_layers",
+    "status_layers_with_tag", "status_tags",
     # 装备
     "equipment_prop", "equipment_property",
     # 伤害 / 结算上下文
@@ -592,6 +594,8 @@ CONDITION_OPS = frozenset({
     "var_compare",
     # 状态 / 标签 / 卡
     "has_status", "has_status_named", "has_tag", "card_has_tag", "card_has_flag",
+    "has_status_tag", "status_has_tag",
+    "has_equipment_flag", "equipment_has_flag",
     "card_has_modifier", "card_has_setup_modifier",
     # 区域与目标
     "zone_exists", "card_exists", "target_selectable", "player_selectable",

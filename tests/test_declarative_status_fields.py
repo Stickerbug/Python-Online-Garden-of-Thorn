@@ -564,3 +564,104 @@ def test_official_root_damage_taken_ignores_magic_and_immunity():
             CARD_DEFS.pop('Root', None)
         else:
             CARD_DEFS['Root'] = previous
+
+
+def test_official_status_tags_are_exposed_in_engine_and_client_defs():
+    shield = official_statuses.engine_status_def('jungle:shield')
+    assert shield['tags'] == ['buff', 'shield']
+    frost = official_statuses.engine_status_def('arctic:frost')
+    assert frost['tags'] == ['debuff', 'cost']
+    client = {item['id']: item for item in official_statuses.client_defs()}
+    assert client['jungle:toxic_poison']['tags'] == ['debuff', 'poison']
+
+
+def test_status_tag_queries_respect_immunity_and_namespace():
+    engine = make_engine()
+    engine.players[0].custom_statuses = {
+        'jungle:shield': 3,
+        'arctic:frost': 5,
+        'bio:debt': 2,
+    }
+    assert engine._player_has_status_tag(0, 'buff')
+    assert engine._player_has_status_tag(0, 'shield')
+    assert engine._player_has_status_tag(0, 'debuff')
+    # same tag but narrowed to one status (short id also matches)
+    assert engine._player_has_status_tag(0, 'buff', status_id='shield')
+    assert not engine._player_has_status_tag(0, 'cost', status_id='shield')
+
+    engine.players[0].custom_statuses['status_immune'] = 1
+    assert not engine._player_has_status_tag(0, 'buff')
+    assert not engine._player_has_status_tag(0, 'debuff')
+
+
+def test_status_tag_expression_ops():
+    from mod_runtime_v2 import check_v2_condition, eval_v2_value
+
+    engine = make_engine()
+    engine.players[0].custom_statuses = {'jungle:shield': 3, 'hel:luck': 2}
+    context = {'source_player': 0, 'target_player': 1, 'vars': {}}
+
+    assert check_v2_condition(
+        engine, context,
+        {'op': 'has_status_tag', 'tag': 'buff', 'target': 'source'},
+    )
+    assert eval_v2_value(
+        engine, context,
+        {'op': 'status_tag_count', 'tag': 'buff', 'target': 'source'},
+    ) == 2
+    assert eval_v2_value(
+        engine, context,
+        {'op': 'status_tag_layers', 'tag': 'buff', 'target': 'source'},
+    ) == 5
+    assert eval_v2_value(
+        engine, context,
+        {'op': 'status_tags', 'status': 'jungle:shield'},
+    ) == ['buff', 'shield']
+
+
+def test_custom_status_tags_are_queryable():
+    engine = make_engine()
+    engine.v2_status_defs = {
+        STATUS_ID: {'id': STATUS_ID, 'stacking': 'stack', 'tags': ['debuff', 'custom']},
+    }
+    engine.players[0].custom_statuses[STATUS_ID] = 2
+    engine.players[0].custom_statuses['arctic:frost'] = 1
+
+    from mod_runtime_v2 import eval_v2_value
+
+    context = {'source_player': 0, 'target_player': 1, 'vars': {}}
+    assert engine._player_has_status_tag(0, 'custom')
+    assert eval_v2_value(
+        engine, context,
+        {'op': 'status_tag_count', 'tag': 'debuff', 'target': 'source'},
+    ) == 2
+
+
+def test_mod_validator_accepts_status_tags():
+    from mod_validator_v2 import validate_mod_v2
+
+    payload = {
+        'format_version': 2,
+        'manifest': {
+            'id': 'tagdemo', 'resource_namespace': 'tagdemo',
+            'name': 'Tag Demo', 'version': '1.0.0', 'api_version': '2.0',
+        },
+        'registries': {
+            'statuses': [
+                {'id': 'tagdemo:marked', 'stacking': 'stack', 'tags': ['debuff', 'demo']},
+            ],
+        },
+    }
+    report = validate_mod_v2(payload, source='tagdemo', allow_reserved_namespaces=True)
+    assert not report.errors, report.errors
+
+    bad = {
+        'format_version': 2,
+        'manifest': {
+            'id': 'tagdemo', 'resource_namespace': 'tagdemo',
+            'name': 'Tag Demo', 'version': '1.0.0', 'api_version': '2.0',
+        },
+        'registries': {'statuses': [{'id': 'tagdemo:marked', 'tags': 'debuff'}]},
+    }
+    report = validate_mod_v2(bad, source='tagdemo', allow_reserved_namespaces=True)
+    assert any('.tags' in str(item) for item in report.errors)

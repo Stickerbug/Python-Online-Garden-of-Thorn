@@ -560,6 +560,18 @@ def _validate_resource_shape(registry: str, resource: Dict[str, Any], label: str
         stacking = resource.get("stacking", "stack")
         if stacking not in ("stack", "duration", "unique"):
             errors.append(f"{label}.stacking 必须是 stack、duration 或 unique")
+        tags = resource.get("tags")
+        if tags is not None:
+            if not isinstance(tags, list):
+                errors.append(f"{label}.tags 必须是数组")
+            else:
+                normalized_tags = []
+                for i, tag in enumerate(tags):
+                    if not isinstance(tag, str) or not tag.strip():
+                        errors.append(f"{label}.tags[{i}] 必须是非空字符串")
+                        continue
+                    normalized_tags.append(tag.strip())
+                resource["tags"] = normalized_tags
 
 
 def _resource_namespace(resource_id: Any) -> str:

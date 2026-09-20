@@ -1894,6 +1894,21 @@ def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
             if _to_int(getattr(ps, attribute, 0)) > 0:
                 count += 1
         return count
+    if op in ("status_tag_count", "statuses_with_tag", "status_tag_layers", "status_layers_with_tag"):
+        target = resolve_v2_target(engine, context, expr.get("target", "source"))
+        player_id = _player_id(engine, target)
+        tag = str(eval_v2_value(engine, context, expr.get("tag", expr.get("value", ""))) or "").strip()
+        getter = getattr(engine, "_player_status_tag_entries", None)
+        entries = list(getter(player_id, tag) or []) if callable(getter) else []
+        if op in ("status_tag_layers", "status_layers_with_tag"):
+            return sum(int(layers or 0) for _status_id, layers in entries)
+        return len(entries)
+    if op == "status_tags":
+        status_id = str(eval_v2_value(
+            engine, context, expr.get("status", expr.get("id", expr.get("value", "")))
+        ) or "").strip()
+        getter = getattr(engine, "_status_definition_tags", None)
+        return list(getter(status_id) or []) if callable(getter) else []
     if op in ("counter_cards_in_hand", "counters_in_hand"):
         target = resolve_v2_target(engine, context, expr.get("target", "source"))
         player_id = _player_id(engine, target)
@@ -2757,6 +2772,19 @@ def check_v2_condition(engine, context: Dict[str, Any], cond: Any) -> bool:
         card = _resolve_card(engine, context, cond.get("card", "current_card"))
         tag = str(eval_v2_value(engine, context, cond.get("tag", cond.get("flag", ""))) or "").strip()
         return bool(tag and tag in _card_flags(card))
+    if op in ("has_status_tag", "status_has_tag"):
+        tag = str(eval_v2_value(
+            engine, context, cond.get("tag", cond.get("value", ""))
+        ) or "").strip()
+        if not tag:
+            return False
+        target = resolve_v2_target(engine, context, cond.get("target", "source"))
+        player_id = _player_id(engine, target)
+        status_id = str(eval_v2_value(
+            engine, context, cond.get("status", cond.get("id", ""))
+        ) or "").strip()
+        checker = getattr(engine, "_player_has_status_tag", None)
+        return bool(callable(checker) and checker(player_id, tag, status_id=status_id))
     if op in ("damage_type_is", "damage_type"):
         expected = str(
             eval_v2_value(engine, context, cond.get("type_name", cond.get("value", cond.get("damage_type", "physical"))))
@@ -4330,6 +4358,8 @@ def _materialize_atomic_value(engine, context: Dict[str, Any], value: Any):
         "status_stack", "get", "deck_top_ids", "zone_top_ids", "zone_random_ids",
         "collection_op", "random_card", "weighted_card", "random_card_id",
         "last_crit_hits", "crit_hits", "status_count", "visible_status_count",
+        "status_tag_count", "statuses_with_tag", "status_tag_layers",
+        "status_layers_with_tag", "status_tags",
         "counter_cards_in_hand", "counters_in_hand",
         "play_was_countered", "was_countered",
         "random", "random_choice", "choice_value", "choice_field",

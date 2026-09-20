@@ -196,6 +196,9 @@ def render() -> str:
         modifiers = item.get("modifiers")
         if isinstance(modifiers, dict) and modifiers:
             impl_parts.append("被动修正：" + "、".join(sorted(str(key) for key in modifiers)))
+        tags = item.get("tags")
+        if isinstance(tags, (list, tuple)) and tags:
+            impl_parts.append("标签：" + "、".join(str(tag) for tag in tags))
         # 只列**已经迁进声明**的部分；E 消耗、护甲/伤害修正这类数值钩子
         # 仍可能留在引擎里，等后续批次迁移。
         impl = "；".join(impl_parts) if impl_parts else "引擎硬编码"

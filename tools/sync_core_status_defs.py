@@ -46,6 +46,8 @@ def render_block() -> str:
         lines.append(f"        description_i18n: {{ {descs} }},")
         lines.append(f"        color: {js_string(entry['color'])}, icon: {js_string(entry['icon'])}, "
                      f"stacking: {js_string(entry['stacking'])}, visible: {visible},")
+        tags = ", ".join(js_string(tag) for tag in entry.get("tags") or ())
+        lines.append(f"        tags: [{tags}],")
         lines.append("    },")
     lines.append("];")
     lines.append(END_MARKER)

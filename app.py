@@ -26401,6 +26401,7 @@ def api_mod_studio_schema():
                 'stacking': item['stacking'],
                 'visible': item['visible'],
                 'package': item['package'],
+                'tags': list(item.get('tags') or ()),
             }
             for item in official_statuses.OFFICIAL_STATUSES
         ],

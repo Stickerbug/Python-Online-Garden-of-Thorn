@@ -2629,6 +2629,46 @@ class GameEngine:
                 entries[canonical] = int(layers)
         return list(entries.items())
 
+    def _status_definition_tags(self, status_id) -> List[str]:
+        """Declared ``tags`` of one status definition (deduplicated, order kept)."""
+
+        definition = self._get_v2_status_def(status_id)
+        tags = definition.get('tags') if isinstance(definition, dict) else None
+        if not isinstance(tags, (list, tuple, set)):
+            return []
+        out: List[str] = []
+        for tag in tags:
+            text = str(tag or '').strip()
+            if text and text not in out:
+                out.append(text)
+        return out
+
+    def _player_status_tag_entries(self, player_id: int, tag: str, status_id: str = ''):
+        """Positive statuses of *player_id* whose definition carries *tag*.
+
+        Optionally narrow to one status id (namespace-insensitive: the last
+        ``:`` segment is compared too, so ``jungle:shield`` matches ``shield``).
+        """
+
+        if not (0 <= player_id < len(self.players)):
+            return []
+        wanted = str(tag or '').strip().lower()
+        if not wanted:
+            return []
+        status_filter = str(status_id or '').strip()
+        filter_local = status_filter.split(':')[-1] if status_filter else ''
+        entries = []
+        for canonical, layers in self._canonical_status_entries(player_id):
+            if status_filter and canonical != status_filter and canonical.split(':')[-1] != filter_local:
+                continue
+            tags = [item.lower() for item in self._status_definition_tags(canonical)]
+            if wanted in tags:
+                entries.append((canonical, layers))
+        return entries
+
+    def _player_has_status_tag(self, player_id: int, tag: str, status_id: str = '') -> bool:
+        return bool(self._player_status_tag_entries(player_id, tag, status_id=status_id))
+
     @staticmethod
     def _status_event_priority(event_def) -> int:
         if isinstance(event_def, dict):

@@ -30,7 +30,7 @@ from typing import Dict, Iterable, List, Optional
 _FIELDS = {"id", "alias", "name_i18n", "desc_i18n", "color", "icon",
            "stacking", "visible", "events", "package",
            "max_stack", "decay", "decay_timing", "decay_log",
-           "keep_when_zero", "show_stack", "stack_keys", "modifiers"}
+           "keep_when_zero", "show_stack", "stack_keys", "modifiers", "tags"}
 
 OFFICIAL_STATUSES: tuple = (
     {
@@ -959,6 +959,33 @@ OFFICIAL_STATUSES: tuple = (
 )
 
 
+# 官方状态的共享标签词表：模组可以用 ``has_status_tag`` / ``status_tag_count``
+# 查询，客户端/编辑器只做展示。标签是自由字符串，不走资源命名空间；自定义
+# 状态想加自己的标签直接写在 ``registries.statuses[].tags`` 里。
+_STATUS_TAGS = {
+    "arctic:frost": ["debuff", "cost"],
+    "bio:debt": ["debuff", "resource"],
+    "bio:extra_healing": ["buff", "heal"],
+    "bio:shield_conversion": ["buff", "heal", "shield"],
+    "hel:luck": ["buff", "crit"],
+    "hel:blazing_fire": ["buff", "burn"],
+    "jungle:fragile": ["debuff", "armor"],
+    "jungle:shield": ["buff", "shield"],
+    "jungle:turn_heal_turns": ["buff", "heal", "regen"],
+    "jungle:turn_magic_turns": ["buff", "magic", "regen"],
+    "jungle:root_status": ["buff", "armor", "equipment"],
+    "jungle:toxic_poison": ["debuff", "poison"],
+    "jungle:turn_heal_power": ["internal"],
+    "jungle:turn_magic_power": ["internal"],
+    "ocean:blood_debt": ["debuff", "resource"],
+    "ocean:unable_counter": ["debuff", "counter"],
+    "sewers:sealed": ["debuff", "equipment"],
+}
+
+for _entry in OFFICIAL_STATUSES:
+    _entry["tags"] = list(_STATUS_TAGS.get(str(_entry.get("id")), ()))
+
+
 def _validate() -> None:
     seen = set()
     for entry in OFFICIAL_STATUSES:
@@ -1049,7 +1076,7 @@ def engine_status_defs() -> Dict[str, dict]:
             "source": "builtin",
         }
         for key in ("max_stack", "decay", "decay_timing", "decay_log",
-                    "keep_when_zero", "show_stack", "stack_keys", "modifiers"):
+                    "keep_when_zero", "show_stack", "stack_keys", "modifiers", "tags"):
             if item.get(key) not in (None, ""):
                 payload[key] = copy.deepcopy(item[key])
         if item.get("events"):
@@ -1071,6 +1098,7 @@ def client_defs() -> List[dict]:
             "icon": item["icon"],
             "stacking": item["stacking"],
             "visible": item["visible"],
+            "tags": list(item.get("tags") or ()),
         }
         for item in OFFICIAL_STATUSES
     ]
