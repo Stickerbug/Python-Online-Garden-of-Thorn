@@ -2402,19 +2402,34 @@ class GameEngine:
         event_def = self._get_v2_status_event(status_id, event_name)
         if not event_def:
             return None
+        extra = extra if isinstance(extra, dict) else {}
+        # ``source_player`` / ``target_player`` 继续保持「状态拥有者」的旧口径：
+        # Jungle 的回合回复事件用 ``{source}`` 指代自己，不能因为新增伤害事件
+        # 就把这里改掉。攻击者/受击者/伤害量另放在 ``vars`` 与 ``source_id`` /
+        # ``target_id`` 上，供后续把「受击时」类官方状态迁进声明使用。
+        status_vars = {
+            'status_id': status_id,
+            'status_stack': self._get_status_count(player_id, status_id),
+        }
+        if 'source_player' in extra:
+            status_vars['event_source_player'] = extra.get('source_player')
+        if 'target_player' in extra:
+            status_vars['event_target_player'] = extra.get('target_player')
+        if 'amount' in extra:
+            status_vars['damage_amount'] = extra.get('amount')
         context = {
             'source_player': player_id,
             'target_player': player_id,
+            'source_id': extra.get('source_player', player_id),
+            'target_id': extra.get('target_player', player_id),
+            'damage_source': extra.get('source_player', player_id),
             'card': None,
             'room': getattr(self, 'room', None),
             'loadout': getattr(self, 'v2_loadout', None),
-            'vars': {
-                'status_id': status_id,
-                'status_stack': self._get_status_count(player_id, status_id),
-            },
-            'last_damage': (extra or {}).get('amount', 0),
+            'vars': status_vars,
+            'last_damage': extra.get('amount', 0),
             'current_event': event_name,
-            'current_action': extra or {},
+            'current_action': extra,
         }
         result = run_v2_event(self, context, event_def)
         if isinstance(result, dict) and result.get('needs_v2_ui'):
@@ -2465,6 +2480,84 @@ class GameEngine:
             self._trigger_v2_status_events_for_player(target_id, 'on_damage_taken', extra)
         if isinstance(source_id, int) and 0 <= source_id < len(self.players):
             self._trigger_v2_status_events_for_player(source_id, 'on_damage_dealt', extra)
+
+    def _apply_declared_status_decay(self, player_id: int, timing: str):
+        """按状态声明的 ``decay`` / ``decay_timing`` 结算衰减。
+
+        约定：**先跑该时点的状态事件，再结算声明衰减**（与中毒「结算后减半」、
+        霜冻「回合结束时减半」一致）。写法二选一：
+
+        * ``"decay": {"timing": "turn_start"|"turn_end", "mode": "one"|"half"|"clear"}``
+        * 编辑器已有的平铺写法 ``"decay_timing": "turn_start"``（等价 mode=one）
+
+        ``decay.log`` 默认关闭；``"zero"`` 只在减到 0 时写「效果消失」，
+        ``true`` 每次衰减都写一条战报。官方霜冻用 ``"zero"`` 保留旧文案。
+        别名键（``frost`` / ``shield`` 这类）会归并到定义里的规范 id，
+        避免同一个状态在 ``custom_statuses`` 里留两份层数。
+
+        以前只有引擎里硬编码的那几条状态会衰减，自定义状态声明了也没人理。
+        """
+        if not (0 <= player_id < len(self.players)):
+            return
+        timing = str(timing or '').strip().lower()
+        if timing not in ('turn_start', 'turn_end'):
+            return
+        ps = self.players[player_id]
+        statuses = dict(getattr(ps, 'custom_statuses', {}) or {})
+        for status_id, value in statuses.items():
+            try:
+                layers = int(value or 0)
+            except (TypeError, ValueError):
+                continue
+            if layers <= 0:
+                continue
+            definition = self._get_v2_status_def(status_id)
+            if not isinstance(definition, dict):
+                continue
+            raw_decay = definition.get('decay')
+            if isinstance(raw_decay, dict):
+                declared_timing = str(raw_decay.get('timing') or '').strip().lower()
+                mode = str(raw_decay.get('mode') or 'one').strip().lower()
+                log_mode = raw_decay.get('log', False)
+            else:
+                declared_timing = str(definition.get('decay_timing') or '').strip().lower()
+                mode = 'one'
+                log_mode = definition.get('decay_log', False)
+            if declared_timing != timing:
+                continue
+            if mode in ('clear', 'remove_all'):
+                new_value = 0
+            elif mode in ('half', 'halve', 'half_down'):
+                new_value = layers // 2
+            else:
+                new_value = max(0, layers - 1)
+            if new_value == layers:
+                continue
+            canonical = str(definition.get('id') or status_id).strip() or status_id
+            alias_keys = [
+                key for key in statuses
+                if key != canonical and self._same_status_definition(key, canonical)
+            ]
+            self._set_custom_status_value(player_id, canonical, new_value)
+            for key in alias_keys:
+                self._set_custom_status_value(player_id, key, 0)
+            label = self._status_log_label(status_id) or status_id
+            if new_value <= 0 and str(log_mode).strip().lower() == 'zero':
+                self.log_msg(f"{self.pn(player_id)}的{label}效果消失")
+            elif log_mode is True:
+                self.log_msg(f"{self.pn(player_id)}的{label}减少{layers - new_value}层（{layers}→{new_value}）")
+
+    def _same_status_definition(self, left: str, right: str) -> bool:
+        """两个 ``custom_statuses`` 键是否指向同一条状态定义（含官方别名）。"""
+
+        left_def = self._get_v2_status_def(left)
+        right_def = self._get_v2_status_def(right)
+        if isinstance(left_def, dict) and isinstance(right_def, dict):
+            left_id = str(left_def.get('id') or left).strip()
+            right_id = str(right_def.get('id') or right).strip()
+            if left_id and right_id:
+                return left_id == right_id
+        return str(left) == str(right)
 
     def _v2_hooks_for(self, hook_name: str) -> List[dict]:
         # 同义钩子名分组（Round 57 / 批次 AU）：组内任意名字注册，组内任意名字触发。
@@ -5738,9 +5831,9 @@ class GameEngine:
         ps = self.players[player_id]
         ps.custom_vars['electric_web_draw_damage'] = 0
         self._clear_electric_web_draw_records_for_target(player_id)
-        self._set_custom_status_value(player_id, 'jungle:fragile', 0)
-        self._set_custom_status_value(player_id, 'fragile', 0)
-        immune = self._is_status_immune(player_id)
+        # 易损的「自己回合开始时清除」现在写在 official_statuses.py 的
+        # ``decay`` 声明里，由 ``_apply_declared_status_decay`` 统一结算；
+        # 护盾的半减仍留在这里，因为它还带向日葵例外。
         shield_keys = ('jungle:shield', 'shield')
         shield = self._custom_status_value(player_id, *shield_keys)
         if shield > 0 and not self._garden_has_sunflower_targeting(player_id):
@@ -13263,11 +13356,8 @@ class GameEngine:
             self._hel_sync_crit_multiplier_display(player_id)
             self.log_msg(f"{self.pn(player_id)}的临时暴击倍率结束")
         self._decay_end_turn_layer_statuses(player_id)
-        frost = self._arctic_frost_value(player_id)
-        if frost > 0:
-            self._arctic_set_frost_value(player_id, frost // 2)
-            if self._arctic_frost_value(player_id) <= 0:
-                self.log_msg(f"{self.pn(player_id)}的霜冻效果消失")
+        # 声明式状态的「自己回合结束」衰减（先事件、后衰减，见 _apply_declared_status_decay）
+        self._apply_declared_status_decay(player_id, 'turn_end')
         ps.custom_vars.pop('arctic_snowballs', None)
         ps.custom_vars.pop('arctic_ready_queue', None)
         self._clear_turn_scoped_effects(player_id)
@@ -17633,6 +17723,8 @@ class GameEngine:
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
         self._apply_jungle_turn_start_statuses(player_id)
+        # 声明式状态的「自己回合开始」衰减（事件与引擎状态结算之后）
+        self._apply_declared_status_decay(player_id, 'turn_start')
         self._run_zone_owner_turn_start_events(player_id)
         self._run_timed_effects_for_turn(player_id)
         untargetable_layers = max(0, int(getattr(ps, 'untargetable', 0) or 0))
@@ -17687,7 +17779,7 @@ class GameEngine:
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             self._defer_turn_start_death_checks = False
             return
-        self._hel_apply_blazing_fire_turn_start(player_id)
+        self._trigger_v2_status_events_for_player(player_id, 'on_turn_start_before_status_damage', {'player_id': player_id})
         if ps.poison > 0:
             if not self._is_status_immune(player_id):
                 dmg = ps.poison
@@ -17714,7 +17806,7 @@ class GameEngine:
             elixir_recovery += self._opening_event_elixir_recovery_bonus(player_id)
             ps.gain_elixir(elixir_recovery)
             self.log_msg(f"{self.pn(player_id)}回复{elixir_recovery}E")
-            self._bio_apply_debt_after_recovery(player_id)
+            self._trigger_v2_status_events_for_player(player_id, 'on_turn_start_after_recovery', {'player_id': player_id})
         # Overload: deduct E at turn start, then clear
         if ps.overload > 0:
             if not self._is_status_immune(player_id):
@@ -17805,7 +17897,7 @@ class GameEngine:
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             self._defer_turn_start_death_checks = False
             return
-        self._hel_apply_blazing_fire_turn_start(player_id)
+        self._trigger_v2_status_events_for_player(player_id, 'on_turn_start_before_status_damage', {'player_id': player_id})
         if self.round_num > 1:
             from formal_logic_runtime import consume_draw_reduction
             draw_count = max(
@@ -17844,7 +17936,7 @@ class GameEngine:
             elixir_recovery += self._opening_event_elixir_recovery_bonus(player_id)
             ps.gain_elixir(elixir_recovery)
             self.log_msg(f"{self.pn(player_id)}回复{elixir_recovery}E")
-            self._bio_apply_debt_after_recovery(player_id)
+            self._trigger_v2_status_events_for_player(player_id, 'on_turn_start_after_recovery', {'player_id': player_id})
         if ps.overload > 0:
             if not self._is_status_immune(player_id):
                 deduct = min(ps.overload, ps.elixir)
@@ -23601,6 +23693,14 @@ class GameEngine:
                 value = max(current, max(0, layers))
             else:
                 value = max(0, current + layers)
+            # 声明式上限：``max_stack``（0 / 缺省 = 不限）。官方状态也用同一字段，
+            # 例如霜冻的 60 层上限；以前只有引擎里硬编码的那几条才吃得到上限。
+            try:
+                max_stack = max(0, int(definition.get('max_stack') or 0))
+            except (TypeError, ValueError):
+                max_stack = 0
+            if max_stack > 0 and value > max_stack:
+                value = max_stack
             if value <= 0:
                 keep_zero = bool(
                     definition.get('keep_when_zero') or definition.get('keep_zero')

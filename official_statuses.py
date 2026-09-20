@@ -24,8 +24,13 @@ from __future__ import annotations
 import copy
 from typing import Dict, Iterable, List, Optional
 
+# 行为字段也属于状态定义的一部分：max_stack / decay / events 等由引擎按同一份
+# 声明执行。官方状态先迁移「不依赖数值修改钩子」的那部分（层数上限、自然衰减），
+# 标签与改伤害/费用/治疗量的特殊效果仍由后续批次迁移。
 _FIELDS = {"id", "alias", "name_i18n", "desc_i18n", "color", "icon",
-           "stacking", "visible", "events", "package"}
+           "stacking", "visible", "events", "package",
+           "max_stack", "decay", "decay_timing", "decay_log",
+           "keep_when_zero", "show_stack"}
 
 OFFICIAL_STATUSES: tuple = (
     {
@@ -46,6 +51,8 @@ OFFICIAL_STATUSES: tuple = (
         "icon": "frost",
         "stacking": "stack",
         "visible": True,
+        "max_stack": 60,
+        "decay": {"timing": "turn_end", "mode": "half", "log": "zero"},
     },
     {
         "id": "bio:debt",
@@ -64,6 +71,40 @@ OFFICIAL_STATUSES: tuple = (
         "icon": "debt",
         "stacking": "stack",
         "visible": True,
+        # 「正常回 E 之后失去 1E，再减 1 层」——旧实现是引擎函数
+        # ``_bio_apply_debt_after_recovery``，现在由回合阶段事件执行。
+        "events": {
+            "on_turn_start_after_recovery": [
+                {
+                    "op": "if_else",
+                    "condition": {
+                        "op": "compare",
+                        "a": {"op": "status_stack", "status": "status_immune"},
+                        "operator": "==",
+                        "b": 0,
+                    },
+                    "then": [
+                        {
+                            "op": "resource_op",
+                            "resource": "e",
+                            "target": "self",
+                            "delta": -1,
+                            "log": "{source}的负债使其失去1E",
+                            "log_positive_only": True,
+                        }
+                    ],
+                    "else": [],
+                },
+                {
+                    "op": "status_op",
+                    "action": "remove",
+                    "status": "bio:debt",
+                    "amount": 1,
+                    "log": False,
+                    "bypass_mask": True,
+                },
+            ],
+        },
     },
     {
         "id": "bio:extra_healing",
@@ -145,6 +186,39 @@ OFFICIAL_STATUSES: tuple = (
         "icon": "blazing_fire",
         "stacking": "stack",
         "visible": True,
+        # 自己回合开始（状态伤害结算前）把层数转成灼烧。旧实现是引擎函数
+        # ``_hel_apply_blazing_fire_turn_start``。
+        "events": {
+            "on_turn_start_before_status_damage": [
+                {
+                    "op": "set_var",
+                    "name": "blazing_fire_stacks",
+                    "value": {"op": "status_stack", "status": "hel:blazing_fire"},
+                },
+                {
+                    "op": "if_else",
+                    "condition": {
+                        "op": "compare",
+                        "a": {"op": "var", "name": "blazing_fire_stacks"},
+                        "operator": ">",
+                        "b": 0,
+                    },
+                    "then": [
+                        {
+                            "op": "status_op",
+                            "action": "add",
+                            "status": "fire",
+                            "target": "self",
+                            "amount": {"op": "var", "name": "blazing_fire_stacks"},
+                            "log": False,
+                            "bypass_mask": True,
+                        },
+                        {"op": "log", "message": "{source}的烈火施加{blazing_fire_stacks}层灼烧"},
+                    ],
+                    "else": [],
+                },
+            ],
+        },
     },
     {
         "id": "jungle:fragile",
@@ -164,6 +238,7 @@ OFFICIAL_STATUSES: tuple = (
         "icon": "fragile",
         "stacking": "stack",
         "visible": True,
+        "decay": {"timing": "turn_start", "mode": "clear"},
     },
     {
         "id": "jungle:shield",
@@ -582,6 +657,10 @@ def engine_status_defs() -> Dict[str, dict]:
             "visible": item["visible"],
             "source": "builtin",
         }
+        for key in ("max_stack", "decay", "decay_timing", "decay_log",
+                    "keep_when_zero", "show_stack"):
+            if item.get(key) not in (None, ""):
+                payload[key] = copy.deepcopy(item[key])
         if item.get("events"):
             payload["events"] = copy.deepcopy(item["events"])
         out[str(item["id"])] = payload

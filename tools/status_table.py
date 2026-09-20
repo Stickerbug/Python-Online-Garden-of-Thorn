@@ -170,13 +170,29 @@ def render() -> str:
         "",
         "写卡时直接引用 id 即可（`status_op.status`）；**不需要**在自己的包里再声明。",
         "颜色/图标/文案由内置表提供，官方包与社区包看到的是同一份。",
+        "「行为实现」列列出已经迁进状态声明（events / decay / max_stack）的部分；"
+        "未列出的数值修改类效果（改 E 消耗、护甲、伤害、治疗量等）仍可能由引擎处理。",
         "",
         "| id | 中文名 | 英文名 | 颜色 | 图标 | 可见 | 规则要点（中文） | 行为实现 | 现引用 |",
         "|---|---|---|---|---|---|---|---|---|",
     ]
     for item in official:
         events = item.get("events") or {}
-        impl = "状态 events：" + "、".join(sorted(events)) if events else "引擎硬编码"
+        impl_parts = []
+        if events:
+            impl_parts.append("状态 events：" + "、".join(sorted(events)))
+        decay = item.get("decay")
+        if isinstance(decay, dict) and decay.get("timing"):
+            impl_parts.append(
+                f"声明衰减：{decay.get('timing')}/{decay.get('mode') or 'one'}"
+            )
+        elif item.get("decay_timing"):
+            impl_parts.append(f"声明衰减：{item['decay_timing']}/one")
+        if item.get("max_stack"):
+            impl_parts.append(f"层数上限 {item['max_stack']}")
+        # 只列**已经迁进声明**的部分；E 消耗、护甲/伤害修正这类数值钩子
+        # 仍可能留在引擎里，等后续批次迁移。
+        impl = "；".join(impl_parts) if impl_parts else "引擎硬编码"
         desc = item["desc_i18n"]["zh"].replace("|", "\\|")
         names = {item["id"], item["alias"], *item["name_i18n"].values()}
         lines.append(

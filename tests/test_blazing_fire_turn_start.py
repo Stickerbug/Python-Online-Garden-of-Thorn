@@ -1,14 +1,15 @@
-"""反馈 #113：烈火在 2v2 / 无限火力回合开始也要转成灼烧。
+"""烈火在 1v1 / 2v2 / 无限火力回合开始都要转成灼烧。
 
-1v1 的 ``_apply_turn_start_effects`` 会调用
-``_hel_apply_blazing_fire_turn_start``；2v2 的两条回合开始路径与 URF 的覆写
-此前漏了这一步，导致多人模式里 ``hel:blazing_fire`` 看起来“消失”。
+反馈 #113 时 2v2 的两条回合开始路径与 URF 的覆写漏了硬编码调用。现在烈火已经
+迁进 ``official_statuses.py`` 的 ``events.on_turn_start_before_status_damage``，
+所以三个模式只要在状态伤害结算前触发同一个阶段事件即可，不再各自调用引擎函数。
 """
 
 from pathlib import Path
 
 import pytest
 
+import official_statuses
 from game_engine import GameEngine
 from game_engine_2v2 import GameEngine2v2
 from game_engine_urf import GameEngineInfiniteFire
@@ -60,5 +61,8 @@ def test_blazing_fire_converts_to_burn_on_own_turn_start(engine_cls):
 def test_multiplayer_turn_start_paths_all_call_blazing_fire():
     source_2v2 = (ROOT / 'game_engine_2v2.py').read_text(encoding='utf-8')
     source_urf = (ROOT / 'game_engine_urf.py').read_text(encoding='utf-8')
-    assert source_2v2.count('self._hel_apply_blazing_fire_turn_start(player_id)') == 2
-    assert source_urf.count('self._hel_apply_blazing_fire_turn_start(player_id)') == 1
+    phase = "'on_turn_start_before_status_damage'"
+    assert source_2v2.count(phase) == 2
+    assert source_urf.count(phase) == 1
+    definition = official_statuses.engine_status_def('hel:blazing_fire')
+    assert definition['events']['on_turn_start_before_status_damage']

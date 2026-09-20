@@ -580,11 +580,8 @@ class GameEngine2v2(GameEngine):
             if ps.bleed == 0:
                 self.log_msg(f"{self.pn(player_id)}的流血效果消失")
         self._decay_end_turn_layer_statuses(player_id)
-        frost = self._arctic_frost_value(player_id)
-        if frost > 0:
-            self._arctic_set_frost_value(player_id, frost // 2)
-            if self._arctic_frost_value(player_id) <= 0:
-                self.log_msg(f"{self.pn(player_id)}的霜冻效果消失")
+        # 声明式状态的「自己回合结束」衰减（与 1v1 同一约定）
+        self._apply_declared_status_decay(player_id, 'turn_end')
         ps.custom_vars.pop('arctic_snowballs', None)
         ps.custom_vars.pop('arctic_ready_queue', None)
         self._clear_turn_scoped_effects(player_id)
@@ -1916,6 +1913,7 @@ class GameEngine2v2(GameEngine):
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
         self._apply_jungle_turn_start_statuses(player_id)
+        self._apply_declared_status_decay(player_id, 'turn_start')
         self._run_zone_owner_turn_start_events(player_id)
         self._run_timed_effects_for_turn(player_id)
         untargetable_layers = max(0, int(getattr(ps, 'untargetable', 0) or 0))
@@ -1996,7 +1994,7 @@ class GameEngine2v2(GameEngine):
             elixir_recovery += self._opening_event_elixir_recovery_bonus(player_id)
             ps.gain_elixir(elixir_recovery)
             self.log_msg(f"{self.pn(player_id)}抽{len(drawn)}张牌，回复{elixir_recovery}E")
-            self._bio_apply_debt_after_recovery(player_id)
+            self._trigger_v2_status_events_for_player(player_id, 'on_turn_start_after_recovery', {'player_id': player_id})
             # Overload: deduct E at turn start, then clear
             if ps.overload > 0:
                 if not self._is_status_immune(player_id):
@@ -2026,7 +2024,7 @@ class GameEngine2v2(GameEngine):
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             self._defer_turn_start_death_checks = False
             return
-        self._hel_apply_blazing_fire_turn_start(player_id)
+        self._trigger_v2_status_events_for_player(player_id, 'on_turn_start_before_status_damage', {'player_id': player_id})
         if ps.poison > 0:
             if not self._is_status_immune(player_id):
                 self._deal_direct_damage(player_id, ps.poison, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
@@ -2140,7 +2138,7 @@ class GameEngine2v2(GameEngine):
             elixir_recovery += self._opening_event_elixir_recovery_bonus(player_id)
             ps.gain_elixir(elixir_recovery)
             self.log_msg(f"{self.pn(player_id)}抽{len(drawn)}张牌，回复{elixir_recovery}E")
-            self._bio_apply_debt_after_recovery(player_id)
+            self._trigger_v2_status_events_for_player(player_id, 'on_turn_start_after_recovery', {'player_id': player_id})
             if ps.overload > 0:
                 if not self._is_status_immune(player_id):
                     deduct = min(ps.overload, ps.elixir)
@@ -2169,7 +2167,7 @@ class GameEngine2v2(GameEngine):
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             self._defer_turn_start_death_checks = False
             return
-        self._hel_apply_blazing_fire_turn_start(player_id)
+        self._trigger_v2_status_events_for_player(player_id, 'on_turn_start_before_status_damage', {'player_id': player_id})
         if ps.poison > 0:
             if not self._is_status_immune(player_id):
                 self._deal_direct_damage(player_id, ps.poison, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)

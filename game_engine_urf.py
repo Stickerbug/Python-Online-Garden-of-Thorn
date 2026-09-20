@@ -445,6 +445,7 @@ class GameEngineInfiniteFire(GameEngine):
         if self.game_over or getattr(self, 'pending_v2_ui', None):
             return
         self._apply_jungle_turn_start_statuses(player_id)
+        self._apply_declared_status_decay(player_id, 'turn_start')
         self._run_zone_owner_turn_start_events(player_id)
         self._run_timed_effects_for_turn(player_id)
         # 反馈 #107：1v1（game_engine.py:16525-16529）与 2v2（game_engine_2v2.py:1904-1908）
@@ -498,7 +499,7 @@ class GameEngineInfiniteFire(GameEngine):
             return
         self._defer_turn_start_death_checks = True
         try:
-            self._hel_apply_blazing_fire_turn_start(player_id)
+            self._trigger_v2_status_events_for_player(player_id, 'on_turn_start_before_status_damage', {'player_id': player_id})
             if ps.poison > 0:
                 if not self._is_status_immune(player_id):
                     self._deal_direct_damage(player_id, ps.poison, '中毒', damage_type=DAMAGE_TYPE_MAGIC, damage_tag=DAMAGE_TAG_POISON)
@@ -518,6 +519,7 @@ class GameEngineInfiniteFire(GameEngine):
                 elixir_recovery = max(0, elixir_recovery - ps.enemy_e_reduction)
                 ps.gain_elixir(elixir_recovery)
                 self.log_msg(f"{self.pn(player_id)}回复{elixir_recovery}E")
+                self._trigger_v2_status_events_for_player(player_id, 'on_turn_start_after_recovery', {'player_id': player_id})
             # Overload: deduct E at turn start, then clear
             if ps.overload > 0:
                 if not self._is_status_immune(player_id):
