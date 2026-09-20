@@ -267,6 +267,80 @@ OFFICIAL_STATUSES: tuple = (
         "stacking": "stack",
         "visible": True,
         "stack_keys": ["hel:luck", "luck", "幸运"],
+        # 暴击判定：减甲之前、闪避预测也跑同一份声明（dry-run）。
+        # force_crit / no_luck_crit 来自当前伤害牌的内部标记。
+        "events": {
+            "on_damage_roll": {
+                "priority": 10,
+                "steps": [
+                    {
+                        "op": "set_var",
+                        "name": "luck_stacks",
+                        "value": {"op": "status_stack", "status": "hel:luck"},
+                    },
+                    {
+                        "op": "if_else",
+                        "condition": {
+                            "op": "or",
+                            "conditions": [
+                                {"op": "var", "name": "force_crit"},
+                                {
+                                    "op": "and",
+                                    "conditions": [
+                                        {"op": "not", "condition": {"op": "var", "name": "no_luck_crit"}},
+                                        {
+                                            "op": "compare",
+                                            "a": {"op": "var", "name": "luck_stacks"},
+                                            "operator": ">=",
+                                            "b": {"op": "var", "name": "damage_amount"},
+                                        },
+                                    ],
+                                },
+                            ],
+                        },
+                        "then": [
+                            {
+                                "op": "if_else",
+                                "condition": {"op": "not", "condition": {"op": "var", "name": "force_crit"}},
+                                "then": [
+                                    {
+                                        "op": "status_op",
+                                        "action": "remove",
+                                        "status": "hel:luck",
+                                        "amount": {"op": "var", "name": "damage_amount"},
+                                        "log": False,
+                                        "bypass_mask": True,
+                                    }
+                                ],
+                                "else": [],
+                            },
+                            {
+                                "op": "set_var",
+                                "name": "damage_amount",
+                                "value": {
+                                    "op": "add",
+                                    "values": [
+                                        {
+                                            "op": "ceil",
+                                            "value": {
+                                                "op": "mul",
+                                                "values": [
+                                                    {"op": "var", "name": "damage_amount"},
+                                                    {"op": "var", "name": "crit_multiplier"},
+                                                ],
+                                            },
+                                        },
+                                        {"op": "var", "name": "crit_bonus_damage"},
+                                    ],
+                                },
+                            },
+                            {"op": "set_var", "name": "is_crit", "value": True},
+                        ],
+                        "else": [],
+                    },
+                ],
+            },
+        },
     },
     {
         "id": "hel:blazing_fire",
@@ -720,6 +794,56 @@ OFFICIAL_STATUSES: tuple = (
         "stacking": "stack",
         "visible": True,
         "stack_keys": ["ocean:blood_debt", "blood_debt", "血债"],
+        # 受到物理伤害时清除，攻击者按层数获得 E；事件在受击者身上跑，
+        # 「攻击者」用 ``event_source`` 选择器取。
+        "events": {
+            "on_damage_taken": {
+                "priority": 10,
+                "steps": [
+                    {
+                        "op": "set_var",
+                        "name": "blood_debt_stacks",
+                        "value": {"op": "status_stack", "status": "ocean:blood_debt"},
+                    },
+                    {
+                        "op": "if_else",
+                        "condition": {
+                            "op": "and",
+                            "conditions": [
+                                {"op": "damage_type", "type_name": "physical"},
+                                {
+                                    "op": "compare",
+                                    "a": {"op": "var", "name": "blood_debt_stacks"},
+                                    "operator": ">",
+                                    "b": 0,
+                                },
+                            ],
+                        },
+                        "then": [
+                            {
+                                "op": "status_op",
+                                "action": "remove",
+                                "status": "ocean:blood_debt",
+                                "log": False,
+                                "bypass_mask": True,
+                            },
+                            {
+                                "op": "resource_op",
+                                "resource": "e",
+                                "target": "event_source",
+                                "delta": {"op": "var", "name": "blood_debt_stacks"},
+                                "log": False,
+                            },
+                            {
+                                "op": "log",
+                                "message": "{source}的血债解除，{event_source_name}获得{blood_debt_stacks}E",
+                            },
+                        ],
+                        "else": [],
+                    },
+                ],
+            },
+        },
     },
     {
         "id": "ocean:unable_counter",
@@ -742,6 +866,63 @@ OFFICIAL_STATUSES: tuple = (
         "stacking": "stack",
         "visible": True,
         "stack_keys": ["ocean:unable_counter", "unable_counter", "无法反制"],
+        # 抽到/入手反制牌时自动弃掉并 -1 层；旧实现在
+        # ``_apply_unable_counter_to_entering_card`` 里写死。
+        "events": {
+            "on_card_added_to_hand": {
+                "priority": 10,
+                "steps": [
+                    {
+                        "op": "set_var",
+                        "name": "unable_counter_block",
+                        "value": {
+                            "op": "min",
+                            "values": [
+                                {"op": "status_stack", "status": "ocean:unable_counter"},
+                                1,
+                            ],
+                        },
+                    },
+                    {
+                        "op": "if_else",
+                        "condition": {
+                            "op": "and",
+                            "conditions": [
+                                {"op": "var", "name": "is_counter_card"},
+                                {
+                                    "op": "compare",
+                                    "a": {"op": "var", "name": "unable_counter_block"},
+                                    "operator": ">",
+                                    "b": 0,
+                                },
+                            ],
+                        },
+                        "then": [
+                            {
+                                "op": "move_card",
+                                "card": {"ref": "current_card"},
+                                "zone": "discard",
+                                "count_as_active_discard": False,
+                                "silent": True,
+                            },
+                            {
+                                "op": "status_op",
+                                "action": "remove",
+                                "status": "ocean:unable_counter",
+                                "amount": {"op": "var", "name": "unable_counter_block"},
+                                "log": False,
+                                "bypass_mask": True,
+                            },
+                            {
+                                "op": "log",
+                                "message": "{source}因无法反制将{card_name}置入弃牌堆",
+                            },
+                        ],
+                        "else": [],
+                    },
+                ],
+            },
+        },
     },
     {
         "id": "sewers:sealed",

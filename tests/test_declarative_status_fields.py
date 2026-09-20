@@ -384,3 +384,97 @@ def test_official_shield_conversion_uses_pre_heal_hook():
     assert player.health == 50
     assert engine._custom_status_value(1, 'jungle:shield', 'shield') == 14
     assert engine._bio_status_value(1, 'shield_conversion') == 0
+
+
+def test_official_luck_declares_damage_roll_and_consumes_layers():
+    definition = official_statuses.engine_status_def('hel:luck')
+    assert definition['events']['on_damage_roll']['priority'] == 10
+
+    engine = make_engine()
+    card = CardInstance('Basic')
+    engine.players[0].custom_statuses['hel:luck'] = 10
+
+    damage, is_crit = engine._hel_apply_lucky_crit_to_damage(0, 5, card)
+
+    assert (damage, is_crit) == (10, True)
+    assert engine._custom_status_value(0, 'hel:luck', 'luck') == 5
+
+
+def test_official_luck_force_and_no_luck_flags():
+    engine = make_engine()
+    card = CardInstance('Basic')
+    card._hel_force_crit = True
+    engine.players[0].custom_statuses['hel:luck'] = 1
+
+    damage, is_crit = engine._hel_apply_lucky_crit_to_damage(0, 5, card)
+    assert (damage, is_crit) == (10, True)
+    # force crit must not consume luck
+    assert engine._custom_status_value(0, 'hel:luck', 'luck') == 1
+
+    engine = make_engine()
+    card = CardInstance('Basic')
+    card._hel_no_luck_crit = True
+    engine.players[0].custom_statuses['hel:luck'] = 99
+    damage, is_crit = engine._hel_apply_lucky_crit_to_damage(0, 5, card)
+    assert (damage, is_crit) == (5, False)
+    assert engine._custom_status_value(0, 'hel:luck', 'luck') == 99
+
+
+def test_official_luck_dry_run_prediction_does_not_consume_layers():
+    engine = make_engine()
+    card = CardInstance('Basic')
+    engine.players[0].custom_statuses['hel:luck'] = 100
+
+    damage, is_crit = engine._run_declared_damage_roll(0, 5, card, 0, dry_run=True)
+
+    assert (damage, is_crit) == (10, True)
+    assert engine._custom_status_value(0, 'hel:luck', 'luck') == 100
+
+
+def test_official_blood_debt_declares_physical_damage_taken():
+    definition = official_statuses.engine_status_def('ocean:blood_debt')
+    assert definition['events']['on_damage_taken']['priority'] == 10
+
+    engine = make_engine()
+    engine.players[1].custom_statuses['blood_debt'] = 4
+
+    engine._record_damage(1, 5, 0, damage_type='physical')
+
+    assert engine.players[0].elixir == 4
+    assert 'blood_debt' not in engine.players[1].custom_statuses
+    assert any('血债解除' in str(line) for line in engine.log)
+
+
+def test_official_blood_debt_ignores_magic_damage():
+    engine = make_engine()
+    engine.players[1].custom_statuses['ocean:blood_debt'] = 4
+
+    engine._record_damage(1, 5, 0, damage_type='magic')
+
+    assert engine.players[0].elixir == 0
+    assert engine.players[1].custom_statuses.get('ocean:blood_debt') == 4
+
+
+def test_official_unable_counter_declares_card_enter_hand():
+    definition = official_statuses.engine_status_def('ocean:unable_counter')
+    assert definition['events']['on_card_added_to_hand']['priority'] == 10
+
+    from cards import CARD_DEFS, CardDef
+
+    card_id = '__test_unable_counter_probe__'
+    CARD_DEFS[card_id] = CardDef(
+        id=card_id, name_en='Counter Probe', name_cn='反制探针',
+        cost_e=0, cost_m=0, card_type='guard', count=1,
+        quality='test', description='', effect_text='', flags=set(),
+    )
+    engine = make_engine()
+    card = CardInstance(card_id)
+    engine.players[0].custom_statuses['ocean:unable_counter'] = 2
+    engine.players[0].hand = [card]
+
+    engine._handle_card_enter_hand(0, card)
+
+    assert card not in engine.players[0].hand
+    assert card in engine.players[0].discard
+    assert engine._custom_status_value(0, 'ocean:unable_counter', 'unable_counter') == 1
+    assert any('无法反制' in str(line) for line in engine.log)

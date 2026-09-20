@@ -1669,7 +1669,10 @@ class GameEngine2v2(GameEngine):
         health_lost = max(0, int(old_health or 0) - max(0, int(ps.health or 0)))
         self._bio_stem_cell_after_health_loss(player_id, health_lost)
         self._note_achievement_health(player_id)
-        self._record_damage(player_id, actual, source_id)
+        self._record_damage(
+            player_id, actual, source_id,
+            damage_type=resolved_damage_type, damage_tag=resolved_damage_tag,
+        )
         if not silent:
             self.log_msg(f"{self.pn(player_id)}受到{actual}点{source}伤害（H={old_health}→{ps.health}）")
         if resolved_damage_type == DAMAGE_TYPE_PHYSICAL and health_lost > 0:
@@ -2384,7 +2387,10 @@ class GameEngine2v2(GameEngine):
             total_dealt += dmg
             if dmg > 0:
                 self._last_positive_damage_hits[target_id] += 1
-            self._record_damage(target_id, dmg, attacker_id)
+            self._record_damage(
+                target_id, dmg, attacker_id,
+                damage_type=DAMAGE_TYPE_PHYSICAL, damage_tag=DAMAGE_TAG_PHYSICAL,
+            )
             self.log_msg(f"{self.pn(target_id)}受到{dmg}点伤害（H={ps.health}）")
             if dmg > 0:
                 self._sewers_grow_toilet_paper_power(target_id)

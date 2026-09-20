@@ -2306,7 +2306,8 @@ class GameEngine:
             + amount
         )
 
-    def _record_damage(self, target_id, amount, source_id=None):
+    def _record_damage(self, target_id, amount, source_id=None,
+                       damage_type: str = '', damage_tag: str = ''):
         try:
             amount = int(amount)
         except Exception:
@@ -2329,7 +2330,9 @@ class GameEngine:
                 int(getattr(source, 'achievement_max_single_damage_dealt', 0) or 0),
                 int(amount),
             )
-        self._trigger_v2_damage_status_events(target_id, source_id, amount)
+        self._trigger_v2_damage_status_events(
+            target_id, source_id, amount, damage_type=damage_type, damage_tag=damage_tag,
+        )
         self._bio_after_damage_hit(target_id, amount)
 
     def _record_dodge_damage_prevented(self, target_id: int, amount: int):
@@ -2422,8 +2425,14 @@ class GameEngine:
         }
         if 'source_player' in extra:
             status_vars['event_source_player'] = extra.get('source_player')
+            source_id = extra.get('source_player')
+            if isinstance(source_id, int) and 0 <= source_id < len(self.players):
+                status_vars['event_source_name'] = self.pn(source_id)
         if 'target_player' in extra:
             status_vars['event_target_player'] = extra.get('target_player')
+            target_id = extra.get('target_player')
+            if isinstance(target_id, int) and 0 <= target_id < len(self.players):
+                status_vars['event_target_name'] = self.pn(target_id)
         if 'amount' in extra:
             status_vars['damage_amount'] = extra.get('amount')
         context = {
@@ -2477,14 +2486,21 @@ class GameEngine:
             if not bool(getattr(self, '_turn_boundary_active', False)) or not claimed:
                 return
 
-    def _trigger_v2_damage_status_events(self, target_id, source_id, amount):
+    def _trigger_v2_damage_status_events(self, target_id, source_id, amount,
+                                         damage_type: str = '', damage_tag: str = ''):
         try:
             amount = int(amount)
         except Exception:
             amount = 0
         if amount <= 0:
             return
-        extra = {'amount': amount, 'source_player': source_id, 'target_player': target_id}
+        extra = {
+            'amount': amount,
+            'source_player': source_id,
+            'target_player': target_id,
+            'damage_type': str(damage_type or ''),
+            'damage_tag': str(damage_tag or ''),
+        }
         if isinstance(target_id, int) and 0 <= target_id < len(self.players):
             self._trigger_v2_status_events_for_player(target_id, 'on_damage_taken', extra)
         if isinstance(source_id, int) and 0 <= source_id < len(self.players):
@@ -2603,7 +2619,8 @@ class GameEngine:
 
     def _run_status_phase_context(self, player_id: int, phase: str,
                                   extra_vars: Optional[dict] = None,
-                                  extra_action: Optional[dict] = None):
+                                  extra_action: Optional[dict] = None,
+                                  card=None, dry_run: bool = False):
         """Run one shared-context status phase; return the mutable context.
 
         This is the numeric-hook counterpart of ``_trigger_v2_status_events_for_player``:
@@ -2633,13 +2650,21 @@ class GameEngine:
         if phase in active:
             return None
         active.add(phase)
+        statuses_snapshot = None
+        if dry_run:
+            try:
+                statuses_snapshot = copy.deepcopy(
+                    getattr(self.players[player_id], 'custom_statuses', {}) or {}
+                )
+            except Exception:
+                statuses_snapshot = None
         context = {
             'source_player': player_id,
             'target_player': player_id,
             'source_id': player_id,
             'target_id': player_id,
             'damage_source': player_id,
-            'card': None,
+            'card': card,
             'room': getattr(self, 'room', None),
             'loadout': getattr(self, 'v2_loadout', None),
             'vars': {'player_id': player_id, **dict(extra_vars or {})},
@@ -2659,6 +2684,8 @@ class GameEngine:
                     break
         finally:
             active.discard(phase)
+            if dry_run and statuses_snapshot is not None:
+                self.players[player_id].custom_statuses = statuses_snapshot
         return context
 
     def _run_declared_heal_modifiers(self, player_id: int, amount: int) -> int:
@@ -2700,6 +2727,7 @@ class GameEngine:
             player_id, 'on_cost',
             {'cost_extra': 0, 'currency': currency},
             {'currency': currency, 'card_id': getattr(card, 'def_id', '')},
+            card=card,
         )
         if context is None:
             return 0
@@ -2744,6 +2772,79 @@ class GameEngine:
             return max(0, int(context.get('vars', {}).get('damage_amount', damage) or 0))
         except (TypeError, ValueError):
             return damage
+
+    def _run_declared_damage_roll(self, attacker_id: int, damage: int, source_card,
+                                  crit_bonus_damage: int = 0,
+                                  dry_run: bool = False):
+        """Run ``on_damage_roll`` status events; return ``(damage, is_crit)``.
+
+        This is the pre-armor / pre-dodge crit window (the old
+        ``_hel_apply_lucky_crit_to_damage`` position).  The declaration reads
+        ``damage_amount`` / ``crit_multiplier`` / ``crit_bonus_damage`` /
+        ``force_crit`` / ``no_luck_crit``, consumes its own layers and writes
+        ``is_crit`` (and optionally a new ``damage_amount``).  ``dry_run=True``
+        runs the same declaration for the dodge prediction and rolls the
+        status layers back afterwards.
+        """
+
+        try:
+            damage = max(0, int(damage or 0))
+        except (TypeError, ValueError):
+            damage = 0
+        if damage <= 0 or not (0 <= attacker_id < len(self.players)):
+            return damage, False
+        if source_card is None:
+            return damage, False
+        try:
+            crit_bonus_damage = max(0, int(crit_bonus_damage or 0))
+        except (TypeError, ValueError):
+            crit_bonus_damage = 0
+        context = self._run_status_phase_context(
+            attacker_id, 'on_damage_roll',
+            {
+                'damage_amount': damage,
+                'crit_multiplier': self._hel_crit_multiplier(attacker_id),
+                'crit_bonus_damage': crit_bonus_damage,
+                'force_crit': bool(getattr(source_card, '_hel_force_crit', False)),
+                'no_luck_crit': bool(getattr(source_card, '_hel_no_luck_crit', False)),
+            },
+            {'amount': damage, 'card_id': getattr(source_card, 'def_id', '')},
+            card=source_card, dry_run=dry_run,
+        )
+        if context is None:
+            return damage, False
+        is_crit = bool(context.get('vars', {}).get('is_crit'))
+        if not is_crit:
+            return damage, False
+        try:
+            return max(0, int(context.get('vars', {}).get('damage_amount', damage) or 0)), True
+        except (TypeError, ValueError):
+            return damage, True
+
+    def _run_declared_card_enter_hand(self, player_id: int, card) -> bool:
+        """Run ``on_card_added_to_hand`` status events; return "card left hand".
+
+        The declaration receives ``is_counter_card`` and the entering card as
+        ``current_card``; the old hardcoded ``_apply_unable_counter_to_entering_card``
+        behaviour is expressed as ``move_card(zone:"discard")`` +
+        ``status_op(remove)``.
+        """
+
+        if card is None or not (0 <= player_id < len(self.players)):
+            return False
+        context = self._run_status_phase_context(
+            player_id, 'on_card_added_to_hand',
+            {
+                'is_counter_card': self._is_counter_card(card),
+                'card_def_id': getattr(card, 'def_id', ''),
+                'card_name': getattr(card, 'name_cn', '') or getattr(card, 'def_id', ''),
+            },
+            {'def_id': getattr(card, 'def_id', ''), 'target_player': player_id},
+            card=card,
+        )
+        if context is None:
+            return False
+        return card not in self.players[player_id].hand
 
     def _declared_status_modifiers(self, player_id: int, key: str) -> int:
         """Sum passive ``modifiers[key]`` deltas from a player's statuses."""
@@ -4461,7 +4562,7 @@ class GameEngine:
         if self._card_has_flag(card, 'enter_hand_power_2'):
             card.power_value = clamp_card_power(max(0, int(getattr(card, 'power_value', 0) or 0)) + 2)
             card.instance_flags.add('power')
-        if self._apply_unable_counter_to_entering_card(player_id, card):
+        if self._run_declared_card_enter_hand(player_id, card):
             return
         # Copy: create exile copies when entering hand
         copy_count = getattr(card.card_def, 'copy_count', 0)
@@ -6305,7 +6406,10 @@ class GameEngine:
         health_lost = max(0, int(old_health or 0) - max(0, int(ps.health or 0)))
         self._bio_stem_cell_after_health_loss(player_id, health_lost)
         self._note_achievement_health(player_id)
-        self._record_damage(player_id, actual, source_id)
+        self._record_damage(
+            player_id, actual, source_id,
+            damage_type=resolved_damage_type, damage_tag=resolved_damage_tag,
+        )
         if not silent:
             self.log_msg(f"{self.pn(player_id)}受到{actual}点{source}伤害（H={old_health}→{ps.health}）")
         if resolved_damage_type == DAMAGE_TYPE_PHYSICAL and health_lost > 0:
@@ -6488,22 +6592,11 @@ class GameEngine:
 
     def _hel_apply_lucky_crit_to_damage(self, attacker_id: int, dmg: int, source_card: Optional[CardInstance],
                                         crit_bonus_damage: int = 0) -> tuple:
-        if dmg <= 0 or not self._valid_player_id(attacker_id):
-            return max(0, int(dmg or 0)), False
-        if source_card is None:
-            return max(0, int(dmg or 0)), False
-        flags = self._effective_card_flags(source_card)
-        force = bool(getattr(source_card, '_hel_force_crit', False))
-        no_luck = bool(getattr(source_card, '_hel_no_luck_crit', False))
-        luck = self._hel_luck_value(attacker_id)
-        crit = force or (not no_luck and luck >= dmg)
+        crit_damage, crit = self._run_declared_damage_roll(
+            attacker_id, dmg, source_card, crit_bonus_damage,
+        )
         if not crit:
             return max(0, int(dmg or 0)), False
-        if not force:
-            self._hel_set_luck_value(attacker_id, luck - dmg)
-        multiplier = self._hel_crit_multiplier(attacker_id)
-        crit_damage = int(math.ceil(max(0, dmg) * multiplier))
-        crit_damage += max(0, int(crit_bonus_damage or 0))
         try:
             self._hel_current_crit_hits = int(getattr(self, '_hel_current_crit_hits', 0) or 0) + 1
             self._hel_last_hit_was_crit = True
@@ -6533,11 +6626,10 @@ class GameEngine:
         )
         if estimated <= 0:
             return False
-        if bool(getattr(source_card, '_hel_force_crit', False)):
-            return True
-        if bool(getattr(source_card, '_hel_no_luck_crit', False)):
-            return False
-        return self._hel_luck_value(attacker_id) >= estimated
+        _predicted_damage, is_crit = self._run_declared_damage_roll(
+            attacker_id, estimated, source_card, 0, dry_run=True,
+        )
+        return bool(is_crit)
 
     def _hel_apply_blazing_fire_turn_start(self, player_id: int):
         stacks = self._custom_status_value(player_id, *self._hel_blazing_fire_keys())
@@ -18457,7 +18549,10 @@ class GameEngine:
             total_dealt += dmg
             if dmg > 0:
                 self._last_positive_damage_hits[target_id] += 1
-            self._record_damage(target_id, dmg, attacker_id)
+            self._record_damage(
+                target_id, dmg, attacker_id,
+                damage_type=DAMAGE_TYPE_PHYSICAL, damage_tag=DAMAGE_TAG_PHYSICAL,
+            )
             self.log_msg(f"{self.pn(target_id)}受到{dmg}点伤害（H={ps.health}）")
             if dmg > 0:
                 self._sewers_grow_toilet_paper_power(target_id)
