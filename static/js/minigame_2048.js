@@ -184,65 +184,130 @@ function tileFaceHtml(value) {
     + '</span>';
 }
 
-function renderBoard(animate) {
+/* ---------------- 棋盘与方块：持久元素（照原版 html_actuator 的做法） ----------------
+
+   原版一步不重建棋盘：方块是**有身份的 DOM 元素**，移动＝改它的 left/top
+   （CSS transition: 100ms ease-in-out 负责滑动），合并＝两块各自滑到目标格 +
+   新块在它们上面 pop，生成＝同一帧插入新块并 appear。
+   这里：16 个空格只建一次（占位），方块是绝对定位的 .mg-cell.filled，按格子坐标摆放。 */
+
+const TILE_COUNT = 16;
+const tileEls = new Map();      // 当前格子下标 → 方块元素
+
+function ensureBoardSkeleton() {
+  const placeholders = boardEl.querySelectorAll('.mg-cell:not(.filled)');
+  if (placeholders.length === TILE_COUNT && !boardEl.querySelector('.mg-cell.filled')) return;
   boardEl.innerHTML = '';
-  const pending = state.ops.length - state.acked;
-  // 这一步里"被合并掉"的格子（用来播放合并弹一下，和原版一致）
-  const mergedIndexes = new Set(
-    (animate && Array.isArray(state.lastMoves) ? state.lastMoves : [])
-      .filter((move) => move && move.merged)
-      .map((move) => move.to),
-  );
-  /* 原版 html_actuator.addTile 的做法：合并时把"被合并掉的两块"也渲染出来，
-     让它们各自从原位滑到目标格，合并后的新块再在它们上面 pop。
-     这里用"幽灵块"实现：绝对定位在目标格，先摆回源格位置再过渡过去，动画完就移除。 */
-  const mergeSources = new Map();
-  if (animate && Array.isArray(state.lastMoves)) {
-    state.lastMoves.forEach((move) => {
-      if (!move || !move.merged) return;
-      if (!mergeSources.has(move.to)) mergeSources.set(move.to, []);
-      mergeSources.get(move.to).push(move.from);
-    });
+  for (let index = 0; index < TILE_COUNT; index += 1) {
+    const cell = document.createElement('div');
+    cell.className = 'mg-cell';
+    boardEl.appendChild(cell);
   }
-  const ghostTargets = new Map();   // to → [ghost 元素]
+  tileEls.clear();
+}
+
+function boardMetricsNow() {
+  const rect = boardEl.getBoundingClientRect();
+  const style = getComputedStyle(boardEl);
+  const gap = parseFloat(style.columnGap) || 0;
+  const pad = parseFloat(style.paddingLeft) || 0;
+  const size = Math.max(8, (rect.width - pad * 2 - gap * 3) / 4);
+  return { gap, pad, size };
+}
+
+function placeTile(el, index, metrics, animate) {
+  el.style.width = `${metrics.size}px`;
+  el.style.height = `${metrics.size}px`;
+  el.style.left = `${metrics.pad + (index % 4) * (metrics.size + metrics.gap)}px`;
+  el.style.top = `${metrics.pad + Math.floor(index / 4) * (metrics.size + metrics.gap)}px`;
+  if (!animate) {
+    el.style.transition = 'none';
+    void el.offsetWidth;
+    el.style.transition = '';
+  }
+}
+
+function makeTile(value, index, metrics, animate) {
+  const el = document.createElement('div');
+  el.className = 'mg-cell filled';
+  applyTileSkin(el, value);
+  el.innerHTML = tileFaceHtml(value);
+  el.dataset.value = String(value);
+  el.dataset.tileId = `t${tileSequence += 1}`;
+  if (value >= 2048) el.classList.add('mg-tile-eternal');
+  placeTile(el, index, metrics, false);
+  boardEl.appendChild(el);
+  if (!animate) {
+    el.style.transition = 'none';
+    void el.offsetWidth;
+    el.style.transition = '';
+  }
+  return el;
+}
+
+let tileSequence = 0;
+
+/* 全量重绘：载入存档 / 主题变化 / 冲突回滚 / 尺寸变化时用（不带动画）。 */
+function rebuildTiles() {
+  ensureBoardSkeleton();
+  const metrics = boardMetricsNow();
+  boardEl.querySelectorAll('.mg-cell.filled').forEach((el) => el.remove());
+  tileEls.clear();
   state.cells.forEach((value, index) => {
-    const tile = document.createElement('div');
-    tile.className = 'mg-cell' + (value ? ' filled' : '');
-    if (value) {
-      applyTileSkin(tile, value);
-      tile.innerHTML = tileFaceHtml(value);
-      tile.classList.add('mg-tile');
-      if (value >= 2048) tile.classList.add('mg-tile-eternal');
-      if (animate && state.lastSpawn === index) tile.classList.add('mg-tile-new');
-      if (animate && mergedIndexes.has(index)) tile.classList.add('mg-tile-merged');
-    }
-    boardEl.appendChild(tile);
+    if (!value) return;
+    tileEls.set(index, makeTile(value, index, metrics, false));
   });
-  // 生成合并幽灵块：源值取自"上一步的棋盘"，让它们滑进目标格
-  if (mergeSources.size && Array.isArray(state.lastPrev)) {
-    mergeSources.forEach((sources, target) => {
-      const cell = boardEl.children[target];
-      if (!cell) return;
-      const created = [];
-      sources.forEach((from) => {
-        const value = Number(state.lastPrev[from] || 0);
-        if (!value) return;
-        const ghost = document.createElement('div');
-        ghost.className = 'mg-cell filled mg-ghost';
-        applyTileSkin(ghost, value);
-        ghost.innerHTML = tileFaceHtml(value);
-        ghost.dataset.from = String(from);
-        ghost.dataset.to = String(target);
-        boardEl.insertBefore(ghost, cell);
-        created.push(ghost);
-      });
-      if (created.length) ghostTargets.set(target, created);
-    });
+}
+
+/* 一步的动画：滑动 → 合并（两块滑过去 + 新块 pop）→ 生成（appear）。 */
+function animateTiles() {
+  const moves = Array.isArray(state.lastMoves) ? state.lastMoves : [];
+  ensureBoardSkeleton();
+  const metrics = boardMetricsNow();
+  const carried = [];
+  const dying = new Map();
+  const mergedValues = new Map();
+
+  moves.forEach((move) => {
+    if (!move || typeof move.from !== 'number') return;
+    const el = tileEls.get(move.from);
+    if (!el) return;
+    tileEls.delete(move.from);
+    carried.push({ el, move });
+    if (move.merged) {
+      if (!dying.has(move.to)) dying.set(move.to, []);
+      dying.get(move.to).push(el);
+      mergedValues.set(move.to, Number(state.cells[move.to]) || 0);
+    }
+  });
+  carried.forEach(({ el, move }) => {
+    placeTile(el, move.to, metrics, true);
+    if (!move.merged) tileEls.set(move.to, el);
+  });
+  mergedValues.forEach((value, index) => {
+    if (!value) return;
+    const el = makeTile(value, index, metrics, true);
+    el.classList.add('mg-tile-merged');
+    tileEls.set(index, el);
+    window.setTimeout(() => {
+      (dying.get(index) || []).forEach((source) => source.remove());
+      el.classList.remove('mg-tile-merged');
+    }, 320);
+  });
+  const spawnIndex = state.lastSpawn;
+  if (typeof spawnIndex === 'number' && state.cells[spawnIndex] && !tileEls.has(spawnIndex)) {
+    const el = makeTile(state.cells[spawnIndex], spawnIndex, metrics, true);
+    el.classList.add('mg-tile-new');
+    tileEls.set(spawnIndex, el);
+    el.addEventListener('animationend', () => el.classList.remove('mg-tile-new'), { once: true });
   }
-  // 原版那种"方块滑过去"：按上一步的移动映射把方块先摆回旧位置，再过渡回原位。
-  if (animate && Array.isArray(state.lastMoves) && state.lastMoves.length) {
-    slideTiles(state.lastMoves, ghostTargets);
-  }
+}
+
+function renderBoard(animate) {
+  const canAnimate = animate && Array.isArray(state.lastMoves) && state.lastMoves.length
+    && tileEls.size > 0;
+  if (canAnimate) animateTiles();
+  else rebuildTiles();
   scoreEl.textContent = String(state.score);
   bestEl.textContent = String(state.best);
   // 同步算好字号（在下一帧绘制之前），新方块一出现就是最终大小；缓存命中时几乎零成本。
@@ -313,86 +378,6 @@ function scheduleTileFit() {
   tileFitFrame = window.requestAnimationFrame(() => {
     tileFitFrame = null;
     fitTileNames({ force: true });
-  });
-}
-
-/* 方块滑动（对应原版 `.tile` 的 `transition: 100ms ease-in-out`）：
-   先把方块按"旧格子 → 新格子"的位移摆回旧位置，下一动画帧再放回原位，
-   让 CSS 过渡把它滑过去；不改变最终布局，也不影响无动画模式。 */
-function slideTiles(moves, ghostTargets = new Map()) {
-  const cells = boardEl.querySelectorAll('.mg-cell:not(.mg-ghost)');
-  if (cells.length !== 16) return;
-  const first = cells[0].getBoundingClientRect();
-  const stepX = cells[1].getBoundingClientRect().left - first.left;
-  const stepY = cells[4].getBoundingClientRect().top - first.top;
-  const shifted = [];
-  const mergeTargets = new Set(ghostTargets.keys());
-  moves.forEach((move) => {
-    if (!move || move.from === move.to) return;
-    // 合并格不滑动：原版里滑进去的是"被合并掉的两块"（下面按幽灵块处理），新块只在原位 pop
-    if (mergeTargets.has(move.to)) return;
-    const target = cells[move.to];
-    if (!target) return;
-    const fromCol = move.from % 4;
-    const fromRow = Math.floor(move.from / 4);
-    const toCol = move.to % 4;
-    const toRow = Math.floor(move.to / 4);
-    target.style.transition = 'none';
-    target.style.transform = `translate(${(fromCol - toCol) * stepX}px, ${(fromRow - toRow) * stepY}px)`;
-    shifted.push(target);
-  });
-  // 合并幽灵块：先摆到源格，再滑到目标格，动画结束后移除
-  const ghosts = [];
-  ghostTargets.forEach((list, target) => {
-    const cell = cells[target];
-    if (!cell) return;
-    const baseLeft = cell.offsetLeft;
-    const baseTop = cell.offsetTop;
-    const width = cell.offsetWidth;
-    const height = cell.offsetHeight;
-    list.forEach((ghost) => {
-      const from = Number(ghost.dataset.from || 0);
-      const fromCol = from % 4;
-      const fromRow = Math.floor(from / 4);
-      const toCol = target % 4;
-      const toRow = Math.floor(target / 4);
-      ghost.style.left = `${baseLeft}px`;
-      ghost.style.top = `${baseTop}px`;
-      ghost.style.width = `${width}px`;
-      ghost.style.height = `${height}px`;
-      ghost.style.transition = 'none';
-      ghost.style.transform = `translate(${(fromCol - toCol) * stepX}px, ${(fromRow - toRow) * stepY}px)`;
-      ghosts.push(ghost);
-    });
-  });
-  const movingGhosts = ghosts.slice();
-  if (!shifted.length && !movingGhosts.length) return;
-  void boardEl.offsetHeight;   // 强制重排，让上面的初始位移先生效
-  // 双 rAF：保证"旧位置"这一帧真的提交了，再改到新位置，避免偶发直接跳到终点
-  window.requestAnimationFrame(() => {
-    window.requestAnimationFrame(() => {
-    shifted.forEach((el) => {
-      el.style.transition = 'transform 100ms ease-in-out';
-      el.style.transform = 'translate(0, 0)';
-    });
-    movingGhosts.forEach((el) => {
-      el.style.transition = 'transform 100ms ease-in-out';
-      el.style.transform = 'translate(0, 0)';
-    });
-    window.setTimeout(() => {
-      shifted.forEach((el) => {
-        el.style.transition = '';
-        el.style.transform = '';
-      });
-      /* 幽灵块**不删除**：让它停在目标格、压在合并后的方块下面（和原版一样，
-         被合并的那两块会一直留在 DOM 里，直到下一次重绘才被清掉）。
-         提前 remove 会让"两块滑进来"看起来中途消失。 */
-      movingGhosts.forEach((el) => {
-        el.style.transition = '';
-        el.style.zIndex = '0';
-      });
-    }, 150);
-    });
   });
 }
 

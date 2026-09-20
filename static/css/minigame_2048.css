@@ -262,6 +262,16 @@
 
 .mg-cell { position: relative; z-index: 1; }
 
+/* 持久方块（原版 .tile-position-x-y 的做法）：绝对定位在棋盘上，
+   left/top 变化由这条 transition 负责"滑过去"；空格保持静态占位。 */
+.mg-board > .mg-cell.filled {
+  position: absolute;
+  z-index: 2;
+  transition: left 100ms ease-in-out, top 100ms ease-in-out;
+}
+
+.mg-board > .mg-cell.mg-tile-merged { z-index: 3; }
+
 /* 合并时"滑进去"的那两块（原版会额外渲染 mergedFrom 的两块方块）。
    注意：它带着 .mg-cell 类，选择器必须比 .mg-cell 更具体，
    否则 position 被覆盖成 relative，就会以网格项的身份挤进 4×4 网格、把格子压扁。 */
