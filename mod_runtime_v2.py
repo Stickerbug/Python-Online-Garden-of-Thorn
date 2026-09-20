@@ -2785,6 +2785,10 @@ def check_v2_condition(engine, context: Dict[str, Any], cond: Any) -> bool:
         ) or "").strip()
         checker = getattr(engine, "_player_has_status_tag", None)
         return bool(callable(checker) and checker(player_id, tag, status_id=status_id))
+    if op in ("card_is_counter", "is_counter_card"):
+        card = _resolve_card(engine, context, cond.get("card", "current_card"))
+        checker = getattr(engine, "_is_counter_card", None)
+        return bool(callable(checker) and checker(card))
     if op in ("damage_type_is", "damage_type"):
         expected = str(
             eval_v2_value(engine, context, cond.get("type_name", cond.get("value", cond.get("damage_type", "physical"))))

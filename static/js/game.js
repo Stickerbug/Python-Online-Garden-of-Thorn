@@ -15632,12 +15632,16 @@ function getStatusIntroItem(statusInfo) {
     const key = normalizeStatusIntroKey(rawKey);
     const customDef = (statusInfo && statusInfo.customDef) || getCustomStatusDef(rawKey);
     if (customDef && key !== 'magic_nazar') {
+        const tags = Array.isArray(customDef.tags)
+            ? customDef.tags.map(tag => String(tag || '').trim()).filter(Boolean)
+            : [];
         return {
             key,
             label: getRegistryText(customDef, 'name', key),
             desc: getRegistryText(customDef, 'description', '由模组定义的自定义状态。'),
             color: safeRegistryColor(customDef.color, statusInfo.fg || COLORS.text_primary),
             iconKey: normalizeStatusIconKey(customDef.icon || key),
+            tags,
         };
     }
     const builtIns = {
@@ -15957,6 +15961,9 @@ function renderTermIntroItems(items) {
         <article class="term-intro-item" style="--term-color:${escapeHtml(item.color || COLORS.text_primary)}">
             <div class="term-intro-item-title">${renderInlineIconHtml(item.iconKey || '', item.label)}<span>${escapeHtml(item.label)}</span></div>
             <div class="term-intro-item-desc">${colorizeCardText(item.desc || '')}</div>
+            ${(Array.isArray(item.tags) && item.tags.length)
+                ? `<div class="term-intro-item-tags">${item.tags.map(tag => `<span class="term-intro-tag">${escapeHtml(getFlagLabel(tag) || tag)}</span>`).join('')}</div>`
+                : ''}
         </article>
     `).join('');
 }

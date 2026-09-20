@@ -9294,6 +9294,24 @@ html.blind-level-4 .card-prediction-part.magic {
   line-height: 1.45;
 }
 
+.term-intro-item-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.term-intro-tag {
+  color: var(--term-color);
+  border: 1px solid color-mix(in srgb, var(--term-color) 38%, transparent);
+  background: color-mix(in srgb, var(--term-color) 12%, transparent);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
 .term-intro-empty {
   color: var(--text-secondary);
   font-weight: 700;

@@ -596,6 +596,7 @@ CONDITION_OPS = frozenset({
     "has_status", "has_status_named", "has_tag", "card_has_tag", "card_has_flag",
     "has_status_tag", "status_has_tag",
     "has_equipment_flag", "equipment_has_flag",
+    "card_is_counter", "is_counter_card",
     "card_has_modifier", "card_has_setup_modifier",
     # 区域与目标
     "zone_exists", "card_exists", "target_selectable", "player_selectable",

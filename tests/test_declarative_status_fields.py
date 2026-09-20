@@ -460,6 +460,7 @@ def test_official_blood_debt_ignores_magic_damage():
 def test_official_unable_counter_declares_card_enter_hand():
     definition = official_statuses.engine_status_def('ocean:unable_counter')
     assert definition['events']['on_card_added_to_hand']['priority'] == 10
+    assert definition['events']['on_status_added']['priority'] == 10
 
     from cards import CARD_DEFS, CardDef
 
@@ -480,6 +481,60 @@ def test_official_unable_counter_declares_card_enter_hand():
     assert card in engine.players[0].discard
     assert engine._custom_status_value(0, 'ocean:unable_counter', 'unable_counter') == 1
     assert any('无法反制' in str(line) for line in engine.log)
+
+
+def test_official_unable_counter_sweeps_existing_hand_on_apply():
+    from cards import CardDef
+
+    card_id = '__test_unable_counter_sweep__'
+    CARD_DEFS[card_id] = CardDef(
+        id=card_id, name_en='Counter Sweep', name_cn='反制探针',
+        cost_e=0, cost_m=0, card_type='guard', count=1,
+        quality='test', description='', effect_text='', flags=set(),
+    )
+    engine = make_engine()
+    first = CardInstance(card_id)
+    second = CardInstance(card_id)
+    basic = CardInstance('Basic')
+    engine.players[0].hand = [first, basic, second]
+
+    engine._apply_status_op(
+        0, None, {'bypass_mask': True}, False,
+        'status_add_named', 0, 'ocean:unable_counter', 2,
+    )
+
+    assert first not in engine.players[0].hand
+    assert second not in engine.players[0].hand
+    assert basic in engine.players[0].hand
+    assert first in engine.players[0].discard
+    assert second in engine.players[0].discard
+    assert engine._custom_status_value(0, 'ocean:unable_counter', 'unable_counter') == 0
+    assert any('将2张反制牌置入弃牌堆' in str(line) for line in engine.log)
+
+
+def test_official_unable_counter_sweep_is_limited_by_stacks():
+    from cards import CardDef
+
+    card_id = '__test_unable_counter_limit__'
+    CARD_DEFS[card_id] = CardDef(
+        id=card_id, name_en='Counter Limit', name_cn='反制上限探针',
+        cost_e=0, cost_m=0, card_type='guard', count=1,
+        quality='test', description='', effect_text='', flags=set(),
+    )
+    engine = make_engine()
+    first = CardInstance(card_id)
+    second = CardInstance(card_id)
+    engine.players[0].hand = [first, second]
+
+    engine._apply_status_op(
+        0, None, {'bypass_mask': True}, False,
+        'status_add_named', 0, 'ocean:unable_counter', 1,
+    )
+
+    assert first not in engine.players[0].hand
+    assert second in engine.players[0].hand
+    assert engine._custom_status_value(0, 'ocean:unable_counter', 'unable_counter') == 0
+    assert any('将1张反制牌置入弃牌堆' in str(line) for line in engine.log)
 
 
 def test_official_shield_decay_condition_respects_sunflower(monkeypatch):
@@ -665,3 +720,41 @@ def test_mod_validator_accepts_status_tags():
     }
     report = validate_mod_v2(bad, source='tagdemo', allow_reserved_namespaces=True)
     assert any('.tags' in str(item) for item in report.errors)
+
+
+def test_equipment_op_seal_can_filter_by_tag():
+    from game_engine import EquipmentInstance
+
+    engine = make_engine()
+    weapon = EquipmentInstance(CardInstance('Basic'), 0)
+    weapon.card_instance.instance_flags.add('weapon')
+    armor = EquipmentInstance(CardInstance('Basic'), 0)
+    armor.card_instance.instance_flags.add('armor_tag')
+    engine.players[0].equipment = [weapon, armor]
+
+    engine._atomic_equipment_op(
+        0, None,
+        {'mode': 'seal', 'amount': 1, 'target': 'self', 'tag': 'weapon'},
+        False, None, None,
+    )
+
+    assert weapon.custom_vars.get('sewers_sealed') == 1
+    assert 'sewers_sealed' not in armor.custom_vars
+    assert not engine._equipment_runtime_active(weapon)
+    assert engine._equipment_runtime_active(armor)
+
+
+def test_equipment_op_seal_without_tag_keeps_old_behavior():
+    from game_engine import EquipmentInstance
+
+    engine = make_engine()
+    first = EquipmentInstance(CardInstance('Basic'), 0)
+    second = EquipmentInstance(CardInstance('Basic'), 0)
+    engine.players[0].equipment = [first, second]
+
+    engine._atomic_equipment_op(
+        0, None, {'mode': 'seal', 'amount': 2, 'target': 'self'}, False, None, None,
+    )
+
+    assert first.custom_vars.get('sewers_sealed') == 2
+    assert second.custom_vars.get('sewers_sealed') == 2

@@ -931,6 +931,97 @@ OFFICIAL_STATUSES: tuple = (
                     },
                 ],
             },
+            # 施加/叠层瞬间，从左到右清掉手牌里的反制牌；旧实现在
+            # ``_apply_unable_counter_to_current_hand`` 里写死。
+            "on_status_added": {
+                "priority": 10,
+                "steps": [
+                    {
+                        "op": "set_var",
+                        "name": "unable_counter_start",
+                        "value": {"op": "status_stack", "status": "ocean:unable_counter"},
+                    },
+                    {
+                        "op": "for_each",
+                        "source": {"ref": "zone_list", "zone": "hand", "target": "self"},
+                        "as": "unable_counter_card",
+                        "body": [
+                            {
+                                "op": "if_else",
+                                "condition": {
+                                    "op": "and",
+                                    "conditions": [
+                                        {
+                                            "op": "compare",
+                                            "a": {"op": "status_count", "status": "ocean:unable_counter"},
+                                            "operator": ">",
+                                            "b": 0,
+                                        },
+                                        {
+                                            "op": "card_is_counter",
+                                            "card": {"ref": "var", "name": "unable_counter_card"},
+                                        },
+                                    ],
+                                },
+                                "then": [
+                                    {
+                                        "op": "move_card",
+                                        "card": {"ref": "var", "name": "unable_counter_card"},
+                                        "zone": "discard",
+                                        "count_as_active_discard": False,
+                                        "silent": True,
+                                    },
+                                    {
+                                        "op": "status_op",
+                                        "action": "remove",
+                                        "status": "ocean:unable_counter",
+                                        "amount": 1,
+                                        "log": False,
+                                        "bypass_mask": True,
+                                    },
+                                ],
+                                "else": [],
+                            }
+                        ],
+                    },
+                    {
+                        "op": "set_var",
+                        "name": "unable_counter_discarded",
+                        "value": {
+                            "op": "floor",
+                            "value": {
+                                "op": "max",
+                                "values": [
+                                    0,
+                                    {
+                                        "op": "sub",
+                                        "values": [
+                                            {"op": "var", "name": "unable_counter_start"},
+                                            {"op": "status_stack", "status": "ocean:unable_counter"},
+                                        ],
+                                    },
+                                ],
+                            },
+                        },
+                    },
+                    {
+                        "op": "if_else",
+                        "condition": {
+                            "op": "compare",
+                            "a": {"op": "var", "name": "unable_counter_discarded"},
+                            "operator": ">",
+                            "b": 0,
+                        },
+                        "then": [
+                            {
+                                "op": "log",
+                                "message": "{source}因无法反制将{unable_counter_discarded}张反制牌置入弃牌堆",
+                            }
+                        ],
+                        "else": [],
+                    },
+                ],
+            },
         },
     },
     {

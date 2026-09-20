@@ -16342,6 +16342,16 @@ class GameEngine:
             flags.update(normalize_card_flags(getattr(target_card, 'instance_flags', set()) or set()))
             flags.difference_update(normalize_card_flags(getattr(target_card, 'disabled_flags', set()) or set()))
             return tag in flags
+        if isinstance(cond, dict) and cond.get('op') in ('card_is_counter', 'is_counter_card'):
+            target_card = self._resolve_card_ref(
+                player_id, cond.get('card', {'ref': 'current_card'}), card,
+            )
+            return bool(self._is_counter_card(target_card))
+        if isinstance(cond, dict) and cond.get('op') in ('has_status_tag', 'status_has_tag'):
+            tid = self._resolve_target(player_id, cond.get('target', 'self'))
+            tag = str(cond.get('tag', cond.get('value', '')) or '')
+            status_id = str(cond.get('status', cond.get('id', '')) or '')
+            return self._player_has_status_tag(tid, tag, status_id=status_id)
         if isinstance(cond, dict) and cond.get('op') in ('damage_type_is', 'damage_type'):
             expected = str(
                 cond.get('type_name') or cond.get('damage_type') or cond.get('value') or 'physical'
@@ -19982,15 +19992,31 @@ class GameEngine:
     def _equipment_op_seal_payload(self, player_id, card, params, log, choice, context):
         # Round 33 / 批次 AC：``equipment_op(mode:"seal")`` 的实现体（旧
         # ``seal_equipment``：给目标所有装备叠尘封层数）。
-        """Seal every piece of equipment on the target(s) by ``amount`` layers."""
+        """Seal every piece of equipment on the target(s) by ``amount`` layers.
+
+        Optional ``tag`` / ``tags`` narrows the seal to equipment carrying
+        that card tag/mark, so data can write "seal all 武器装备" without an
+        engine special case.
+        """
         amount = max(0, self._eval_int(player_id, params.get('amount', 1), card, 1))
         if amount <= 0:
             return
+        raw_tags = params.get('tags', params.get('tag', params.get('flags')))
+        if isinstance(raw_tags, (list, tuple, set)):
+            seal_tags = [str(tag).strip() for tag in raw_tags if str(tag or '').strip()]
+        else:
+            seal_tags = [str(raw_tags).strip()] if str(raw_tags or '').strip() else []
         for target_id in self._resolve_step_targets(player_id, card, params.get('target', 'target'), context):
             if not self._valid_player_id(target_id):
                 continue
             affected = 0
             for eq in list(getattr(self.players[target_id], 'equipment', []) or []):
+                if seal_tags and not any(
+                    self._card_has_flag(getattr(eq, 'card_instance', None), tag)
+                    or self._equipment_has_mark(eq, tag)
+                    for tag in seal_tags
+                ):
+                    continue
                 if self._apply_sealed_to_equipment(target_id, eq, amount) > 0:
                     affected += 1
             if affected <= 0 or params.get('silent') or log is False:
@@ -23895,6 +23921,12 @@ class GameEngine:
         runner = getattr(self, '_run_v2_status_event', None)
         if not callable(runner):
             return
+        # 每次真实增减都触发一次（不只 0↔正的边沿）；``on_apply`` / ``on_remove``
+        # 仍保持旧的边沿语义，数据按需要选。
+        if delta > 0:
+            runner(target_id, status_id, 'on_status_added', {'amount': delta})
+        elif delta < 0:
+            runner(target_id, status_id, 'on_status_removed', {'amount': -delta})
         if before <= 0 < after:
             runner(target_id, status_id, 'on_apply', {'amount': after - before})
         elif before > 0 and after <= 0:
@@ -24145,8 +24177,6 @@ class GameEngine:
 
         self._normalize_status_value(ps, status_text)
         self._note_achievement_status_peak(target_id)
-        if status_text in self._unable_counter_keys():
-            self._apply_unable_counter_to_current_hand(target_id)
         after = self._status_stack_value(target_id, status_text)
         event_after = self._status_stack_value(target_id, status_text, ignore_immunity=True)
         self._fire_status_change_events(target_id, status_text, event_before, event_after)
