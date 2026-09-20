@@ -195,8 +195,9 @@ const TILE_COUNT = 16;
 const tileEls = new Map();      // 当前格子下标 → 方块元素
 
 function ensureBoardSkeleton() {
-  const placeholders = boardEl.querySelectorAll('.mg-cell:not(.filled)');
-  if (placeholders.length === TILE_COUNT && !boardEl.querySelector('.mg-cell.filled')) return;
+  // 只判断"占位空格齐不齐"：**不能**因为棋盘上已经有方块就重建骨架，
+  // 否则每一步都会把已有方块清掉（曾经真的这么错过：只剩新生成的块）。
+  if (boardEl.querySelectorAll('.mg-cell:not(.filled)').length === TILE_COUNT) return;
   boardEl.innerHTML = '';
   for (let index = 0; index < TILE_COUNT; index += 1) {
     const cell = document.createElement('div');

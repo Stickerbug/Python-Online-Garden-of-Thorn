@@ -234,9 +234,12 @@
   overflow-clip-margin: 40px;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  padding: 12px;
+  /* 原版比例：棋盘 500×500、内边距 15px、格间距 15px（格子约 106px） */
+  gap: 15px;
+  padding: 15px;
   width: 100%;
+  max-width: 500px;
+  margin: 0 auto;
   aspect-ratio: 1 / 1;
   background: var(--g-board);
   border-radius: 6px;
@@ -335,10 +338,16 @@
    合并（pop）：**只让格子（背景+边框）弹一下**，文字层套一个反向缩放，
    这样文字的视觉大小始终不变——稀有度名字本来就占满格子，
    跟着放大 1.18 倍会越界被裁。 */
-.mg-tile-new .mg-tile-face { animation: mg-appear 200ms ease 100ms backwards; }
-.mg-tile-merged { animation: mg-pop 200ms ease 100ms; }
-.mg-tile-merged .mg-tile-face { animation: mg-pop-inverse 200ms ease 100ms; }
-.mg-no-anim .mg-tile-new .mg-tile-face,
+/* 出现：**整块**（背景+边框+文字）一起从 0 放大到 1 —— 和原版 .tile-new .tile-inner 一致。
+   只放大到 1，不会越界，所以文字跟着长出来是安全的。
+   （合并的 pop 才需要"块弹字不弹"，见下。） */
+.mg-tile-new { animation: mg-appear 200ms ease 100ms backwards; }
+/* 注意 `backwards`：合并结果在 100ms 延迟期间必须**不可见**（scale 0），
+   否则它会先以完整大小闪一下、再缩小重播 pop —— 看起来就是"两块碰在一起时闪了一下"。
+   加上 backwards 之后：两块源方块滑进来 → 到位后合并块才 pop 出来。 */
+.mg-tile-merged { animation: mg-pop 200ms ease 100ms backwards; }
+.mg-tile-merged .mg-tile-face { animation: mg-pop-inverse 200ms ease 100ms backwards; }
+.mg-no-anim .mg-tile-new,
 .mg-no-anim .mg-tile-merged,
 .mg-no-anim .mg-tile-merged .mg-tile-face { animation: none; }
 
@@ -561,7 +570,8 @@
 
 @media (max-width: 520px) {
   .mg-title { font-size: 48px; }
-  .mg-board { gap: 9px; padding: 9px; }
+  /* 原版窄屏：格子约 57.5px、间距/内边距 10px */
+  .mg-board { gap: 10px; padding: 10px; }
   .mg-score-box { min-width: 78px; padding: 6px 8px 4px; }
   .mg-score-value { font-size: 20px; }
   .mg-overlay-card h2 { font-size: 34px; }
@@ -569,7 +579,7 @@
 
 @media (max-width: 380px) {
   .mg-frame { padding: 14px 8px 32px; }
-  .mg-board { gap: 7px; padding: 7px; }
+  .mg-board { gap: 8px; padding: 8px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
