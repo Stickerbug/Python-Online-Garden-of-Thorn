@@ -10021,7 +10021,8 @@ def _resolve_deck_operation(state, payload, seed, events):
             if card.get('def_id') != 'amulet':
                 _fail('INVALID_ENCHANT_TARGET', '致臻化境只能选择护身符')
             card['def_id'] = 'enchanted_amulet'
-            card.pop('modifiers', None)
+            # 反馈 #183：转化是「同一张牌换定义」，牌上的修饰（例如 [钟爱]、附魔）
+            # 必须保留——之前这里把 modifiers 整段丢掉，钟爱标记会凭空消失。
             events.append({
                 'type': 'card_transformed',
                 'card_instance_id': card['instance_id'],

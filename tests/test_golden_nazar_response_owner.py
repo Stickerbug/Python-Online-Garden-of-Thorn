@@ -13,6 +13,15 @@ def _equip(engine, owner_id, def_id='Disc', *, armor=0):
 
 
 class GoldenNazarResponseOwnerTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # 本文件用旧内置牌表构造 ``CardInstance('Sewage')`` / ``'GoldenNazar'``。
+        # 线上启动会先把官方模组合并进 CARD_DEFS（污水带 ``destroys_equipment`` 等
+        # 数据 flag 才成立），这里补上同样的前置，测试就不再依赖整套用例的执行顺序。
+        from mod_loader import merge_mod_cards_to_card_defs
+
+        merge_mod_cards_to_card_defs()
+
     def test_one_vs_one_response_adds_armor_before_targeted_destruction(self):
         engine = GameEngine()
         targeted = _equip(engine, 1)

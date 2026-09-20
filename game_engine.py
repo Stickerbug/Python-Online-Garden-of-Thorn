@@ -4051,7 +4051,7 @@ class GameEngine:
             ps._magic_gain_callback = self._jurassic_redirect_magic_gain
 
     def _refresh_hand_limit_bonuses(self):
-        from engine_runtime_support import card_has_flag
+        from engine_runtime_support import card_has_flag, declared_card_value
         for ps in getattr(self, 'players', []):
             ps.extra_hand_limit_bonus = 0
             ps.external_zero_e_ignore_hand_limit = False
@@ -4069,7 +4069,14 @@ class GameEngine:
                     if card_has_flag(getattr(eq, 'card_instance', None), 'zero_e_ignore_hand_limit'):
                         self.players[target_id].external_zero_e_ignore_hand_limit = True
                 if 0 <= target_id < len(self.players) and card_has_flag(getattr(eq, 'card_instance', None), 'hand_limit_penalty'):
-                    self.players[target_id].extra_hand_limit_bonus -= 1
+                    # 反馈 #181：惩罚层数由牌面数据决定（布加迪是 -2），旧牌只有 flag 时仍按 1。
+                    penalty = 1
+                    try:
+                        declared = declared_card_value(getattr(eq, 'card_instance', None), 'hand_limit_penalty', 1)
+                        penalty = max(1, int(declared or 1))
+                    except (TypeError, ValueError):
+                        penalty = 1
+                    self.players[target_id].extra_hand_limit_bonus -= penalty
         for ps in getattr(self, 'players', []):
             ps.enforce_hand_limit()
 
@@ -21111,7 +21118,9 @@ class GameEngine:
                 self._bio_stem_cell_after_health_loss(tid, health_lost)
                 self._note_achievement_health(tid)
                 self._record_damage(tid, amount, source_id)
-                self.log_msg(log or f"{self.pn(tid)}受到{amount}点{source}伤害（H={ps.health}）")
+                # 反馈 #178：``health_op(mode:"lose")`` 是「失去生命」——不受护甲/减伤影响，
+                # 战报也不该写成「受到…伤害」，否则玩家会以为它是一段无视护甲的伤害。
+                self.log_msg(log or f"{self.pn(tid)}因{source}失去{amount}H（H={ps.health}）")
                 self._check_yggdrasil(tid)
             self._check_game_over()
             return

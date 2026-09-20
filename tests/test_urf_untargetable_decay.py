@@ -8,7 +8,7 @@
 * URF：``game_engine_urf.py`` 的 ``_apply_turn_start_effects`` 是整段覆写，修复前
   只有铲子分支（``game_engine_urf.py:433-436``）会碰 ``untargetable``，于是黄瓜
   （``ocean:cucumber``：``events.on_response.resolution.suppress_responder_untargetable``
-  + ``after_resolution`` 的 ``player_status_layers(status=untargetable, amount=1)``）
+  + ``after_resolution`` 的 ``status_op(action:add, status:untargetable, amount:1)``）
   给出的一层不可选中会永久留在无限火力对局里。
 """
 
@@ -62,7 +62,7 @@ def setup_module():
                 "resolution": {
                     "suppress_responder_untargetable": True,
                     "after_resolution": [
-                        {"op": "player_status_layers", "amount": 1, "status": "untargetable"},
+                        {"op": "status_op", "action": "add", "status": "untargetable", "amount": 1},
                     ],
                 },
             },

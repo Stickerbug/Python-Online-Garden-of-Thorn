@@ -19,13 +19,15 @@ class InvincibleEffectTests(unittest.TestCase):
 
         self.assertTrue(player.invincible)
         self.assertEqual(engine._get_player_property_value(0, 'invincible'), 1)
-        self.assertEqual(engine._get_status_count(0, 'invincible'), 0)
+        # 批次 DD（反馈 #177）：无敌并进 status_op 后，它也作为状态层读得到 1。
+        self.assertEqual(engine._get_status_count(0, 'invincible'), 1)
         self.assertTrue(engine._has_fatal_prevention(0))
         self.assertEqual(engine._deal_direct_damage(0, 20, '测试'), 0)
         self.assertEqual(engine.deal_attack_damage(0, 20, attacker_id=1), 0)
         self.assertEqual(player.health, 100)
 
-    def test_clear_named_status_does_not_clear_invincible(self):
+    def test_clear_named_status_clears_invincible(self):
+        """批次 DD（反馈 #177）：``status_op(remove, invincible)`` 会连开关一起复位。"""
         engine = GameEngine()
         self._grant_status_immunity(engine, 0)
         engine._set_invincible_until_next_own_turn_end(0)
@@ -39,7 +41,8 @@ class InvincibleEffectTests(unittest.TestCase):
             None, {},
         )
 
-        self.assertTrue(engine.players[0].invincible)
+        self.assertFalse(engine.players[0].invincible)
+        self.assertEqual(engine._get_status_count(0, 'invincible'), 0)
 
     def test_2v2_invincible_ignores_status_immunity(self):
         engine = GameEngine2v2()
