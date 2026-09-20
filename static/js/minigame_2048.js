@@ -310,8 +310,15 @@ function move(direction) {
   state.lastSpawn = result.spawn ? result.spawn.index : null;
   state.lastMerges = [];
   if (result.gained > 0) {
-    scoreEl.classList.add('mg-score-bump');
-    window.setTimeout(() => scoreEl.classList.remove('mg-score-bump'), 180);
+    // 官方 2048 的 "+N" 反馈：飘在分数格上，不占布局。
+    const box = scoreEl.parentElement;
+    if (box) {
+      const float = document.createElement('span');
+      float.className = 'mg-score-float';
+      float.textContent = `+${result.gained}`;
+      box.appendChild(float);
+      window.setTimeout(() => float.remove(), 750);
+    }
   }
   saveLocal();
   renderBoard(animations);
@@ -519,7 +526,7 @@ async function openLeaderboard(windowMode = '14d') {
         <thead><tr><th>名次</th><th>账号</th><th>总分</th><th>最高方块</th><th>验证时间</th></tr></thead>
         <tbody>${entries.map((item) => `
           <tr${data.me && item.user_id === data.me.user_id ? ' class="me"' : ''}>
-            <td>${item.rank}</td>
+            <td class="mg-rank-no">${item.rank}</td>
             <td>${escapeHtml(item.username || '')}</td>
             <td>${item.score}</td>
             <td>${item.max_rarity ? `${escapeHtml(item.max_rarity)}（${item.max_tile}）` : item.max_tile}</td>

@@ -1,205 +1,397 @@
-/* 休闲花园 · 2048 的隔离样式：只作用于 .mg-* 与本站页面，
-   不覆盖主模式的全局颜色变量；明暗切换只改底座/空格，方块色板恒定。 */
+/* 休闲花园 · 2048
 
-:root {
-  --mg-bg: #eef2f7;
-  --mg-surface: #ffffff;
-  --mg-text: #172033;
-  --mg-muted: #657386;
-  --mg-line: #d8e0ea;
-  --mg-accent: #2563eb;
+   结构参考官方 2048（play2048.co / Gabriele Cirulli 原版）：
+   标题 + 两个分数格 → 一个新游戏按钮 → 棋盘 → 折叠的「玩法说明」→ 结束/达成浮层。
+   皮肤不另起一套：字体、按钮、卡片、边框、圆角、阴影全部用荆棘花园 `style.css`
+   的设计令牌（`--font-main` / `--bg-card` / `--text-*` / `--border-*` / `.btn`），
+   所以和故事模式、训练场看起来是同一套 UI；明暗主题自动跟随 `[data-theme]`。
+
+   棋盘底座与空格用本站点固定色（亮 #CCD5CF / #E4E9E2，暗 #26322D / #34443B），
+   方块用 17 档稀有度色板（行内变量，来自服务端配置），两者都不受主题影响。 */
+
+.mg-page {
   --mg-board-bg: #CCD5CF;
   --mg-cell-bg: #E4E9E2;
-  --mg-danger: #cf3f3f;
-  --mg-ok: #138a5b;
-}
-
-[data-theme="dark"] {
-  --mg-bg: #131a17;
-  --mg-surface: #1c2521;
-  --mg-text: #e7efe9;
-  --mg-muted: #9db0a6;
-  --mg-line: #2c3a33;
-  --mg-accent: #6ea8fe;
-  --mg-board-bg: #26322D;
-  --mg-cell-bg: #34443B;
-  --mg-danger: #ff8a8a;
-  --mg-ok: #63d3a0;
-}
-
-* { box-sizing: border-box; }
-
-.mg-body {
   margin: 0;
   min-height: 100vh;
-  background: var(--mg-bg);
-  color: var(--mg-text);
-  font-family: inherit;
-  overflow-x: hidden;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-main);
+  -webkit-text-size-adjust: 100%;
 }
 
-.mg-shell {
-  max-width: 760px;
+[data-theme="dark"] .mg-page {
+  --mg-board-bg: #26322D;
+  --mg-cell-bg: #34443B;
+}
+
+.mg-frame {
+  width: 100%;
+  max-width: 540px;
   margin: 0 auto;
-  padding: 16px 14px 32px;
+  padding: 20px 16px 36px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
-.mg-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
-.mg-title { display: flex; align-items: baseline; gap: 10px; }
-.mg-title h1 { margin: 0; font-size: 26px; letter-spacing: .04em; }
-.mg-back { color: var(--mg-muted); text-decoration: none; font-size: 13px; }
-.mg-back:hover { color: var(--mg-accent); }
-.mg-badge {
-  font-size: 11px; color: var(--mg-accent);
-  border: 1px solid var(--mg-accent); border-radius: 999px; padding: 2px 8px;
+/* ---------------- 顶部：标题 + 分数格（官方 2048 的两格） ---------------- */
+
+.mg-head {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
 
-.mg-scores { display: flex; gap: 8px; flex-wrap: wrap; }
+.mg-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mg-back {
+  color: var(--text-muted);
+  font-size: 12px;
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.mg-back:hover { color: var(--bloom); }
+
+.mg-tag { font-size: 11px; color: var(--text-muted); }
+
+.mg-title {
+  margin: 0;
+  font-size: clamp(26px, 8vw, 36px);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.mg-scores { display: flex; gap: 8px; }
+
 .mg-score-box {
-  min-width: 96px; padding: 6px 10px; border-radius: 10px;
-  background: var(--mg-surface); border: 1px solid var(--mg-line);
-  display: flex; flex-direction: column; gap: 2px;
+  position: relative;
+  min-width: 84px;
+  padding: 6px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  overflow: visible;
 }
-.mg-score-box span { font-size: 11px; color: var(--mg-muted); }
-.mg-score-box strong { font-size: 18px; font-variant-numeric: tabular-nums; }
-.mg-score-bump { animation: mg-bump 180ms ease-out; }
-.mg-no-anim .mg-score-bump { animation: none; }
-@keyframes mg-bump { from { transform: scale(1.18); color: var(--mg-accent); } to { transform: scale(1); } }
 
-.mg-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.mg-btn {
-  border: 1px solid var(--mg-line); background: var(--mg-surface); color: var(--mg-text);
-  border-radius: 8px; padding: 7px 12px; font-size: 13px; cursor: pointer;
+.mg-score-label {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
 }
-.mg-btn:hover { border-color: var(--mg-accent); color: var(--mg-accent); }
-.mg-btn.primary { background: var(--mg-accent); border-color: var(--mg-accent); color: #fff; }
-.mg-btn.small { padding: 4px 9px; font-size: 12px; }
-.mg-btn.active { background: var(--mg-accent); border-color: var(--mg-accent); color: #fff; }
-.mg-switch { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; color: var(--mg-muted); }
-.mg-sync { font-size: 12px; color: var(--mg-muted); }
-.mg-sync[data-state="ok"] { color: var(--mg-ok); }
-.mg-sync[data-state="offline"], .mg-sync[data-state="pending"] { color: #a96800; }
-.mg-sync[data-state="denied"], .mg-sync[data-state="conflict"], .mg-sync[data-state="error"] { color: var(--mg-danger); }
 
-.mg-board-wrap { position: relative; }
+.mg-score-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+/* 官方 2048 的 "+N" 浮动加分 */
+.mg-score-float {
+  position: absolute;
+  top: -6px;
+  right: 8px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--bloom);
+  pointer-events: none;
+  animation: mg-float 700ms ease-out forwards;
+}
+
+.mg-no-anim .mg-score-float { display: none; }
+
+@keyframes mg-float {
+  0% { opacity: 0; transform: translateY(6px); }
+  25% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-26px); }
+}
+
+.mg-subline {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.mg-subline strong { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.mg-sep { opacity: 0.5; }
+
+.mg-sync[data-state="ok"] { color: var(--bloom); }
+.mg-sync[data-state="offline"], .mg-sync[data-state="pending"] { color: var(--elixir); }
+.mg-sync[data-state="denied"],
+.mg-sync[data-state="conflict"],
+.mg-sync[data-state="error"] { color: var(--thorn); }
+
+/* ---------------- 操作区：只留两个按钮（官方就一个「New Game」） ---------------- */
+
+.mg-actions { display: flex; gap: 8px; }
+.mg-actions .btn { flex: 1 1 0; padding: 10px 14px; font-size: 14px; }
 
 .mg-invite {
   display: flex;
-  gap: 8px;
   align-items: center;
-  flex-wrap: wrap;
-  margin: 0 0 8px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid var(--mg-accent);
-  background: color-mix(in srgb, var(--mg-accent) 12%, var(--mg-surface));
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bloom-bg);
+  border: 1px solid var(--bloom);
+  border-radius: var(--radius-md);
   font-size: 13px;
-  font-weight: 600;
 }
+
+.mg-invite-actions { display: flex; gap: 6px; }
+
+/* ---------------- 棋盘 ---------------- */
+
+.mg-board-wrap { position: relative; }
+
 .mg-board {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  padding: 8px;
-  border-radius: 12px;
-  background: var(--mg-board-bg);
-  aspect-ratio: 1 / 1;
+  gap: 10px;
+  padding: 10px;
   width: 100%;
-  max-width: 520px;
-  margin: 0 auto;
+  aspect-ratio: 1 / 1;
+  background: var(--mg-board-bg);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
   touch-action: pan-y;
   outline: none;
 }
-.mg-board:focus-visible { box-shadow: 0 0 0 3px var(--mg-accent); }
+
+.mg-board:focus-visible { box-shadow: 0 0 0 3px var(--bloom-glow); }
 
 .mg-cell {
-  border-radius: 8px;
-  background: var(--mg-cell-bg);
-  border: 2px solid transparent;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 1px;
   padding: 4px;
-  overflow: hidden;
   min-width: 0;
+  overflow: hidden;
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--mg-cell-bg);
 }
+
 .mg-cell.filled {
   background: var(--mg-tile-bg);
   border-color: var(--mg-tile-border);
   color: var(--mg-tile-fg);
 }
+
 .mg-tile-name {
-  font-size: clamp(9px, 2.6vw, 15px);
-  font-weight: 800;
+  /* 手机 360px 宽约 12px：Legendary / Apotheotic 这类长名完整可读，
+     不裁切、不省略号（实测见 .codex-tmp/round111/mobile_check.mjs）。 */
+  font-size: clamp(11px, 3.4vw, 15px);
+  font-weight: 700;
   line-height: 1.05;
   letter-spacing: -0.01em;
   text-align: center;
-  word-break: break-word;
   overflow-wrap: anywhere;
   max-width: 100%;
 }
+
 .mg-tile-value {
-  font-size: clamp(8px, 2.2vw, 13px);
+  font-size: clamp(9px, 2.6vw, 13px);
   font-variant-numeric: tabular-nums;
-  opacity: .85;
+  opacity: 0.85;
 }
+
 .mg-tile-new { animation: mg-appear 140ms ease-out; }
 .mg-tile-merged { animation: mg-merge 160ms ease-out; }
-.mg-no-anim .mg-tile-new, .mg-no-anim .mg-tile-merged { animation: none; }
-@keyframes mg-appear { from { transform: scale(.75); opacity: .4; } to { transform: scale(1); opacity: 1; } }
-@keyframes mg-merge { from { transform: scale(1.15); } to { transform: scale(1); } }
+.mg-no-anim .mg-tile-new,
+.mg-no-anim .mg-tile-merged { animation: none; }
+
+@keyframes mg-appear {
+  from { transform: scale(0.75); opacity: 0.4; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes mg-merge {
+  from { transform: scale(1.14); }
+  to { transform: scale(1); }
+}
+
+/* ---------------- 结束 / 达成浮层（对应官方 Try again / Keep going） ---------------- */
 
 .mg-overlay {
-  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  background: color-mix(in srgb, var(--mg-bg) 82%, transparent);
-  border-radius: 12px;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: color-mix(in srgb, var(--mg-board-bg) 78%, transparent);
+  border-radius: var(--radius-lg);
 }
+
 .mg-overlay-card {
-  background: var(--mg-surface); border: 1px solid var(--mg-line); border-radius: 12px;
-  padding: 16px; max-width: 320px; text-align: center; box-shadow: 0 12px 32px rgba(0,0,0,.12);
+  width: 100%;
+  max-width: 300px;
+  padding: 18px;
+  text-align: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
 }
-.mg-overlay-card h2 { margin: 0 0 6px; font-size: 18px; }
-.mg-overlay-card p { margin: 0 0 12px; font-size: 13px; color: var(--mg-muted); }
+
+.mg-overlay-card h2 { margin: 0 0 6px; font-size: 20px; }
+.mg-overlay-card p { margin: 0 0 14px; font-size: 13px; color: var(--text-secondary); }
 .mg-overlay-actions { display: flex; gap: 8px; justify-content: center; }
 
-.mg-help { display: flex; flex-direction: column; gap: 8px; }
-.mg-hint { margin: 0; font-size: 12.5px; color: var(--mg-muted); line-height: 1.6; }
-.mg-pool { color: var(--mg-text); }
-.mg-legend summary { cursor: pointer; font-size: 13px; font-weight: 700; }
-.mg-legend-grid { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
-.mg-legend-item {
-  display: inline-flex; align-items: center; gap: 6px;
-  background: var(--mg-tile-bg); border: 2px solid var(--mg-tile-border); color: var(--mg-tile-fg);
-  border-radius: 7px; padding: 4px 8px; font-size: 12px; font-weight: 700;
+/* ---------------- 折叠面板：玩法说明 / 合成顺序 / 设置 ---------------- */
+
+.mg-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
-.mg-legend-item b { font-variant-numeric: tabular-nums; opacity: .9; }
+
+.mg-panel > summary {
+  padding: 12px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  list-style: none;
+}
+
+.mg-panel > summary::-webkit-details-marker { display: none; }
+.mg-panel > summary::after { content: '▾'; float: right; color: var(--text-muted); }
+.mg-panel[open] > summary::after { content: '▴'; }
+
+.mg-panel-body {
+  padding: 0 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mg-hint {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+}
+
+.mg-legend-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.mg-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 2px solid var(--mg-tile-border);
+  border-radius: var(--radius-sm);
+  background: var(--mg-tile-bg);
+  color: var(--mg-tile-fg);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.mg-legend-item b { font-variant-numeric: tabular-nums; opacity: 0.9; }
+
+.mg-settings { gap: 8px; }
+
+.mg-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.mg-switch input { accent-color: var(--bloom); width: 15px; height: 15px; }
+
+/* ---------------- 排行榜（榜单样式参考竞技向站点：名次 / 账号 / 分数 / 最高档 / 时间） ---------------- */
 
 .mg-modal { position: fixed; inset: 0; z-index: 60; }
-.mg-modal-backdrop { position: absolute; inset: 0; background: rgba(9, 14, 12, .5); }
+.mg-modal-backdrop { position: absolute; inset: 0; background: var(--bg-overlay); }
+
 .mg-modal-panel {
-  position: relative; max-width: 720px; margin: 6vh auto 0; background: var(--mg-surface);
-  border: 1px solid var(--mg-line); border-radius: 12px; overflow: hidden;
-  max-height: 84vh; display: flex; flex-direction: column;
+  position: relative;
+  width: min(680px, calc(100% - 24px));
+  max-height: 84vh;
+  margin: 6vh auto 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  color: var(--text-primary);
+  font-family: var(--font-main);
 }
-.mg-modal-head { padding: 12px; border-bottom: 1px solid var(--mg-line); display: flex; flex-direction: column; gap: 8px; }
+
+.mg-modal-head {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .mg-modal-head strong { font-size: 15px; }
 .mg-modal-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
-.mg-modal-body { padding: 12px; overflow: auto; }
-.mg-rank-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.mg-rank-table th, .mg-rank-table td { padding: 6px 8px; border-bottom: 1px solid var(--mg-line); text-align: left; }
-.mg-rank-table tr.me { background: color-mix(in srgb, var(--mg-accent) 12%, transparent); font-weight: 700; }
+.mg-modal-body { padding: 12px 14px; overflow: auto; }
 
-@media (max-width: 480px) {
-  .mg-score-box { min-width: 82px; }
-  .mg-title h1 { font-size: 22px; }
-  .mg-board { gap: 6px; padding: 6px; }
+.mg-rank-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+
+.mg-rank-table th {
+  text-align: left;
+  padding: 6px 8px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.mg-rank-table td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--border-light);
+  color: var(--text-secondary);
+}
+
+.mg-rank-table tr.me td {
+  background: var(--bloom-bg);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.mg-rank-table .mg-rank-no { font-weight: 700; color: var(--text-primary); }
+
+@media (max-width: 420px) {
+  .mg-frame { padding: 14px 10px 28px; }
+  .mg-board { gap: 7px; padding: 7px; }
+  .mg-score-box { min-width: 74px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mg-score-bump, .mg-tile-new, .mg-tile-merged { animation: none !important; }
+  .mg-score-float, .mg-tile-new, .mg-tile-merged { animation: none !important; }
 }

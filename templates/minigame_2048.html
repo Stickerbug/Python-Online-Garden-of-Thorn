@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <title>2048 · 休闲花园</title>
   <link rel="icon" href="/static/assets/favicon.ico">
+  <link rel="stylesheet" href="/static/css/style.css?v={{ static_version|default('dev')|urlencode }}">
   <link rel="stylesheet" href="/static/css/minigame_2048.css?v={{ static_version|default('dev')|urlencode }}">
   <script nonce="{{ csp_nonce }}">
   (() => {
@@ -13,85 +14,106 @@
     };
     const theme = read('gtn_theme') === 'dark' || read('gtn_beta_theme') === 'dark' ? 'dark' : 'light';
     document.documentElement.setAttribute('data-theme', theme);
+    // 这一页不加载 game.js，字体就绪后自己把 --font-main 切到 Kreadon（与游戏其他地方一致）。
+    const enableFont = () => document.documentElement.classList.add('fonts-loaded-main');
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(enableFont).catch(enableFont);
+      window.setTimeout(enableFont, 1500);
+    } else {
+      enableFont();
+    }
   })();
   </script>
 </head>
-<body class="mg-body">
-<main class="mg-shell">
+<body class="mg-page">
+<main class="mg-frame">
   <header class="mg-head">
-    <div class="mg-title">
-      <a class="mg-back" href="/" title="返回大厅">← 大厅</a>
-      <h1>2048</h1>
-      <span class="mg-badge">休闲花园 · 内测</span>
+    <div class="mg-head-row">
+      <a class="mg-back" href="/" title="返回大厅">← 返回大厅</a>
+      <span class="mg-tag">休闲花园 · 内测</span>
     </div>
-    <div class="mg-scores">
-      <div class="mg-score-box">
-        <span>分数</span>
-        <strong id="mg-score">0</strong>
-      </div>
-      <div class="mg-score-box">
-        <span>最高纪录（本机）</span>
-        <strong id="mg-best">0</strong>
-      </div>
-      <div class="mg-score-box mg-score-box-server">
-        <span>已验证上榜分</span>
-        <strong id="mg-verified">0</strong>
+    <div class="mg-head-row">
+      <h1 class="mg-title">2048</h1>
+      <div class="mg-scores">
+        <div class="mg-score-box">
+          <span class="mg-score-label">分数</span>
+          <strong id="mg-score" class="mg-score-value">0</strong>
+        </div>
+        <div class="mg-score-box">
+          <span class="mg-score-label">最高纪录</span>
+          <strong id="mg-best" class="mg-score-value">0</strong>
+        </div>
       </div>
     </div>
+    <p class="mg-subline">
+      已验证上榜分 <strong id="mg-verified">0</strong>
+      <span class="mg-sep">·</span>
+      <span id="mg-sync" class="mg-sync" role="status" aria-live="polite">正在读取存档…</span>
+    </p>
   </header>
 
-  <section class="mg-toolbar">
-    <button id="mg-new" class="mg-btn" type="button">重新开始</button>
-    <button id="mg-rank" class="mg-btn" type="button">排行榜</button>
-    <label class="mg-switch" title="方块上同时显示数值">
-      <input type="checkbox" id="mg-show-numbers">
-      <span>显示对应数字</span>
-    </label>
-    <label class="mg-switch" title="开启后其他人无法在服务器侧邀请你">
-      <input type="checkbox" id="mg-decline-invites">
-      <span>拒绝对局邀请</span>
-    </label>
-    <label class="mg-switch" title="关闭移动/合并动画">
-      <input type="checkbox" id="mg-animations" checked>
-      <span>动画</span>
-    </label>
-    <span id="mg-sync" class="mg-sync" role="status" aria-live="polite">正在读取存档…</span>
-  </section>
+  <div class="mg-actions">
+    <button id="mg-new" class="btn btn-primary" type="button">新游戏</button>
+    <button id="mg-rank" class="btn btn-secondary" type="button">排行榜</button>
+  </div>
+
+  <div id="mg-invite" class="mg-invite" hidden>
+    <span id="mg-invite-text">收到对局邀请</span>
+    <span class="mg-invite-actions">
+      <button id="mg-invite-accept" class="btn btn-primary btn-small" type="button">接受</button>
+      <button id="mg-invite-decline" class="btn btn-secondary btn-small" type="button">拒绝</button>
+    </span>
+  </div>
 
   <section class="mg-board-wrap">
-    <div id="mg-invite" class="mg-invite" hidden>
-      <span id="mg-invite-text">收到对局邀请</span>
-      <button id="mg-invite-accept" class="mg-btn primary small" type="button">接受</button>
-      <button id="mg-invite-decline" class="mg-btn small" type="button">拒绝</button>
-    </div>
     <div id="mg-board" class="mg-board" role="grid" aria-label="2048 棋盘（方向键 / WASD / 触摸滑动）" tabindex="0"></div>
     <div id="mg-overlay" class="mg-overlay" hidden>
       <div class="mg-overlay-card">
         <h2 id="mg-overlay-title">游戏结束</h2>
         <p id="mg-overlay-text">没有空格也没有可以合并的相邻方块了。</p>
         <div class="mg-overlay-actions">
-          <button id="mg-overlay-primary" class="mg-btn primary" type="button">再来一局</button>
-          <button id="mg-overlay-secondary" class="mg-btn" type="button" hidden>继续游戏</button>
+          <button id="mg-overlay-primary" class="btn btn-primary" type="button">再来一局</button>
+          <button id="mg-overlay-secondary" class="btn btn-secondary" type="button" hidden>继续游戏</button>
         </div>
       </div>
     </div>
   </section>
 
-  <section class="mg-help">
-    <p class="mg-hint">
-      方向键 / WASD / 触摸滑动移动方块。同值方块相撞会合并，分数增加新方块的数值；
-      只有棋盘真的变了才会生成新方块。成绩**自动同步**，不需要手动提交。
-    </p>
-    <details class="mg-legend" open>
-      <summary>合成顺序与色板（17 档）</summary>
+  <details class="mg-panel">
+    <summary>玩法说明与合成顺序</summary>
+    <div class="mg-panel-body">
+      <p class="mg-hint">
+        方向键 / WASD / 触摸滑动移动方块。同值方块相撞会合并，分数增加新方块的数值；
+        只有棋盘真的变了才会生成新方块。成绩自动同步，不需要手动提交。
+      </p>
       <div id="mg-legend-grid" class="mg-legend-grid"></div>
-      <p class="mg-hint">稀有度名称是这个小游戏的固定顺序，不代表其他作品里的等级关系。超出色表的数值按数字显示，不影响合并规则。</p>
-    </details>
-    <p class="mg-hint mg-pool">
-      每周一 00:00（UTC+8）按最近 {{ minigame_window_days }} 天已验证成绩结算：冠军总奖池 {{ champion_pool }} 荆露，
-      至少 {{ champion_min_accounts }} 个有效账号才发放；并列冠军平分奖池。
-    </p>
-  </section>
+      <p class="mg-hint">
+        稀有度名称是这个小游戏的固定顺序，不代表其他作品里的等级关系；超出色表的数值按数字显示，不影响合并规则。
+      </p>
+      <p class="mg-hint">
+        每周一 00:00（UTC+8）按最近 {{ minigame_window_days }} 天已验证成绩结算：冠军总奖池 {{ champion_pool }} 荆露，
+        至少 {{ champion_min_accounts }} 个有效账号才发放，并列冠军平分奖池。
+      </p>
+    </div>
+  </details>
+
+  <details class="mg-panel">
+    <summary>设置</summary>
+    <div class="mg-panel-body mg-settings">
+      <label class="mg-switch">
+        <input type="checkbox" id="mg-show-numbers">
+        <span>在方块上显示数值</span>
+      </label>
+      <label class="mg-switch">
+        <input type="checkbox" id="mg-animations" checked>
+        <span>移动与合并动画</span>
+      </label>
+      <label class="mg-switch">
+        <input type="checkbox" id="mg-decline-invites">
+        <span>拒绝对局邀请（仍显示在线）</span>
+      </label>
+    </div>
+  </details>
 </main>
 
 <div id="mg-rank-modal" class="mg-modal" hidden>
