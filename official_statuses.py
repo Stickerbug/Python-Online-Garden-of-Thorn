@@ -436,6 +436,15 @@ OFFICIAL_STATUSES: tuple = (
         "stacking": "stack",
         "visible": True,
         "stack_keys": ["jungle:shield", "shield"],
+        # 自己回合开始半减；带 ``shield_decay_immune``（向日葵）的装备时跳过。
+        "decay": {
+            "timing": "turn_start",
+            "mode": "half",
+            "condition": {
+                "op": "not",
+                "condition": {"op": "has_equipment_flag", "flag": "shield_decay_immune"},
+            },
+        },
         # 减甲/拿扎尔之后的伤害在此被护盾抵扣；旧实现在
         # ``_apply_universal_damage_shields`` 里写死。
         "events": {

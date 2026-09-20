@@ -2396,11 +2396,7 @@ class GameEngine2v2(GameEngine):
                 self._sewers_grow_toilet_paper_power(target_id)
                 self._garden_magic_cutter_after_hit(attacker_id, target_id, dmg)
             self._run_v2_after_damage_hooks(damage_context, dmg)
-            if dmg > 0 and not immune:
-                root_layers = self._custom_status_value(target_id, 'jungle:root', 'jungle:root_status', 'root_status')
-                if root_layers > 0:
-                    self._set_custom_status_alias_group(target_id, 'jungle:root_status', ('jungle:root', 'jungle:root_status', 'root_status'), root_layers - 1)
-                    self._consume_jungle_root_layer_from_equipment(target_id)
+            # 树根扣装备层现在由 Root 卡的 ``on_damage_taken`` 装备事件执行。
             if dmg > 0 and ps.toxic > 0 and not immune:
                 from engine_runtime_support import effective_poison_coating
                 ps.poison += effective_poison_coating(self, target_id)

@@ -11,8 +11,10 @@
 
 import pytest
 
+from pathlib import Path
+
 import official_statuses
-from cards import CardInstance
+from cards import CARD_DEFS, CardInstance
 from game_engine import ELIXIR_RECOVERY, GameEngine
 from game_engine_2v2 import GameEngine2v2
 from game_engine_urf import GameEngineInfiniteFire
@@ -478,3 +480,87 @@ def test_official_unable_counter_declares_card_enter_hand():
     assert card in engine.players[0].discard
     assert engine._custom_status_value(0, 'ocean:unable_counter', 'unable_counter') == 1
     assert any('无法反制' in str(line) for line in engine.log)
+
+
+def test_official_shield_decay_condition_respects_sunflower(monkeypatch):
+    definition = official_statuses.engine_status_def('jungle:shield')
+    assert definition['decay']['condition']
+
+    engine = make_engine()
+    engine.players[0].custom_statuses['jungle:shield'] = 9
+    monkeypatch.setattr(
+        engine, '_has_flag_equipment',
+        lambda player_id, flag: flag == 'shield_decay_immune',
+    )
+    engine._apply_declared_status_decay(0, 'turn_start')
+    assert engine._custom_status_value(0, 'jungle:shield', 'shield') == 9
+
+    monkeypatch.setattr(engine, '_has_flag_equipment', lambda player_id, flag: False)
+    engine._apply_declared_status_decay(0, 'turn_start')
+    assert engine._custom_status_value(0, 'jungle:shield', 'shield') == 4
+
+
+def _with_jungle_root():
+    from mod_loader import load_mod
+
+    package = Path(__file__).resolve().parents[1] / 'mods' / 'Jungle Cards Addition.gtnmod'
+    mod = load_mod(str(package))
+    cards = {card.id: card for card in mod.cards}
+    previous = CARD_DEFS.get('Root')
+    CARD_DEFS['Root'] = cards['Root'].to_card_def()
+    return previous
+
+
+def _equip_jungle_root(engine, target_id=1):
+    card = CardInstance('Root')
+    engine.current_player = 0
+    engine.players[0].elixir = 50
+    engine.players[0].hand = [card]
+    result = engine.play_card(
+        0, card.instance_id,
+        {'target_player': target_id, 'target_player_id': target_id, 'target_id': target_id},
+    )
+    assert result.get('success'), result
+    equipment = engine.players[0].equipment[-1]
+    equipment.custom_vars['jungle_root_layers'] = 2
+    engine.players[target_id].custom_statuses['jungle:root_status'] = 2
+    return equipment
+
+
+def test_official_root_damage_taken_decrements_bound_equipment():
+    previous = _with_jungle_root()
+    try:
+        engine = make_engine()
+        equipment = _equip_jungle_root(engine)
+
+        dealt = engine.deal_attack_damage(1, 5, attacker_id=0)
+
+        assert dealt == 3  # root armor 2 applied before the layer is consumed
+        assert equipment.custom_vars.get('jungle_root_layers') == 1
+        assert engine.players[1].custom_statuses.get('jungle:root_status') == 1
+    finally:
+        if previous is None:
+            CARD_DEFS.pop('Root', None)
+        else:
+            CARD_DEFS['Root'] = previous
+
+
+def test_official_root_damage_taken_ignores_magic_and_immunity():
+    previous = _with_jungle_root()
+    try:
+        engine = make_engine()
+        equipment = _equip_jungle_root(engine)
+
+        engine._deal_direct_damage(1, 5, '测试', 0, damage_type='magic')
+        assert equipment.custom_vars.get('jungle_root_layers') == 2
+        assert engine.players[1].custom_statuses.get('jungle:root_status') == 2
+
+        engine.players[1].custom_statuses['status_immune'] = 1
+        engine.deal_attack_damage(1, 5, attacker_id=0)
+        assert equipment.custom_vars.get('jungle_root_layers') == 2
+        assert engine.players[1].custom_statuses.get('jungle:root_status') == 2
+    finally:
+        if previous is None:
+            CARD_DEFS.pop('Root', None)
+        else:
+            CARD_DEFS['Root'] = previous

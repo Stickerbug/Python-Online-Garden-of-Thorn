@@ -22,6 +22,7 @@ import official_statuses
 from mod_runtime_v2 import (
     ATOMIC_OP_MACROS,
     apply_param_synonyms,
+    check_v2_condition,
     FOR_EACH_LIMIT,
     LoopBreak,
     LoopContinue,
@@ -2544,12 +2545,32 @@ class GameEngine:
                 declared_timing = str(raw_decay.get('timing') or '').strip().lower()
                 mode = str(raw_decay.get('mode') or 'one').strip().lower()
                 log_mode = raw_decay.get('log', False)
+                condition = raw_decay.get('condition', raw_decay.get('if'))
             else:
                 declared_timing = str(definition.get('decay_timing') or '').strip().lower()
                 mode = 'one'
                 log_mode = definition.get('decay_log', False)
+                condition = definition.get('decay_if')
             if declared_timing != timing:
                 continue
+            if condition:
+                try:
+                    condition_ctx = {
+                        'source_player': player_id,
+                        'target_player': player_id,
+                        'source_id': player_id,
+                        'target_id': player_id,
+                        'vars': {
+                            'status_id': status_id,
+                            'status_stack': self._get_status_count(player_id, status_id),
+                        },
+                        'current_action': {},
+                    }
+                    if not check_v2_condition(self, condition_ctx, condition):
+                        continue
+                except Exception:
+                    # 条件读不出来时按旧行为继续衰减（与步骤 gate 的约定一致）。
+                    pass
             if mode in ('clear', 'remove_all'):
                 new_value = 0
             elif mode in ('half', 'halve', 'half_down'):
@@ -6198,11 +6219,7 @@ class GameEngine:
         self._clear_electric_web_draw_records_for_target(player_id)
         # 易损的「自己回合开始时清除」现在写在 official_statuses.py 的
         # ``decay`` 声明里，由 ``_apply_declared_status_decay`` 统一结算；
-        # 护盾的半减仍留在这里，因为它还带向日葵例外。
-        shield_keys = ('jungle:shield', 'shield')
-        shield = self._custom_status_value(player_id, *shield_keys)
-        if shield > 0 and not self._garden_has_sunflower_targeting(player_id):
-            self._set_custom_status_alias_group(player_id, 'jungle:shield', shield_keys, shield // 2)
+        # 护盾的半减同样改由 ``decay.condition``（向日葵例外）声明执行。
 
     # Round 102 / 批次 CX：``_apply_jungle_turn_start_regen`` 已删除——「回合回复 / 魔力回合回复」
     # 的每回合结算改由**状态自带的 on_turn_start 事件**执行（数据在 Jungle 包的
@@ -18558,13 +18575,8 @@ class GameEngine:
                 self._sewers_grow_toilet_paper_power(target_id)
                 self._garden_magic_cutter_after_hit(attacker_id, target_id, dmg)
             self._run_v2_after_damage_hooks(damage_context, dmg)
-            if dmg > 0:
-                self._apply_ocean_blood_debt_after_physical_damage(target_id, attacker_id)
-            if dmg > 0 and not immune:
-                root_layers = self._custom_status_value(target_id, 'jungle:root', 'jungle:root_status', 'root_status')
-                if root_layers > 0:
-                    self._set_custom_status_alias_group(target_id, 'jungle:root_status', ('jungle:root', 'jungle:root_status', 'root_status'), root_layers - 1)
-                    self._consume_jungle_root_layer_from_equipment(target_id)
+            # 血债走 ``on_damage_taken`` 状态事件，树根扣装备层走 Root 卡的
+            # ``on_damage_taken`` 装备事件；引擎不再在这里特判。
             if dmg > 0 and ps.toxic > 0 and not immune:
                 from engine_runtime_support import effective_poison_coating
                 ps.poison += effective_poison_coating(self, target_id)

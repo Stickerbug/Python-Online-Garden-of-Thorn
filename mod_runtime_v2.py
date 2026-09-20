@@ -2780,6 +2780,14 @@ def check_v2_condition(engine, context: Dict[str, Any], cond: Any) -> bool:
             except Exception:
                 return False
         return _valid_player(engine, target_id)
+    if op in ("has_equipment_flag", "equipment_has_flag"):
+        flag = str(eval_v2_value(
+            engine, context, cond.get("flag", cond.get("tag", cond.get("name", "")))
+        ) or "").strip()
+        target = resolve_v2_target(engine, context, cond.get("target", "source"))
+        player_id = _player_id(engine, target)
+        checker = getattr(engine, "_has_flag_equipment", None)
+        return bool(flag and callable(checker) and checker(player_id, flag))
     if op in ("zone_exists", "card_exists"):
         return bool(resolve_v2_target(engine, context, cond.get("zone", cond.get("selector", []))))
     if op == "var_compare":
@@ -3835,6 +3843,15 @@ def _resolve_equipment(engine, context: Dict[str, Any], owner_id: int, selector:
     if selector in (None, "", "first"):
         return engine.players[owner_id].equipment[0] if engine.players[owner_id].equipment else None
     value = resolve_v2_target(engine, context, selector)
+    # ``resolve_v2_target`` already resolves ``current_equipment`` across all
+    # players by instance id; an equipment can target another player than its
+    # owner, so return the instance before the owner-local list lookup below.
+    if (
+        value is not None
+        and not isinstance(value, CardInstance)
+        and getattr(value, "card_instance", None) is not None
+    ):
+        return value
     if value in engine.players[owner_id].equipment:
         return value
     try:

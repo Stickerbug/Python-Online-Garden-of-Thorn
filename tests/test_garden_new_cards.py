@@ -252,7 +252,15 @@ class GardenNewCardsTests(unittest.TestCase):
         self.equip(engine, "Sunflower", 0, 1)
         engine._set_custom_status_alias_group(1, "jungle:shield", ("jungle:shield", "shield"), 9)
         engine._apply_jungle_turn_start_statuses(1)
+        engine._apply_declared_status_decay(1, "turn_start")
         self.assertEqual(engine._custom_status_value(1, "jungle:shield", "shield"), 9)
+
+    def test_shield_halves_without_sunflower(self):
+        engine = self.action_engine()
+        engine._set_custom_status_alias_group(1, "jungle:shield", ("jungle:shield", "shield"), 9)
+        engine._apply_jungle_turn_start_statuses(1)
+        engine._apply_declared_status_decay(1, "turn_start")
+        self.assertEqual(engine._custom_status_value(1, "jungle:shield", "shield"), 4)
 
     def test_declarative_bloom_and_equipment_effects(self):
         engine = self.action_engine()
