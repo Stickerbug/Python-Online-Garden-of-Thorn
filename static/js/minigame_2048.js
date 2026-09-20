@@ -155,7 +155,8 @@ function renderBoard(animate) {
   });
   scoreEl.textContent = String(state.score);
   bestEl.textContent = String(state.best);
-  scheduleTileFit();
+  // 同步算好字号（在下一帧绘制之前），新方块一出现就是最终大小；缓存命中时几乎零成本。
+  fitTileNames();
   if (pending > 0) {
     setSyncText(`待同步 ${pending} 步${navigator.onLine ? '' : '（离线，本地已保存）'}`,
       navigator.onLine ? 'pending' : 'offline');
@@ -165,12 +166,22 @@ function renderBoard(animate) {
 }
 
 let tileFitFrame = null;
+/* 字号缓存：key = 文字 + 格子尺寸。同一文字在同样大的格子里直接套用上次算好的字号，
+   这样新方块**在首次绘制前**就已经是最终字号，不会出现"先小后大"的跳变。 */
+const tileFitCache = new Map();
 
-function fitTileNames() {
+function fitTileNames({ force = false } = {}) {
   const cells = boardEl.querySelectorAll('.mg-cell.filled');
   cells.forEach((cell) => {
     const name = cell.querySelector('.mg-tile-name');
     if (!name) return;
+    const text = String(name.textContent || '');
+    const key = `${text}|${cell.clientWidth}|${cell.clientHeight}`;
+    const cached = tileFitCache.get(key);
+    if (cached && !force) {
+      name.style.fontSize = `${cached}px`;
+      return;
+    }
     const availW = Math.max(18, cell.clientWidth - 10);
     const availH = Math.max(14, cell.clientHeight - 10);
     const fits = (size) => {
@@ -185,6 +196,7 @@ function fitTileNames() {
     let high = MAX_SIZE;
     if (fits(high)) {
       name.style.fontSize = `${high}px`;
+      tileFitCache.set(key, high);
       return;
     }
     while (high - low > 0.5) {
@@ -192,7 +204,9 @@ function fitTileNames() {
       if (fits(mid)) low = mid;
       else high = mid;
     }
-    name.style.fontSize = `${Math.floor(low * 10) / 10}px`;
+    const size = Math.floor(low * 10) / 10;
+    name.style.fontSize = `${size}px`;
+    tileFitCache.set(key, size);
   });
 }
 
@@ -200,12 +214,12 @@ function scheduleTileFit() {
   if (tileFitFrame) window.cancelAnimationFrame(tileFitFrame);
   tileFitFrame = window.requestAnimationFrame(() => {
     tileFitFrame = null;
-    fitTileNames();
+    fitTileNames({ force: true });
   });
 }
 
 // 便于自动化检查（也方便以后调试）：手动触发一次"字号自适应"
-window.__mgFit = fitTileNames;
+window.__mgFit = () => fitTileNames({ force: true });
 
 function buildLegend() {
   const host = el('mg-legend-grid');
