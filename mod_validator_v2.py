@@ -41,6 +41,7 @@ from mod_runtime_v2 import (
     TEXT_INPUT_MODERATIONS,
     TEXT_INPUT_NORMALIZES,
 )
+import official_statuses
 
 
 MAX_CARDS = 300
@@ -119,6 +120,11 @@ def validate_mod_v2(data: Any, source: str = "", *, allow_reserved_namespaces: b
     # direct_damage 里的 force_crit/is_precision 等写出来会被伤害管线
     # 忽略，过去只能靠人肉对源码，现在由词汇表统一给出。
     warnings.extend(damage_pipeline_warnings(normalized))
+
+    # Round 108 / 批次 DF：状态 id 的发布期提示（官方 17 条状态已内置，见 official_statuses.py）。
+    # 只提示、不拦投稿：命名空间写在官方那几个包里的状态 id，如果内置表里没有，
+    # 基本就是拼错——运行时会当自定义状态处理、**静默无效**（历史"幽灵钩子"的同一类毛病）。
+    warnings.extend(status_reference_warnings(normalized, registries))
 
     for key in list(normalized.keys()):
         if key not in {
@@ -641,6 +647,114 @@ def _validate_event_hooks(value: Any, errors: List[str], warnings: List[str]) ->
             errors.append(f"event_hooks[{i}].steps 递归步骤总数超过上限 {MAX_EVENT_STEPS}")
         normalized.append(row)
     return normalized
+
+
+"""状态 id 的发布期提示（Round 108 / 批次 DF）。
+
+官方 17 条状态已经从包里搬进引擎内置表（见 ``official_statuses.py``）：
+
+* 包内再声明同 id 的状态没有意义（会被内置表盖住）→ 给一条"可以删掉"的提示；
+* 官方那几个命名空间里写了内置表没有的状态 id → 基本是拼错。运行时把不认识的名字
+  当**自定义状态**处理，拼错就静默无效（和"幽灵钩子"同一类毛病），所以这里至少提示。
+
+只提示、不报错：社区包可以引用第三方命名空间的状态（不在我们的词表里），
+这里只对"官方命名空间"下结论。
+"""
+
+OFFICIAL_STATUS_NAMESPACES = frozenset(
+    str(item["id"]).split(":", 1)[0].lower() for item in official_statuses.OFFICIAL_STATUSES
+)
+_STATUS_STEP_KEYS = ("status", "statuses")
+_STATUS_VALUE_SKIP = frozenset({"all", "buffs", "debuffs"})
+
+
+def _status_words(data: Any) -> set:
+    """本包认得的状态词：内置官方表 + 本包自己声明的 id / 别名 / 名字。"""
+
+    payload = data if isinstance(data, dict) else {}
+    words = set(official_statuses.status_words())
+    for item in (payload.get("registries") or {}).get("statuses") or []:
+        if not isinstance(item, dict):
+            continue
+        for key in ("id", "name", "name_cn", "name_en"):
+            value = item.get(key)
+            if isinstance(value, str) and value.strip():
+                words.add(value.strip().lower())
+        for alias in item.get("aliases") or []:
+            if isinstance(alias, str) and alias.strip():
+                words.add(alias.strip().lower())
+    return words
+
+
+def _iter_status_references(node: Any, path: str = ""):
+    """产出 ``(状态名, 位置)``：步骤里 ``status`` / ``statuses`` 两个键的字符串值。"""
+
+    if isinstance(node, dict):
+        for key in _STATUS_STEP_KEYS:
+            value = node.get(key)
+            if isinstance(value, str):
+                yield value.strip(), f"{path}.{key}"
+            elif isinstance(value, list):
+                for index, item in enumerate(value):
+                    if isinstance(item, str):
+                        yield item.strip(), f"{path}.{key}[{index}]"
+                    elif isinstance(item, dict):
+                        inner = item.get("id") or item.get("status")
+                        if isinstance(inner, str):
+                            yield inner.strip(), f"{path}.{key}[{index}]"
+        for key, value in node.items():
+            if isinstance(value, (dict, list)):
+                yield from _iter_status_references(value, f"{path}.{key}")
+    elif isinstance(node, list):
+        for index, value in enumerate(node):
+            yield from _iter_status_references(value, f"{path}[{index}]")
+
+
+def status_reference_warnings(data: Any, registries: Any = None) -> List[str]:
+    """官方命名空间里的未知状态 id / 重复声明内置状态 → 提示列表。"""
+
+    payload = data if isinstance(data, dict) else {}
+    if isinstance(registries, dict):
+        payload = dict(payload)
+        payload["registries"] = registries
+    known = _status_words(payload)
+    out: List[str] = []
+    seen = set()
+    for value, label in _iter_status_references(payload):
+        text = str(value or "").strip()
+        if not text or text.lower() in _STATUS_VALUE_SKIP or text.lower() in known:
+            continue
+        if ":" not in text:
+            continue
+        namespace = text.split(":", 1)[0].strip().lower()
+        if namespace not in OFFICIAL_STATUS_NAMESPACES or text in seen:
+            continue
+        seen.add(text)
+        out.append(
+            f"{label} 用了官方命名空间里的未知状态 id {text}（内置状态见 /api/mod-studio/schema "
+            f"的 officialStatuses）；写错时运行时会当自定义状态、静默无效"
+        )
+    for index, item in enumerate((payload.get("registries") or {}).get("statuses") or []):
+        if not isinstance(item, dict):
+            continue
+        status_id = str(item.get("id") or "").strip()
+        if not status_id:
+            continue
+        builtin = official_statuses.get_status(status_id)
+        if builtin and str(builtin["id"]) == status_id:
+            out.append(
+                f"registries.statuses[{index}] 声明的是官方内置状态 {status_id}："
+                f"引擎与客户端自带定义，包内这份会被忽略，可以删掉"
+            )
+            continue
+        short = status_id.split(":")[-1].strip().lower()
+        builtin = official_statuses.get_status(short) if short else None
+        if builtin and str(builtin["id"]) != status_id:
+            out.append(
+                f"registries.statuses[{index}] 的短名 {short} 与官方内置状态 {builtin['id']} 同名："
+                f"客户端按短名找状态时会先命中内置那条，建议换一个短名（完整 id 使用不受影响）"
+            )
+    return out
 
 
 def _validate_steps(value: Any, label: str, errors: List[str], warnings: Optional[List[str]] = None,

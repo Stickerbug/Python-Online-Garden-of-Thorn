@@ -26260,6 +26260,7 @@ def api_mod_studio_schema():
     if _rate_limited(ip, 'mod_studio_schema', limit=60, window=300):
         return _json_error('请求过于频繁，请稍后再试', 429)
     from atomic_registry import engine_atomic_ops
+    import official_statuses
     from mod_spec_v2 import (
         ATOMIC_OP_MACROS,
         INTERNAL_HANDLERS,
@@ -26284,6 +26285,21 @@ def api_mod_studio_schema():
         'macros': dict(sorted((ATOMIC_OP_MACROS or {}).items())),
         # 只登记在引擎里、没进策展清单的原子：编辑器不必暴露给玩家
         'unregisteredAtoms': sorted(engine_ops - curated),
+        # Round 108 / 批次 DF：官方状态已内置（包内不再声明），编辑器/校验器要有一份同源表。
+        'officialStatuses': [
+            {
+                'id': item['id'],
+                'alias': item['alias'],
+                'name_zh': item['name_i18n']['zh'],
+                'name_en': item['name_i18n']['en'],
+                'color': item['color'],
+                'icon': item['icon'],
+                'stacking': item['stacking'],
+                'visible': item['visible'],
+                'package': item['package'],
+            }
+            for item in official_statuses.OFFICIAL_STATUSES
+        ],
     }
     response = jsonify(payload)
     response.headers['Cache-Control'] = 'public, max-age=300'

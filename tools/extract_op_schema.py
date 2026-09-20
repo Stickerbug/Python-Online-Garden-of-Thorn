@@ -201,6 +201,7 @@ def main(argv=None) -> int:
         sys.path.insert(0, str(ROOT))
     import atomic_registry
     import mod_spec_v2
+    import official_statuses
 
     runtime_ops = set(mod_spec_v2.VALID_LOGIC_OPS)
     curated_ops = set(getattr(mod_spec_v2, "_CORE_LOGIC_OPS", set()) or set())
@@ -245,6 +246,23 @@ def main(argv=None) -> int:
         "ops": dict(sorted(blocks.items())),
         "runtimeOnly": runtime_only,
         "needsReview": needs_review,
+        # Round 108 / 批次 DF：官方状态内置表（`official_statuses.py`）。
+        # 编辑器离线时也要有一份与引擎同源的官方状态清单：状态下拉、校验提示、
+        # "这条状态已经是内置的，不用再声明" 都靠它，别再去读包里的 registries.statuses。
+        "officialStatuses": [
+            {
+                "id": item["id"],
+                "alias": item["alias"],
+                "name_zh": item["name_i18n"]["zh"],
+                "name_en": item["name_i18n"]["en"],
+                "color": item["color"],
+                "icon": item["icon"],
+                "stacking": item["stacking"],
+                "visible": item["visible"],
+                "package": item["package"],
+            }
+            for item in official_statuses.OFFICIAL_STATUSES
+        ],
     }
     out = pathlib.Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
