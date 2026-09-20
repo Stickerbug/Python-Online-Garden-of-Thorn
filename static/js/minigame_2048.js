@@ -247,6 +247,13 @@ function renderBoard(animate) {
   bestEl.textContent = String(state.best);
   // 同步算好字号（在下一帧绘制之前），新方块一出现就是最终大小；缓存命中时几乎零成本。
   fitTileNames();
+  updateSyncLabel();
+}
+
+/* 同步状态那行小字：棋盘重绘和"只更新同步信息"两条路共用。
+   （从服务器回来的同步结果不需要重绘棋盘——重绘会打断正在播放的出现/合并动画。） */
+function updateSyncLabel() {
+  const pending = state.ops.length - state.acked;
   if (pending > 0) {
     setSyncText(`待同步 ${pending} 步${navigator.onLine ? '' : '（离线，本地已保存）'}`,
       navigator.onLine ? 'pending' : 'offline');
@@ -480,7 +487,8 @@ async function syncNow() {
     if (body.verified) verifiedEl.textContent = String(body.verified.score);
     retryDelay = RETRY_BASE_MS;
     saveLocal();
-    renderBoard(false);
+    // 不要重绘棋盘：会打断正在播放的出现/合并/滑动动画。只更新同步状态那行字。
+    updateSyncLabel();
     if (state.ops.length > state.acked) scheduleSync();
   } catch (_) {
     setSyncText('离线，本地已保存', 'offline');

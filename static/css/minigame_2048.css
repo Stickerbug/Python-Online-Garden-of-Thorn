@@ -318,10 +318,16 @@
 }
 
 /* 出现 / 合并的缩放都放在内层（原版 .tile-inner），
-   外层的 transform 留给滑动过渡，两者互不打架。 */
+   外层的 transform 留给滑动过渡，两者互不打架。
+
+   合并（pop）：**只让格子（背景+边框）弹一下**，文字层套一个反向缩放，
+   这样文字的视觉大小始终不变——稀有度名字本来就占满格子，
+   跟着放大 1.18 倍会越界被裁。 */
 .mg-tile-new .mg-tile-face { animation: mg-appear 200ms ease 100ms backwards; }
-.mg-tile-merged .mg-tile-face { animation: mg-pop 200ms ease 100ms; }
+.mg-tile-merged { animation: mg-pop 200ms ease 100ms; }
+.mg-tile-merged .mg-tile-face { animation: mg-pop-inverse 200ms ease 100ms; }
 .mg-no-anim .mg-tile-new .mg-tile-face,
+.mg-no-anim .mg-tile-merged,
 .mg-no-anim .mg-tile-merged .mg-tile-face { animation: none; }
 
 /* 高层方块的"光晕"（原版 / AK IOI 细节）：从 128 起逐档变亮，
@@ -341,6 +347,13 @@
 @keyframes mg-pop {
   0% { transform: scale(0); }
   50% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+
+/* 与 mg-pop 严格互补：1/1.18 ≈ 0.8475，保证文字净缩放恒为 1 */
+@keyframes mg-pop-inverse {
+  0% { transform: scale(0); }
+  50% { transform: scale(0.8475); }
   100% { transform: scale(1); }
 }
 
