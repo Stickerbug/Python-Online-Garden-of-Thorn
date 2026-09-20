@@ -38834,6 +38834,7 @@ async function init() {
         el.addEventListener('click', handler);
     };
     bindClickOnce('btn-solo-training', showSoloTraining);
+    bindClickOnce('btn-minigame-2048', () => { window.location.href = '/minigame/2048'; });
     bindClickOnce('btn-connect', onLogin);
     bindClickOnce('btn-story-mode', openStoryMode);
     bindClickOnce('btn-ai-1v1-test', async () => {

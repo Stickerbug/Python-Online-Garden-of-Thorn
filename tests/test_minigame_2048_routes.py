@@ -73,6 +73,26 @@ class RouteAccessTests(unittest.TestCase):
         self.assertEqual(sync.status_code, 200)
         self.assertEqual(sync.get_json()["status"], "ok")
 
+    def test_lobby_entry_button_only_renders_for_staff(self):
+        """大厅里的「休闲花园 · 2048」入口只给通过内测门槛的账号渲染。"""
+
+        class _Roles:
+            @staticmethod
+            def get_user_role_profile(identifier):
+                return {"role_type": "staff" if str(identifier) == "entry_staff" else "player"}
+
+        svc.db_module = _Roles()
+        with self.client.session_transaction() as session:
+            session["user_id"] = 9001
+            session["username"] = "entry_player"
+        html = self.client.get("/").data.decode("utf-8", "replace")
+        self.assertNotIn("btn-minigame-2048", html)
+        with self.client.session_transaction() as session:
+            session["user_id"] = 9002
+            session["username"] = "entry_staff"
+        html = self.client.get("/").data.decode("utf-8", "replace")
+        self.assertIn("btn-minigame-2048", html)
+
 
 if __name__ == "__main__":
     unittest.main()

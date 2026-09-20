@@ -84,24 +84,53 @@ class LobbyPresenceTests(unittest.TestCase):
         with unittest_mock.patch.object(svc, 'prefs_decline_invites', staticmethod(_boom)):
             self.assertFalse(gtn.minigame_2048_player_declines_invites(player))
 
-    def test_presence_event_refuses_non_staff(self):
-        client = gtn.app.test_client()
-        with client.session_transaction() as session:
-            session['user_id'] = 4242
-            session['username'] = 'regular'
-        self._player()
+@unittest.skipIf(gtn is None, f"无法导入 app（{IMPORT_ERROR}）")
+class SameAccountInviteTests(unittest.TestCase):
+    """同账号多标签页（2048 页）替大厅接受/拒绝邀请（用户第九节）。"""
 
-        class _Roles:
-            @staticmethod
-            def get_user_role_profile(identifier):
-                return {'role_type': 'player'}
+    def setUp(self):
+        self._players = dict(gtn.players)
+        self._invites = dict(gtn.invites)
+        gtn.players.clear()
+        gtn.invites.clear()
 
-        svc.db_module = _Roles()
-        with client.session_transaction() as session:
-            session['username'] = 'regular'
-        # 直接调 socket 处理器需要 request 上下文，这里改测判定函数本身
-        self.assertFalse(svc.can_access_minigame(4242, 'regular'))
+    def tearDown(self):
+        gtn.players.clear()
+        gtn.players.update(self._players)
+        gtn.invites.clear()
+        gtn.invites.update(self._invites)
 
+    def _scene(self):
+        gtn.players['lobby-a'] = {'nickname': 'alice', 'user_id': 11, 'status': 'lobby'}
+        gtn.players['lobby-b'] = {'nickname': 'bob', 'user_id': 22, 'status': 'lobby'}
+        gtn.players['mini-b'] = {'nickname': 'bob', 'user_id': 22, 'status': 'minigame',
+                                 'minigame': '2048'}
+        gtn.invites['lobby-a'] = 'lobby-b'
+
+    def test_same_sid_still_works(self):
+        self._scene()
+        self.assertEqual(gtn.resolve_invite_target_for('lobby-b', 'lobby-a'), 'lobby-b')
+
+    def test_sibling_tab_of_same_account_can_accept(self):
+        self._scene()
+        self.assertEqual(gtn.resolve_invite_target_for('mini-b', 'lobby-a'), 'mini-b')
+        self.assertEqual(gtn.invites['lobby-a'], 'mini-b')   # 邀请改绑到当前会话
+
+    def test_other_account_cannot_accept(self):
+        self._scene()
+        gtn.players['lobby-c'] = {'nickname': 'carol', 'user_id': 33, 'status': 'lobby'}
+        self.assertIsNone(gtn.resolve_invite_target_for('lobby-c', 'lobby-a'))
+        self.assertEqual(gtn.invites['lobby-a'], 'lobby-b')
+
+    def test_guests_compare_by_nickname(self):
+        gtn.players['g1'] = {'nickname': 'GuestOne', 'status': 'lobby'}
+        gtn.players['g2'] = {'nickname': 'guestone', 'status': 'minigame'}
+        gtn.invites['host'] = 'g1'
+        self.assertEqual(gtn.resolve_invite_target_for('g2', 'host'), 'g2')
+
+    def test_missing_invite_returns_none(self):
+        self._scene()
+        self.assertIsNone(gtn.resolve_invite_target_for('mini-b', 'nobody'))
 
 if __name__ == "__main__":
     unittest.main()

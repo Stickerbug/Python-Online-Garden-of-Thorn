@@ -497,6 +497,11 @@
 <div class="form-row">
 <button id="btn-solo-training" class="btn btn-magic">单人训练场</button>
 </div>
+{% if minigame_2048_available|default(false) %}
+<div class="form-row" id="minigame-2048-entry-row">
+<button id="btn-minigame-2048" class="btn btn-secondary" type="button" title="休闲花园 · 2048（内测，仅 staff / admin）">休闲花园 · 2048</button>
+</div>
+{% endif %}
 <div class="form-row login-utility-row">
 <a id="btn-public-feedback-center" class="btn-settings" href="/feedback-center" target="_blank" rel="noopener">反馈中心</a>
 <button id="btn-open-feedback" class="btn-settings">反馈</button>

@@ -5178,6 +5178,56 @@ def player_is_lobby_match_available(sid):
     return True
 
 
+def players_share_account(one, two) -> bool:
+    """两个在线会话是否属于同一个账号（Round 110：同账号多标签页）。
+
+    注册账号比 ``user_id``；游客沿用现有约定——同一个昵称视为同一账号
+    （``_same_login_identity`` 也是这么比的）。调用方自行持锁。
+    """
+
+    if not isinstance(one, dict) or not isinstance(two, dict):
+        return False
+    user_a, user_b = one.get('user_id'), two.get('user_id')
+    try:
+        if user_a and user_b and int(user_a) == int(user_b):
+            return True
+    except (TypeError, ValueError):
+        pass
+    name_a = str(one.get('nickname') or '').strip().lower()
+    name_b = str(two.get('nickname') or '').strip().lower()
+    return bool(name_a) and name_a == name_b
+
+
+def resolve_invite_target_for(current_sid, inviter_sid):
+    """当前会话能不能替这个邀请接受/拒绝；能就返回"被邀请的那个 sid"。
+
+    自己就是被邀请方时原样返回；如果是**同账号的另一个标签页**（例如 2048 小游戏页），
+    也允许，并把邀请改绑到当前 sid（这样接受后建的房间属于当前会话，
+    旧标签页导航回大厅时按现有重连逻辑接上）。
+    """
+
+    sid = current_sid
+    invited_sid = invites.get(inviter_sid)
+    if not invited_sid:
+        return None
+    if invited_sid == sid:
+        return sid
+    invited_player = players.get(invited_sid)
+    current_player = players.get(sid)
+    if invited_player is None or current_player is None:
+        return None
+    if not players_share_account(invited_player, current_player):
+        return None
+    invites[inviter_sid] = sid
+    return sid
+
+
+def resolve_pending_invite_for_sid(inviter_sid):
+    """socket 处理处的薄封装（拿 ``request.sid`` 当前会话）。"""
+
+    return resolve_invite_target_for(request.sid, inviter_sid)
+
+
 def clear_pending_match_invites_for_sids_locked(sids):
     participant_sids = {sid for sid in (sids or []) if sid}
     if not participant_sids:
@@ -20069,8 +20119,20 @@ def both_disconnected_cleanup(room_id):
 def index():
     if is_beta_instance():
         return beta_entry_response()
+    # 休闲花园（2048）的入口只对通过内测门槛的账号渲染；权限判定仍以服务端角色表为准，
+    # 按钮只是入口，直达 /minigame/2048 依旧会被同一套判定拦下。
+    minigame_2048_available = False
+    try:
+        user_id = session.get('user_id')
+        username = str(session.get('username') or '')
+        if MINIGAME_2048_ENABLED and user_id and username:
+            minigame_2048_available = minigame_2048_service.can_access_minigame(user_id, username)
+    except Exception as exc:
+        admin_event('error', f'minigame 2048 entry check failed: {exc}')
+        minigame_2048_available = False
     return render_template(
         'index.html',
+        minigame_2048_available=minigame_2048_available,
         beta_mode=False,
         static_version=GTN_STATIC_VERSION,
         instance_id=GTN_INSTANCE_ID,
@@ -29082,7 +29144,8 @@ def on_accept_invite(data):
     with _lock:
         if inviter_sid not in players or sid not in players:
                     return
-        if inviter_sid not in invites or invites[inviter_sid] != sid:
+        # 同账号的另一个标签页（例如 2048 小游戏页）也可以接受这条邀请。
+        if resolve_pending_invite_for_sid(inviter_sid) is None:
                     return
         del invites[inviter_sid]
         inviter = players[inviter_sid]
@@ -29217,7 +29280,8 @@ def on_decline_invite(data):
         _security_illegal(sid, 'decline_invite', str(exc))
         return
     with _lock:
-        if inviter_sid in invites and invites[inviter_sid] == sid:
+        # 同账号的另一个标签页也可以拒绝（与接受同一条规则）。
+        if resolve_pending_invite_for_sid(inviter_sid) is not None:
             del invites[inviter_sid]
             if inviter_sid in players:
                 socketio.emit('invite_declined', {'target_sid': sid}, room=inviter_sid)
