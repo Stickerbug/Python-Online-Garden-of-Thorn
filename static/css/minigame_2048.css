@@ -83,7 +83,10 @@
   margin-top: 16px;
 }
 
-.mg-board-wrap { flex: 1 1 500px; max-width: 500px; position: relative; }
+/* width:100% 是**必须**的：窄屏 .mg-main 会折成 column + align-items:flex-start，
+   不收这一条时包裹层会按内容宽度收缩，棋盘宽度就变成"由内容反推"——
+   首屏量到 8px 的格子后整块棋盘会塌成 82px（必须重开一局才恢复）。 */
+.mg-board-wrap { flex: 1 1 500px; width: 100%; max-width: 500px; min-width: 0; position: relative; }
 
 .mg-legend-col {
   flex: 0 0 210px;
@@ -259,7 +262,7 @@
 
 /* ---------------- 棋盘（原版 .game-container / .grid-cell） ---------------- */
 
-.mg-board-wrap { position: relative; margin-top: 16px; }
+.mg-board-wrap { position: relative; margin-top: 16px; width: 100%; max-width: 500px; }
 
 .mg-board {
   position: relative;
@@ -279,10 +282,18 @@
   aspect-ratio: 1 / 1;
   background: var(--g-board);
   border-radius: 6px;
-  touch-action: pan-y;
-  /* 手机端下拉刷新：棋盘区域内的下滑交给游戏（JS 会 preventDefault），
-     不让浏览器把它当成"下拉刷新"；棋盘之外照旧可以刷新。 */
+  /* 棋盘上的手势**完全不交给浏览器**：不滚动页面、不触发下拉刷新，
+     上下左右都只用于移动方块（JS 另有一层 preventDefault 兜底）。
+     touch-action: none 才让 touchmove 始终可取消——pan-y 时浏览器会先接管纵向滑动，
+     于是"向上划"会翻页、"向下划"偶尔触发下拉刷新。棋盘之外照旧滚动/刷新。 */
+  touch-action: none;
+  -ms-touch-action: none;
   overscroll-behavior: contain;
+  /* 长按不要弹出选择/系统菜单：棋盘是手势区，不是文本区 */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
   outline: none;
 }
 
@@ -690,6 +701,8 @@
   .mg-board { gap: 10px; padding: 10px; }
   /* 窄屏：合成顺序挪到棋盘下面（横排两列），不挡住棋盘 */
   .mg-main { flex-direction: column; }
+  /* 折列后 flex-basis:500px 会被当成**高度**用，棋盘下方会多出 100+px 空白 */
+  .mg-board-wrap { flex: 0 0 auto; }
   .mg-legend-col { flex: 1 1 auto; width: 100%; align-self: auto; }
   .mg-legend-grid {
     display: grid;

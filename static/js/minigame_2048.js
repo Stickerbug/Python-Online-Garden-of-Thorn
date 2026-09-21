@@ -213,8 +213,14 @@ function boardMetricsNow() {
   const gap = parseFloat(style.columnGap) || 0;
   const pad = parseFloat(style.paddingLeft) || 0;
   const size = Math.max(8, (rect.width - pad * 2 - gap * 3) / 4);
-  return { gap, pad, size };
+  return { gap, pad, size, width: rect.width };
 }
+
+/* 棋盘还没排版好时的最小合理宽度：正常最窄也有 ~300px。
+   低于它就说明这一帧量到的是"未成形"的布局（窄屏包裹层收缩、字体/样式未落地等），
+   此时**不能**把 8px 的格子写进方块：那会把棋盘宽度锁死成一个错误的自洽状态
+   （方块 8px → 棋盘 82px → 再量还是 8px），只能靠重开一局恢复。 */
+const MIN_MEASURABLE_BOARD_PX = 120;
 
 function placeTile(el, index, metrics, animate) {
   el.style.width = `${metrics.size}px`;
@@ -248,10 +254,15 @@ function makeTile(value, index, metrics, animate) {
 
 let tileSequence = 0;
 
-/* 全量重绘：载入存档 / 主题变化 / 冲突回滚 / 尺寸变化时用（不带动画）。 */
-function rebuildTiles() {
+/* 全量重绘：载入存档 / 主题变化 / 冲突回滚 / 尺寸变化时用（不带动画）。
+   retry：首屏若还没排版完，等下一帧再量（最多 ~1 秒），绝不把错误尺寸写进棋盘。 */
+function rebuildTiles(retry = 0) {
   ensureBoardSkeleton();
   const metrics = boardMetricsNow();
+  if (metrics.width < MIN_MEASURABLE_BOARD_PX && retry < 60) {
+    window.requestAnimationFrame(() => rebuildTiles(retry + 1));
+    return;
+  }
   boardEl.querySelectorAll('.mg-cell.filled').forEach((el) => el.remove());
   tileEls.clear();
   state.cells.forEach((value, index) => {
@@ -265,6 +276,11 @@ function animateTiles() {
   const moves = Array.isArray(state.lastMoves) ? state.lastMoves : [];
   ensureBoardSkeleton();
   const metrics = boardMetricsNow();
+  if (metrics.width < MIN_MEASURABLE_BOARD_PX) {
+    // 量不到棋盘（排版未落地）：这一帧不摆动画，等下一帧按真实尺寸重摆，避免摆歪
+    window.requestAnimationFrame(() => rebuildTiles());
+    return;
+  }
   const carried = [];
   const dying = new Map();
   const mergedValues = new Map();
@@ -383,6 +399,28 @@ function scheduleTileFit() {
     tileFitFrame = null;
     fitTileNames({ force: true });
   });
+}
+
+/* 棋盘尺寸变化（首屏排版落地、旋转屏幕、桌面改窗口大小）时按新尺寸重摆方块。
+   只比宽度：高度由 aspect-ratio 跟着宽度走。 */
+let boardRelayoutFrame = null;
+let observedBoardWidth = 0;
+
+function scheduleBoardRelayout() {
+  if (boardRelayoutFrame) return;
+  boardRelayoutFrame = window.requestAnimationFrame(() => {
+    boardRelayoutFrame = null;
+    const width = boardEl.clientWidth;
+    if (!width || Math.abs(width - observedBoardWidth) < 0.5) return;
+    observedBoardWidth = width;
+    if (!state || !Array.isArray(state.cells)) return;
+    rebuildTiles();
+    fitTileNames({ force: true });
+  });
+}
+
+if (typeof ResizeObserver === 'function') {
+  new ResizeObserver(() => scheduleBoardRelayout()).observe(boardEl);
 }
 
 // 便于自动化检查（也方便以后调试）：手动触发一次"字号自适应"
@@ -663,20 +701,19 @@ boardEl.addEventListener('touchmove', (event) => {
   const touch = event.touches[0];
   const dx = touch.clientX - touchStart.x;
   const dy = touch.clientY - touchStart.y;
-  /* 只要在棋盘里往下拖，就立刻拦掉浏览器默认行为（否则手机上会触发"下拉刷新"，官方版不会）。
+  /* 手指从棋盘开始移动：**任何方向**都不许影响页面（滚动 / 上翻 / 下拉刷新 / 橡皮筋）。
+     touch-action: none 已经拦掉绝大多数，这里对老浏览器再兜一层。
      位移够大才真正走一步；一次手势只移动一次。 */
-  if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 4) {
-    event.preventDefault();
-  }
+  if (Math.abs(dx) > 4 || Math.abs(dy) > 4) event.preventDefault();
   if (Math.abs(dx) < 24 && Math.abs(dy) < 24) return;
-  if (touchStart.handled) { event.preventDefault(); return; }   // 一次手势只移动一次
+  if (touchStart.handled) return;                               // 一次手势只移动一次
   touchStart.handled = true;
-  event.preventDefault();
   move(Math.abs(dx) > Math.abs(dy)
     ? (dx > 0 ? DIRECTIONS.right : DIRECTIONS.left)
     : (dy > 0 ? DIRECTIONS.down : DIRECTIONS.up));
 }, { passive: false });
 boardEl.addEventListener('touchend', () => { touchStart = null; }, { passive: true });
+boardEl.addEventListener('touchcancel', () => { touchStart = null; }, { passive: true });
 
 /* ---------------- 排行榜 / 偏好 ---------------- */
 
@@ -1014,10 +1051,17 @@ async function boot() {
   await loadPrefs();
   renderBoard(false);
   boardEl.focus();
+  // 首屏兜底：排版/字体落地后按真实尺寸再摆一次（量不到尺寸时 rebuildTiles 会自己重试）
+  scheduleBoardRelayout();
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready
+      .then(() => { scheduleBoardRelayout(); scheduleTileFit(); })
+      .catch(() => { /* 字体信息拿不到不影响游玩 */ });
+  }
   window.addEventListener('online', () => { retryDelay = RETRY_BASE_MS; scheduleSync(200); });
   window.addEventListener('offline', () => setSyncText('离线，本地已保存', 'offline'));
-  window.addEventListener('resize', () => scheduleTileFit());
-  window.addEventListener('orientationchange', () => scheduleTileFit());
+  window.addEventListener('resize', () => { scheduleBoardRelayout(); scheduleTileFit(); });
+  window.addEventListener('orientationchange', () => { scheduleBoardRelayout(); scheduleTileFit(); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) scheduleSync(200); });
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/minigame/2048/sw.js', { scope: '/minigame/2048' })
