@@ -1,3 +1,15 @@
+/* 聊天文字统一走这个"只有 Regular 一个字重"的族：
+   小游戏页把 Demi 注册成了 'Kreadon' 的 700 字重，粗体（昵称等）会挑到真 Demi，
+   而大厅只有 400 一个字重、粗体是浏览器合成的 —— 两边渲染结果会不一样。
+   这里在共享样式里声明同一个族（同一份 Regular 文件），所有聊天页面都按"Regular + 合成粗体"渲染。 */
+@font-face {
+  font-family: 'Kreadon Regular';
+  src: url('/fonts/Kreadon-Regular.subset.woff2?v=3') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* 独立页（小游戏等）不加载主游戏的 style.css：给聊天面板挂上这个类，
    就能拿到与多人游戏完全一致的字体、底色、边框和前缀配色。
    取值与 style.css 的亮/暗主题保持同步，改主题色时两边一起改。 */
@@ -55,7 +67,7 @@
   padding: 0 0 8px;
   border-bottom: 1px solid var(--border-color);
   color: var(--text-primary);
-  font-family: var(--font-main);
+  font-family: 'Kreadon Regular', var(--font-main);
   font-size: 16px;
   font-weight: 700;
   line-height: 1.2;
@@ -69,7 +81,10 @@
   border-radius: 10px;
   background: rgba(0, 0, 0, .03);
   color: var(--text-primary);
-  font-family: var(--font-main);
+  /* 'Kreadon Regular' 只在小游戏页定义：那边 Demi 占了 'Kreadon' 的 700 字重，
+     粗体（昵称等）会挑到真 Demi，和大厅的"Regular + 合成粗体"不一致。
+     大厅页没定义这个族，会自动跳到后面的 var(--font-main)，渲染完全不变。 */
+  font-family: 'Kreadon Regular', var(--font-main);
   font-size: 12px;
   line-height: 1.6;
 }
@@ -209,6 +224,19 @@
   -webkit-text-fill-color: currentColor;
 }
 
+/* “随主题变色”的名牌：亮/暗各取一套颜色（与 style.css 同名规则一致） */
+.gtn-lobby-chat-log .title-paint-theme,
+.log-entry.log-chat .title-paint-theme,
+.log-entry.chat .title-paint-theme {
+  color: var(--title-paint-light, currentColor) !important;
+}
+
+:root[data-theme='dark'] .gtn-lobby-chat-log .title-paint-theme,
+:root[data-theme='dark'] .log-entry.log-chat .title-paint-theme,
+:root[data-theme='dark'] .log-entry.chat .title-paint-theme {
+  color: var(--title-paint-dark, currentColor) !important;
+}
+
 .gtn-lobby-chat-log .chat-spectator-prefix,
 .log-entry.log-chat .chat-spectator-prefix,
 .log-entry.chat .chat-spectator-prefix {
@@ -238,7 +266,8 @@
 .gtn-lobby-chat-log .chat-origin-leisure,
 .log-entry.log-chat .chat-origin-leisure,
 .log-entry.chat .chat-origin-leisure {
-  color: #8a6a2f;
+  /* 跟休闲花园入口的深紫一致（原来那版是棕色，和故事模式的琥珀太近） */
+  color: #4B3F8F;
 }
 
 :root[data-theme='dark'] .chat-origin-multiplayer {
@@ -250,7 +279,7 @@
 }
 
 :root[data-theme='dark'] .chat-origin-leisure {
-  color: #d8bd7a;
+  color: #A99AE8;
 }
 
 .gtn-lobby-chat-log .chat-time-separator,
@@ -379,7 +408,7 @@
   color: var(--text-primary);
   /* 暗色主题下主界面输入框用的是 --input-bg（比卡片底色更深），这里保持一致 */
   background: var(--input-bg, var(--bg-card));
-  font-family: var(--font-main);
+  font-family: 'Kreadon Regular', var(--font-main);
   font-size: 12px;
   transition: border-color 150ms ease;
 }
@@ -402,7 +431,7 @@
   border-radius: 10px;
   color: var(--magic);
   background: var(--magic-bg);
-  font-family: var(--font-main);
+  font-family: 'Kreadon Regular', var(--font-main);
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;

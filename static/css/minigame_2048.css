@@ -790,6 +790,9 @@
   right: 16px;
   bottom: 16px;
   z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 10px 16px;
   border: 0;
   border-radius: 999px;
@@ -800,6 +803,23 @@
   cursor: pointer;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
 }
+
+/* 未读消息红点：和故事模式的未读角标一个意思（面板收起时收到消息才亮） */
+.mg-chat-unread {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: #C0392B;
+  color: #FFFFFF;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.mg-chat-unread[hidden] { display: none; }
 
 .mg-chat {
   position: fixed;

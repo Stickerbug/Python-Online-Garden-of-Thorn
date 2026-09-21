@@ -810,7 +810,12 @@ function connectPresence() {
   socket.on('lobby_chat_history', (payload) => {
     renderChatHistory(payload && payload.items);
   });
-  socket.on('chat', (payload) => { appendChatLine(payload); });
+  socket.on('chat', (payload) => {
+    appendChatLine(payload);
+    // 面板收起时给个未读红点（历史消息不算未读）
+    const panel = el('mg-chat');
+    if (panel && panel.hidden) markChatUnread(payload);
+  });
   socket.on('minigame_status', () => { /* 状态已生效 */ });
   socket.on('server_error', (payload) => {
     const reason = payload && payload.reason;
@@ -927,20 +932,63 @@ function chatReputationHtml(item) {
     + `<span class="reputation-badge reputation-${level}">${escapeHtml(labels.lowReputation)}</span>`;
 }
 
-/* 昵称名牌配色（渐变 / 纯色），与大厅同一套类名。 */
+/* 昵称名牌配色：数据形状与 game.js 的 getPlayerNamePaint / titlePaintPresentation 一致——
+   渐变（含彩虹）与随主题变色都存在 ``name_style.paint`` 里，不是 name_style.kind。
+   返回 ``{ className, style }``；没有自定义名牌时返回 null（用默认色）。 */
+function chatNamePaint(item) {
+  const style = (item && item.name_style) || null;
+  const paint = (style && typeof style.paint === 'object' && style.paint) || null;
+  if (paint) {
+    const kind = String(paint.kind || '').toLowerCase();
+    if (kind === 'gradient' || kind === 'rainbow') {
+      const colors = (Array.isArray(paint.colors) ? paint.colors : [])
+        .map((color) => titleColorCss(color))
+        .filter(Boolean)
+        .slice(0, 12);
+      if (colors.length >= 2) {
+        const numeric = Number(paint.angle);
+        const angle = Number.isFinite(numeric) ? ((numeric % 360) + 360) % 360 : 90;
+        return {
+          className: 'title-paint-gradient',
+          style: `--title-paint-gradient:linear-gradient(${angle}deg,${colors.join(',')})`,
+        };
+      }
+    } else if (kind === 'theme') {
+      const light = titleColorCss(paint.light && paint.light.color) || titleColorCss('neutral');
+      const dark = titleColorCss(paint.dark && paint.dark.color) || titleColorCss('neutral');
+      return {
+        className: 'title-paint-theme',
+        style: `--title-paint-light:${light};--title-paint-dark:${dark};background-image:none;-webkit-text-fill-color:currentColor`,
+      };
+    } else if (kind === 'solid') {
+      const color = titleColorCss(paint.color);
+      if (color) {
+        return {
+          className: 'title-paint-solid',
+          style: `color:${color};background-image:none;-webkit-text-fill-color:currentColor`,
+        };
+      }
+    }
+  }
+  const solid = titleColorCss(item && item.name_color);
+  return solid
+    ? { className: 'title-paint-solid', style: `color:${solid};background-image:none;-webkit-text-fill-color:currentColor` }
+    : null;
+}
+
 function chatNameHtml(item, fallback) {
   const name = String((item && item.nickname) || fallback || '?');
-  const style = (item && item.name_style) || null;
-  const kind = String((style && style.kind) || '').toLowerCase();
-  const colors = Array.isArray(style && style.colors) ? style.colors.filter(Boolean).slice(0, 12) : [];
-  if ((kind === 'gradient' || kind === 'rainbow') && colors.length >= 2) {
-    const numeric = Number(style.angle);
-    const angle = Number.isFinite(numeric) ? ((numeric % 360) + 360) % 360 : 90;
-    return `<span class="player-name-value title-paint-gradient"`
-      + ` style="--title-paint-gradient:linear-gradient(${angle}deg,${colors.join(',')})">${escapeHtml(name)}</span>`;
-  }
-  const solid = kind === 'solid' ? titleColorCss(style.color) : titleColorCss(item && item.name_color);
-  return `<span class="player-name-value"${solid ? ` style="color:${solid}"` : ''}>${escapeHtml(name)}</span>`;
+  const paint = chatNamePaint(item);
+  return `<span class="player-name-value${paint ? ` ${paint.className}` : ''}"`
+    + `${paint ? ` style="${paint.style}"` : ''}>${escapeHtml(name)}</span>`;
+}
+
+function isOwnChatItem(item) {
+  if (!item) return false;
+  if (CONFIG.userId != null && item.user_id != null
+      && String(item.user_id) === String(CONFIG.userId)) return true;
+  return String(item.nickname || '') !== ''
+    && String(item.nickname) === String(CONFIG.username || '');
 }
 
 function chatTextHtml(item) {
@@ -1004,6 +1052,7 @@ function renderChatHistory(items) {
   log.innerHTML = html.filter(Boolean).join('')
     || '<p class="mg-hint">还没有人说话。</p>';
   log.scrollTop = log.scrollHeight;
+  countChatUnreadFromHistory(list);
 }
 
 function appendChatLine(item) {
@@ -1014,6 +1063,59 @@ function appendChatLine(item) {
   log.scrollTop = log.scrollHeight;
 }
 
+/* 聊天未读红点：面板收起时收到别人的消息就计数，打开面板即清零。 */
+let chatUnreadCount = 0;
+
+function updateChatUnreadBadge() {
+  const badge = el('mg-chat-unread');
+  if (!badge) return;
+  const count = Math.max(0, Number(chatUnreadCount) || 0);
+  badge.hidden = count <= 0;
+  badge.textContent = count > 99 ? '99+' : String(count);
+  badge.setAttribute('aria-label', count > 0 ? `${count} 条未读消息` : '没有未读消息');
+}
+
+function markChatUnread(item) {
+  if (!item || item.type === 'time' || item.system) return;
+  if (isOwnChatItem(item)) return;                 // 自己发的不算未读
+  chatUnreadCount += 1;
+  updateChatUnreadBadge();
+}
+
+/* 小游戏页收大厅消息靠"整段历史刷新"（不是逐条 chat 事件），
+   所以未读按历史里的消息 id 计：首屏只记游标，之后新增的才算未读。 */
+let chatUnreadCursor = 0;
+let chatUnreadCursorReady = false;
+
+function countChatUnreadFromHistory(list) {
+  const rows = Array.isArray(list) ? list : [];
+  const maxId = rows.reduce((max, item) => Math.max(max, Number(item && item.id) || 0), 0);
+  if (!chatUnreadCursorReady) {
+    chatUnreadCursorReady = true;
+    chatUnreadCursor = maxId;
+    return;
+  }
+  if (maxId <= chatUnreadCursor) return;
+  const panel = el('mg-chat');
+  const panelHidden = !panel || panel.hidden;
+  if (panelHidden) {
+    rows.forEach((item) => {
+      if (!item || item.type === 'time' || item.system) return;
+      if ((Number(item.id) || 0) <= chatUnreadCursor) return;
+      if (isOwnChatItem(item)) return;
+      chatUnreadCount += 1;
+    });
+    updateChatUnreadBadge();
+  }
+  chatUnreadCursor = maxId;
+}
+
+function clearChatUnread() {
+  if (!chatUnreadCount) return;
+  chatUnreadCount = 0;
+  updateChatUnreadBadge();
+}
+
 function toggleChat(force) {
   const panel = el('mg-chat');
   const toggle = el('mg-chat-toggle');
@@ -1021,7 +1123,10 @@ function toggleChat(force) {
   const open = force === undefined ? panel.hidden : !!force;
   panel.hidden = !open;
   if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-  if (open) el('mg-chat-input')?.focus();
+  if (open) {
+    clearChatUnread();
+    el('mg-chat-input')?.focus();
+  }
 }
 
 function sendChat() {

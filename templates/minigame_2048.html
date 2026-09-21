@@ -126,7 +126,10 @@
     <div id="mg-rank-body" class="mg-rank-body">正在读取…</div>
   </section>
 
-  <button id="mg-chat-toggle" class="mg-chat-toggle" type="button" aria-expanded="false">聊天</button>
+  <button id="mg-chat-toggle" class="mg-chat-toggle" type="button" aria-expanded="false">
+    聊天
+    <span id="mg-chat-unread" class="mg-chat-unread" hidden aria-label="没有未读消息">0</span>
+  </button>
   <!-- 面板/标题/日志/输入行都复用多人游戏大厅那一套 gtn-lobby-chat-* 样式，
        gtn-lobby-chat-standalone 负责补上独立页缺失的主题变量。 -->
   <aside id="mg-chat" class="mg-chat gtn-lobby-chat-surface gtn-lobby-chat-standalone" hidden aria-label="聊天">
