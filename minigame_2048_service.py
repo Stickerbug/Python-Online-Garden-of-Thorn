@@ -266,6 +266,15 @@ def create_game(conn, user_id: int, *, seed=None, source: str = "online", now=No
     seed_value = g.normalize_seed(seed)
     initial = g.initial_state(seed_value)
     uid = str(game_uid or "").strip() or f"{int(user_id)}-{seed_value:x}"
+    # 同一账号拿同一个种子重开时（例如"重新开始"带上同一个客户端种子），
+    # 默认 uid 会撞上历史局的 UNIQUE 约束 → 这里补随机后缀，保证每次开新局都是新局。
+    if conn.execute("SELECT 1 FROM minigame_2048_games WHERE game_uid = ?", (uid,)).fetchone():
+        while True:
+            candidate = f"{uid}-{os.urandom(4).hex()}"
+            if not conn.execute("SELECT 1 FROM minigame_2048_games WHERE game_uid = ?",
+                                (candidate,)).fetchone():
+                uid = candidate
+                break
     conn.execute(
         "UPDATE minigame_2048_games SET status='closed', closed_at=?, updated_at=?"
         " WHERE user_id=? AND status='active'",
@@ -285,13 +294,37 @@ def create_game(conn, user_id: int, *, seed=None, source: str = "online", now=No
     return load_state(conn, user_id)
 
 
+def _archive_outdated_game(conn, user_id: int, row, *, now=None) -> bool:
+    """规则版本升级后作废旧活动局（最省事：不迁移 4×4 棋盘，直接开新局）。
+
+    旧局本身不删：状态改成 closed，审计里留一条 rules_upgraded，
+    旧成绩记录也仍按自己的 rules_version 留在库里（不进新榜）。
+    """
+
+    if row is None or int(row["rules_version"]) == g.RULES_VERSION:
+        return False
+    stamp = now_iso(now)
+    conn.execute(
+        "UPDATE minigame_2048_games SET status='closed', closed_at=?, updated_at=? WHERE id=?",
+        (stamp, stamp, int(row["id"])),
+    )
+    _audit(conn, user_id, int(row["id"]), "rules_upgraded",
+           {"from": int(row["rules_version"]), "to": g.RULES_VERSION})
+    conn.commit()
+    return True
+
+
 def load_state(conn, user_id: int, *, create: bool = True) -> Dict[str, object]:
     """读当前活动局（没有就开一局）；顺带给出棋盘快照与已验证进度。"""
 
     row = _active_game(conn, user_id)
+    upgraded = _archive_outdated_game(conn, user_id, row)
+    if upgraded:
+        row = None
     if row is None:
         if not create:
-            return {"game": None, "board": None, "verified": {"op_index": 0, "score": 0}}
+            return {"game": None, "board": None, "verified": {"op_index": 0, "score": 0},
+                    "rules_upgraded": upgraded}
         create_game(conn, user_id)
         row = _active_game(conn, user_id)
     state = _game_state(row)
@@ -301,6 +334,7 @@ def load_state(conn, user_id: int, *, create: bool = True) -> Dict[str, object]:
         "game": state,
         "board": board,
         "verified": {"op_index": verified_index, "score": verified_score},
+        "rules_upgraded": upgraded,
         "prefs": get_prefs(conn, user_id),
         "rules": {
             "protocol_version": g.PROTOCOL_VERSION,
@@ -356,6 +390,13 @@ def sync_progress(conn, user_id: int, game_uid: str, from_index: int, ops,
     """
 
     row = _active_game(conn, user_id)
+    if _archive_outdated_game(conn, user_id, row, now=now):
+        # 规则升级（4×4 → 5×5 + 合并失败）：旧局作废、直接开新局，
+        # 客户端拿到 stale_game 后会用返回的新状态继续（本地老档由它自己丢弃）。
+        create_game(conn, user_id, now=now)
+        fresh = _active_game(conn, user_id)
+        return {"status": "stale_game", "rules_upgraded": True,
+                "active_game_uid": str(fresh["game_uid"]) if fresh is not None else ""}
     if row is None and new_game and seed is not None and game_uid:
         # 全新账号/没活动局时的离线开局补传：直接按客户端种子建档。
         create_game(conn, user_id, seed=seed, source=source, now=now, game_uid=str(game_uid))

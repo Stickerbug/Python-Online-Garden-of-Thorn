@@ -272,7 +272,8 @@
   overflow: clip;
   overflow-clip-margin: 40px;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  /* 规则 v2：5×5（列数必须与 minigame_2048_core.js 的 BOARD_SIZE 一致） */
+  grid-template-columns: repeat(5, 1fr);
   /* 原版比例：棋盘 500×500、内边距 15px、格间距 15px（格子约 106px） */
   gap: 15px;
   padding: 15px;
@@ -409,9 +410,29 @@
    加上 backwards 之后：两块源方块滑进来 → 到位后合并块才 pop 出来。 */
 .mg-tile-merged { animation: mg-pop 200ms ease 100ms backwards; }
 .mg-tile-merged .mg-tile-face { animation: mg-pop-inverse 200ms ease 100ms backwards; }
+
+/* 合并**失败**（规则 v2 的 20%）：两块滑到一起后只留下一个原值方块，
+   播一条很短的"碎裂"——一道细裂纹闪过 + 轻微抖一下 + 压暗，约 200ms 收尾，
+   不震屏、不改变布局，也不延迟下一步操作。 */
+.mg-tile-cracked { animation: mg-crack-shake 200ms ease-out both; }
+.mg-tile-cracked::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  /* 两道细折线拼成一条裂纹；纯 CSS，不引素材 */
+  background:
+    linear-gradient(104deg, transparent 46.6%, rgba(21, 32, 27, .5) 47.4%, rgba(21, 32, 27, .5) 48.6%, transparent 49.4%),
+    linear-gradient(64deg, transparent 45.2%, rgba(21, 32, 27, .34) 46.2%, rgba(21, 32, 27, .34) 47.2%, transparent 48.2%);
+  animation: mg-crack-fade 200ms ease-out both;
+  pointer-events: none;
+}
+
 .mg-no-anim .mg-tile-new,
 .mg-no-anim .mg-tile-merged,
-.mg-no-anim .mg-tile-merged .mg-tile-face { animation: none; }
+.mg-no-anim .mg-tile-merged .mg-tile-face,
+.mg-no-anim .mg-tile-cracked,
+.mg-no-anim .mg-tile-cracked::after { animation: none; }
 
 /* 高层方块的"光晕"（原版 / AK IOI 细节）：从 128 起逐档变亮，
    2048 及以上用原版那圈金色；同时保留 1px 内侧高光。
@@ -438,6 +459,19 @@
   0% { transform: scale(0); }
   50% { transform: scale(0.8475); }
   100% { transform: scale(1); }
+}
+
+@keyframes mg-crack-shake {
+  0% { transform: translateX(0) scale(1); filter: none; }
+  30% { transform: translateX(-1.5px) scale(.986); filter: brightness(.86); }
+  65% { transform: translateX(1.5px) scale(.994); filter: brightness(.94); }
+  100% { transform: translateX(0) scale(1); filter: none; }
+}
+
+@keyframes mg-crack-fade {
+  0% { opacity: 0; }
+  18% { opacity: .95; }
+  100% { opacity: 0; }
 }
 
 /* ---------------- 结束 / 达成浮层（原版 .game-message） ---------------- */
@@ -720,7 +754,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mg-score-float, .mg-tile-new, .mg-tile-merged { animation: none !important; }
+  .mg-score-float, .mg-tile-new, .mg-tile-merged,
+  .mg-tile-cracked, .mg-tile-cracked::after { animation: none !important; }
 }
 
 /* ---------------- 大厅聊天（与多人游戏共用同一条；浮层、默认收起，不挤棋盘） ----------------

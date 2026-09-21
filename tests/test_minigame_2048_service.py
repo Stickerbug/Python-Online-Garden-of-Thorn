@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import sqlite3
 import unittest
+import json
 
 import minigame_2048 as g
 import minigame_2048_service as svc
@@ -313,6 +314,65 @@ class SettlementTests(unittest.TestCase):
                          ["2048-2026-09-21", "2048-2026-09-28", "2048-2026-10-05"])
         self.assertEqual([row["status"] for row in periods], ["skipped", "paid", "paid"])
         self.assertEqual(results[-1]["status"], "paid")
+
+
+class RulesUpgradeTests(unittest.TestCase):
+    """规则升级（v1 的 4×4 → v2 的 5×5 + 合并失败）：旧局作废、自动开新局，不删数据。"""
+
+    def setUp(self):
+        self.conn = make_conn()
+        stamp = "2026-09-19T00:00:00Z"
+        legacy_cells = [0] * 16
+        legacy_cells[0] = 2
+        legacy_cells[6] = 2
+        self.conn.execute(
+            "INSERT INTO minigame_2048_games"
+            " (user_id, game_uid, seed, rules_version, save_version, ops, op_index,"
+            "  checkpoint_index, checkpoint_cells, checkpoint_score, checkpoint_rng_state,"
+            "  score, max_tile, status, reached_2048, continued, source, created_at, updated_at)"
+            " VALUES (1, 'legacy-1', 12345, 1, 1, '', 0, 0, ?, 0, 12345, 0, 2,"
+            "         'active', 0, 0, 'online', ?, ?)",
+            (json.dumps(legacy_cells), stamp, stamp),
+        )
+        self.conn.commit()
+
+    def test_load_state_archives_old_game_and_starts_a_new_one(self):
+        state = svc.load_state(self.conn, 1)
+        self.assertTrue(state["rules_upgraded"])
+        self.assertEqual(state["rules"]["rules_version"], g.RULES_VERSION)
+        self.assertEqual(int(state["game"]["rules_version"]), g.RULES_VERSION)
+        self.assertEqual(len(state["board"]["cells"]), g.CELL_COUNT)
+        legacy = self.conn.execute(
+            "SELECT * FROM minigame_2048_games WHERE game_uid = 'legacy-1'").fetchone()
+        self.assertEqual(legacy["status"], "closed")          # 不删，只关闭
+        self.assertEqual(legacy["rules_version"], 1)          # 仍记着自己的规则版本
+        audit = self.conn.execute(
+            "SELECT * FROM minigame_2048_audit WHERE kind = 'rules_upgraded'").fetchone()
+        self.assertIsNotNone(audit)
+        active = self.conn.execute(
+            "SELECT COUNT(*) AS n FROM minigame_2048_games WHERE status = 'active'").fetchone()
+        self.assertEqual(active["n"], 1)
+
+    def test_second_load_is_not_flagged_again(self):
+        svc.load_state(self.conn, 1)
+        again = svc.load_state(self.conn, 1)
+        self.assertFalse(again["rules_upgraded"])
+
+    def test_sync_from_old_rules_game_reports_upgrade(self):
+        result = svc.sync_progress(self.conn, 1, "legacy-1", 0, "")
+        self.assertEqual(result["status"], "stale_game")
+        self.assertTrue(result["rules_upgraded"])
+        state = svc.load_state(self.conn, 1)
+        self.assertEqual(len(state["board"]["cells"]), g.CELL_COUNT)
+        self.assertFalse(state["rules_upgraded"])
+
+    def test_restart_with_the_same_seed_still_gets_a_fresh_game(self):
+        # 曾经的 bug：同一种子重开会撞 game_uid 的唯一约束，restart 直接 500。
+        first = svc.create_game(self.conn, 1, seed=424242)
+        second = svc.create_game(self.conn, 1, seed=424242)
+        self.assertNotEqual(first["game"]["game_uid"], second["game"]["game_uid"])
+        self.assertEqual(int(second["game"]["rules_version"]), g.RULES_VERSION)
+        self.assertEqual(second["game"]["seed"], first["game"]["seed"])
 
 
 if __name__ == "__main__":

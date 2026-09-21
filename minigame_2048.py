@@ -11,6 +11,10 @@
 
 客户端实现见 ``static/js/minigame_2048.js``，两边必须给出相同的棋盘、分数、
 随机状态与结束判定（测试用同一组种子对拍）。
+
+规则 v2（RULES_VERSION = 2）：棋盘 5×5；每次"本应合并"都有 20% 概率**失败**——
+只留下一个原值方块（不翻倍），位置就是合并结果本该出现的那一格；失败与否
+同样由 ``(种子, 操作序列)`` 决定（每次合并消耗一个随机数，按扫描顺序）。
 """
 
 from __future__ import annotations
@@ -18,14 +22,15 @@ from __future__ import annotations
 import json
 from typing import Dict, Iterable, List, Optional, Tuple
 
-BOARD_SIZE = 4
+BOARD_SIZE = 5
 CELL_COUNT = BOARD_SIZE * BOARD_SIZE
 
 PROTOCOL_VERSION = 1
-RULES_VERSION = 1        # 规则不兼容变更时 +1（排行榜按版本隔离）
+RULES_VERSION = 2        # v2 = 5×5 + 合并有概率失败（不翻倍）；排行榜按版本隔离
 SAVE_VERSION = 1         # 存档结构版本
 SPAWN_MIN_VALUE = 2
 SPAWN_MIN_RATIO = 90     # 90% 出 2（Common），10% 出 4（Unusual）
+MERGE_FAIL_PERCENT = 20  # 每次合并消耗一个随机数：<20 判这次合并"碎裂失败"（留在原地且不翻倍）
 SEED_MASK = 0xFFFFFFFF
 
 # 唯一色板（用户给定表；名称不随语言翻译，色板与明暗主题无关）。
@@ -159,28 +164,35 @@ def initial_state(seed) -> Dict[str, object]:
     }
 
 
-def _merge_line(line: List[int]) -> Tuple[List[int], int, List[Dict[str, int]]]:
-    """把一行（已按滑动方向排好）压紧并合并，返回 ``(结果, 得分, 合并明细)``。"""
+def _merge_line(line: List[int], rng_state: int) -> Tuple[List[int], int, List[Dict[str, object]], int]:
+    """把一行（已按滑动方向排好）压紧并合并，返回 ``(结果, 得分, 合并明细, 新随机状态)``。
+
+    每次"本应合并"（两个同值方块相遇）都消耗一个随机数：
+    ``roll < MERGE_FAIL_PERCENT`` 时这次合并**失败**——只留下一个原值方块（不翻倍），
+    得分按留下的方块数值计。失败与否由 ``(种子, 操作序列)`` 完全决定，两端必须一致。
+    """
 
     packed = [value for value in line if value]
     out: List[int] = []
     gained = 0
-    merges: List[Dict[str, int]] = []
+    merges: List[Dict[str, object]] = []
     index = 0
     while index < len(packed):
         current = packed[index]
         if index + 1 < len(packed) and packed[index + 1] == current:
-            merged = current * 2
-            gained += merged
-            merges.append({"value": merged, "from": current})
-            out.append(merged)
+            rng_state, roll = rng_range(rng_state, 100)
+            failed = roll < MERGE_FAIL_PERCENT
+            value = current if failed else current * 2
+            gained += value
+            merges.append({"value": value, "from": current, "failed": failed})
+            out.append(value)
             index += 2
             continue
         out.append(current)
         index += 1
     while len(out) < BOARD_SIZE:
         out.append(0)
-    return out, gained, merges
+    return out, gained, merges, rng_state
 
 
 def line_indices(direction: int) -> List[List[int]]:
@@ -202,19 +214,22 @@ def line_indices(direction: int) -> List[List[int]]:
     return lines
 
 
-def apply_move(cells: List[int], direction: int) -> Dict[str, object]:
-    """执行一次方向操作；不做生成，返回棋盘/得分/是否变化/合并明细。"""
+def apply_move(cells: List[int], direction: int, rng_state: int = 0) -> Dict[str, object]:
+    """执行一次方向操作；不做生成，返回棋盘/得分/是否变化/合并明细/新随机状态。"""
 
     if direction not in range(4):
         raise Minigame2048Error("方向必须是 0..3")
     board = [int(value or 0) for value in cells]
     if len(board) != CELL_COUNT:
-        raise Minigame2048Error("棋盘长度必须是 16")
+        raise Minigame2048Error(f"棋盘长度必须是 {CELL_COUNT}")
     out = [0] * CELL_COUNT
     gained = 0
-    merges: List[Dict[str, int]] = []
+    merges: List[Dict[str, object]] = []
+    state = int(rng_state) & SEED_MASK
     for indexes in line_indices(direction):
-        merged_line, line_gain, line_merges = _merge_line([board[index] for index in indexes])
+        merged_line, line_gain, line_merges, state = _merge_line(
+            [board[index] for index in indexes], state,
+        )
         gained += line_gain
         for offset, index in enumerate(indexes):
             out[index] = merged_line[offset]
@@ -225,6 +240,7 @@ def apply_move(cells: List[int], direction: int) -> Dict[str, object]:
         "gained": gained,
         "changed": out != board,
         "merges": merges,
+        "rng_state": state,
     }
 
 
@@ -257,7 +273,7 @@ def step(state: Dict[str, object], direction: int) -> Dict[str, object]:
     """一次方向操作：无效操作不加分、不生成、不推进随机状态。"""
 
     cells = [int(value or 0) for value in state["cells"]]
-    move = apply_move(cells, direction)
+    move = apply_move(cells, direction, int(state["rng_state"]))
     if not move["changed"]:
         return {
             "cells": cells,
@@ -269,8 +285,8 @@ def step(state: Dict[str, object], direction: int) -> Dict[str, object]:
             "merges": [],
             "reached_2048": False,
         }
-    rng_state, info = state["rng_state"], None
-    new_cells, rng_state, info = spawn_tile(list(move["cells"]), int(rng_state))
+    rng_state, info = int(move["rng_state"]), None
+    new_cells, rng_state, info = spawn_tile(list(move["cells"]), rng_state)
     score_before = int(state.get("score") or 0)
     score = score_before + int(move["gained"])
     reached = score_before < ETERNAL_VALUE <= max_tile(move["cells"]) or (

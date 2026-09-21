@@ -8,13 +8,13 @@
    `from_index` 续传，服务端重放验证。401/403 视为真实拒绝，不用缓存绕过。 */
 
 import {
-  DIRECTION_CHARS, DIRECTIONS, ETERNAL_VALUE, initialCells, isGameOver, maxTile,
-  seedFromText, stepMove,
+  BOARD_SIZE, CELL_COUNT, DIRECTION_CHARS, DIRECTIONS, ETERNAL_VALUE, initialCells,
+  isGameOver, maxTile, seedFromText, stepMove,
 } from './minigame_2048_core.js';
 
 const CONFIG = JSON.parse(document.getElementById('mg-config').textContent || '{}');
 const PALETTE = JSON.parse(document.getElementById('mg-palette').textContent || '[]');
-const RULES_VERSION = 1;
+const RULES_VERSION = 2;      // v2 = 5×5 + 合并有 20% 概率失败（不翻倍）
 const SAVE_VERSION = 1;
 const MAX_PENDING_OPS = 20000;
 const SYNC_DEBOUNCE_MS = 400;
@@ -138,7 +138,8 @@ function loadLocal() {
     const raw = store.getItem(accountKey);
     if (!raw) return null;
     const data = JSON.parse(raw);
-    if (!data || data.saveVersion !== SAVE_VERSION) return null;
+    // 规则版本不同（例如 4×4 老档）直接作废：用新规则重开会更省事，也不会把老棋盘喂给新引擎。
+    if (!data || data.saveVersion !== SAVE_VERSION || data.rulesVersion !== RULES_VERSION) return null;
     return data;
   } catch (_) {
     return null;
@@ -191,7 +192,7 @@ function tileFaceHtml(value) {
    新块在它们上面 pop，生成＝同一帧插入新块并 appear。
    这里：16 个空格只建一次（占位），方块是绝对定位的 .mg-cell.filled，按格子坐标摆放。 */
 
-const TILE_COUNT = 16;
+const TILE_COUNT = CELL_COUNT;                 // 5×5 = 25（规则侧唯一来源）
 const tileEls = new Map();      // 当前格子下标 → 方块元素
 
 function ensureBoardSkeleton() {
@@ -212,7 +213,7 @@ function boardMetricsNow() {
   const style = getComputedStyle(boardEl);
   const gap = parseFloat(style.columnGap) || 0;
   const pad = parseFloat(style.paddingLeft) || 0;
-  const size = Math.max(8, (rect.width - pad * 2 - gap * 3) / 4);
+  const size = Math.max(8, (rect.width - pad * 2 - gap * (BOARD_SIZE - 1)) / BOARD_SIZE);
   return { gap, pad, size, width: rect.width };
 }
 
@@ -225,8 +226,8 @@ const MIN_MEASURABLE_BOARD_PX = 120;
 function placeTile(el, index, metrics, animate) {
   el.style.width = `${metrics.size}px`;
   el.style.height = `${metrics.size}px`;
-  el.style.left = `${metrics.pad + (index % 4) * (metrics.size + metrics.gap)}px`;
-  el.style.top = `${metrics.pad + Math.floor(index / 4) * (metrics.size + metrics.gap)}px`;
+  el.style.left = `${metrics.pad + (index % BOARD_SIZE) * (metrics.size + metrics.gap)}px`;
+  el.style.top = `${metrics.pad + Math.floor(index / BOARD_SIZE) * (metrics.size + metrics.gap)}px`;
   if (!animate) {
     el.style.transition = 'none';
     void el.offsetWidth;
@@ -284,6 +285,7 @@ function animateTiles() {
   const carried = [];
   const dying = new Map();
   const mergedValues = new Map();
+  const failedMerges = new Set();   // 这次移动里"碎裂失败"的合并（不翻倍，播裂纹动画）
 
   moves.forEach((move) => {
     if (!move || typeof move.from !== 'number') return;
@@ -295,6 +297,7 @@ function animateTiles() {
       if (!dying.has(move.to)) dying.set(move.to, []);
       dying.get(move.to).push(el);
       mergedValues.set(move.to, Number(state.cells[move.to]) || 0);
+      if (move.failed) failedMerges.add(move.to);
     }
   });
   carried.forEach(({ el, move }) => {
@@ -303,13 +306,14 @@ function animateTiles() {
   });
   mergedValues.forEach((value, index) => {
     if (!value) return;
+    const failed = failedMerges.has(index);
     const el = makeTile(value, index, metrics, true);
-    el.classList.add('mg-tile-merged');
+    el.classList.add(failed ? 'mg-tile-cracked' : 'mg-tile-merged');
     tileEls.set(index, el);
     window.setTimeout(() => {
       (dying.get(index) || []).forEach((source) => source.remove());
-      el.classList.remove('mg-tile-merged');
-    }, 320);
+      el.classList.remove('mg-tile-merged', 'mg-tile-cracked');
+    }, failed ? 260 : 320);
   });
   const spawnIndex = state.lastSpawn;
   if (typeof spawnIndex === 'number' && state.cells[spawnIndex] && !tileEls.has(spawnIndex)) {
@@ -546,7 +550,9 @@ async function handleConflict(body) {
     }));
   } catch (_) { /* 备份失败也不阻断 */ }
   const serverState = body.state;
-  setSyncText('与服务器进度分叉：已用服务器分支继续，本地分支已备份', 'conflict');
+  setSyncText(body.rules_upgraded
+    ? '规则已升级（棋盘 5×5、合并可能碎裂）：旧局已作废并开了新局'
+    : '与服务器进度分叉：已用服务器分支继续，本地分支已备份', 'conflict');
   if (serverState && serverState.game) {
     adoptServerState(serverState);
   }
@@ -1034,7 +1040,13 @@ async function boot() {
       return;
     }
     const data = await response.json();
-    if (!state || !state.gameUid) {
+    if (data.rules_upgraded) {
+      // 规则升级（5×5 + 合并失败）：服务端已把旧局作废并开了新局，本地老档直接丢掉
+      adoptServerState(data);
+      state.best = Math.max(state.best || 0, state.score);
+      saveLocal();
+      setSyncText('规则已升级：棋盘 5×5、合并可能碎裂，旧局已作废并开了新局', 'ok');
+    } else if (!state || !state.gameUid) {
       adoptServerState(data);
       state.best = Math.max(state.best || 0, state.score);
       saveLocal();

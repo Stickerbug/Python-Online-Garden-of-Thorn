@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""2048 规则核心的验收用例（用户验收 1–4）。"""
+"""2048 规则核心的验收用例（用户验收 1–4；规则 v2：5×5 + 20% 合并失败）。"""
 
 from __future__ import annotations
 
@@ -7,62 +7,153 @@ import unittest
 
 import minigame_2048 as g
 
+SIZE = g.BOARD_SIZE
+
 
 def board(rows):
     cells = []
     for row in rows:
-        assert len(row) == 4
+        assert len(row) == SIZE, row
         cells.extend(row)
     return cells
 
 
 def rows(cells):
-    return [list(cells[index * 4:index * 4 + 4]) for index in range(4)]
+    return [list(cells[index * SIZE:index * SIZE + SIZE]) for index in range(SIZE)]
 
 
-def move_line(line, direction="left"):
+def find_roll(target):
+    """找一个随机状态，让下一次合并判定的 roll 恰好等于 target。"""
+
+    for seed in range(1, 500000):
+        _nxt, roll = g.rng_range(seed, 100)
+        if roll == target:
+            return seed
+    raise AssertionError(f"找不到 roll={target} 的随机状态")
+
+
+def find_state(fail_spec):
+    """找一个随机状态，让接下来的合并判定依次命中给定的失败/成功序列。"""
+
+    for seed in range(1, 500000):
+        state = seed
+        ok = True
+        for want_fail in fail_spec:
+            state, roll = g.rng_range(state, 100)
+            if (roll < g.MERGE_FAIL_PERCENT) != bool(want_fail):
+                ok = False
+                break
+        if ok:
+            return seed
+    raise AssertionError(f"找不到满足 {fail_spec} 的随机状态")
+
+
+FAIL, OK = True, False
+ROLL_FAIL_MAX = g.MERGE_FAIL_PERCENT - 1          # 19：失败
+ROLL_OK_MIN = g.MERGE_FAIL_PERCENT                # 20：成功
+
+
+def move_line(line, direction="left", rng_state=0):
     """把一行放进空棋盘再滑动，取回那一行（用于验收用例 1）。"""
 
-    cells = board([line, [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]])
-    result = g.apply_move(cells, g.DIRECTIONS[direction])
-    return rows(result["cells"])[0], result["gained"]
+    cells = board([line] + [[0] * SIZE for _ in range(SIZE - 1)])
+    result = g.apply_move(cells, g.DIRECTIONS[direction], rng_state)
+    return rows(result["cells"])[0], result["gained"], result["merges"], result["rng_state"]
+
+
+class BoardShapeTests(unittest.TestCase):
+    def test_rules_v2_is_five_by_five(self):
+        self.assertEqual(g.RULES_VERSION, 2)
+        self.assertEqual(SIZE, 5)
+        self.assertEqual(g.CELL_COUNT, 25)
+        self.assertEqual(len(g.initial_state(1)["cells"]), 25)
 
 
 class MergeRuleTests(unittest.TestCase):
-    def test_four_twos_merge_into_two_fours(self):
-        line, gained = move_line([2, 2, 2, 2])
-        self.assertEqual(line, [4, 4, 0, 0])
+    def test_four_twos_merge_into_two_fours_when_both_succeed(self):
+        line, gained, merges, _state = move_line([2, 2, 2, 2, 0], rng_state=find_state([OK, OK]))
+        self.assertEqual(line, [4, 4, 0, 0, 0])
         self.assertEqual(gained, 8)
+        self.assertEqual([item["failed"] for item in merges], [False, False])
+
+    def test_failed_merge_keeps_value_and_does_not_double(self):
+        line, gained, merges, _state = move_line([2, 2, 0, 0, 0], rng_state=find_state([FAIL]))
+        self.assertEqual(line, [2, 0, 0, 0, 0])          # 只留下一个原值方块
+        self.assertEqual(gained, 2)                       # 分数按留下的方块算
+        self.assertTrue(merges[0]["failed"])
+        self.assertEqual(merges[0]["value"], 2)
+
+    def test_roll_boundary_is_exactly_twenty_percent(self):
+        line, _gained, merges, _state = move_line([2, 2, 0, 0, 0], rng_state=find_roll(ROLL_FAIL_MAX))
+        self.assertTrue(merges[0]["failed"], "roll=19 应当失败")
+        self.assertEqual(line[0], 2)
+        line_ok, _gained_ok, merges_ok, _state_ok = move_line(
+            [2, 2, 0, 0, 0], rng_state=find_roll(ROLL_OK_MIN),
+        )
+        self.assertFalse(merges_ok[0]["failed"], "roll=20 应当成功")
+        self.assertEqual(line_ok[0], 4)
+
+    def test_each_merge_consumes_one_roll_in_scan_order(self):
+        # 第一次失败、第二次成功：[2,2,2,2] → [2,4]，得分 2+4
+        line, gained, merges, _state = move_line([2, 2, 2, 2, 0], rng_state=find_state([FAIL, OK]))
+        self.assertEqual(line, [2, 4, 0, 0, 0])
+        self.assertEqual(gained, 6)
+        self.assertEqual([item["failed"] for item in merges], [True, False])
 
     def test_two_two_four_keeps_first_merge(self):
-        line, gained = move_line([2, 2, 4, 0])
-        self.assertEqual(line, [4, 4, 0, 0])
+        line, gained, _merges, _state = move_line([2, 2, 4, 0, 0], rng_state=find_state([OK]))
+        self.assertEqual(line, [4, 4, 0, 0, 0])
         self.assertEqual(gained, 4)
 
     def test_four_fours_merge_into_two_eights(self):
-        line, gained = move_line([4, 4, 4, 4])
-        self.assertEqual(line, [8, 8, 0, 0])
+        line, gained, _merges, _state = move_line([4, 4, 4, 4, 0], rng_state=find_state([OK, OK]))
+        self.assertEqual(line, [8, 8, 0, 0, 0])
         self.assertEqual(gained, 16)
 
     def test_merged_tile_does_not_merge_again_in_the_same_move(self):
-        line, gained = move_line([2, 2, 4, 4])
-        self.assertEqual(line, [4, 8, 0, 0])
+        line, gained, _merges, _state = move_line([2, 2, 4, 4, 0], rng_state=find_state([OK, OK]))
+        self.assertEqual(line, [4, 8, 0, 0, 0])
         self.assertEqual(gained, 12)
 
     def test_right_direction_is_mirrored(self):
-        line, gained = move_line([2, 2, 2, 2], "right")
-        self.assertEqual(line, [0, 0, 4, 4])
+        line, gained, _merges, _state = move_line(
+            [2, 2, 2, 2, 0], "right", rng_state=find_state([OK, OK]),
+        )
+        self.assertEqual(line, [0, 0, 0, 4, 4])
         self.assertEqual(gained, 8)
 
     def test_up_and_down_columns(self):
-        cells = board([[2, 0, 0, 0], [2, 0, 0, 0], [4, 0, 0, 0], [4, 0, 0, 0]])
-        up = g.apply_move(cells, g.DIRECTIONS["up"])
+        cells = board([[2, 0, 0, 0, 0], [2, 0, 0, 0, 0], [4, 0, 0, 0, 0],
+                       [4, 0, 0, 0, 0], [0] * 5])
+        up = g.apply_move(cells, g.DIRECTIONS["up"], find_state([OK, OK]))
         self.assertEqual(rows(up["cells"])[0][0], 4)
         self.assertEqual(rows(up["cells"])[1][0], 8)
         self.assertEqual(up["gained"], 12)
-        down = g.apply_move(cells, g.DIRECTIONS["down"])
-        self.assertEqual(rows(down["cells"])[2][0], 4)
-        self.assertEqual(rows(down["cells"])[3][0], 8)
+        down = g.apply_move(cells, g.DIRECTIONS["down"], find_state([OK, OK]))
+        self.assertEqual(rows(down["cells"])[3][0], 4)
+        self.assertEqual(rows(down["cells"])[4][0], 8)
+
+    def test_rng_advances_on_merge_and_stays_on_invalid_move(self):
+        state = find_state([FAIL])
+        moved = g.apply_move(board([[2, 2, 0, 0, 0]] + [[0] * 5] * 4), g.DIRECTIONS["left"], state)
+        self.assertNotEqual(moved["rng_state"], state)
+        stuck = board([[2, 4, 8, 16, 32]] + [[0] * 5] * 4)
+        still = g.apply_move(stuck, g.DIRECTIONS["left"], state)
+        self.assertFalse(still["changed"])
+        self.assertEqual(still["rng_state"], state)
+
+    def test_merge_failure_rate_is_about_twenty_percent(self):
+        cells = board([[2, 2, 0, 0, 0]] + [[0] * 5] * 4)
+        state = 24681357
+        failures = 0
+        rounds = 4000
+        for _ in range(rounds):
+            result = g.apply_move(cells, g.DIRECTIONS["left"], state)
+            state = result["rng_state"]
+            failures += 1 if result["merges"][0]["failed"] else 0
+        ratio = failures / rounds
+        self.assertGreater(ratio, 0.17)
+        self.assertLess(ratio, 0.23)
 
     def test_long_names_come_from_the_fixed_palette(self):
         expected = {
@@ -85,7 +176,7 @@ class SpawnTests(unittest.TestCase):
     def test_only_changed_moves_spawn_and_score(self):
         state = g.initial_state(12345)
         blocked = {"seed": state["seed"], "rng_state": state["rng_state"],
-                   "cells": board([[2, 4, 8, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]),
+                   "cells": board([[2, 4, 8, 16, 0]] + [[0] * 5] * 4),
                    "score": 10}
         left = g.step(dict(blocked), g.DIRECTIONS["left"])       # 左移无效：第一行已靠左
         self.assertFalse(left["changed"])
@@ -101,7 +192,7 @@ class SpawnTests(unittest.TestCase):
         self.assertNotEqual(right["rng_state"], blocked["rng_state"])
 
     def test_spawn_distribution_is_about_90_percent(self):
-        cells = [0] * 16
+        cells = [0] * g.CELL_COUNT
         state = 987654321
         twos = 0
         total = 4000
@@ -115,17 +206,21 @@ class SpawnTests(unittest.TestCase):
         self.assertLess(ratio, 0.93)
 
     def test_spawn_places_into_empty_cells_only(self):
-        cells = board([[2, 4, 2, 4], [4, 2, 4, 2], [2, 4, 2, 4], [4, 2, 4, 0]])
+        cells = board([[2, 4, 2, 4, 2], [4, 2, 4, 2, 4], [2, 4, 2, 4, 2],
+                       [4, 2, 4, 2, 4], [2, 4, 2, 4, 0]])
         new_cells, _state, info = g.spawn_tile(cells, 42)
-        self.assertEqual(info["index"], 15)
-        self.assertIn(new_cells[15], (2, 4))
+        self.assertEqual(info["index"], 24)
+        self.assertIn(new_cells[24], (2, 4))
 
     def test_game_over_requires_full_board_without_merges(self):
-        stuck = board([[2, 4, 2, 4], [4, 2, 4, 2], [2, 4, 2, 4], [4, 2, 4, 2]])
+        stuck = board([[2, 4, 2, 4, 2], [4, 2, 4, 2, 4], [2, 4, 2, 4, 2],
+                       [4, 2, 4, 2, 4], [2, 4, 2, 4, 2]])
         self.assertTrue(g.is_game_over(stuck))
-        mergeable = board([[2, 2, 4, 8], [4, 8, 16, 32], [2, 4, 8, 16], [4, 8, 16, 32]])
+        mergeable = board([[2, 2, 4, 8, 16], [4, 8, 16, 32, 64], [2, 4, 8, 16, 32],
+                           [4, 8, 16, 32, 64], [2, 4, 8, 16, 32]])
         self.assertFalse(g.is_game_over(mergeable))
-        roomy = board([[2, 0, 4, 8], [4, 8, 16, 32], [2, 4, 8, 16], [4, 8, 16, 32]])
+        roomy = board([[2, 0, 4, 8, 16], [4, 8, 16, 32, 64], [2, 4, 8, 16, 32],
+                       [4, 8, 16, 32, 64], [2, 4, 8, 16, 32]])
         self.assertFalse(g.is_game_over(roomy))
 
 
@@ -162,6 +257,14 @@ class DeterminismTests(unittest.TestCase):
         self.assertEqual(tail["score"], full["score"])
         self.assertEqual(tail["rng_state"], full["rng_state"])
 
+    def test_failure_pattern_is_reproducible_from_seed_and_ops(self):
+        ops = "l" * 6 + "u" * 4 + "r" * 3 + "d" * 5
+        first = g.replay(31337, ops)
+        second = g.replay(31337, ops)
+        self.assertEqual(first["cells"], second["cells"])
+        self.assertEqual(first["score"], second["score"])
+        self.assertEqual(first["rng_state"], second["rng_state"])
+
     def test_verify_submission_accepts_matching_and_rejects_tampering(self):
         seed = 13579
         ops = "lurd"
@@ -171,7 +274,7 @@ class DeterminismTests(unittest.TestCase):
         self.assertTrue(ok["ok"], ok)
         bad_score = g.verify_submission(seed, ops, claimed_score=truth["score"] + 4)
         self.assertFalse(bad_score["ok"])
-        bad_cells = g.verify_submission(seed, ops, claimed_cells=[2] * 16)
+        bad_cells = g.verify_submission(seed, ops, claimed_cells=[2] * g.CELL_COUNT)
         self.assertFalse(bad_cells["ok"])
         unknown = g.verify_submission(seed, "lx")
         self.assertFalse(unknown["ok"])
@@ -182,9 +285,9 @@ class DeterminismTests(unittest.TestCase):
         self.assertEqual(g.ops_from_list("lurd"), "lurd")
 
     def test_eternal_flag_fires_once_per_reach(self):
-        # 直接摆一个 1024+1024 的局面，合并后应报"首次达成 2048"。
-        state = {"seed": 5, "rng_state": 1234567, "score": 0,
-                 "cells": board([[1024, 1024, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]])}
+        # 直接摆一个 1024+1024 的局面；用"必定成功"的随机状态，合并后应报"首次达成 2048"。
+        state = {"seed": 5, "rng_state": find_state([OK]), "score": 0,
+                 "cells": board([[1024, 1024, 0, 0, 0]] + [[0] * 5] * 4)}
         result = g.step(state, g.DIRECTIONS["left"])
         self.assertTrue(result["reached_2048"])
         self.assertEqual(result["score"], 2048)
