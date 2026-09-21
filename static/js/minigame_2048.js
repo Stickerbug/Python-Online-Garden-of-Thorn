@@ -614,7 +614,8 @@ function move(direction) {
       title: '达成 Eternal（2048）！',
       text: '可以继续合成 Fabled、Divine 等更高级方块，也可以开新局。',
       primary: { label: '继续游戏', run: () => { hideOverlay(); } },
-      secondary: { label: '重新开始', run: () => { hideOverlay(); void restartGame(); } },
+      // 已经在这个界面内弹窗里点过"重新开始"了，不再问第二次
+      secondary: { label: '重新开始', run: () => { hideOverlay(); void restartGame({ confirm: false }); } },
     });
   } else if (isGameOver(state.cells)) {
     showOverlay({
@@ -626,8 +627,37 @@ function move(direction) {
   }
 }
 
-async function restartGame() {
-  if (!window.confirm('确定重新开始？当前这局会关闭（已获得的成绩与待同步操作都会保留）。')) return;
+/* 界面内的确认框：复用棋盘上的浮层（不弹系统浏览器对话框）。
+   回车 = 主按钮，Esc = 次按钮（见下面的 keydown）。 */
+function mgConfirm({ title, text, confirmLabel = '确定', cancelLabel = '取消' }) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      hideOverlay();
+      resolve(value);
+    };
+    showOverlay({
+      title,
+      text,
+      primary: { label: confirmLabel, run: () => finish(true) },
+      secondary: { label: cancelLabel, run: () => finish(false) },
+    });
+  });
+}
+
+const RESTART_ASK = {
+  title: '重新开始？',
+  text: '当前这局会关闭（已获得的成绩与待同步操作都会保留）。',
+  confirmLabel: '重新开始',
+  cancelLabel: '继续这局',
+};
+
+async function restartGame({ confirm = true } = {}) {
+  // 已经输了（满格且没有相邻同值）时没必要再问一次，直接开新局。
+  const alreadyLost = !!(state && Array.isArray(state.cells) && isGameOver(state.cells));
+  if (confirm && !alreadyLost && !(await mgConfirm(RESTART_ASK))) return;
   try {
     const response = await fetch('/api/minigame/2048/restart', {
       method: 'POST',
@@ -684,6 +714,19 @@ function isEditable(target) {
 
 document.addEventListener('keydown', (event) => {
   if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+  if (!overlayEl.hidden) {
+    // 界面内弹窗打开时：回车按主按钮、Esc 按次按钮，其余按键不落到棋盘上
+    const primary = el('mg-overlay-primary');
+    const secondary = el('mg-overlay-secondary');
+    if (event.key === 'Enter' && primary) {
+      event.preventDefault();
+      primary.click();
+    } else if ((event.key === 'Escape' || event.key === 'Esc') && secondary && !secondary.hidden) {
+      event.preventDefault();
+      secondary.click();
+    }
+    return;
+  }
   if (isEditable(event.target)) return;               // 聊天/设置输入框里不触发移动
   const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
   if (key === 'r') {
