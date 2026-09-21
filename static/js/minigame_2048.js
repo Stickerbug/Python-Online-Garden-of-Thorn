@@ -14,7 +14,7 @@ import {
 
 const CONFIG = JSON.parse(document.getElementById('mg-config').textContent || '{}');
 const PALETTE = JSON.parse(document.getElementById('mg-palette').textContent || '[]');
-const RULES_VERSION = 2;      // v2 = 5×5 + 合并有 20% 概率失败（不翻倍）
+const RULES_VERSION = 2;      // v2 = 5×5 + 合并有 15% 概率失败（不翻倍）
 const SAVE_VERSION = 1;
 const MAX_PENDING_OPS = 20000;
 const SYNC_DEBOUNCE_MS = 400;

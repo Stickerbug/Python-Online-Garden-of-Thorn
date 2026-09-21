@@ -2,7 +2,7 @@
 
    必须与 Python 侧 `minigame_2048.py` 逐位一致：32 位 xorshift、90% 出 2、
    空格等概率、同一次操作里新合成的方块不再合并、只有棋盘变化才生成新块。
-   规则 v2：棋盘 5×5；每次"本应合并"消耗一个随机数，<20 判**合并失败**——
+   规则 v2：棋盘 5×5；每次"本应合并"消耗一个随机数，<15 判**合并失败**——
    只留下一个原值方块（不翻倍），位置就是合并结果本该出现的那一格。
    对拍脚本见 `tests/test_minigame_2048_parity.py`（Node ↔ Python）。 */
 
@@ -12,7 +12,7 @@ export const ETERNAL_VALUE = 2048;
 export const BOARD_SIZE = 5;
 export const CELL_COUNT = BOARD_SIZE * BOARD_SIZE;
 export const RULES_VERSION = 2;
-export const MERGE_FAIL_PERCENT = 20;
+export const MERGE_FAIL_PERCENT = 15;
 
 export function rngNext(value) {
   let x = value >>> 0;

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""2048 规则核心的验收用例（用户验收 1–4；规则 v2：5×5 + 20% 合并失败）。"""
+"""2048 规则核心的验收用例（用户验收 1–4；规则 v2：5×5 + 15% 合并失败）。"""
 
 from __future__ import annotations
 
@@ -49,8 +49,8 @@ def find_state(fail_spec):
 
 
 FAIL, OK = True, False
-ROLL_FAIL_MAX = g.MERGE_FAIL_PERCENT - 1          # 19：失败
-ROLL_OK_MIN = g.MERGE_FAIL_PERCENT                # 20：成功
+ROLL_FAIL_MAX = g.MERGE_FAIL_PERCENT - 1          # 14：失败
+ROLL_OK_MIN = g.MERGE_FAIL_PERCENT                # 15：成功
 
 
 def move_line(line, direction="left", rng_state=0):
@@ -83,14 +83,14 @@ class MergeRuleTests(unittest.TestCase):
         self.assertTrue(merges[0]["failed"])
         self.assertEqual(merges[0]["value"], 2)
 
-    def test_roll_boundary_is_exactly_twenty_percent(self):
+    def test_roll_boundary_is_exactly_fifteen_percent(self):
         line, _gained, merges, _state = move_line([2, 2, 0, 0, 0], rng_state=find_roll(ROLL_FAIL_MAX))
-        self.assertTrue(merges[0]["failed"], "roll=19 应当失败")
+        self.assertTrue(merges[0]["failed"], "roll=14 应当失败")
         self.assertEqual(line[0], 2)
         line_ok, _gained_ok, merges_ok, _state_ok = move_line(
             [2, 2, 0, 0, 0], rng_state=find_roll(ROLL_OK_MIN),
         )
-        self.assertFalse(merges_ok[0]["failed"], "roll=20 应当成功")
+        self.assertFalse(merges_ok[0]["failed"], "roll=15 应当成功")
         self.assertEqual(line_ok[0], 4)
 
     def test_each_merge_consumes_one_roll_in_scan_order(self):
@@ -142,7 +142,7 @@ class MergeRuleTests(unittest.TestCase):
         self.assertFalse(still["changed"])
         self.assertEqual(still["rng_state"], state)
 
-    def test_merge_failure_rate_is_about_twenty_percent(self):
+    def test_merge_failure_rate_is_about_fifteen_percent(self):
         cells = board([[2, 2, 0, 0, 0]] + [[0] * 5] * 4)
         state = 24681357
         failures = 0
@@ -152,8 +152,8 @@ class MergeRuleTests(unittest.TestCase):
             state = result["rng_state"]
             failures += 1 if result["merges"][0]["failed"] else 0
         ratio = failures / rounds
-        self.assertGreater(ratio, 0.17)
-        self.assertLess(ratio, 0.23)
+        self.assertGreater(ratio, 0.12)
+        self.assertLess(ratio, 0.18)
 
     def test_long_names_come_from_the_fixed_palette(self):
         expected = {

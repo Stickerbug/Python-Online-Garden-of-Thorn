@@ -411,8 +411,8 @@
 .mg-tile-merged { animation: mg-pop 200ms ease 100ms backwards; }
 .mg-tile-merged .mg-tile-face { animation: mg-pop-inverse 200ms ease 100ms backwards; }
 
-/* 合并**失败**（规则 v2 的 20%）：两块滑到一起后只留下一个原值方块，
-   播一条很短的"碎裂"——一道细裂纹闪过 + 轻微抖一下 + 压暗，约 200ms 收尾，
+/* 合并**失败**（规则 v2 的 15%）：两块滑到一起后只留下一个原值方块，
+   播一条很短的"碎裂"——一个横跨整块的叉闪过 + 轻微抖一下 + 压暗，约 200ms 收尾，
    不震屏、不改变布局，也不延迟下一步操作。 */
 .mg-tile-cracked { animation: mg-crack-shake 200ms ease-out both; }
 .mg-tile-cracked::after {
@@ -420,10 +420,18 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  /* 两道细折线拼成一条裂纹；纯 CSS，不引素材 */
+  /* 两条对角线拼成一个横跨整块方块（角到角）的叉；纯 CSS，不引素材 */
   background:
-    linear-gradient(104deg, transparent 46.6%, rgba(21, 32, 27, .5) 47.4%, rgba(21, 32, 27, .5) 48.6%, transparent 49.4%),
-    linear-gradient(64deg, transparent 45.2%, rgba(21, 32, 27, .34) 46.2%, rgba(21, 32, 27, .34) 47.2%, transparent 48.2%);
+    linear-gradient(to top right,
+      transparent calc(50% - 1.2px),
+      rgba(21, 32, 27, .55) calc(50% - 1.2px),
+      rgba(21, 32, 27, .55) calc(50% + 1.2px),
+      transparent calc(50% + 1.2px)),
+    linear-gradient(to bottom right,
+      transparent calc(50% - 1.2px),
+      rgba(21, 32, 27, .55) calc(50% - 1.2px),
+      rgba(21, 32, 27, .55) calc(50% + 1.2px),
+      transparent calc(50% + 1.2px));
   animation: mg-crack-fade 200ms ease-out both;
   pointer-events: none;
 }
