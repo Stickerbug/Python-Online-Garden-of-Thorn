@@ -433,11 +433,11 @@ window.__mgFit = () => fitTileNames({ force: true });
 function buildLegend() {
   const host = el('mg-legend-grid');
   if (!host) return;
-  // 排版照 AK IOI 的 oi-2048 对照表：左边"方块 + 名称"，最右边是数值。
+  // 排版照 AK IOI 的 oi-2048 对照表：左边是"方块"（里面写稀有度名，不再重复数字），
+  // 最右边才是数值。名字越长字号越小，见 .mg-legend-swatch 的 --mg-legend-chars。
   host.innerHTML = PALETTE.map((item) => `
     <div class="mg-legend-item">
-      <span class="mg-legend-swatch" style="--mg-tile-bg:${item.bg};--mg-tile-fg:${item.fg}">${item.value}</span>
-      <span class="mg-legend-name">${item.name}</span>
+      <span class="mg-legend-swatch" style="--mg-tile-bg:${item.bg};--mg-tile-fg:${item.fg};--mg-legend-chars:${item.name.length}">${item.name}</span>
       <span class="mg-legend-value">${item.value}</span>
     </div>`).join('');
 }

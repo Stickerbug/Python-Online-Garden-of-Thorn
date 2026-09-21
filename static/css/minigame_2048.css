@@ -596,19 +596,20 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 46px;
+  /* 方块里写稀有度名（数值只保留最右一列，避免同一个数字出现两次） */
+  width: 96px;
   height: 30px;
-  border-radius: 3px;
+  padding: 0 6px;
+  border-radius: 4px;
   background: var(--mg-tile-bg);
   color: var(--mg-tile-fg);
-  font-size: 11px;
   font-weight: 700;
-}
-
-.mg-legend-name {
-  font-weight: 700;
-  color: var(--g-text);
-  overflow-wrap: anywhere;
+  /* 名字越长字号越小（--mg-legend-chars 由 JS 按名称长度写入） */
+  font-size: clamp(10px, calc(84px / (0.62 * var(--mg-legend-chars, 5))), 13px);
+  line-height: 1;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 /* AK IOI 对照表那一列：最右边是数值 */
@@ -766,6 +767,8 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 2px 10px;
   }
+  /* 窄屏两列：方块略窄一点，保证"名称方块 + 数值"两列都放得下 */
+  .mg-legend-swatch { width: 84px; }
   .mg-score-box { min-width: 78px; padding: 6px 8px 4px; }
   .mg-score-value { font-size: 20px; }
   .mg-overlay-card h2 { font-size: 34px; }
@@ -774,6 +777,13 @@
 @media (max-width: 380px) {
   .mg-frame { padding: 14px 8px 32px; }
   .mg-board { gap: 8px; padding: 8px; }
+  .mg-legend-swatch { width: 76px; }
+  /* 超窄屏：标题和分数格一起收一点，否则头部会比屏幕宽（横向滚动条） */
+  .mg-title { font-size: 38px; }
+  .mg-scores { gap: 4px; }
+  .mg-score-box { min-width: 64px; padding: 5px 7px 4px; }
+  .mg-score-label { font-size: 10px; }
+  .mg-score-value { font-size: 18px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
