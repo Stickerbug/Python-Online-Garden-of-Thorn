@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-  <title>2048 · 休闲花园</title>
+  <title>Craft Eternal · 休闲花园</title>
   <link rel="icon" href="/static/assets/favicon.ico">
   <link rel="stylesheet" href="/static/css/minigame_2048.css?v={{ static_version|default('dev')|urlencode }}">
   <script nonce="{{ csp_nonce }}">
@@ -24,7 +24,7 @@
       <span class="mg-tag">休闲花园 · 内测</span>
     </div>
     <div class="mg-head-row">
-      <h1 class="mg-title">2048</h1>
+      <h1 class="mg-title">Craft Eternal</h1>
       <div class="mg-scores">
         <div class="mg-score-box">
           <span class="mg-score-label">分数</span>
@@ -43,9 +43,12 @@
     </p>
   </header>
 
-  <div class="mg-actions">
-    <button id="mg-new" class="mg-btn" type="button">新游戏</button>
-    <button id="mg-rank" class="mg-btn secondary" type="button">排行榜</button>
+  <div class="mg-above-game">
+    <p class="mg-intro">合成稀有度得到 <strong>Eternal</strong>！</p>
+    <div class="mg-actions">
+      <button id="mg-new" class="mg-btn" type="button">新游戏</button>
+      <button id="mg-rank" class="mg-btn secondary" type="button">排行榜</button>
+    </div>
   </div>
 
   <div id="mg-invite" class="mg-invite" hidden>
@@ -71,28 +74,34 @@
     </label>
   </section>
 
-  <section class="mg-board-wrap">
-    <div id="mg-board" class="mg-board" role="grid" aria-label="2048 棋盘（方向键 / WASD / 触摸滑动）" tabindex="0"></div>
-    <div id="mg-overlay" class="mg-overlay" hidden>
-      <div class="mg-overlay-card">
-        <h2 id="mg-overlay-title">游戏结束</h2>
-        <p id="mg-overlay-text">没有空格也没有可以合并的相邻方块了。</p>
-        <div class="mg-overlay-actions">
-          <button id="mg-overlay-primary" class="mg-btn" type="button">再来一局</button>
-          <button id="mg-overlay-secondary" class="mg-btn secondary" type="button" hidden>继续游戏</button>
+  <div class="mg-main">
+    <section class="mg-board-wrap">
+      <div id="mg-board" class="mg-board" role="grid" aria-label="Craft Eternal 棋盘（方向键 / WASD / 触摸滑动）" tabindex="0"></div>
+      <div id="mg-overlay" class="mg-overlay" hidden>
+        <div class="mg-overlay-card">
+          <h2 id="mg-overlay-title">游戏结束</h2>
+          <p id="mg-overlay-text">没有空格也没有可以合并的相邻方块了。</p>
+          <div class="mg-overlay-actions">
+            <button id="mg-overlay-primary" class="mg-btn" type="button">再来一局</button>
+            <button id="mg-overlay-secondary" class="mg-btn secondary" type="button" hidden>继续游戏</button>
+          </div>
         </div>
       </div>
-    </div>
-  </section>
+    </section>
+
+    <aside class="mg-legend-col" aria-label="合成顺序">
+      <div class="mg-legend-head"><strong>合成顺序</strong><span>方块 / 稀有度 / 数值</span></div>
+      <div id="mg-legend-grid" class="mg-legend-grid"></div>
+    </aside>
+  </div>
 
   <details class="mg-panel">
-    <summary>玩法说明与合成顺序</summary>
+    <summary>玩法说明</summary>
     <div class="mg-panel-body">
       <p class="mg-hint">
         方向键 / WASD / 触摸滑动移动方块。同值方块相撞会合并，分数增加新方块的数值；
         只有棋盘真的变了才会生成新方块。成绩自动同步，不需要手动提交。
       </p>
-      <div id="mg-legend-grid" class="mg-legend-grid"></div>
       <p class="mg-hint">
         稀有度名称是这个小游戏的固定顺序，不代表其他作品里的等级关系；超出色表的数值按数字显示，不影响合并规则。
       </p>

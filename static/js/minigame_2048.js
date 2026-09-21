@@ -391,12 +391,13 @@ window.__mgFit = () => fitTileNames({ force: true });
 function buildLegend() {
   const host = el('mg-legend-grid');
   if (!host) return;
-  // 排版参考 AK IOI 的 oi-2048：左边一块"方块"，右边写名称（这里是稀有度名）。
+  // 排版照 AK IOI 的 oi-2048 对照表：左边"方块 + 名称"，最右边是数值。
   host.innerHTML = PALETTE.map((item) => `
-    <span class="mg-legend-item" style="--mg-tile-bg:${item.bg};--mg-tile-fg:${item.fg}">
-      <span class="mg-legend-swatch">${item.value}</span>
+    <div class="mg-legend-item">
+      <span class="mg-legend-swatch" style="--mg-tile-bg:${item.bg};--mg-tile-fg:${item.fg}">${item.value}</span>
       <span class="mg-legend-name">${item.name}</span>
-    </span>`).join('');
+      <span class="mg-legend-value">${item.value}</span>
+    </div>`).join('');
 }
 
 function showOverlay({ title, text, primary, secondary }) {

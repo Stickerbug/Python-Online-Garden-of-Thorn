@@ -70,10 +70,46 @@
 
 .mg-frame {
   width: 100%;
-  max-width: 500px;
+  max-width: 760px;
   margin: 0 auto;
   padding: 24px 12px 40px;
 }
+
+/* 棋盘 + 右侧"合成顺序"（照 AK IOI oi-2048：对照表放在棋盘右边） */
+.mg-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.mg-board-wrap { flex: 1 1 500px; max-width: 500px; position: relative; }
+
+.mg-legend-col {
+  flex: 0 0 210px;
+  align-self: stretch;
+  padding: 10px;
+  border: 1px solid rgba(119, 110, 101, 0.25);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+[data-theme="dark"] .mg-legend-col {
+  border-color: #3a332b;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.mg-legend-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid rgba(119, 110, 101, 0.25);
+}
+
+.mg-legend-head strong { font-size: 13px; }
+.mg-legend-head span { font-size: 11px; color: var(--g-text-soft); }
 
 /* ---------------- 标题与分数格（原版 .heading / .scores-container） ---------------- */
 
@@ -472,9 +508,9 @@
 .mg-hint strong { font-weight: 700; }
 
 .mg-legend-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 
 .mg-legend-item {
@@ -505,6 +541,15 @@
   font-weight: 700;
   color: var(--g-text);
   overflow-wrap: anywhere;
+}
+
+/* AK IOI 对照表那一列：最右边是数值 */
+.mg-legend-value {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--g-text-soft);
+  font-weight: 700;
+  font-size: 11px;
 }
 
 .mg-settings { gap: 8px; }
@@ -643,6 +688,14 @@
   .mg-title { font-size: 48px; }
   /* 原版窄屏：格子约 57.5px、间距/内边距 10px */
   .mg-board { gap: 10px; padding: 10px; }
+  /* 窄屏：合成顺序挪到棋盘下面（横排两列），不挡住棋盘 */
+  .mg-main { flex-direction: column; }
+  .mg-legend-col { flex: 1 1 auto; width: 100%; align-self: auto; }
+  .mg-legend-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2px 10px;
+  }
   .mg-score-box { min-width: 78px; padding: 6px 8px 4px; }
   .mg-score-value { font-size: 20px; }
   .mg-overlay-card h2 { font-size: 34px; }
