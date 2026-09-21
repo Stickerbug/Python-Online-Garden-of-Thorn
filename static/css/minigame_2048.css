@@ -214,10 +214,25 @@
 
 /* ---------------- 操作区（原版 .above-game：一句说明 + 大按钮） ---------------- */
 
+/* 说明和新游戏 / 排行榜排在同一行（说明在左、按钮在右）；
+   窄屏放不下时自动折行，按钮仍然靠右，不会挤在一起。 */
+.mg-above-game {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-top: 16px;
+}
+
+.mg-intro {
+  margin: 0;
+  min-width: 0;
+}
+
 .mg-actions {
   display: flex;
   gap: 8px;
-  margin-top: 16px;
+  margin: 0 0 0 auto;      /* 同一行时推到最右；折行时这一行也靠右 */
   justify-content: flex-end;
 }
 
