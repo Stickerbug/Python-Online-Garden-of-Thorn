@@ -1585,6 +1585,8 @@ def build_match_achievement_flags(room, player_user_ids, winner_player_indices):
                     user_flags.append('flag_counter_6')
                 if int(getattr(ps, 'achievement_max_enemy_poison_fire_min', 0) or 0) >= 15:
                     user_flags.append('flag_poison_fire_dual_15')
+                if int(getattr(ps, 'achievement_max_enemy_fire_frost_dual', 0) or 0) >= 30:
+                    user_flags.append('flag_fire_frost_dual')
                 if int(getattr(ps, 'achievement_min_enemy_card_total', 999999) or 999999) <= 10:
                     user_flags.append('flag_enemy_cards_10')
                 if mode != '2v2' and (
@@ -1674,6 +1676,7 @@ LIVE_ACHIEVEMENT_FLAGS = {
     'flag_equipment_destroy_7',
     'flag_counter_6',
     'flag_poison_fire_dual_15',
+    'flag_fire_frost_dual',
     'flag_enemy_cards_10',
     'flag_team_double_resources',
     'flag_enemy_attack_blocked_5',
@@ -1728,6 +1731,8 @@ def build_live_achievement_flags(room):
                 user_flags.append('flag_counter_6')
             if int(getattr(ps, 'achievement_max_enemy_poison_fire_min', 0) or 0) >= 15:
                 user_flags.append('flag_poison_fire_dual_15')
+            if int(getattr(ps, 'achievement_max_enemy_fire_frost_dual', 0) or 0) >= 30:
+                user_flags.append('flag_fire_frost_dual')
             if int(getattr(ps, 'achievement_min_enemy_card_total', 999999) or 999999) <= 10:
                 user_flags.append('flag_enemy_cards_10')
             if getattr(room, 'mode', '') != '2v2' and (

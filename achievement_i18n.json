@@ -987,6 +987,20 @@
         "ja": "敵プレイヤーに少なくとも 15 スタックの毒と 15 スタックの火傷を同時に与えます。"
       }
     },
+    "fire_frost_dual": {
+      "name": {
+        "zh": "冰火两重天",
+        "en": "Two Heavens of Ice and Fire",
+        "fr": "Deux cieux de glace et de feu",
+        "ja": "氷と火の二重天"
+      },
+      "description": {
+        "zh": "使一名敌方玩家同时拥有至少10层灼烧和30层霜冻。",
+        "en": "Make an enemy have at least 10 Fire and 30 Frost at the same time.",
+        "fr": "Faites en sorte qu'un joueur ennemi ait au moins 10 charges de brûlure et 30 charges de gel en même temps.",
+        "ja": "敵プレイヤーに少なくとも 10 スタックの燃焼と 30 スタックの凍結を同時に与えます。"
+      }
+    },
     "barren_field": {
       "name": {
         "zh": "寸草不生",

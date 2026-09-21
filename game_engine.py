@@ -399,6 +399,8 @@ class PlayerState:
         self.achievement_max_enemy_poison: int = 0
         self.achievement_max_enemy_fire: int = 0
         self.achievement_max_enemy_poison_fire_min: int = 0
+        self.achievement_max_enemy_frost: int = 0
+        self.achievement_max_enemy_fire_frost_dual: int = 0
         self.achievement_max_enemy_status_types: int = 0
         self.achievement_attack_blocked_received: int = 0
         self.achievement_last_attack_blocked_value: int = int(self.attack_blocked)
@@ -520,6 +522,8 @@ class PlayerState:
             'achievement_max_enemy_poison': self.achievement_max_enemy_poison,
             'achievement_max_enemy_fire': self.achievement_max_enemy_fire,
             'achievement_max_enemy_poison_fire_min': self.achievement_max_enemy_poison_fire_min,
+            'achievement_max_enemy_frost': self.achievement_max_enemy_frost,
+            'achievement_max_enemy_fire_frost_dual': self.achievement_max_enemy_fire_frost_dual,
             'achievement_max_enemy_status_types': self.achievement_max_enemy_status_types,
             'achievement_attack_blocked_received': self.achievement_attack_blocked_received,
             'achievement_last_attack_blocked_value': self.achievement_last_attack_blocked_value,
@@ -656,6 +660,8 @@ class PlayerState:
         ps.achievement_max_enemy_poison = int(d.get('achievement_max_enemy_poison', 0) or 0)
         ps.achievement_max_enemy_fire = int(d.get('achievement_max_enemy_fire', 0) or 0)
         ps.achievement_max_enemy_poison_fire_min = int(d.get('achievement_max_enemy_poison_fire_min', 0) or 0)
+        ps.achievement_max_enemy_frost = int(d.get('achievement_max_enemy_frost', 0) or 0)
+        ps.achievement_max_enemy_fire_frost_dual = int(d.get('achievement_max_enemy_fire_frost_dual', 0) or 0)
         ps.achievement_max_enemy_status_types = int(d.get('achievement_max_enemy_status_types', 0) or 0)
         ps.achievement_attack_blocked_received = int(d.get('achievement_attack_blocked_received', 0) or 0)
         ps.achievement_last_attack_blocked_value = int(d.get('achievement_last_attack_blocked_value', getattr(ps, 'attack_blocked', 0)) or 0)
@@ -1487,6 +1493,16 @@ class GameEngine:
                         int(getattr(source, 'achievement_max_enemy_poison_fire_min', 0) or 0),
                         min(int(getattr(target, 'poison', 0) or 0), int(getattr(target, 'fire', 0) or 0)),
                     )
+                    enemy_frost = max(0, int(self._arctic_frost_value(target_id) or 0))
+                    source.achievement_max_enemy_frost = max(
+                        int(getattr(source, 'achievement_max_enemy_frost', 0) or 0),
+                        enemy_frost,
+                    )
+                    # 冰火两重天：10 火 + 30 霜冻 ⇔ min(火×3, 霜冻) >= 30。
+                    source.achievement_max_enemy_fire_frost_dual = max(
+                        int(getattr(source, 'achievement_max_enemy_fire_frost_dual', 0) or 0),
+                        min(int(getattr(target, 'fire', 0) or 0) * 3, enemy_frost),
+                    )
                     source.achievement_max_enemy_status_types = max(
                         int(getattr(source, 'achievement_max_enemy_status_types', 0) or 0),
                         int(status_types or 0),
@@ -1519,6 +1535,8 @@ class GameEngine:
         ps.achievement_max_enemy_poison = 0
         ps.achievement_max_enemy_fire = 0
         ps.achievement_max_enemy_poison_fire_min = 0
+        ps.achievement_max_enemy_frost = 0
+        ps.achievement_max_enemy_fire_frost_dual = 0
         ps.achievement_max_enemy_status_types = 0
         ps.achievement_attack_blocked_received = 0
         ps.achievement_last_attack_blocked_value = max(0, int(getattr(ps, 'attack_blocked', 0) or 0))
