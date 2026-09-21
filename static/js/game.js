@@ -5329,6 +5329,27 @@ let socketConnectUrl = '';
 let socketCreateSeq = 0;
 let manualDisconnect = false;
 let transientMatchRecovery = null;
+
+/* 从休闲花园（2048）接受邀请跳过来的标记：小游戏页会用当前会话先接受邀请、
+   建好这一局，然后带 `?from_minigame_invite=1` 跳到主页面。这里读到标记后：
+   1) 立刻从地址栏抹掉（避免以后误触发）；2) 收到这一局的重连邀请时直接接上，
+   不用玩家再点一次"是否重连到上一局对战"。 */
+const minigameInviteHandoff = (() => {
+    try {
+        const params = new URLSearchParams(window.location.search || '');
+        if (!params.has('from_minigame_invite')) return false;
+        params.delete('from_minigame_invite');
+        const query = params.toString();
+        window.history.replaceState(
+            null,
+            '',
+            `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash || ''}`,
+        );
+        return true;
+    } catch (_) {
+        return false;
+    }
+})();
 let transientLoginRetryTimer = null;
 let latencyPingTimer = null;
 let activeAfkCheck = null;
@@ -17726,6 +17747,13 @@ function connectSocket(serverUrl) {
     bindSocketEvent('reconnect_available', (data) => {
         const offeredRoomId = data && data.room_id != null ? String(data.room_id) : '';
         const routeMatches = reconnectOfferMatchesSavedRoute(data || {});
+        if (minigameInviteHandoff && !isSpectating && offeredRoomId) {
+            // 刚从休闲花园接受了邀请：这一局就是为我们建的，直接接上，不再多问一次
+            phase = 'reconnecting';
+            hideModal();
+            socket.emit('reconnect_accept', { room_id: data.room_id, old_sid: data.old_sid });
+            return;
+        }
         if (!isSpectating && transientMatchRecovery && routeMatches) {
             phase = 'reconnecting';
             transientMatchRecovery.autoAcceptRoomId = offeredRoomId;
@@ -39535,6 +39563,27 @@ if (window.__GTN_CARD_EXPORTER_RENDERER__) {
     debugLog('[LOAD] game.js card exporter renderer loaded');
 } else {
     document.addEventListener('DOMContentLoaded', init);
+
+    /* 从休闲花园接受邀请跳过来时（?from_minigame_invite=1）：
+       自动帮玩家点一次"进入大厅"——那一局是建在前一个会话上的，
+       必须真的登录进大厅，服务端才会把重连邀请发过来（见 reconnect_available 的自动接受）。 */
+    if (minigameInviteHandoff) {
+        const startedAt = Date.now();
+        let lastClickAt = 0;
+        const autoEnterLobbyForInvite = () => {
+            const loginView = $('view-login');
+            if (!loginView || loginView.classList.contains('hidden')) return;
+            const now = Date.now();
+            const connectBtn = $('btn-connect');
+            if (connectBtn && !connectBtn.disabled && now - lastClickAt > 2500) {
+                lastClickAt = now;
+                connectBtn.click();
+            }
+            if (now - startedAt < 20000) window.setTimeout(autoEnterLobbyForInvite, 400);
+        };
+        window.setTimeout(autoEnterLobbyForInvite, 400);
+    }
+
     window.addEventListener('resize', () => {
         const gc = document.querySelector('.game-container');
         if (gc) gc.style.removeProperty('--card-w');

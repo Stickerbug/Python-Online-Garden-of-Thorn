@@ -772,6 +772,7 @@ boardEl.addEventListener('touchcancel', () => { touchStart = null; }, { passive:
    断线（关页、断网）走正常清理，不会伪造在线。 */
 
 let socket = null;
+let pendingInviterSid = '';      // 最近一条待处理邀请的发起方 sid（接受时必须带上）
 
 function connectPresence() {
   if (typeof io !== 'function') return;
@@ -824,9 +825,10 @@ function connectPresence() {
   });
   socket.on('invite_received', (payload) => {
     // 邀请只做提示，不自动离开棋盘；接受前先保存本地进度并尝试同步。
+    pendingInviterSid = String((payload && payload.inviter_sid) || '');
     showInvitePrompt(payload || {});
   });
-  socket.on('invite_cancelled', () => hideInvitePrompt());
+  socket.on('invite_cancelled', () => { pendingInviterSid = ''; hideInvitePrompt(); });
 }
 
 function showInvitePrompt(payload) {
@@ -1034,16 +1036,22 @@ function sendChat() {
 async function acceptInvite() {
   hideInvitePrompt();
   saveLocal();
+  const inviterSid = pendingInviterSid;
   try {
     // 不无限阻塞：给同步最多 3 秒，没传完也继续（队列随后自动续传）。
     await Promise.race([syncNow(), new Promise((resolve) => window.setTimeout(resolve, 3000))]);
   } catch (_) { /* 同步失败也继续 */ }
-  if (socket) {
-    socket.emit('minigame_leave', { game: '2048' });
-    socket.emit('accept_invite', {});
+  if (!socket || !inviterSid) {
+    // 少了 inviter_sid 服务端会直接拒绝（以前的写法就是这样，所以才"只回到主页"）
+    setSyncText('邀请已失效，请在多人大厅里重新邀请', 'error');
+    return;
   }
+  // 用当前会话接受：服务端会把这一局建在当前会话上；随后跳到主页面，
+  // 主页面登录时按"重连"直接接上这一局（见 game.js 的 from_minigame_invite）。
+  socket.emit('accept_invite', { inviter_sid: inviterSid });
+  pendingInviterSid = '';
   setSyncText('正在进入对局…（进度已保存，未传完的操作会继续同步）');
-  window.setTimeout(() => { window.location.href = '/'; }, 600);
+  window.setTimeout(() => { window.location.href = '/?from_minigame_invite=1'; }, 700);
 }
 
 function declineInvite() {
