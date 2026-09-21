@@ -6155,7 +6155,8 @@ body {
 }
 
 /* 休闲花园入口：和其它三个主入口**同一套尺寸**（宽度/高度/字号/圆角），只换颜色。
-   颜色取砂金：多人=青绿、故事=琥珀、训练=蓝，休闲=砂金，四者互不混淆。 */
+   底色取**深紫 + 白字**：多人=青绿、故事=琥珀、训练=蓝，休闲=深紫，
+   和故事模式的琥珀拉开明显距离（原来那版砂金太接近故事模式了）。 */
 #btn-minigame-2048 {
   width: 100%;
   min-height: 48px;
@@ -6164,21 +6165,26 @@ body {
   font-weight: 700;
   font-family: var(--font-main);
   border-radius: var(--radius-lg);
-  background: #C2A26B;
-  color: #2B241A;
-  border-color: #A98B57;
+  background: #4B3F8F;
+  color: #FFFFFF;
+  border-color: #3E3478;
 }
 
 #btn-minigame-2048:hover:not(:disabled) {
-  background: #CFAF78;
-  border-color: #B8965F;
-  color: #2B241A;
+  background: #5A4DA6;
+  border-color: #4B3F8F;
+  color: #FFFFFF;
 }
 
 [data-theme="dark"] #btn-minigame-2048 {
-  background: #8A7448;
-  color: #F6EFE1;
-  border-color: #A98B57;
+  background: #5A4CA0;
+  color: #FFFFFF;
+  border-color: #6E5FBE;
+}
+
+[data-theme="dark"] #btn-minigame-2048:hover:not(:disabled) {
+  background: #6A5BB8;
+  border-color: #7F70CE;
 }
 
 #btn-connect {

@@ -138,17 +138,75 @@
 .chat-channel-private { color: var(--elixir, #F1C40F); }
 
 .gtn-lobby-chat-log .chat-player-name,
-.gtn-lobby-chat-log .player-title-inline {
+.gtn-lobby-chat-log .player-title-inline,
+.log-entry.log-chat .chat-player-name,
+.log-entry.log-chat .player-title-inline,
+.log-entry.chat .chat-player-name,
+.log-entry.chat .player-title-inline {
   display: inline;
   color: inherit;
 }
 
-.gtn-lobby-chat-log .player-name-value {
+.gtn-lobby-chat-log .player-name-value,
+.log-entry.log-chat .player-name-value,
+.log-entry.chat .player-name-value {
   display: inline-block;
   color: inherit;
   line-height: 1.3;
   overflow: visible;
   vertical-align: baseline;
+}
+
+/* 信誉徽章（新人 / 低信誉）与名牌配色：主界面由 style.css 提供，
+   这里收一份同名规则，独立页（小游戏）也能照常显示。取值与 style.css 一致。 */
+.gtn-lobby-chat-log .reputation-badge,
+.log-entry.log-chat .reputation-badge,
+.log-entry.chat .reputation-badge {
+  display: inline-block;
+  margin-inline-end: .35em;
+  padding: .06em .3em;
+  border-radius: .25em;
+  font-size: .75em;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.gtn-lobby-chat-log .reputation-yellow,
+.log-entry.log-chat .reputation-yellow,
+.log-entry.chat .reputation-yellow { color: #664500; background: #ffe6a1; }
+
+.gtn-lobby-chat-log .reputation-orange,
+.log-entry.log-chat .reputation-orange,
+.log-entry.chat .reputation-orange { color: #702400; background: #ffbf88; }
+
+.gtn-lobby-chat-log .reputation-red,
+.log-entry.log-chat .reputation-red,
+.log-entry.chat .reputation-red { color: #fff; background: #a92335; }
+
+.gtn-lobby-chat-log .newcomer-badge,
+.log-entry.log-chat .newcomer-badge,
+.log-entry.chat .newcomer-badge { color: #164524; background: #bceac6; }
+
+.gtn-lobby-chat-log .title-paint-gradient,
+.log-entry.log-chat .title-paint-gradient,
+.log-entry.chat .title-paint-gradient {
+  color: transparent !important;
+  background-image: var(--title-paint-gradient);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gtn-lobby-chat-log .title-paint-solid,
+.gtn-lobby-chat-log .title-paint-theme,
+.log-entry.log-chat .title-paint-solid,
+.log-entry.log-chat .title-paint-theme,
+.log-entry.chat .title-paint-solid,
+.log-entry.chat .title-paint-theme {
+  background-image: none !important;
+  background-clip: border-box;
+  -webkit-background-clip: border-box;
+  -webkit-text-fill-color: currentColor;
 }
 
 .gtn-lobby-chat-log .chat-spectator-prefix,

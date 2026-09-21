@@ -848,10 +848,22 @@ function hideInvitePrompt() {
    所以休闲花园里的聊天就是大厅聊天本身；[休闲] 前缀由服务端给的 chat_origin 渲染。 */
 
 const CHAT_LABELS = {
-  zh: { multiplayer: '多人', story: '故事', leisure: '休闲', system: '系统' },
-  en: { multiplayer: 'Multiplayer', story: 'Story', leisure: 'Casual', system: 'System' },
-  fr: { multiplayer: 'Multijoueur', story: 'Histoire', leisure: 'Détente', system: 'Système' },
-  ja: { multiplayer: 'マルチ', story: 'ストーリー', leisure: 'レジャー', system: 'システム' },
+  zh: {
+    multiplayer: '多人', story: '故事', leisure: '休闲', system: '系统',
+    newcomer: '新人', lowReputation: '低信誉', spectator: '观战', console: '控制台',
+  },
+  en: {
+    multiplayer: 'Multiplayer', story: 'Story', leisure: 'Casual', system: 'System',
+    newcomer: 'Newcomer', lowReputation: 'Low reputation', spectator: 'Spectating', console: 'Console',
+  },
+  fr: {
+    multiplayer: 'Multijoueur', story: 'Histoire', leisure: 'Détente', system: 'Système',
+    newcomer: 'Nouveau', lowReputation: 'Faible réputation', spectator: 'Spectateur', console: 'Console',
+  },
+  ja: {
+    multiplayer: 'マルチ', story: 'ストーリー', leisure: 'レジャー', system: 'システム',
+    newcomer: '新人', lowReputation: '低評価', spectator: '観戦', console: 'コンソール',
+  },
 };
 
 function chatLabels() {
@@ -867,6 +879,66 @@ function chatOriginBadgeHtml(item) {
   const labels = chatLabels();
   if (!labels[origin]) return '';
   return `<span class="chat-origin-prefix chat-origin-${origin}">[${escapeHtml(labels[origin])}]</span>`;
+}
+
+/* 称号配色：与 game.js 的 titleColorCss 同一张表（多人大厅就是这么给称号上色的）。
+   色板 / 称号色调整时两边一起改。 */
+const TITLE_COLOR_TOKENS = {
+  admin: '#C0392B', thorn: '#C0392B', bloom: '#1ABC9C', root: '#8D6E63', guard: '#2980B9',
+  curse: '#704B87', infect: '#7E9638', health: '#2ECC71', elixir: '#F1C40F', energy: '#F1C40F',
+  magic: '#3498DB', damage: '#C0392B', electric: '#4BA3FF', poison: '#8E44AD', fire: '#E67E22',
+  armor: '#95A5A6', precision: '#546E7A', banish: '#6C3483', indestructible: '#D4AC0D',
+  critical: '#D4AC0D', primary: '#7EEF6D', common: '#7EEF6D', unusual: '#FFE65D', rare: '#4D52E3',
+  epic: '#861FDE', legendary: '#DE1F1F', mythic: '#1FDBDE', ultra: '#FF2B75', super: '#2BFFA3',
+  omega: '#F329D9', eternal: '#EEEEEE', unique: '#555555', milestone: '#5AA469', hidden: '#7257A8',
+  neutral: '#7F8C8D', spectator: '#95A5A6',
+};
+
+function titleColorCss(color) {
+  const key = String(color || '').trim().toLowerCase();
+  if (TITLE_COLOR_TOKENS[key]) return TITLE_COLOR_TOKENS[key];
+  if (/^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i.test(key)) return key;
+  return '';
+}
+
+/* 游戏称号前缀：和多人游戏大厅一样渲染成 [称号名]（按称号自带颜色）。 */
+function chatTitlesHtml(item) {
+  const titles = Array.isArray(item && item.equipped_titles) ? item.equipped_titles : [];
+  return titles.slice(0, 3).map((title) => {
+    const name = String((title && title.name) || '').trim();
+    if (!name) return '';
+    const color = titleColorCss(title.color);
+    return `<span class="player-title-inline"${color ? ` style="color:${color}"` : ''}>[${escapeHtml(name)}]</span>`;
+  }).join('');
+}
+
+/* 信誉徽章：新人 / 低信誉（与多人大厅同名同类，样式见 shared-lobby-chat.css）。 */
+function chatReputationHtml(item) {
+  const labels = chatLabels();
+  const profile = (item && item.reputation_profile) || null;
+  const newcomer = profile && profile.newcomer && profile.newcomer.is_newcomer === true
+    ? `<span class="reputation-badge newcomer-badge">${escapeHtml(labels.newcomer)}</span>`
+    : '';
+  const level = String((profile && profile.level) || '');
+  if (!['yellow', 'orange', 'red'].includes(level)) return newcomer;
+  return newcomer
+    + `<span class="reputation-badge reputation-${level}">${escapeHtml(labels.lowReputation)}</span>`;
+}
+
+/* 昵称名牌配色（渐变 / 纯色），与大厅同一套类名。 */
+function chatNameHtml(item, fallback) {
+  const name = String((item && item.nickname) || fallback || '?');
+  const style = (item && item.name_style) || null;
+  const kind = String((style && style.kind) || '').toLowerCase();
+  const colors = Array.isArray(style && style.colors) ? style.colors.filter(Boolean).slice(0, 12) : [];
+  if ((kind === 'gradient' || kind === 'rainbow') && colors.length >= 2) {
+    const numeric = Number(style.angle);
+    const angle = Number.isFinite(numeric) ? ((numeric % 360) + 360) % 360 : 90;
+    return `<span class="player-name-value title-paint-gradient"`
+      + ` style="--title-paint-gradient:linear-gradient(${angle}deg,${colors.join(',')})">${escapeHtml(name)}</span>`;
+  }
+  const solid = kind === 'solid' ? titleColorCss(style.color) : titleColorCss(item && item.name_color);
+  return `<span class="player-name-value"${solid ? ` style="color:${solid}"` : ''}>${escapeHtml(name)}</span>`;
 }
 
 function chatTextHtml(item) {
@@ -890,14 +962,29 @@ function chatLineHtml(item) {
   const labels = chatLabels();
   const system = !!item.system;
   const name = escapeHtml(String(item.nickname || '').trim());
+  const spectator = item.is_spectator
+    ? `<span class="chat-spectator-prefix">[${escapeHtml(labels.spectator)}]</span>`
+    : '';
+  const consolePrefix = (!system && (item.console_player || item.special_role === 'console'))
+    ? `<span class="player-title-inline">[${escapeHtml(labels.console)}]</span>`
+    : '';
   const head = system
     ? `${name || `[${escapeHtml(labels.system)}]`} `
-    : `<span class="chat-player-name">${name || '?'}</span>: `;
+    : spectator
+      + '<span class="chat-player-name">'
+      + chatReputationHtml(item)
+      + consolePrefix
+      + chatTitlesHtml(item)
+      + chatNameHtml(item, name || '?')
+      + '</span>: ';
   return `<div class="chat-msg">`
     + `<span class="chat-nick${system ? ' system-name' : ''}">${chatOriginBadgeHtml(item)}${head}</span>`
     + chatTextHtml(item)
     + '</div>';
 }
+
+// 便于自动化检查：按当前规则把一条聊天负载渲染成 HTML（纯函数，不改状态）
+window.__mgChatLineHtml = (item) => chatLineHtml(item || {});
 
 function renderChatHistory(items) {
   const log = el('mg-chat-log');
