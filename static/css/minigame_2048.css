@@ -244,6 +244,9 @@
   background: var(--g-board);
   border-radius: 6px;
   touch-action: pan-y;
+  /* 手机端下拉刷新：棋盘区域内的下滑交给游戏（JS 会 preventDefault），
+     不让浏览器把它当成"下拉刷新"；棋盘之外照旧可以刷新。 */
+  overscroll-behavior: contain;
   outline: none;
 }
 
@@ -262,6 +265,18 @@
   /* 原版：滑动 100ms ease-in-out */
   transition: transform 100ms ease-in-out;
 }
+
+/* 设置条：放在棋盘**上面**（用户要求"设置等功能放上面"），一行三个开关 */
+.mg-settings-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 12px;
+  padding: 8px 2px;
+  border-top: 1px solid rgba(119, 110, 101, 0.18);
+}
+
+[data-theme="dark"] .mg-settings-bar { border-top-color: #3a332b; }
 
 .mg-cell { position: relative; z-index: 1; }
 
@@ -506,6 +521,62 @@
 .mg-switch input { accent-color: var(--g-btn); width: 15px; height: 15px; }
 
 /* ---------------- 排行榜（榜单排版参考 AK IOI oi-2048 的对照表） ---------------- */
+
+/* 常驻展开在页面底部的榜单：左边名次/账号，右边"方块 + 数字"（AK IOI 那种对照表排版） */
+.mg-rank {
+  margin-top: 18px;
+  border-top: 1px solid #d8cdbf;
+  padding-top: 10px;
+}
+
+[data-theme="dark"] .mg-rank { border-top-color: #3a332b; }
+
+.mg-rank-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.mg-rank-head strong { font-size: 14px; }
+.mg-rank-window { display: flex; gap: 6px; }
+
+.mg-rank-body { display: flex; flex-direction: column; gap: 2px; }
+
+.mg-rank-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 3px;
+  font-size: 13px;
+}
+
+.mg-rank-row:nth-child(odd) { background: rgba(119, 110, 101, 0.06); }
+.mg-rank-row.me { background: rgba(143, 122, 102, 0.16); font-weight: 700; }
+
+.mg-rank-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mg-rank-no { width: 2.2em; text-align: right; opacity: 0.75; font-variant-numeric: tabular-nums; }
+.mg-rank-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.mg-rank-right { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.mg-rank-score { font-variant-numeric: tabular-nums; font-weight: 700; }
+
+.mg-rank-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 46px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 3px;
+  background: var(--mg-tile-bg, #bbada0);
+  color: var(--mg-tile-fg, #f9f6f2);
+  font-size: 11px;
+  font-weight: 700;
+}
 
 .mg-modal { position: fixed; inset: 0; z-index: 60; }
 

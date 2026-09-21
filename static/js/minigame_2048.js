@@ -483,6 +483,7 @@ async function syncNow() {
       ? `已同步 · 已验证 ${body.record.score} 分`
       : '已同步（本次没有新增计分）';
     if (body.verified) verifiedEl.textContent = String(body.verified.score);
+    if (body.record) void refreshLeaderboard(rankWindowMode);   // 有新成绩就刷新底部榜单
     retryDelay = RETRY_BASE_MS;
     saveLocal();
     // 不要重绘棋盘：会打断正在播放的出现/合并/滑动动画。只更新同步状态那行字。
@@ -661,6 +662,11 @@ boardEl.addEventListener('touchmove', (event) => {
   const touch = event.touches[0];
   const dx = touch.clientX - touchStart.x;
   const dy = touch.clientY - touchStart.y;
+  /* 只要在棋盘里往下拖，就立刻拦掉浏览器默认行为（否则手机上会触发"下拉刷新"，官方版不会）。
+     位移够大才真正走一步；一次手势只移动一次。 */
+  if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 4) {
+    event.preventDefault();
+  }
   if (Math.abs(dx) < 24 && Math.abs(dy) < 24) return;
   if (touchStart.handled) { event.preventDefault(); return; }   // 一次手势只移动一次
   touchStart.handled = true;
@@ -816,13 +822,23 @@ function declineInvite() {
   if (socket) socket.emit('decline_invite', {});
 }
 
-async function openLeaderboard(windowMode = '14d') {
-  const modal = el('mg-rank-modal');
+/* 底部常驻榜单：每行"名次 + 账号"在左，右边是"最高方块 + 总分"（AK IOI 那种对照表排版）。 */
+let rankWindowMode = '14d';
+
+function rankTileHtml(value) {
+  const item = paletteFor(Number(value) || 0);
+  const name = tileLabel(Number(value) || 0) || String(value || '');
+  return `<span class="mg-rank-tile" style="--mg-tile-bg:${item ? item.bg : '#bbada0'};`
+    + `--mg-tile-fg:${item ? item.fg : '#f9f6f2'}">${escapeHtml(name)}</span>`;
+}
+
+async function refreshLeaderboard(windowMode = rankWindowMode) {
+  rankWindowMode = windowMode === 'all' ? 'all' : '14d';
   const body = el('mg-rank-body');
-  modal.hidden = false;
-  body.textContent = '正在读取…';
+  if (!body) return;
+  if (!body.dataset.loaded) body.textContent = '正在读取…';
   try {
-    const response = await fetch(`/api/minigame/2048/leaderboard?window=${windowMode}&limit=100`,
+    const response = await fetch(`/api/minigame/2048/leaderboard?window=${rankWindowMode}&limit=100`,
       { credentials: 'same-origin' });
     if (response.status === 401 || response.status === 403) {
       body.textContent = '身份或权限失效，无法查看排行榜。';
@@ -830,26 +846,30 @@ async function openLeaderboard(windowMode = '14d') {
     }
     const data = await response.json();
     const entries = data.leaderboard?.entries || [];
+    body.dataset.loaded = '1';
     if (!entries.length) {
       body.innerHTML = '<p class="mg-hint">还没有已验证成绩。</p>';
       return;
     }
-    body.innerHTML = `
-      <table class="mg-rank-table">
-        <thead><tr><th>名次</th><th>账号</th><th>总分</th><th>最高方块</th><th>验证时间</th></tr></thead>
-        <tbody>${entries.map((item) => `
-          <tr${data.me && item.user_id === data.me.user_id ? ' class="me"' : ''}>
-            <td class="mg-rank-no">${item.rank}</td>
-            <td>${escapeHtml(item.username || '')}</td>
-            <td>${item.score}</td>
-            <td>${item.max_rarity ? `${escapeHtml(item.max_rarity)}（${item.max_tile}）` : item.max_tile}</td>
-            <td>${escapeHtml(String(item.verified_at || '').replace('T', ' ').replace('Z', ''))}</td>
-          </tr>`).join('')}</tbody>
-      </table>
-      ${data.me ? `<p class="mg-hint">你：第 ${data.me.rank} 名 · ${data.me.score} 分</p>`
-        : '<p class="mg-hint">你在当前榜单还没有已验证成绩。</p>'}
-      ${(data.periods || []).length ? `<p class="mg-hint">奖期：${data.periods.map((p) =>
-        `${escapeHtml(p.period_key)} ${p.status === 'paid' ? `已发 ${p.pool}` : '未发（' + escapeHtml(p.reason || '') + '）'}`).join('；')}</p>` : ''}`;
+    body.innerHTML = entries.map((item) => `
+      <div class="mg-rank-row${data.me && item.user_id === data.me.user_id ? ' me' : ''}"
+           title="${escapeHtml(String(item.verified_at || '').replace('T', ' ').replace('Z', ''))}">
+        <span class="mg-rank-left">
+          <span class="mg-rank-no">${item.rank}</span>
+          <span class="mg-rank-name">${escapeHtml(item.username || '')}</span>
+        </span>
+        <span class="mg-rank-right">
+          ${rankTileHtml(item.max_tile)}
+          <span class="mg-rank-score">${item.score}</span>
+        </span>
+      </div>`).join('')
+      + (data.me ? '' : '<p class="mg-hint">你在这个榜还没有已验证成绩。</p>')
+      + ((data.periods || []).length
+        ? '<p class="mg-hint">奖期：' + data.periods.map((p) =>
+            escapeHtml(p.period_key) + ' ' + (p.status === 'paid'
+              ? '已发 ' + p.pool
+              : '未发（' + escapeHtml(p.reason || '') + '）')).join('；') + '</p>'
+        : '');
   } catch (_) {
     body.textContent = '离线，暂时读不到排行榜（棋盘不受影响）。';
   }
@@ -948,6 +968,7 @@ async function boot() {
       .catch(() => { /* 缓存不可用不影响游玩 */ });
   }
   connectPresence();
+  void refreshLeaderboard(rankWindowMode);   // 底部常驻榜单：进页面就加载，之后随同步刷新
   void syncNow();
 }
 
@@ -960,7 +981,10 @@ el('mg-chat-form').addEventListener('submit', (event) => {
 });
 el('mg-invite-accept').addEventListener('click', () => { void acceptInvite(); });
 el('mg-invite-decline').addEventListener('click', () => { declineInvite(); });
-el('mg-rank').addEventListener('click', () => { void openLeaderboard('14d'); });
+el('mg-rank').addEventListener('click', () => {
+  el('mg-rank-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  void refreshLeaderboard(rankWindowMode);
+});
 el('mg-show-numbers').addEventListener('change', (event) => {
   showNumbers = event.target.checked;
   renderBoard(false);
@@ -972,15 +996,13 @@ el('mg-animations').addEventListener('change', (event) => {
   animations = event.target.checked;
   document.documentElement.classList.toggle('mg-no-anim', !animations);
 });
-el('mg-rank-modal').addEventListener('click', (event) => {
-  if (event.target.closest('[data-mg-close]')) el('mg-rank-modal').hidden = true;
+el('mg-rank-section')?.addEventListener('click', (event) => {
   const tab = event.target.closest('[data-mg-window]');
-  if (tab) {
-    document.querySelectorAll('[data-mg-window]').forEach((btn) => {
-      btn.classList.toggle('active', btn === tab);
-    });
-    void openLeaderboard(tab.dataset.mgWindow);
-  }
+  if (!tab) return;
+  document.querySelectorAll('[data-mg-window]').forEach((btn) => {
+    btn.classList.toggle('active', btn === tab);
+  });
+  void refreshLeaderboard(tab.dataset.mgWindow);
 });
 if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
   animations = false;
