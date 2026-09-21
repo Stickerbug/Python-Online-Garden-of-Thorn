@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-"""内测权限（用户用例 5）：只有服务端真实角色 staff / admin 能进，不看客户端自报。"""
+"""休闲花园（小游戏）的进入门槛：**全部登录账号都能进**，未登录一律拒绝。
+
+身份只认服务端会话（user_id / username），不看客户端自报。
+"""
 
 from __future__ import annotations
 
@@ -9,50 +12,36 @@ import minigame_2048_service as svc
 
 
 class _FakeDb:
-    def __init__(self, roles):
-        self.roles = roles
+    """站在数据库模块的位置上即可；门槛已不再查角色表。"""
 
     def get_user_role_profile(self, identifier):
-        key = str(identifier)
-        role = self.roles.get(key)
-        return {"role_type": role} if role else None
+        raise AssertionError("不应再查角色表")
 
 
 class AccessTests(unittest.TestCase):
     def setUp(self):
         self.original = svc.db_module
-        svc.db_module = _FakeDb({
-            "1": "staff",
-            "2": "admin",
-            "3": "player",
-            "tester1": "staff",
-            "boss": "admin",
-            "guest": "player",
-        })
+        svc.db_module = _FakeDb()
 
     def tearDown(self):
         svc.db_module = self.original
 
-    def test_staff_and_admin_pass(self):
+    def test_any_logged_in_account_passes(self):
         self.assertTrue(svc.can_access_minigame(1, "tester1"))
         self.assertTrue(svc.can_access_minigame(2, "boss"))
+        self.assertTrue(svc.can_access_minigame(3, "player"))
+        self.assertTrue(svc.can_access_minigame(99, "guest"))
+        # 只有 user_id（用户名缺失）会话也算登录过
+        self.assertTrue(svc.can_access_minigame(7, ""))
+        self.assertTrue(svc.can_access_minigame(None, "old_session"))
 
-    def test_regular_account_and_guest_are_denied(self):
-        self.assertFalse(svc.can_access_minigame(3, "player"))
-        self.assertFalse(svc.can_access_minigame(99, "guest"))
+    def test_anonymous_is_denied(self):
         self.assertFalse(svc.can_access_minigame(None, ""))
+        self.assertFalse(svc.can_access_minigame(0, ""))
+        self.assertFalse(svc.can_access_minigame(None, None))
 
-    def test_username_lookup_is_not_trusted_over_role_table(self):
-        # 自称 staff 的用户名在角色表里不是 staff → 拒绝
-        svc.db_module = _FakeDb({"liar": "player"})
-        self.assertFalse(svc.can_access_minigame(5, "liar"))
-
-    def test_database_error_fails_closed(self):
-        class _Broken:
-            def get_user_role_profile(self, identifier):
-                raise RuntimeError("db down")
-
-        svc.db_module = _Broken()
+    def test_database_unavailable_fails_closed(self):
+        svc.db_module = None
         self.assertFalse(svc.can_access_minigame(1, "tester1"))
 
 

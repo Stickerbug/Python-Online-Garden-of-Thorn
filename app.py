@@ -20126,8 +20126,8 @@ def both_disconnected_cleanup(room_id):
 def index():
     if is_beta_instance():
         return beta_entry_response()
-    # 休闲花园（2048）的入口只对通过内测门槛的账号渲染；权限判定仍以服务端角色表为准，
-    # 按钮只是入口，直达 /minigame/2048 依旧会被同一套判定拦下。
+    # 休闲花园（小游戏）已对全部登录账号开放：入口按钮只要登录了就渲染，
+    # 直达 /minigame 与 /minigame/2048 依旧走同一套会话判定（未登录仍会被拦下）。
     minigame_2048_available = False
     try:
         user_id = session.get('user_id')
@@ -26776,7 +26776,7 @@ def on_minigame_presence(data=None):
         admin_event('error', f'2048 presence permission check failed: {exc}')
         allowed = False
     if not allowed:
-        emit('server_error', {'message': '2048 内测中：目前仅 staff / admin 可进入',
+        emit('server_error', {'message': '小游戏暂时不可用，请稍后再试',
                               'reason': 'minigame_denied'})
         return
     changed = False
@@ -34913,7 +34913,7 @@ def _prewarm_local_ai_worker():
 
 """--------------------------------------------------------------- 休闲花园：2048
 
-内测：只有 staff / admin 能用（权限取自服务端角色表，不看客户端自报）。
+已对全部登录账号开放（只要服务端会话里有账号即可，不看客户端自报）。
 规则核心在 ``minigame_2048.py``，存档 / 同步 / 排行榜 / 每周冠军荆露在
 ``minigame_2048_service.py``；这一层只做会话归属、限流与 JSON 编解码。
 """
@@ -34947,7 +34947,8 @@ def _minigame_2048_guard():
         admin_event('error', f'2048 permission check failed: {exc}')
         allowed = False
     if not allowed:
-        return None, _json_error('2048 内测中：目前仅 staff / admin 可进入', 403)
+        # 门槛已放开：走到这里只可能是数据库不可用之类的基建问题
+        return None, _json_error('小游戏暂时不可用，请稍后再试', 403)
     return identity, None
 
 
@@ -34992,7 +34993,7 @@ def ensure_minigame_2048_settlement_worker():
 def minigame_hub_page():
     """休闲花园首页：小游戏列表（2048 已上线，合成大花花制作中）。
 
-    权限跟小游戏本体一致（内测仅 staff / admin），直达 URL 也走同一套判定。
+    权限跟小游戏本体一致（登录账号即可），直达 URL 也走同一套判定。
     """
 
     identity, denied = _minigame_2048_guard()

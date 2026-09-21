@@ -167,19 +167,15 @@ def role_name(profile) -> str:
 
 
 def can_access_minigame(user_id=None, username="") -> bool:
-    """内测门槛：**服务端真实角色** staff / admin 才放行（不信客户端自报）。"""
+    """开放门槛：只要是**服务端会话确认过的登录账号**就能进（不再限制 staff / admin）。
+
+    仍然要求有账号：未登录 / 游客一律拒绝；身份只取服务端会话，不信客户端自报。
+    数据库不可用时依旧关闭（存档、榜单都依赖它）。
+    """
 
     if db_module is None:
         return False
-    identifier = username or user_id
-    if not identifier:
-        return False
-    try:
-        profile = db_module.get_user_role_profile(identifier) if username else \
-            db_module.get_user_role_profile(user_id)
-    except Exception:
-        return False
-    return role_name(profile) in ("staff", "admin")
+    return bool(user_id or username)
 
 
 # ---------------------------------------------------------------- 存档

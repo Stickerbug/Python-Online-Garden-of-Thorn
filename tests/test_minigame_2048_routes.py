@@ -33,7 +33,9 @@ class RouteAccessTests(unittest.TestCase):
         post = self.client.post("/api/minigame/2048/sync", json={"ops": "lurd"})
         self.assertEqual(post.status_code, 401)
 
-    def test_regular_account_is_forbidden_even_with_direct_url(self):
+    def test_regular_account_can_enter(self):
+        """门槛已放开：普通账号直达 URL 也能进（未登录仍然 401）。"""
+
         with self.client.session_transaction() as session:
             session["user_id"] = 4242
             session["username"] = "regular_player"
@@ -43,13 +45,13 @@ class RouteAccessTests(unittest.TestCase):
                 return {"role_type": "player"}
 
         svc.db_module = _Roles()
-        for path in ("/minigame", "/minigame/2048", "/api/minigame/2048/state",
-                     "/api/minigame/2048/leaderboard", "/api/minigame/2048/prefs"):
-            self.assertEqual(self.client.get(path).status_code, 403, path)
+        self.assertEqual(self.client.get("/minigame").status_code, 200)
+        self.assertEqual(self.client.get("/minigame/2048").status_code, 200)
+        if not getattr(gtn, "DB_AVAILABLE", False):
+            self.skipTest("当前环境没有可用数据库：接口部分跳过")
+        self.assertEqual(self.client.get("/api/minigame/2048/state").status_code, 200)
         self.assertEqual(
-            self.client.post("/api/minigame/2048/restart", json={}).status_code, 403)
-        denied = self.client.get("/api/minigame/2048/state").get_json()
-        self.assertIn("内测", denied.get("error", ""))
+            self.client.post("/api/minigame/2048/restart", json={}).status_code, 200)
 
     def test_staff_can_use_the_api(self):
         if not getattr(gtn, "DB_AVAILABLE", False):
@@ -80,8 +82,8 @@ class RouteAccessTests(unittest.TestCase):
         self.assertEqual(sync.status_code, 200)
         self.assertEqual(sync.get_json()["status"], "ok")
 
-    def test_lobby_entry_button_only_renders_for_staff(self):
-        """大厅里的「休闲花园 · 2048」入口只给通过内测门槛的账号渲染。"""
+    def test_lobby_entry_button_renders_for_any_logged_in_account(self):
+        """大厅里的「休闲花园」入口：登录账号都渲染，未登录不渲染。"""
 
         class _Roles:
             @staticmethod
@@ -89,11 +91,13 @@ class RouteAccessTests(unittest.TestCase):
                 return {"role_type": "staff" if str(identifier) == "entry_staff" else "player"}
 
         svc.db_module = _Roles()
+        html = self.client.get("/").data.decode("utf-8", "replace")
+        self.assertNotIn("btn-minigame-2048", html)          # 未登录
         with self.client.session_transaction() as session:
             session["user_id"] = 9001
             session["username"] = "entry_player"
         html = self.client.get("/").data.decode("utf-8", "replace")
-        self.assertNotIn("btn-minigame-2048", html)
+        self.assertIn("btn-minigame-2048", html)             # 普通玩家也能看到
         with self.client.session_transaction() as session:
             session["user_id"] = 9002
             session["username"] = "entry_staff"
