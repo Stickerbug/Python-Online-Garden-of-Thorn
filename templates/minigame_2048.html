@@ -21,8 +21,8 @@
 <main class="mg-frame">
   <header class="mg-head">
     <div class="mg-head-row">
-      <a class="mg-back" href="/" title="返回大厅">← 返回大厅</a>
-      <span class="mg-tag">休闲花园 · 内测</span>
+      <a class="mg-back" href="/minigame" title="返回休闲花园">← 休闲花园</a>
+      <span class="mg-tag">2048 · 内测</span>
     </div>
     <div class="mg-head-row">
       <h1 class="mg-title">Craft Eternal</h1>
@@ -100,19 +100,17 @@
     <summary>玩法说明</summary>
     <div class="mg-panel-body">
       <p class="mg-hint">
-        5×5 棋盘。方向键 / WASD / 触摸滑动移动方块；同值方块相撞会合并，
-        分数增加新方块的数值，只有棋盘真的变了才会生成新方块。成绩自动同步，不需要手动提交。
+        5×5 棋盘。方向键 / WASD / 触摸滑动移动方块；同稀有度方块相撞会合成更高的稀有度。
+        成绩将自动同步。
       </p>
       <p class="mg-hint">
-        每次合并有 15% 概率合成失败：失败时只留下一个原值方块（不翻倍），
-        并在方块上闪过一道很短的叉形裂纹。
+        每次合并有 15% 概率合成失败：失败时只留下一个原值方块（不翻倍）。
       </p>
       <p class="mg-hint">
-        稀有度名称是这个小游戏的固定顺序，不代表其他作品里的等级关系；超出色表的数值按数字显示，不影响合并规则。
+        稀有度名称是本小游戏的固定顺序，不代表其他作品里的等级关系。
       </p>
       <p class="mg-hint">
-        每周一 00:00（UTC+8）按最近 {{ minigame_window_days }} 天已验证成绩结算：冠军总奖池 {{ champion_pool }} 荆露，
-        至少 {{ champion_min_accounts }} 个有效账号才发放，并列冠军平分奖池。
+        每周一 00:00（UTC+8）按最近 {{ minigame_window_days }} 天成绩结算：冠军总奖池 {{ champion_pool }} 荆露。
       </p>
     </div>
   </details>

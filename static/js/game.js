@@ -38890,7 +38890,8 @@ async function init() {
         el.addEventListener('click', handler);
     };
     bindClickOnce('btn-solo-training', showSoloTraining);
-    bindClickOnce('btn-minigame-2048', () => { window.location.href = '/minigame/2048'; });
+    // 休闲花园现在先进"小游戏列表"（首页），由玩家自己挑一个游戏
+    bindClickOnce('btn-minigame-2048', () => { window.location.href = '/minigame'; });
     bindClickOnce('btn-connect', onLogin);
     bindClickOnce('btn-story-mode', openStoryMode);
     bindClickOnce('btn-ai-1v1-test', async () => {

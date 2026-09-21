@@ -26,6 +26,7 @@ class RouteAccessTests(unittest.TestCase):
         svc.db_module = self.original_db
 
     def test_anonymous_is_rejected(self):
+        self.assertEqual(self.client.get("/minigame").status_code, 401)
         self.assertEqual(self.client.get("/minigame/2048").status_code, 401)
         self.assertEqual(self.client.get("/api/minigame/2048/state").status_code, 401)
         self.assertEqual(self.client.get("/api/minigame/2048/leaderboard").status_code, 401)
@@ -42,7 +43,7 @@ class RouteAccessTests(unittest.TestCase):
                 return {"role_type": "player"}
 
         svc.db_module = _Roles()
-        for path in ("/minigame/2048", "/api/minigame/2048/state",
+        for path in ("/minigame", "/minigame/2048", "/api/minigame/2048/state",
                      "/api/minigame/2048/leaderboard", "/api/minigame/2048/prefs"):
             self.assertEqual(self.client.get(path).status_code, 403, path)
         self.assertEqual(
@@ -63,6 +64,12 @@ class RouteAccessTests(unittest.TestCase):
 
         svc.db_module = _Roles()
         self.assertEqual(self.client.get("/minigame/2048").status_code, 200)
+        hub = self.client.get("/minigame")
+        self.assertEqual(hub.status_code, 200)
+        hub_html = hub.get_data(as_text=True)
+        self.assertIn("Craft Eternal", hub_html)
+        self.assertIn("合成大花花", hub_html)
+        self.assertIn("制作中", hub_html)
         state = self.client.get("/api/minigame/2048/state")
         self.assertEqual(state.status_code, 200)
         payload = state.get_json()

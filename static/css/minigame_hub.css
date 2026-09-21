@@ -1,0 +1,201 @@
+/* 休闲花园首页（小游戏列表）。
+   独立页不加载主 style.css，所以这里自带一份设计令牌（取值与 style.css 的亮/暗主题一致），
+   再加一点点卡片样式；字体用荆棘花园自己的 Kreadon。 */
+
+@font-face {
+  font-family: 'Kreadon';
+  src: url('/fonts/Kreadon-Regular.subset.woff2?v=3') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: optional;
+}
+
+@font-face {
+  font-family: 'Kreadon';
+  src: url('/fonts/Kreadon-Demi.subset.woff2?v=3') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --font-main: 'Kreadon', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', system-ui, sans-serif;
+  --bg-page: #F5F5F0;
+  --bg-card: #FFFFFF;
+  --text-primary: #2C3E50;
+  --text-secondary: #7F8C8D;
+  --text-muted: #95A5A6;
+  --border-color: #DCDCDC;
+  --leisure-accent: #4B3F8F;
+  --leisure-accent-hover: #5A4DA6;
+  --radius-lg: 8px;
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.08);
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --bg-page: #111419;
+  --bg-card: #1C222B;
+  --text-primary: #F0F2F5;
+  --text-secondary: #BAC1CA;
+  --text-muted: #8D97A4;
+  --border-color: #3B4552;
+  --leisure-accent: #5A4CA0;
+  --leisure-accent-hover: #6A5BB8;
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.4);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+.mh-page {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-main);
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+.mh-frame {
+  width: 100%;
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+.mh-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.mh-back {
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.mh-back:hover { color: var(--text-primary); }
+
+.mh-tag {
+  padding: 3px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.mh-title {
+  margin: 18px 0 6px;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: .5px;
+}
+
+.mh-sub {
+  margin: 0 0 22px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.mh-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.mh-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-card);
+}
+
+.mh-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mh-card-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.mh-badge {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--leisure-accent);
+  color: #FFFFFF;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.mh-badge-soon {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+}
+
+.mh-card-desc {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.mh-play {
+  margin-top: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--leisure-accent);
+  border-radius: 10px;
+  background: var(--leisure-accent);
+  color: #FFFFFF;
+  font-family: var(--font-main);
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+
+.mh-play:hover,
+.mh-play:focus-visible {
+  background: var(--leisure-accent-hover);
+  border-color: var(--leisure-accent-hover);
+}
+
+.mh-play-disabled,
+.mh-play-disabled:hover {
+  background: transparent;
+  border-color: var(--border-color);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+/* 制作中的卡片：整体压暗一点，一眼能看出还没做 */
+.mh-card-soon {
+  border-style: dashed;
+  box-shadow: none;
+  opacity: .78;
+}
+
+@media (max-width: 520px) {
+  .mh-title { font-size: 28px; }
+  .mh-grid { grid-template-columns: 1fr; }
+}

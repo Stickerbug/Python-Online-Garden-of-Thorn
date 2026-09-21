@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>休闲花园 · Garden of Thorn</title>
+  <link rel="icon" href="/static/assets/favicon.ico">
+  <link rel="stylesheet" href="/static/css/minigame_hub.css?v={{ static_version|default('dev')|urlencode }}">
+  <script nonce="{{ csp_nonce }}">
+  (() => {
+    const read = (key) => {
+      try { return window.localStorage.getItem(key); } catch (_) { return null; }
+    };
+    const theme = read('gtn_theme') === 'dark' || read('gtn_beta_theme') === 'dark' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', theme);
+  })();
+  </script>
+</head>
+<body class="mh-page">
+<main class="mh-frame">
+  <header class="mh-head">
+    <a class="mh-back" href="/" title="返回大厅">← 返回大厅</a>
+    <span class="mh-tag">休闲花园 · 内测</span>
+  </header>
+
+  <h1 class="mh-title">休闲花园</h1>
+  <p class="mh-sub">这里放轻松向的小游戏，成绩会照常自动同步。目前内测中，仅 staff / admin 可进入。</p>
+
+  <section class="mh-grid" aria-label="小游戏列表">
+    <article class="mh-card">
+      <div class="mh-card-top">
+        <h2 class="mh-card-title">Craft Eternal</h2>
+        <span class="mh-badge">2048</span>
+      </div>
+      <p class="mh-card-desc">
+        5×5 棋盘，把同值方块合成更高稀有度；每次合并有 15% 概率碎裂失败
+        （只留一个原值方块）。成绩自动同步，每周按最近 14 天榜结算冠军奖励。
+      </p>
+      <a class="mh-play" id="mh-play-2048" href="/minigame/2048">开始游戏</a>
+    </article>
+
+    <article class="mh-card mh-card-soon" aria-disabled="true">
+      <div class="mh-card-top">
+        <h2 class="mh-card-title">合成大花花</h2>
+        <span class="mh-badge mh-badge-soon">制作中</span>
+      </div>
+      <p class="mh-card-desc">
+        把同种花花合成更大的花花——这是以后要加的新小游戏，暂时还没做，先在这里占个位置。
+      </p>
+      <button class="mh-play mh-play-disabled" type="button" disabled>制作中</button>
+    </article>
+  </section>
+</main>
+</body>
+</html>

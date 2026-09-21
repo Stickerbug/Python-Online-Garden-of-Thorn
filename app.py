@@ -34983,6 +34983,24 @@ def ensure_minigame_2048_settlement_worker():
                          name='minigame2048-settlement', daemon=True).start()
 
 
+@app.route('/minigame')
+def minigame_hub_page():
+    """休闲花园首页：小游戏列表（2048 已上线，合成大花花制作中）。
+
+    权限跟小游戏本体一致（内测仅 staff / admin），直达 URL 也走同一套判定。
+    """
+
+    identity, denied = _minigame_2048_guard()
+    if denied is not None:
+        return denied
+    return render_template(
+        'minigame_hub.html',
+        username=identity[1],
+        user_id=identity[0],
+        static_version=GTN_STATIC_VERSION,
+    )
+
+
 @app.route('/minigame/2048')
 def minigame_2048_page():
     identity, denied = _minigame_2048_guard()
