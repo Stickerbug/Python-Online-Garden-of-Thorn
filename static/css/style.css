@@ -6154,6 +6154,33 @@ body {
   border-radius: var(--radius-lg);
 }
 
+/* 休闲花园入口：和其它三个主入口**同一套尺寸**（宽度/高度/字号/圆角），只换颜色。
+   颜色取砂金：多人=青绿、故事=琥珀、训练=蓝，休闲=砂金，四者互不混淆。 */
+#btn-minigame-2048 {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: var(--font-main);
+  border-radius: var(--radius-lg);
+  background: #C2A26B;
+  color: #2B241A;
+  border-color: #A98B57;
+}
+
+#btn-minigame-2048:hover:not(:disabled) {
+  background: #CFAF78;
+  border-color: #B8965F;
+  color: #2B241A;
+}
+
+[data-theme="dark"] #btn-minigame-2048 {
+  background: #8A7448;
+  color: #F6EFE1;
+  border-color: #A98B57;
+}
+
 #btn-connect {
   background: var(--bloom);
   color: #fff;
@@ -14419,7 +14446,8 @@ body.spectate-disconnect-modal-active #classic-leave-spectate:not(.hidden) {
 
 #btn-connect,
 #btn-story-mode,
-#btn-solo-training {
+#btn-solo-training,
+#btn-minigame-2048 {
   min-height: 48px;
   font-size: 15px;
   font-weight: 700;
@@ -15385,6 +15413,7 @@ body.spectate-disconnect-modal-active #classic-leave-spectate:not(.hidden) {
   #btn-connect,
   #btn-story-mode,
   #btn-solo-training,
+  #btn-minigame-2048,
   .login-form .btn-settings {
     min-height: 40px;
     padding: 8px 10px;
