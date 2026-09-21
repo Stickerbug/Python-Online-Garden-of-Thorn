@@ -1,3 +1,41 @@
+/* 独立页（小游戏等）不加载主游戏的 style.css：给聊天面板挂上这个类，
+   就能拿到与多人游戏完全一致的字体、底色、边框和前缀配色。
+   取值与 style.css 的亮/暗主题保持同步，改主题色时两边一起改。 */
+.gtn-lobby-chat-standalone {
+  --font-main: 'Kreadon', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', system-ui, sans-serif;
+  --bg-card: #FFFFFF;
+  --input-bg: #FFFFFF;
+  --text-primary: #2C3E50;
+  --text-secondary: #7F8C8D;
+  --text-muted: #95A5A6;
+  --border-color: #DCDCDC;
+  --guard: #2980B9;
+  --magic: #3498DB;
+  --magic-bg: rgba(52, 152, 219, 0.08);
+  --damage: #C0392B;
+  --damage-bg: rgba(192, 57, 43, 0.12);
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --transition-fast: 0.15s ease;
+}
+
+:root[data-theme='dark'] .gtn-lobby-chat-standalone {
+  --bg-card: #1C222B;
+  --input-bg: #171C23;
+  --text-primary: #F0F2F5;
+  --text-secondary: #BAC1CA;
+  --text-muted: #8D97A4;
+  --border-color: #3B4552;
+  --guard: #78BCE8;
+  --magic: #69BCEB;
+  --magic-bg: rgba(52, 152, 219, 0.15);
+  --damage: #F0786C;
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
 .gtn-lobby-chat-surface {
   min-height: 0;
   display: flex;
@@ -8,6 +46,8 @@
   color: var(--text-primary);
   background: var(--bg-card);
   box-shadow: var(--shadow-sm);
+  /* 面板基字号固定，避免各页继承到不同的页面字号（聊天内部元素都显式设了字号） */
+  font-size: 14px;
 }
 
 .gtn-lobby-chat-title {
@@ -34,22 +74,68 @@
   line-height: 1.6;
 }
 
-.gtn-lobby-chat-log .chat-msg {
+/* ---------------- 统一的聊天行 ----------------
+   大厅、故事模式、休闲花园小游戏的聊天日志（.gtn-lobby-chat-log）和对局/经典
+   模式的战斗日志（.log-entry.log-chat）共用下面这套行样式：每条消息都是
+   `.chat-nick`（可带 [来源]/[观战]/[频道] 前缀）+ 正文。
+   公共文件在大厅之后加载，所以这里的取值会盖掉 style.css 里对局日志的窄版聊天样式。 */
+.gtn-lobby-chat-log .chat-msg,
+.log-entry.log-chat,
+.log-entry.chat {
   color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.6;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 
-.gtn-lobby-chat-log .chat-nick {
+.gtn-lobby-chat-log .chat-nick,
+.log-entry.log-chat .chat-nick,
+.log-entry.chat .chat-nick {
   color: var(--text-muted);
   font-weight: 600;
   white-space: normal;
 }
 
-.gtn-lobby-chat-log .chat-nick.system-name {
+.gtn-lobby-chat-log .chat-nick.system-name,
+.log-entry.log-chat .chat-nick.system-name,
+.log-entry.chat .chat-nick.system-name {
   color: var(--guard);
   font-weight: 900;
 }
+
+.gtn-lobby-chat-log .chat-nick.admin-name,
+.log-entry.log-chat .chat-nick.admin-name,
+.log-entry.chat .chat-nick.admin-name {
+  color: #C0392B;
+  font-weight: 800;
+}
+
+.gtn-lobby-chat-log .chat-nick.bloom-name,
+.log-entry.log-chat .chat-nick.bloom-name,
+.log-entry.chat .chat-nick.bloom-name {
+  color: var(--bloom, #1ABC9C);
+  font-weight: 800;
+}
+
+.gtn-lobby-chat-log .chat-nick.guard-name,
+.log-entry.log-chat .chat-nick.guard-name,
+.log-entry.chat .chat-nick.guard-name {
+  color: var(--guard);
+  font-weight: 800;
+}
+
+.gtn-lobby-chat-log .chat-channel,
+.log-entry.log-chat .chat-channel,
+.log-entry.chat .chat-channel {
+  margin-right: 2px;
+  color: var(--magic);
+  font-weight: 800;
+}
+
+.chat-channel-team { color: var(--bloom, #1ABC9C); }
+.chat-channel-enemy { color: var(--damage); }
+.chat-channel-private { color: var(--elixir, #F1C40F); }
 
 .gtn-lobby-chat-log .chat-player-name,
 .gtn-lobby-chat-log .player-title-inline {
@@ -65,32 +151,52 @@
   vertical-align: baseline;
 }
 
-.gtn-lobby-chat-log .chat-spectator-prefix {
+.gtn-lobby-chat-log .chat-spectator-prefix,
+.log-entry.log-chat .chat-spectator-prefix,
+.log-entry.chat .chat-spectator-prefix {
   color: var(--text-muted);
 }
 
-.gtn-lobby-chat-log .chat-origin-prefix {
+.gtn-lobby-chat-log .chat-origin-prefix,
+.log-entry.log-chat .chat-origin-prefix,
+.log-entry.chat .chat-origin-prefix {
   margin-right: 2px;
   font-weight: 700;
 }
 
-.gtn-lobby-chat-log .chat-origin-multiplayer {
+.gtn-lobby-chat-log .chat-origin-multiplayer,
+.log-entry.log-chat .chat-origin-multiplayer,
+.log-entry.chat .chat-origin-multiplayer {
   color: #117d6e;
 }
 
-.gtn-lobby-chat-log .chat-origin-story {
+.gtn-lobby-chat-log .chat-origin-story,
+.log-entry.log-chat .chat-origin-story,
+.log-entry.chat .chat-origin-story {
   color: #94601a;
 }
 
-:root[data-theme='dark'] .gtn-lobby-chat-log .chat-origin-multiplayer {
+/* 休闲花园（小游戏）里发出的消息：前缀 [休闲] */
+.gtn-lobby-chat-log .chat-origin-leisure,
+.log-entry.log-chat .chat-origin-leisure,
+.log-entry.chat .chat-origin-leisure {
+  color: #8a6a2f;
+}
+
+:root[data-theme='dark'] .chat-origin-multiplayer {
   color: #62d8c0;
 }
 
-:root[data-theme='dark'] .gtn-lobby-chat-log .chat-origin-story {
+:root[data-theme='dark'] .chat-origin-story {
   color: #e3ad60;
 }
 
-.gtn-lobby-chat-log .chat-time-separator {
+:root[data-theme='dark'] .chat-origin-leisure {
+  color: #d8bd7a;
+}
+
+.gtn-lobby-chat-log .chat-time-separator,
+.log-entry.log-chat .chat-time-separator {
   margin: 8px 0;
   color: var(--text-secondary);
   font-size: 11px;
@@ -99,7 +205,9 @@
   text-align: center;
 }
 
-.gtn-lobby-chat-log .chat-repeat-count {
+.gtn-lobby-chat-log .chat-repeat-count,
+.log-entry.log-chat .chat-repeat-count,
+.log-entry.chat .chat-repeat-count {
   margin-left: 4px;
   color: var(--text-secondary);
   font-size: 11px;
@@ -211,7 +319,8 @@
   border-radius: 8px;
   outline: none;
   color: var(--text-primary);
-  background: var(--bg-card);
+  /* 暗色主题下主界面输入框用的是 --input-bg（比卡片底色更深），这里保持一致 */
+  background: var(--input-bg, var(--bg-card));
   font-family: var(--font-main);
   font-size: 12px;
   transition: border-color 150ms ease;
@@ -226,6 +335,9 @@
 }
 
 .gtn-lobby-chat-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
   padding: 6px 12px;
   border: 1px solid rgba(52, 152, 219, .3);
@@ -236,6 +348,7 @@
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
+  white-space: nowrap;
   transition: background 150ms ease;
 }
 

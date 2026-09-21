@@ -763,13 +763,13 @@
 </div>
 </div>
 
-<div id="phase-chat-panel" class="phase-chat-panel hidden">
-<div class="phase-chat-title" id="phase-chat-title">聊天</div>
-<div id="phase-chat-log" class="phase-chat-log"></div>
-<div class="phase-chat-input-row">
+<div id="phase-chat-panel" class="phase-chat-panel gtn-lobby-chat-surface hidden">
+<div class="phase-chat-title gtn-lobby-chat-title" id="phase-chat-title">聊天</div>
+<div id="phase-chat-log" class="phase-chat-log gtn-lobby-chat-log"></div>
+<div class="phase-chat-input-row gtn-lobby-chat-input-row">
 <select id="phase-chat-channel" class="game-chat-channel hidden" aria-label="Chat channel"></select>
-<input type="text" id="phase-chat-input" placeholder="聊天..." maxlength="200">
-<button id="btn-phase-chat-send" class="btn btn-small">发送</button>
+<input type="text" id="phase-chat-input" class="gtn-lobby-chat-input" placeholder="聊天..." maxlength="200">
+<button id="btn-phase-chat-send" class="gtn-lobby-chat-send">发送</button>
 </div>
 </div>
 
@@ -823,10 +823,10 @@
     </div>
     <div id="classic-log-content" class="classic-log-content" data-battle-panel-content="log"></div>
     <div id="classic-spectator-list" class="battle-spectator-list classic-spectator-list hidden" data-battle-panel-content="spectators"></div>
-    <div id="classic-chat-row" class="classic-chat-row">
+    <div id="classic-chat-row" class="classic-chat-row gtn-lobby-chat-input-row">
       <select id="classic-game-chat-channel" class="game-chat-channel hidden" aria-label="Chat channel"></select>
-      <input type="text" id="classic-game-chat-input" placeholder="聊天..." maxlength="200">
-      <button id="btn-classic-game-chat-send" class="classic-mini-btn" type="button">发送</button>
+      <input type="text" id="classic-game-chat-input" class="gtn-lobby-chat-input" placeholder="聊天..." maxlength="200">
+      <button id="btn-classic-game-chat-send" class="gtn-lobby-chat-send" type="button">发送</button>
     </div>
   </div>
   <div id="classic-hand-fan" class="classic-hand-fan"></div>
@@ -893,10 +893,10 @@
       </div>
       <div class="log-content" data-battle-panel-content="log"></div>
       <div id="battle-spectator-list" class="battle-spectator-list hidden" data-battle-panel-content="spectators"></div>
-      <div class="controls-group controls-right battle-log-chat-row">
+      <div class="controls-group controls-right battle-log-chat-row gtn-lobby-chat-input-row">
         <select id="game-chat-channel" class="game-chat-channel hidden" aria-label="Chat channel"></select>
-        <input type="text" id="game-chat-input" placeholder="聊天..." maxlength="200">
-        <button id="btn-game-chat-send" class="btn btn-small">发送</button>
+        <input type="text" id="game-chat-input" class="gtn-lobby-chat-input" placeholder="聊天..." maxlength="200">
+        <button id="btn-game-chat-send" class="gtn-lobby-chat-send">发送</button>
       </div>
     </div>
     <div id="teammate-sidebar" class="teammate-sidebar hidden">

@@ -710,7 +710,9 @@
   .mg-score-float, .mg-tile-new, .mg-tile-merged { animation: none !important; }
 }
 
-/* ---------------- 大厅聊天（与多人游戏共用同一条；浮层、默认收起，不挤棋盘） ---------------- */
+/* ---------------- 大厅聊天（与多人游戏共用同一条；浮层、默认收起，不挤棋盘） ----------------
+   面板、标题、日志、输入行和每条消息的样式全部来自 shared-lobby-chat.css 的
+   .gtn-lobby-chat-*（和多人游戏大厅同一套），这里只负责"浮层"本身的定位与开合。 */
 
 .mg-chat-toggle {
   position: fixed;
@@ -735,69 +737,22 @@
   z-index: 51;
   width: min(340px, calc(100vw - 24px));
   max-height: min(60vh, 460px);
-  display: flex;
-  flex-direction: column;
-  background: var(--g-bg);
-  border-radius: 6px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
-  overflow: hidden;
-  font-family: inherit;
-  color: var(--g-text);
 }
-
-.mg-chat-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  background: var(--g-board);
-  color: #f9f6f2;
-}
-
-.mg-chat-head strong { font-size: 14px; }
-.mg-chat-hint { flex: 1 1 auto; font-size: 11px; opacity: 0.85; }
 
 .mg-chat-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 0 4px;
   border: 0;
+  border-radius: 4px;
   background: transparent;
-  color: #f9f6f2;
+  color: var(--text-muted);
+  font-family: var(--font-main);
   font-size: 18px;
   line-height: 1;
   cursor: pointer;
 }
 
-.mg-chat-log {
-  flex: 1 1 auto;
-  overflow-y: auto;
-  padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-.mg-chat-line { overflow-wrap: anywhere; }
-.mg-chat-line .mg-chat-name { font-weight: 700; margin-right: 4px; }
-.mg-chat-line.system { color: var(--g-text-soft); font-style: italic; }
-
-.mg-chat-form {
-  display: flex;
-  gap: 6px;
-  padding: 8px 10px;
-  border-top: 1px solid rgba(119, 110, 101, 0.2);
-}
-
-.mg-chat-form input {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 8px 10px;
-  border: 1px solid rgba(119, 110, 101, 0.35);
-  border-radius: 3px;
-  background: #fff;
-  font: inherit;
-  font-size: 13px;
-  color: #33312b;
-}
-
-[data-theme="dark"] .mg-chat-form input { background: #2b2723; color: var(--g-text); }
+.mg-chat-close:hover,
+.mg-chat-close:focus-visible { color: var(--text-primary); }

@@ -26799,6 +26799,13 @@ def on_minigame_presence(data=None):
         })
         return
     emit('minigame_status', {'ok': True, 'game': '2048', 'status': 'minigame'})
+    # 小游戏和大厅共用同一条聊天：进入时补推一次历史，否则打开时聊天是空的
+    # （大厅玩家的历史随 lobby_update 下发，小游戏玩家不在那份名单里）。
+    with _lock:
+        player = players.get(sid)
+        chat_scope_beta = bool((player or {}).get('beta_mode', False))
+        chat_history_payload = _lobby_chat_history_payload_locked(LOBBY_CHAT_VISIBLE_LIMIT, chat_scope_beta)
+    emit('lobby_chat_history', chat_history_payload)
     if changed:
         broadcast_lobby()
 
@@ -30047,7 +30054,12 @@ def on_chat(data):
                 )
         else:
             beta_mode = bool(player.get('beta_mode', False))
-            chat_data['chat_origin'] = 'multiplayer'
+            # 休闲花园（小游戏）里发的消息算「休闲」来源：由**服务端**按在线状态判定，
+            # 任何小游戏页只要把状态设成 'minigame' 就自动生效，不必各自实现。
+            # 前缀 [休闲] 由各端按 chat_origin 渲染（与 [多人]/[故事] 同一套），
+            # 所以这里只标来源，不再往正文里塞文字，避免两端前缀重复。
+            is_leisure = str(player.get('status') or '') == 'minigame'
+            chat_data['chat_origin'] = 'leisure' if is_leisure else 'multiplayer'
             mentions = _extract_lobby_mentions(text, beta_mode=beta_mode)
             if mentions and not exempt:
                 mention_key = f"mention:{chat_rate_key(sid, player)}"

@@ -494,7 +494,7 @@
             chatTitle: 'Chat', chatConnecting: 'Connecting...', chatConnected: 'Lobby chat',
             chatDisconnected: 'Disconnected. Reconnecting...', chatPlaceholder: 'Type a message...',
             chatSend: 'Send', chatCollapse: 'Collapse chat',
-            chatOriginMultiplayer: 'Multiplayer', chatOriginStory: 'Story',
+            chatOriginMultiplayer: 'Multiplayer', chatOriginStory: 'Story', chatOriginLeisure: 'Casual',
             chatSpectator: 'Spectating', chatYesterday: 'Yesterday', chatBeforeYesterday: 'The day before yesterday',
             chatConsole: 'Console',
             chatUnread: (count) => `${count} unread message(s)`,
@@ -607,7 +607,7 @@
             chatTitle: '聊天', chatConnecting: '正在连接...', chatConnected: '大厅聊天',
             chatDisconnected: '连接已断开，正在重连...', chatPlaceholder: '输入消息...',
             chatSend: '发送', chatCollapse: '收起聊天',
-            chatOriginMultiplayer: '多人', chatOriginStory: '故事',
+            chatOriginMultiplayer: '多人', chatOriginStory: '故事', chatOriginLeisure: '休闲',
             chatSpectator: '观战', chatYesterday: '昨天', chatBeforeYesterday: '前天', chatConsole: '控制台',
             chatUnread: (count) => `${count} 条未读消息`,
             chatRecall: '撤回',
@@ -717,7 +717,7 @@
             chatTitle: 'Chat', chatConnecting: 'Connexion...', chatConnected: 'Chat du salon',
             chatDisconnected: 'Déconnecté. Reconnexion...', chatPlaceholder: 'Écrire un message...',
             chatSend: 'Envoyer', chatCollapse: 'Réduire le chat',
-            chatOriginMultiplayer: 'Multijoueur', chatOriginStory: 'Histoire',
+            chatOriginMultiplayer: 'Multijoueur', chatOriginStory: 'Histoire', chatOriginLeisure: 'Détente',
             chatSpectator: 'Spectateur', chatYesterday: 'Hier', chatBeforeYesterday: 'Avant-hier',
             chatConsole: 'Console',
             chatUnread: (count) => `${count} message(s) non lu(s)`,
@@ -847,7 +847,7 @@
             chatTitle: 'チャット', chatConnecting: '接続中...', chatConnected: 'ロビーチャット',
             chatDisconnected: '切断されました。再接続中...', chatPlaceholder: 'メッセージを入力...',
             chatSend: '送信', chatCollapse: 'チャットを閉じる',
-            chatOriginMultiplayer: 'マルチ', chatOriginStory: 'ストーリー',
+            chatOriginMultiplayer: 'マルチ', chatOriginStory: 'ストーリー', chatOriginLeisure: 'レジャー',
             chatSpectator: '観戦', chatYesterday: '昨日', chatBeforeYesterday: '一昨日', chatConsole: 'コンソール',
             chatUnread: (count) => `未読メッセージ ${count}件`,
             chatRecall: '取り消し',
@@ -4797,12 +4797,14 @@
 
     function appendStoryChatIdentity(parent, entry = {}) {
         const originKey = String(entry.chat_origin || entry.chatOrigin || '').toLowerCase();
-        if (originKey === 'multiplayer' || originKey === 'story') {
+        if (originKey === 'multiplayer' || originKey === 'story' || originKey === 'leisure') {
             const origin = document.createElement('span');
             origin.className = `story-chat-origin story-chat-origin-${originKey} chat-origin-prefix chat-origin-${originKey}`;
             origin.textContent = `[${originKey === 'story'
                 ? t.chatOriginStory
-                : t.chatOriginMultiplayer}]`;
+                : originKey === 'leisure'
+                    ? t.chatOriginLeisure
+                    : t.chatOriginMultiplayer}]`;
             parent.appendChild(origin);
         }
 

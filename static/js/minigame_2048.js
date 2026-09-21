@@ -756,22 +756,77 @@ function hideInvitePrompt() {
   if (box) box.hidden = true;
 }
 
-/* ---------------- 大厅聊天（与多人游戏共用同一条） ---------------- */
+/* ---------------- 大厅聊天（与多人游戏共用同一条） ----------------
+   面板、标题、日志、输入框、每条消息的类名和样式都和多人游戏大厅完全一致
+   （见 shared-lobby-chat.css 的 .gtn-lobby-chat-* 与 .chat-msg/.chat-nick），
+   所以休闲花园里的聊天就是大厅聊天本身；[休闲] 前缀由服务端给的 chat_origin 渲染。 */
+
+const CHAT_LABELS = {
+  zh: { multiplayer: '多人', story: '故事', leisure: '休闲', system: '系统' },
+  en: { multiplayer: 'Multiplayer', story: 'Story', leisure: 'Casual', system: 'System' },
+  fr: { multiplayer: 'Multijoueur', story: 'Histoire', leisure: 'Détente', system: 'Système' },
+  ja: { multiplayer: 'マルチ', story: 'ストーリー', leisure: 'レジャー', system: 'システム' },
+};
+
+function chatLabels() {
+  let lang = '';
+  try {
+    lang = String((store && store.getItem('gtn_lang')) || '').toLowerCase();
+  } catch (_) { lang = ''; }
+  return CHAT_LABELS[lang] || CHAT_LABELS.zh;
+}
+
+function chatOriginBadgeHtml(item) {
+  const origin = String((item && item.chat_origin) || '').toLowerCase();
+  const labels = chatLabels();
+  if (!labels[origin]) return '';
+  return `<span class="chat-origin-prefix chat-origin-${origin}">[${escapeHtml(labels[origin])}]</span>`;
+}
+
+function chatTextHtml(item) {
+  let out = escapeHtml((item && item.text) || '');
+  const mentions = Array.isArray(item && item.mentions) ? item.mentions : [];
+  mentions.slice(0, 8).forEach((mention) => {
+    const name = escapeHtml((mention && mention.nickname) || '');
+    if (!name) return;
+    const token = `@${name}`;
+    out = out.split(token).join(`<span class="chat-mention-token">${token}</span>`);
+  });
+  return out;
+}
 
 function chatLineHtml(item) {
-  const system = !!(item && item.system);
-  const name = escapeHtml((item && item.nickname) || '');
-  const text = escapeHtml((item && item.text) || '');
-  return `<div class="mg-chat-line${system ? ' system' : ''}">`
-    + (system ? '' : `<span class="mg-chat-name">${name}</span>`)
-    + `${text}</div>`;
+  if (!item) return '';
+  if (item.type === 'time') {
+    const label = escapeHtml(String(item.display_time || '').trim());
+    return label ? `<div class="chat-time-separator">${label}</div>` : '';
+  }
+  const labels = chatLabels();
+  const system = !!item.system;
+  const name = escapeHtml(String(item.nickname || '').trim());
+  const head = system
+    ? `${name || `[${escapeHtml(labels.system)}]`} `
+    : `<span class="chat-player-name">${name || '?'}</span>: `;
+  return `<div class="chat-msg">`
+    + `<span class="chat-nick${system ? ' system-name' : ''}">${chatOriginBadgeHtml(item)}${head}</span>`
+    + chatTextHtml(item)
+    + '</div>';
 }
 
 function renderChatHistory(items) {
   const log = el('mg-chat-log');
   if (!log) return;
-  const list = Array.isArray(items) ? items : [];
-  log.innerHTML = list.map(chatLineHtml).join('')
+  const list = (Array.isArray(items) ? items : []).slice(-200);
+  const html = [];
+  list.forEach((item, index) => {
+    // 和多人游戏一样：撤掉消息后没了下文的时间分隔符不再显示
+    if (item && item.type === 'time') {
+      const next = list[index + 1];
+      if (!next || next.type === 'time') return;
+    }
+    html.push(chatLineHtml(item));
+  });
+  log.innerHTML = html.filter(Boolean).join('')
     || '<p class="mg-hint">还没有人说话。</p>';
   log.scrollTop = log.scrollHeight;
 }

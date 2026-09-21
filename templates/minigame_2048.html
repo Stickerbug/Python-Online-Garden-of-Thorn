@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <title>Craft Eternal · 休闲花园</title>
   <link rel="icon" href="/static/assets/favicon.ico">
+  <link rel="stylesheet" href="/static/css/shared-lobby-chat.css?v={{ static_version|default('dev')|urlencode }}">
   <link rel="stylesheet" href="/static/css/minigame_2048.css?v={{ static_version|default('dev')|urlencode }}">
   <script nonce="{{ csp_nonce }}">
   (() => {
@@ -124,16 +125,15 @@
   </section>
 
   <button id="mg-chat-toggle" class="mg-chat-toggle" type="button" aria-expanded="false">聊天</button>
-  <aside id="mg-chat" class="mg-chat" hidden aria-label="大厅聊天">
-    <header class="mg-chat-head">
-      <strong>大厅聊天</strong>
-      <span class="mg-chat-hint">与多人游戏共用</span>
-      <button id="mg-chat-close" class="mg-chat-close" type="button" aria-label="关闭聊天">×</button>
-    </header>
-    <div id="mg-chat-log" class="mg-chat-log" role="log" aria-live="polite"></div>
-    <form id="mg-chat-form" class="mg-chat-form">
-      <input id="mg-chat-input" type="text" maxlength="200" autocomplete="off" placeholder="说点什么…">
-      <button class="mg-btn small" type="submit">发送</button>
+  <!-- 面板/标题/日志/输入行都复用多人游戏大厅那一套 gtn-lobby-chat-* 样式，
+       gtn-lobby-chat-standalone 负责补上独立页缺失的主题变量。 -->
+  <aside id="mg-chat" class="mg-chat gtn-lobby-chat-surface gtn-lobby-chat-standalone" hidden aria-label="聊天">
+    <h3 class="gtn-lobby-chat-title">聊天</h3>
+    <button id="mg-chat-close" class="mg-chat-close" type="button" aria-label="关闭聊天">×</button>
+    <div id="mg-chat-log" class="gtn-lobby-chat-log" role="log" aria-live="polite"></div>
+    <form id="mg-chat-form" class="gtn-lobby-chat-input-row">
+      <input id="mg-chat-input" class="gtn-lobby-chat-input" type="text" maxlength="200" autocomplete="off" placeholder="输入消息...">
+      <button id="mg-chat-send" class="gtn-lobby-chat-send" type="submit">发送</button>
     </form>
   </aside>
 </main>
