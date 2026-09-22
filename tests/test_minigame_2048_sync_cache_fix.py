@@ -30,3 +30,9 @@ def test_client_keeps_local_game_when_state_request_fails():
     # /state 的失败响应绝不能再交给 adoptServerState 当成存档
     assert 'if (!response.ok) {' in js
     assert '服务器繁忙，本地进度已保留，稍后自动校验' in js
+
+
+def test_boot_reconciles_stale_local_new_with_server_progress():
+    js = (ROOT / 'static' / 'js' / 'minigame_2048.js').read_text(encoding='utf-8')
+    assert 'state.localNew === true && serverHasProgress && state.replaceActive !== true' in js
+    assert '已回到服务器上的上一局' in js

@@ -794,6 +794,7 @@ GTN_STATIC_VERSION += '-new-player-entertainment-default-fix-1'
 GTN_STATIC_VERSION += '-casual-mod-draw-1'
 GTN_STATIC_VERSION += '-v2-ui-select-default-1'
 GTN_STATIC_VERSION += '-minigame-2048-sync-cache-fix-1'
+GTN_STATIC_VERSION += '-minigame-2048-boot-reconcile-1'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 STORY_COOP_ENABLED = os.environ.get('GTN_STORY_COOP_ENABLED', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 GTN_AI_1V1_TEST_ENABLED = os.environ.get('GTN_AI_1V1_TEST_ENABLED', '1').strip().lower() in ('1', 'true', 'yes', 'on')

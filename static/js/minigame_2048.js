@@ -1448,10 +1448,30 @@ async function boot() {
         state.best = Math.max(state.best || 0, state.score);
         saveLocal();
       } else {
-        verifiedEl.textContent = String(data.verified?.score || 0);
-        state.best = Math.max(state.best || 0, state.score);
-        setSyncText('在线：正在校验本机进度…');
-        scheduleSync(200);
+        const serverGame = data.game || {};
+        const serverUid = String(serverGame.game_uid || '');
+        const localUid = String(state.gameUid || '');
+        const serverHasProgress = Number(serverGame.op_index || 0) > 0
+          || Number(serverGame.score || 0) > 0;
+        if (state.localNew === true && serverHasProgress && state.replaceActive !== true) {
+          // 上一次打开时 /state 失败，留下了"本地新局"；服务器上其实还有真实进度。
+          // 直接回到服务器分支，避免先显示空棋盘、走两步才被同步纠正。
+          adoptServerState(data);
+          state.best = Math.max(state.best || 0, state.score);
+          saveLocal();
+          setSyncText('已回到服务器上的上一局', 'ok');
+        } else if (state.localNew !== true && serverUid && localUid && serverUid !== localUid) {
+          // 本地是普通在线局存档，但服务器活动局已经换成别的：以服务器为准。
+          adoptServerState(data);
+          state.best = Math.max(state.best || 0, state.score);
+          saveLocal();
+          setSyncText('已同步到服务器上的最新一局', 'ok');
+        } else {
+          verifiedEl.textContent = String(data.verified?.score || 0);
+          state.best = Math.max(state.best || 0, state.score);
+          setSyncText('在线：正在校验本机进度…');
+          scheduleSync(200);
+        }
       }
     }
   } catch (_) {
