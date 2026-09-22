@@ -57,6 +57,27 @@
 
 * { box-sizing: border-box; }
 
+/* 资源没加载出来时的兜底提示（正常情况一直 hidden） */
+.mg-boot-error {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid #c0392b;
+  border-radius: 8px;
+  background: rgba(192, 57, 43, 0.08);
+  color: #c0392b;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+[data-theme="dark"] .mg-boot-error {
+  border-color: #f0786c;
+  background: rgba(240, 120, 108, 0.12);
+  color: #f0786c;
+}
+
 .mg-page {
   margin: 0;
   min-height: 100vh;

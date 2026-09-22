@@ -1285,6 +1285,7 @@ async function savePrefs() {
 /* ---------------- 启动 ---------------- */
 
 async function boot() {
+  window.__mgBooted = true;      // 供页面里的兜底提示判断"脚本起来了"
   buildLegend();
   const local = loadLocal();
   if (local) {

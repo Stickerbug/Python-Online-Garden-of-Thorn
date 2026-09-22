@@ -16,9 +16,22 @@
     document.documentElement.setAttribute('data-theme', theme);
   })();
   </script>
+  <script nonce="{{ csp_nonce }}">
+  /* 兜底：模块/样式没加载出来（例如离线缓存不完整）时，别留一个空白页。 */
+  window.__mgBooted = false;
+  window.setTimeout(() => {
+    if (window.__mgBooted) return;
+    const box = document.getElementById('mg-boot-error');
+    if (box) box.hidden = false;
+  }, 6000);
+  </script>
 </head>
 <body class="mg-page">
 <main class="mg-frame">
+  <p id="mg-boot-error" class="mg-boot-error" hidden>
+    页面资源没有加载完整（可能是离线缓存或网络问题）。
+    <button class="mg-btn small" type="button" onclick="window.location.reload()">重新加载</button>
+  </p>
   <header class="mg-head">
     <div class="mg-head-row">
       <a class="mg-back" href="/minigame" title="返回休闲花园">← 休闲花园</a>
