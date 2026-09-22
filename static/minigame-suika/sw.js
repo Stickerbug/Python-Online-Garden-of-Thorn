@@ -10,8 +10,11 @@
 const CACHE = 'gtn-mgsuika-v1';
 const SHELL = [
   '/static/css/minigame_suika.css',
+  '/static/css/shared-lobby-chat.css',
   '/static/js/minigame_suika.js',
+  '/static/js/minigame-chat.js',
   '/static/js/minigame-presence.js',
+  '/static/js/shared-chat-actions.js',
   '/static/js/suika_core.js',
   '/static/vendor/matter.min.js',
   '/static/vendor/socket.io.min.js',

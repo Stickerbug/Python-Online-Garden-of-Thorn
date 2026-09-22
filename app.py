@@ -35079,10 +35079,17 @@ def minigame_suika_page():
     if denied is not None:
         return denied
     from_key = minigame_registry.normalize_from(request.args.get('from'))
+    # 聊天身份（admin / staff / player）：客户端据此显示"撤回"按钮，服务端撤回时还会再判一次
+    viewer_chat_role = 'player'
+    try:
+        viewer_chat_role = _chat_role_for_account(identity[0])
+    except Exception as exc:
+        admin_event('error', f'suika page chat role lookup failed: {exc}')
     return render_template(
         'minigame_suika.html',
         username=identity[1],
         user_id=identity[0],
+        chat_role=viewer_chat_role,
         static_version=GTN_STATIC_VERSION,
         from_key=from_key,
         back_href=minigame_registry.with_from('/minigame', from_key),

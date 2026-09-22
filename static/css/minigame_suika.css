@@ -443,3 +443,70 @@ body.sk-page {
   .sk-card, .sk-btn { transition: none; }
   .sk-card:hover { transform: none; }
 }
+
+/* ---------------- 大厅聊天（与多人游戏、2048 同一条；浮层、默认收起） ----------------
+   面板内部样式全部来自 shared-lobby-chat.css 的 .gtn-lobby-chat-*，这里只管浮层定位。 */
+
+.sk-chat-toggle {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--sk-accent);
+  color: #FFFFFF;
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+
+.sk-chat-toggle:hover { background: var(--sk-accent-hover); }
+
+.sk-chat-unread {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--sk-danger);
+  color: #FFFFFF;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.sk-chat-unread[hidden] { display: none; }
+
+.sk-chat {
+  position: fixed;
+  right: 16px;
+  bottom: 68px;
+  z-index: 51;
+  width: min(340px, calc(100vw - 24px));
+  max-height: min(60vh, 460px);
+}
+
+.sk-chat-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--sk-text-muted);
+  font-family: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sk-chat-close:hover,
+.sk-chat-close:focus-visible { color: var(--sk-text); }

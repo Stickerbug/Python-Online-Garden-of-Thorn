@@ -935,6 +935,62 @@ function attachPresence() {
     },
     // 接受邀请前先把这一局存好（云同步接入后这里会顺便等一次上传）
     beforeAccept: async () => { saveLocal(); },
+    // 大厅聊天：和多人游戏 / 2048 是同一条，用共用渲染模块
+    onSocket: (socket) => { attachChat(socket); },
+  });
+}
+
+/** 大厅聊天（共用 minigame-chat.js；渲染规则与多人游戏大厅一致）。 */
+function attachChat(socket) {
+  const factory = window.GtnMinigameChat;
+  if (!factory || !socket) return;
+  const chat = factory.attach({
+    socket,
+    gameKey: CONFIG.gameKey || 'suika',
+    userId: CONFIG.userId,
+    username: CONFIG.username,
+    chatRole: CONFIG.chatRole || 'player',
+    toggleId: 'sk-chat-toggle',
+    panelId: 'sk-chat',
+    closeId: 'sk-chat-close',
+    logId: 'sk-chat-log',
+    formId: 'sk-chat-form',
+    inputId: 'sk-chat-input',
+    unreadId: 'sk-chat-unread',
+    emptyHtml: '<p class="sk-hint">还没有人说话。</p>',
+  });
+  window.__skChat = chat;   // 浏览器探针用
+  socket.on('lobby_chat_history', (payload) => {
+    try {
+      chat.render(payload && payload.items);
+    } catch (error) {
+      window.__skChatError = String((error && error.stack) || error);
+    }
+  });
+  socket.on('chat', (payload) => {
+    try {
+      chat.append(payload);
+    } catch (error) {
+      window.__skChatError = String((error && error.stack) || error);
+    }
+    const panel = document.getElementById('sk-chat');
+    if (panel && panel.hidden) chat.markUnread(payload);
+  });
+  socket.on('chat_recall', (payload) => {
+    const ids = ((payload || {}).message_ids || []).map((value) => Number(value) || 0).filter(Boolean);
+    const log = document.getElementById('sk-chat-log');
+    if (!log) return;
+    ids.forEach((id) => {
+      const row = log.querySelector(`.chat-msg[data-chat-message-id="${id}"]`);
+      if (row) row.remove();
+    });
+    const actor = String((payload || {}).actor_name || '管理员');
+    const target = String((payload || {}).target_name || '');
+    const text = (payload || {}).self_recall
+      ? `${actor} 撤回了一条消息`
+      : `${actor} 撤回了 ${target || '某个玩家'} 的一条消息`;
+    log.insertAdjacentHTML('beforeend', `<div class="chat-msg chat-recall-entry">${text}</div>`);
+    log.scrollTop = log.scrollHeight;
   });
 }
 
