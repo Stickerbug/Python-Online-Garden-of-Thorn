@@ -26,15 +26,17 @@
       }
     </style>
   </defs>
-  <circle class="st0" cx="203.44" cy="196.18" r="30.14"/>
-  <circle class="st0" cx="203.44" cy="196.18" r="16.42"/>
-  <g transform="translate(112.46 176.42) rotate(-12.4)">
-    <rect class="st1" x="-54.6" y="-54.6" width="109.2" height="109.2" rx="18"/>
-    <circle class="st2" cx="-27.4" cy="-27.4" r="11.2"/>
-    <circle class="st2" cx="0" cy="0" r="11.2"/>
-    <circle class="st2" cx="27.4" cy="27.4" r="11.2"/>
+  <g transform="translate(141.73 141.73) scale(0.795) translate(-156.5 -146)">
+    <circle class="st0" cx="203.44" cy="196.18" r="30.14"/>
+    <circle class="st0" cx="203.44" cy="196.18" r="16.42"/>
+    <g transform="translate(112.46 176.42) rotate(-12.4)">
+      <rect class="st1" x="-54.6" y="-54.6" width="109.2" height="109.2" rx="18"/>
+      <circle class="st2" cx="-27.4" cy="-27.4" r="11.2"/>
+      <circle class="st2" cx="0" cy="0" r="11.2"/>
+      <circle class="st2" cx="27.4" cy="27.4" r="11.2"/>
+    </g>
+    <ellipse class="st2" cx="182.74" cy="128.42" rx="84.36" ry="21.94"/>
+    <path class="st2" d="M131.06,129.42h103.36v-63.1c0-9.3-7.54-16.84-16.84-16.84h-69.68c-9.3,0-16.84,7.54-16.84,16.84v63.1Z"/>
+    <rect class="st3" x="131.06" y="104.88" width="103.36" height="24.54"/>
   </g>
-  <ellipse class="st2" cx="182.74" cy="128.42" rx="84.36" ry="21.94"/>
-  <path class="st2" d="M131.06,129.42h103.36v-63.1c0-9.3-7.54-16.84-16.84-16.84h-69.68c-9.3,0-16.84,7.54-16.84,16.84v63.1Z"/>
-  <rect class="st3" x="131.06" y="104.88" width="103.36" height="24.54"/>
 </svg>

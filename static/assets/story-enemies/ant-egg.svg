@@ -19,8 +19,8 @@
       }
     </style>
   </defs>
-  <ellipse class="st0" cx="141.73" cy="141.73" rx="76.02" ry="92.05"/>
-  <ellipse class="st1" cx="118.24" cy="106.42" rx="20.86" ry="27.14" transform="rotate(-24.12 118.24 106.42)"/>
-  <ellipse class="st2" cx="167.42" cy="176.11" rx="9.48" ry="6.42" transform="rotate(-17.85 167.42 176.11)"/>
-  <ellipse class="st2" cx="131.66" cy="187.94" rx="6.98" ry="5.04" transform="rotate(-11.64 131.66 187.94)"/>
+  <ellipse class="st0" cx="141.73" cy="141.73" rx="76.02" ry="82.05"/>
+  <ellipse class="st1" cx="120.9" cy="111.4" rx="20.86" ry="25.2" transform="rotate(-24.12 120.9 111.4)"/>
+  <ellipse class="st2" cx="166.2" cy="170.6" rx="9.48" ry="6.42" transform="rotate(-17.85 166.2 170.6)"/>
+  <ellipse class="st2" cx="133.2" cy="181.4" rx="6.98" ry="5.04" transform="rotate(-11.64 133.2 181.4)"/>
 </svg>
