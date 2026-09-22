@@ -49,3 +49,12 @@
 - 当前状态：正在取得许可。
 - 在 GTN 中的用途：临时战斗背景音乐槽位。
 - 说明：该曲目为 Deltarune / Touhou Remix，正式长期使用前应确认授权或替换为明确可用于游戏分发的原创/授权曲目。
+
+## matter.js
+
+- 来源：<https://github.com/liabru/matter-js>（构建产物取自 npm 包 `matter-js@0.19.0`）
+- 本地路径：`static/vendor/matter.min.js`
+- 许可证：MIT
+- 在 GTN 中的用途：休闲花园「合成大花花」小游戏的 2D 物理引擎。
+- 说明：文件头保留原作者的 MIT 声明注释（`matter-js 0.19.0 by @liabru ... License MIT`），
+  仅作为静态资源加载，服务器不联网拉取。
