@@ -12224,21 +12224,27 @@ html.blind-level-4 .card-prediction-part.magic {
 
 /* 休闲花园（小游戏）入口：砂金色，和故事（紫）/训练场（蓝）/多人（青绿）区分开 */
 .btn-leisure {
-  background: #C2A26B;
-  color: #2B241A;
-  border-color: #A98B57;
+  /* 与休闲花园入口一致：深紫底 + 白字（原来那版砂金已经废弃） */
+  background: #4B3F8F;
+  color: #FFFFFF;
+  border-color: #3E3478;
 }
 
 .btn-leisure:hover:not(:disabled) {
-  background: #CFAF78;
-  color: #2B241A;
-  border-color: #B8965F;
+  background: #5A4DA6;
+  color: #FFFFFF;
+  border-color: #4B3F8F;
 }
 
 [data-theme="dark"] .btn-leisure {
-  background: #8A7448;
-  color: #F6EFE1;
-  border-color: #A98B57;
+  background: #5A4CA0;
+  color: #FFFFFF;
+  border-color: #6E5FBE;
+}
+
+[data-theme="dark"] .btn-leisure:hover:not(:disabled) {
+  background: #6A5BB8;
+  border-color: #7F70CE;
 }
 
 .btn-magic:hover:not(:disabled) {

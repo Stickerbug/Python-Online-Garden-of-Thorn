@@ -713,6 +713,9 @@
 </div>
 </div>
 <div class="lobby-footer">
+{% if minigame_2048_available|default(false) %}
+<button id="btn-lobby-leisure" class="btn btn-leisure" type="button" title="休闲花园">休闲花园</button>
+{% endif %}
 <button id="btn-lobby-back" class="btn btn-secondary">返回主页</button>
 <button id="btn-lobby-settings" class="btn btn-secondary">设置</button>
 </div>

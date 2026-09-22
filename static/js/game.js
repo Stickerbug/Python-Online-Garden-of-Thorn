@@ -38891,6 +38891,8 @@ async function init() {
     bindClickOnce('btn-solo-training', showSoloTraining);
     // 休闲花园现在先进"小游戏列表"（首页），由玩家自己挑一个游戏
     bindClickOnce('btn-minigame-2048', () => { window.location.href = '/minigame'; });
+    // 大厅页脚也有一个入口，行为一致
+    bindClickOnce('btn-lobby-leisure', () => { window.location.href = '/minigame'; });
     bindClickOnce('btn-connect', onLogin);
     bindClickOnce('btn-story-mode', openStoryMode);
     bindClickOnce('btn-ai-1v1-test', async () => {
