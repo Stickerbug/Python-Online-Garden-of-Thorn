@@ -4337,7 +4337,9 @@ def _online_lobby_mention_candidates(beta_mode=False):
         })
 
     for target_sid, target in players.items():
-        if target.get('status') not in {'lobby', 'spectating'}:
+        # 休闲花园（status='minigame'）里的人也在这条大厅聊天里，同样要能被 @ 到，
+        # 否则 @ 不出来（服务端识别不到 → 客户端不给变蓝）。
+        if target.get('status') not in {'lobby', 'spectating', 'minigame'}:
             continue
         if bool(target.get('beta_mode', False)) != bool(beta_mode):
             continue

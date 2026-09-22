@@ -994,11 +994,16 @@ function isOwnChatItem(item) {
 function chatTextHtml(item) {
   let out = escapeHtml((item && item.text) || '');
   const mentions = Array.isArray(item && item.mentions) ? item.mentions : [];
+  const ownUserId = CONFIG.userId != null ? String(CONFIG.userId) : '';
   mentions.slice(0, 8).forEach((mention) => {
     const name = escapeHtml((mention && mention.nickname) || '');
     if (!name) return;
     const token = `@${name}`;
-    out = out.split(token).join(`<span class="chat-mention-token">${token}</span>`);
+    // 点到自己的时候额外加个描边（和大厅一样），别人只是蓝色
+    const isSelf = !!ownUserId && mention && mention.user_id != null
+      && String(mention.user_id) === ownUserId;
+    const cls = `chat-mention-token${isSelf ? ' mention-self' : ''}`;
+    out = out.split(token).join(`<span class="${cls}">${token}</span>`);
   });
   return out;
 }
