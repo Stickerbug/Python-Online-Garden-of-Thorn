@@ -538,7 +538,7 @@ async function syncNow() {
       ? `已同步 · 已验证 ${body.record.score} 分`
       : '已同步（本次没有新增计分）';
     if (body.verified) verifiedEl.textContent = String(body.verified.score);
-    if (body.record) void refreshLeaderboard(rankWindowMode);   // 有新成绩就刷新底部榜单
+    if (body.record) scheduleLeaderboardRefresh();   // 有新成绩，最多 15 秒刷一次榜单
     retryDelay = RETRY_BASE_MS;
     saveLocal();
     // 不要重绘棋盘：会打断正在播放的出现/合并/滑动动画。只更新同步状态那行字。
@@ -1315,6 +1315,17 @@ function rankTileHtml(value) {
   const name = tileLabel(Number(value) || 0) || String(value || '');
   return `<span class="mg-rank-tile" style="--mg-tile-bg:${item ? item.bg : '#bbada0'};`
     + `--mg-tile-fg:${item ? item.fg : '#f9f6f2'}">${escapeHtml(name)}</span>`;
+}
+
+/* 玩的时候会不断刷新已验证成绩；榜单本身变化很慢，合并到最多 15 秒一次，
+   避免每次加分都打一发 /leaderboard。切窗口/进页面仍然立即刷新。 */
+let leaderboardRefreshTimer = null;
+function scheduleLeaderboardRefresh(delay = 15000) {
+  if (leaderboardRefreshTimer) return;
+  leaderboardRefreshTimer = window.setTimeout(() => {
+    leaderboardRefreshTimer = null;
+    void refreshLeaderboard(rankWindowMode);
+  }, delay);
 }
 
 async function refreshLeaderboard(windowMode = rankWindowMode) {

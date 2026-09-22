@@ -797,6 +797,7 @@ GTN_STATIC_VERSION += '-casual-mod-draw-1'
 GTN_STATIC_VERSION += '-v2-ui-select-default-1'
 GTN_STATIC_VERSION += '-minigame-2048-sync-cache-fix-1'
 GTN_STATIC_VERSION += '-minigame-2048-boot-reconcile-1'
+GTN_STATIC_VERSION += '-minigame-2048-leaderboard-cache-1'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 STORY_COOP_ENABLED = os.environ.get('GTN_STORY_COOP_ENABLED', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 GTN_AI_1V1_TEST_ENABLED = os.environ.get('GTN_AI_1V1_TEST_ENABLED', '1').strip().lower() in ('1', 'true', 'yes', 'on')
@@ -34990,9 +34991,20 @@ def _minigame_2048_settlement_worker():
                 with get_db_connection() as conn:
                     minigame_2048_service.ensure_schema(conn)
                     results = minigame_2048_service.settle_due(conn)
+                    # 休闲花园里的小游戏共用同一套奖期表（靠 `suika-` 前缀分账）：
+                    # 同一个 worker 里顺带把合成大花花的奖期也结掉。
+                    try:
+                        suika_results = minigame_suika_service.settle_due(conn)
+                    except Exception as exc:
+                        suika_results = []
+                        admin_event('error', f'suika settlement failed: {exc}')
                 for item in results:
                     if item.get("status") == "paid":
                         print(f"[minigame2048] settled {item['period_key']} "
+                              f"participants={item.get('participants')}", flush=True)
+                for item in suika_results:
+                    if item.get("status") == "paid":
+                        print(f"[minigamesuika] settled {item['period_key']} "
                               f"participants={item.get('participants')}", flush=True)
         except Exception as exc:
             admin_event('error', f'2048 settlement worker error: {exc}')
@@ -35394,8 +35406,10 @@ def api_minigame_2048_leaderboard():
     if window not in ('14d', 'all'):
         return _json_error('window 只能是 14d 或 all', 400)
     with get_db_connection() as conn:
-        table = minigame_2048_service.leaderboard(conn, window=window, limit=limit)
-        me = minigame_2048_service.self_entry(conn, identity[0], window=window)
+        # 短 TTL 缓存 + 复用同一份完整榜单：不再为 self_entry 扫第二遍全表。
+        table = minigame_2048_service.leaderboard_cached(conn, window=window, limit=limit)
+        full_table = minigame_2048_service.leaderboard_cached(conn, window=window, limit=0)
+        me = minigame_2048_service.self_entry_from_table(full_table, identity[0])
         periods = minigame_2048_service.period_history(conn, limit=4)
         # 榜单上要显示「称号 + 染色昵称」：批量取一次身份字段（两次查询，避免逐行查库）
         try:

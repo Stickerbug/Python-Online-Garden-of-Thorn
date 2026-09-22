@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
@@ -639,13 +640,65 @@ def leaderboard(conn, *, window: str = "14d", limit: int = DEFAULT_LEADERBOARD_L
 
 
 def self_entry(conn, user_id: int, *, window: str = "14d", now=None,
-               game_key: str = "2048") -> Optional[Dict[str, object]]:
+               game_key: str = "2048",
+               rules_version: int = g.RULES_VERSION) -> Optional[Dict[str, object]]:
     """自己的名次；榜外也能查到（验收 7）。"""
 
-    table = leaderboard(conn, window=window, limit=0, now=now, game_key=game_key)
+    table = leaderboard(conn, window=window, limit=0, now=now,
+                        game_key=game_key, rules_version=rules_version)
     for item in table["entries"]:
         if int(item["user_id"]) == int(user_id):
             return item
+    return None
+
+
+# 排行榜短 TTL 缓存。窗口内成绩变化很慢，但原实现每次请求都要把窗口内所有
+# 记录全量扫一遍（``self_entry`` 还会再扫第二遍）；多人同时玩时 `/leaderboard`
+# 每次 ~600ms，单线程事件循环被占满，登录/连接请求就会排队。
+_LEADERBOARD_CACHE_TTL_SECONDS = 15.0
+_LEADERBOARD_CACHE: Dict[Tuple[str, int, str], Tuple[float, Dict[str, object]]] = {}
+
+
+def invalidate_leaderboard_cache() -> None:
+    _LEADERBOARD_CACHE.clear()
+
+
+def leaderboard_cached(conn, *, window: str = "14d", limit: int = DEFAULT_LEADERBOARD_LIMIT,
+                       now=None, rules_version: int = g.RULES_VERSION,
+                       game_key: str = "2048") -> Dict[str, object]:
+    """``leaderboard`` 的进程内短缓存：同一窗口 15 秒内只算一次。"""
+
+    key = (str(window), int(rules_version), str(game_key or "2048"))
+    clock = time.monotonic()
+    cached = _LEADERBOARD_CACHE.get(key)
+    if cached is None or cached[0] <= clock:
+        table = leaderboard(conn, window=window, limit=0, now=now,
+                            rules_version=rules_version, game_key=game_key)
+        _LEADERBOARD_CACHE[key] = (clock + _LEADERBOARD_CACHE_TTL_SECONDS, table)
+    else:
+        table = cached[1]
+    safe_limit = max(0, min(int(limit or 0), 500))
+    return {
+        "window": table["window"],
+        "limit": safe_limit,
+        "participants": table["participants"],
+        "entries": table["entries"][:safe_limit] if safe_limit else table["entries"],
+    }
+
+
+def self_entry_from_table(table: Dict[str, object], user_id) -> Optional[Dict[str, object]]:
+    """从已经算好的榜单里取自己那一行，避免再扫一遍全表。"""
+
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None
+    for item in (table.get("entries") or []):
+        try:
+            if int(item.get("user_id") or -1) == uid:
+                return item
+        except (TypeError, ValueError):
+            continue
     return None
 
 
