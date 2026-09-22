@@ -1,3 +1,106 @@
+/* 聊天行操作按钮（举报 / 撤回）与举报弹窗：小游戏页、故事模式共用。
+   举报按钮样式与主界面 .report-inline-btn 一致（那边由 style.css 提供）。 */
+.report-inline-btn {
+  margin-left: 8px;
+  padding: 2px 7px;
+  font-family: 'Kreadon Regular', var(--font-main);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.35;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--text-muted) 28%, transparent);
+  border-radius: var(--radius-sm, 5px);
+  cursor: pointer;
+  opacity: 0.68;
+  transition: color 150ms ease, border-color 150ms ease, background 150ms ease, opacity 150ms ease;
+}
+
+.report-inline-btn:hover,
+.report-inline-btn:focus-visible {
+  color: var(--damage);
+  border-color: color-mix(in srgb, var(--damage) 48%, transparent);
+  background: color-mix(in srgb, var(--damage-bg, rgba(192, 57, 43, .12)) 70%, transparent);
+  opacity: 1;
+  outline: none;
+}
+
+.chat-report-btn {
+  margin-left: 5px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  vertical-align: baseline;
+  opacity: 0.56;
+}
+
+.gtn-chat-report-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.gtn-chat-report-modal {
+  width: min(460px, 100%);
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-lg, 0 12px 32px rgba(0, 0, 0, .25));
+  font-family: 'Kreadon Regular', var(--font-main);
+  font-size: 13px;
+}
+
+.gtn-chat-report-modal h3 { margin: 0; font-size: 17px; }
+.gtn-chat-report-target { margin: 0; color: var(--text-secondary); overflow-wrap: anywhere; }
+.gtn-chat-report-field { display: grid; gap: 4px; }
+.gtn-chat-report-field span { color: var(--text-secondary); font-size: 12px; font-weight: 700; }
+
+.gtn-chat-report-field select,
+.gtn-chat-report-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 9px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-primary);
+  background: var(--input-bg, var(--bg-card));
+  font-family: 'Kreadon Regular', var(--font-main);
+  font-size: 12px;
+}
+
+.gtn-chat-report-field textarea { min-height: 72px; resize: vertical; }
+.gtn-chat-report-error { margin: 0; color: var(--damage); font-size: 12px; font-weight: 700; }
+.gtn-chat-report-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+.gtn-chat-report-actions button {
+  padding: 7px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: 'Kreadon Regular', var(--font-main);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.gtn-chat-report-actions .gtn-chat-report-submit {
+  border-color: color-mix(in srgb, var(--damage) 42%, transparent);
+  color: var(--damage);
+  background: color-mix(in srgb, var(--damage-bg, rgba(192, 57, 43, .12)) 60%, transparent);
+}
+
+.gtn-chat-report-actions button:disabled { opacity: .5; cursor: not-allowed; }
+
 /* 聊天文字统一走这个"只有 Regular 一个字重"的族：
    小游戏页把 Demi 注册成了 'Kreadon' 的 700 字重，粗体（昵称等）会挑到真 Demi，
    而大厅只有 400 一个字重、粗体是浏览器合成的 —— 两边渲染结果会不一样。

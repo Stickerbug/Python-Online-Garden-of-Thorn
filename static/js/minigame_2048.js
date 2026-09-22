@@ -11,6 +11,10 @@ import {
   BOARD_SIZE, CELL_COUNT, DIRECTION_CHARS, DIRECTIONS, ETERNAL_VALUE, initialCells,
   isGameOver, maxTile, seedFromText, stepMove,
 } from './minigame_2048_core.js';
+/* 举报 / 撤回的共享实现（shared-chat-actions.js 是经典脚本，挂在 window 上） */
+const {
+  chatActionButtonsHtml, chatActionLabels, confirmChatRecall, openChatReportDialog,
+} = window.GtnChatActions || {};
 
 const CONFIG = JSON.parse(document.getElementById('mg-config').textContent || '{}');
 const PALETTE = JSON.parse(document.getElementById('mg-palette').textContent || '[]');
@@ -816,9 +820,41 @@ function connectPresence() {
     const panel = el('mg-chat');
     if (panel && panel.hidden) markChatUnread(payload);
   });
+  // 撤回结果：成功提示一句（被撤回的那条会随刷新后的历史一起消失）
+  socket.on('admin_chat_recall_result', (payload) => {
+    const recalled = Number((payload || {}).recalled || 0);
+    setSyncText(recalled > 0 ? `已撤回 ${recalled} 条消息` : '撤回失败：消息可能已被撤回，或你没有权限',
+      recalled > 0 ? 'ok' : 'error');
+  });
+  // 别人（或自己）撤回消息：把对应行从日志里拿掉，并补一条撤回提示
+  socket.on('chat_recall', (payload) => {
+    const ids = ((payload || {}).message_ids || [])
+      .map((value) => Number(value) || 0)
+      .filter((value) => value > 0);
+    if (!ids.length) return;
+    const log = el('mg-chat-log');
+    if (log) {
+      ids.forEach((id) => {
+        chatEntriesById.delete(id);
+        const row = log.querySelector(`.chat-msg[data-chat-message-id="${id}"]`);
+        if (row) row.remove();
+      });
+      const actor = escapeHtml(String((payload || {}).actor_name || '管理员'));
+      const target = escapeHtml(String((payload || {}).target_name || ''));
+      const text = (payload || {}).self_recall
+        ? `${actor}撤回了一条消息`
+        : `${actor}撤回了${target || '某人'}的一条消息`;
+      log.insertAdjacentHTML('beforeend', `<div class="chat-msg chat-recall-entry">${text}</div>`);
+      log.scrollTop = log.scrollHeight;
+    }
+  });
   socket.on('minigame_status', () => { /* 状态已生效 */ });
   socket.on('server_error', (payload) => {
     const reason = payload && payload.reason;
+    if (reason === 'chat_recall_failed') {
+      setSyncText((payload && payload.message) || '撤回失败：消息可能已被撤回，或你没有权限', 'error');
+      return;
+    }
     if (reason === 'minigame_denied' || reason === 'minigame_login_required') {
       identityRejected = true;
       setSyncText((payload && payload.message) || '身份或权限失效（本地进度仍在）', 'denied');
@@ -1037,10 +1073,32 @@ function chatLineHtml(item) {
       + chatTitlesHtml(item)
       + chatNameHtml(item, name || '?')
       + '</span>: ';
-  return `<div class="chat-msg">`
+  const messageId = Number(item.message_id || item.messageId || 0);
+  return `<div class="chat-msg"${messageId > 0 ? ` data-chat-message-id="${messageId}"` : ''}>`
     + `<span class="chat-nick${system ? ' system-name' : ''}">${chatOriginBadgeHtml(item)}${head}</span>`
     + chatTextHtml(item)
+    + chatActionsHtml(item)
     + '</div>';
+}
+
+/* 举报 / 撤回按钮（共享脚本没加载出来时就不显示，不影响聊天本身） */
+function chatActionsHtml(item) {
+  if (typeof chatActionButtonsHtml !== 'function') return '';
+  return chatActionButtonsHtml(item, chatViewer(), typeof chatActionLabels === 'function' ? chatActionLabels() : {});
+}
+
+/* 当前登录者（撤回按钮的权限判定用；身份只用于显示，服务端还会再判一次） */
+function chatViewer() {
+  return { role: String(CONFIG.chatRole || 'player').toLowerCase(), user_id: CONFIG.userId };
+}
+
+/* 撤回/举报按钮是渲染进 HTML 字符串的，这里用事件委托按消息 id 找回来 */
+const chatEntriesById = new Map();
+
+function rememberChatEntry(item) {
+  if (!item) return;
+  const id = Number(item.message_id || item.messageId || 0);
+  if (Number.isFinite(id) && id > 0) chatEntriesById.set(id, item);
 }
 
 // 便于自动化检查：按当前规则把一条聊天负载渲染成 HTML（纯函数，不改状态）
@@ -1057,6 +1115,7 @@ function renderChatHistory(items) {
       const next = list[index + 1];
       if (!next || next.type === 'time') return;
     }
+    rememberChatEntry(item);
     html.push(chatLineHtml(item));
   });
   log.innerHTML = html.filter(Boolean).join('')
@@ -1069,6 +1128,7 @@ function appendChatLine(item) {
   const log = el('mg-chat-log');
   if (!log || !item) return;
   if (log.querySelector('p.mg-hint')) log.innerHTML = '';
+  rememberChatEntry(item);
   log.insertAdjacentHTML('beforeend', chatLineHtml(item));
   log.scrollTop = log.scrollHeight;
 }
@@ -1146,6 +1206,45 @@ function sendChat() {
   if (!text) return;
   socket.emit('chat', { text });
   input.value = '';
+}
+
+/* 聊天行的举报 / 撤回：按钮由 chatActionButtonsHtml 渲染，这里统一接管点击 */
+function bindChatLogActions() {
+  const log = el('mg-chat-log');
+  if (!log || log.dataset.actionsBound === '1') return;
+  log.dataset.actionsBound = '1';
+  log.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!target || !target.closest) return;
+    const reportBtn = target.closest('.report-inline-btn');
+    if (reportBtn) {
+      event.preventDefault();
+      const id = Number(reportBtn.dataset.chatReport || 0);
+      const entry = chatEntriesById.get(id);
+      if (!entry || typeof openChatReportDialog !== 'function') return;
+      void openChatReportDialog(entry, chatActionLabels()).then((ok) => {
+        if (ok) setSyncText('举报已提交', 'ok');
+      });
+      return;
+    }
+    const recallBtn = target.closest('.chat-recall-btn');
+    if (recallBtn) {
+      event.preventDefault();
+      const id = Number(recallBtn.dataset.chatRecall || 0);
+      const entry = chatEntriesById.get(id);
+      if (!entry || typeof confirmChatRecall !== 'function') return;
+      confirmChatRecall(entry, {
+        socket,
+        labels: chatActionLabels(),
+        confirm: (message) => mgConfirm({
+          title: '撤回消息',
+          text: message,
+          confirmLabel: '撤回',
+          cancelLabel: '取消',
+        }),
+      });
+    }
+  });
 }
 
 async function acceptInvite() {
@@ -1356,6 +1455,7 @@ async function boot() {
       .catch(() => { /* 缓存不可用不影响游玩 */ });
   }
   connectPresence();
+  bindChatLogActions();
   void refreshLeaderboard(rankWindowMode);   // 底部常驻榜单：进页面就加载，之后随同步刷新
   void syncNow();
   updateHideTitlesButton();

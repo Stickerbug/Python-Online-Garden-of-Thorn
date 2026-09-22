@@ -35015,10 +35015,18 @@ def minigame_2048_page():
     identity, denied = _minigame_2048_guard()
     if denied is not None:
         return denied
+    # 聊天身份（admin / staff / player）：客户端据此决定要不要显示"撤回"按钮；
+    # 真正的权限判定仍由服务端在做撤回时再判一次。
+    viewer_chat_role = 'player'
+    try:
+        viewer_chat_role = _chat_role_for_account(identity[0])
+    except Exception as exc:
+        admin_event('error', f'2048 page chat role lookup failed: {exc}')
     return render_template(
         'minigame_2048.html',
         username=identity[1],
         user_id=identity[0],
+        chat_role=viewer_chat_role,
         static_version=GTN_STATIC_VERSION,
         rarity_table=minigame_2048.rarity_table_payload(),
         minigame_window_days=minigame_2048_service.RULES_WINDOW_DAYS,

@@ -5068,6 +5068,11 @@
             const recallBtn = createStoryChatRecallButton(entry);
             if (recallBtn) row.appendChild(recallBtn);
         }
+        // 举报（与休闲花园/大厅共用同一套实现与样式）
+        if (window.GtnChatActions && typeof window.GtnChatActions.createChatReportButton === 'function') {
+            const reportBtn = window.GtnChatActions.createChatReportButton(entry);
+            if (reportBtn) row.appendChild(reportBtn);
+        }
         container.appendChild(row);
     }
 
