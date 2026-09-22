@@ -264,11 +264,12 @@ body.sk-page {
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background-color: var(--sk-arena);
+  background-color: transparent;
   background-repeat: no-repeat;
   background-position: center;
-  background-size: 88% 88%;
-  border: 1px solid var(--sk-line);
+  /* 贴图自己就是外框：铺满、不要额外的圈 */
+  background-size: contain;
+  border: 1px solid transparent;
 }
 
 .sk-next-name {
@@ -341,8 +342,9 @@ body.sk-page {
   border-radius: 50%;
   background-repeat: no-repeat;
   background-position: center;
-  background-size: 88% 88%;
-  border: 1px solid var(--sk-line);
+  background-size: contain;
+  background-color: transparent;
+  border: 1px solid transparent;
 }
 
 .sk-legend-name {

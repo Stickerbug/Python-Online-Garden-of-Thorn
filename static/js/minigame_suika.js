@@ -30,8 +30,8 @@ const PLAYER_LOOK = Object.freeze({ x: 0.707, y: -0.707 });   // 固定看向右
 const LOOK_OFFSET_X = 0.38;
 const LOOK_OFFSET_Y = 0.56;
 
-/* 每档球的底色/描边（贴图叠在圆上，球才是"实体"）。最后一档默认用皮肤色，
-   玩家皮肤加载或改动后再覆盖。 */
+/* 每档的**兜底底色**：只在"贴图没加载出来"或"第 10 档玩家球"时用到。
+   有贴图的档位不再画底色圆和描边——贴图本身就是这颗球的外框。 */
 const TIER_COLORS = [
   { bg: '#d9e9f5', edge: '#a7c8dc' },   // Bubble
   { bg: '#f7f0dc', edge: '#d6c6a1' },   // Ant Egg
@@ -47,7 +47,9 @@ const TIER_COLORS = [
 ];
 
 const SCAN = 256;
-const BOX_FILL = 0.86;      // 贴图墨迹占球直径的比例
+/* 贴图墨迹占球直径的比例：1 = 图片外框正好等于物理半径画出来的圆，
+   这样"看上去挨住"就是"真的碰到"（没有底色圆兜着，缩小会让手感对不上）。 */
+const BOX_FILL = 1;
 
 const canvas = document.getElementById('sk-canvas');
 const ctx = canvas ? canvas.getContext('2d') : null;
@@ -195,13 +197,20 @@ async function loadAllArt() {
   }));
 }
 
-function drawSprite(target, sprite, x, y, radius, rotation = 0, alpha = 1) {
+function drawSprite(target, sprite, x, y, radius, rotation = 0, alpha = 1, shadow = false) {
   if (!sprite) return;
   const { img, box } = sprite;
   const size = radius * 2 * BOX_FILL;
   const full = size / Math.max(box.w, box.h);
   target.save();
   target.globalAlpha = alpha;
+  if (shadow) {
+    // 很淡的原图（例如半透明的泡泡）在浅色底上会看不清：给贴图一层柔和投影，
+    // 跟故事模式敌人立绘的处理一致。它是阴影，不是外框——形状仍由贴图自己决定。
+    const scale = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    target.shadowColor = 'rgba(24, 34, 28, 0.32)';
+    target.shadowBlur = Math.max(3, radius * 0.22) * scale;
+  }
   target.translate(x, y);
   if (rotation) target.rotate(rotation);
   // 用整张图当源（3 参数形式）：不依赖 naturalWidth —— SVG 的固有尺寸可能是 0，
@@ -395,23 +404,21 @@ function drawArena() {
     ctx.stroke();
     ctx.restore();
     const sprite = art[game.nextTier];
-    ctx.save();
-    ctx.globalAlpha = 0.72;
-    ctx.beginPath();
-    ctx.arc(x, dropLineY + def.radius, def.radius, 0, Math.PI * 2);
-    ctx.fillStyle = tierColors(game.nextTier).bg;
-    ctx.fill();
-    ctx.lineWidth = Math.max(2, def.radius * 0.14);
-    ctx.strokeStyle = tierColors(game.nextTier).edge;
-    ctx.stroke();
-    ctx.restore();
     if (game.nextTier === MAX_TIER) {
       ctx.save();
       ctx.globalAlpha = 0.72;
       drawPlayerBall(ctx, x, dropLineY + def.radius, def.radius);
       ctx.restore();
     } else if (sprite) {
-      drawSprite(ctx, sprite, x, dropLineY + def.radius, def.radius, 0, 0.72);
+      drawSprite(ctx, sprite, x, dropLineY + def.radius, def.radius, 0, 0.72, true);
+    } else {
+      ctx.save();
+      ctx.globalAlpha = 0.72;
+      ctx.beginPath();
+      ctx.arc(x, dropLineY + def.radius, def.radius, 0, Math.PI * 2);
+      ctx.fillStyle = tierColors(game.nextTier).bg;
+      ctx.fill();
+      ctx.restore();
     }
   }
 }
@@ -421,25 +428,24 @@ function drawBalls() {
   for (const record of game.balls) {
     const tier = record.tier;
     const def = tierDef(tier);
-    const colors = tierColors(tier);
     const isPlayer = tier === MAX_TIER;
     const x = record.body.position.x;
     const y = record.body.position.y;
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(x, y, def.radius, 0, Math.PI * 2);
-    ctx.fillStyle = colors.bg;
-    ctx.fill();
-    ctx.lineWidth = Math.max(2, def.radius * 0.14);
-    ctx.strokeStyle = colors.edge;
-    ctx.stroke();
-    ctx.restore();
+    // 有贴图的档位：只画贴图，贴图自己就是球的外框（不再叠一层底色圆）。
     if (isPlayer) {
       drawPlayerBall(ctx, x, y, def.radius);
     } else if (art[tier]) {
-      drawSprite(ctx, art[tier], x, y, def.radius, record.body.angle || 0);
+      drawSprite(ctx, art[tier], x, y, def.radius, record.body.angle || 0, 1, true);
     } else {
+      const colors = tierColors(tier);
       ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, y, def.radius, 0, Math.PI * 2);
+      ctx.fillStyle = colors.bg;
+      ctx.fill();
+      ctx.lineWidth = Math.max(2, def.radius * 0.14);
+      ctx.strokeStyle = colors.edge;
+      ctx.stroke();
       ctx.fillStyle = 'rgba(0,0,0,0.45)';
       ctx.font = `700 ${Math.round(def.radius * 0.5)}px system-ui, sans-serif`;
       ctx.textAlign = 'center';
@@ -494,8 +500,10 @@ function updateNextChip() {
   const def = tierDef(tier);
   const colors = tierColors(tier);
   if (nextChipEl) {
-    nextChipEl.style.backgroundColor = colors.bg;
+    // 有贴图就直接显示贴图本身（不套底色圆/描边）；玩家档没有贴图，用皮肤色圆代替。
     nextChipEl.style.backgroundImage = def.art ? `url("${def.art}")` : 'none';
+    nextChipEl.style.backgroundColor = def.art ? 'transparent' : colors.bg;
+    nextChipEl.style.borderColor = def.art ? 'transparent' : colors.edge;
   }
   if (nextNameEl) nextNameEl.textContent = def.en;
 }
@@ -509,9 +517,14 @@ function buildLegend() {
     const ball = document.createElement('span');
     ball.className = 'sk-legend-ball';
     const colors = tierColors(index);
-    ball.style.backgroundColor = colors.bg;
-    ball.style.borderColor = colors.edge;
-    if (def.art) ball.style.backgroundImage = `url("${def.art}")`;
+    if (def.art) {
+      ball.style.backgroundColor = 'transparent';
+      ball.style.borderColor = 'transparent';
+      ball.style.backgroundImage = `url("${def.art}")`;
+    } else {
+      ball.style.backgroundColor = colors.bg;
+      ball.style.borderColor = colors.edge;
+    }
     const name = document.createElement('span');
     name.className = 'sk-legend-name';
     name.textContent = def.en;
