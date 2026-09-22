@@ -73,7 +73,7 @@ const out = {};
   };
 }
 
-// 3) 判负线：球停在线上一整秒才结束
+// 3) 判负线：球停在线上一整秒才结束；还在动的球不算
 {
   const game = new core.SuikaGame(Matter, { seed: 7 });
   game.spawnBall(4, 320, 120, { isStatic: true });
@@ -82,21 +82,68 @@ const out = {};
   const beforeOneSecond = game.gameOver;
   game.advance(300);
   out.loseLine = { beforeOneSecond, afterOneSecond: game.gameOver, ms: Math.round(game.timeMs) };
+
+  const moving = new core.SuikaGame(Matter, { seed: 8 });
+  const fast = moving.spawnBall(4, 320, 120, { velocity: { x: 0, y: 6 } });
+  moving.spawnBall(0, 140, 700);
+  for (let i = 0; i < 6; i += 1) moving.advance(1000 / 60);
+  out.loseMoving = {
+    speed: Math.round(Math.abs(fast.body.velocity.y) * 1000) / 1000,
+    overMs: moving.balls.length ? moving.balls[0].overMs : -1,
+    gameOver: moving.gameOver,
+  };
 }
 
-// 4) 随机池：只出最小 5 档，且五档都能出
+// 4) 生成规则 v2：随分数开放、按分值加权、防连出 / 防短时间重复
 {
-  let state = core.seedFromText('suika');
-  const seen = new Set();
-  for (let i = 0; i < 500; i += 1) {
-    const picked = core.pickTier(state);
-    state = picked.rngState;
-    seen.add(picked.tier);
+  const game = new core.SuikaGame(Matter, { seed: core.seedFromText('suika') });
+  const tiers = [];
+  for (let i = 0; i < 400; i += 1) tiers.push(game.rollTier());
+  const counts = {};
+  tiers.forEach((tier) => { counts[tier] = (counts[tier] || 0) + 1; });
+  const lowCounts = [0, 1, 2, 3].map((tier) => counts[tier] || 0);
+
+  const rich = new core.SuikaGame(Matter, { seed: 4242 });
+  rich.score = 5000;
+  const richTiers = [];
+  for (let i = 0; i < 400; i += 1) richTiers.push(rich.rollTier());
+  const rareAt = richTiers.map((tier, index) => (tier === 5 ? index : -1)).filter((index) => index >= 0);
+  let spacingViolations = 0;
+  for (let i = 1; i < rareAt.length; i += 1) {
+    if (rareAt[i] - rareAt[i - 1] < core.SPAWN_RARE_WINDOW) spacingViolations += 1;
   }
-  out.pool = { tiers: [...seen].sort((x, y) => x - y), max: Math.max(...seen), count: seen.size };
+
+  out.pool = {
+    gates: [core.maxSpawnTierFor(0), core.maxSpawnTierFor(301), core.maxSpawnTierFor(1801)],
+    lowTiers: [...new Set(tiers)].sort((a, b) => a - b),
+    lowCounts,
+    rarestTier: lowCounts.indexOf(Math.min(...lowCounts)),
+    smallShare: Math.round(((lowCounts[0] + lowCounts[1]) / tiers.length) * 100) / 100,
+    richHas4: richTiers.includes(4),
+    richHas5: richTiers.includes(5),
+    spacingViolations,
+  };
 }
 
-// 5) 存档：serialize 出来的投放序列能重放出同样的分数与结束状态
+// 5) 落点预测：往已经有的球上丢，预测高度应该在它上面
+{
+  const game = new core.SuikaGame(Matter, { seed: 99 });
+  game.queue = [3, 0, 0];
+  game.drop(320);
+  core.settle(Matter, game, 6000);
+  game.advance(400);
+  const ball = game.balls[0];
+  const predicted = game.predictLanding(320, 0);
+  out.landing = {
+    existed: !!ball,
+    predictedY: Math.round(predicted.y),
+    ballY: ball ? Math.round(ball.body.position.y) : -1,
+    ballTop: ball ? Math.round(ball.body.position.y - core.TIERS[ball.tier].radius) : -1,
+    landedOnBall: predicted.landedOnBall,
+  };
+}
+
+// 6) 存档：serialize 出来的投放序列能重放出同样的分数与结束状态
 {
   const game = core.replay(Matter, payload.seed, payload.drops);
   const saved = game.serialize();
@@ -157,11 +204,30 @@ class SuikaCoreTests(unittest.TestCase):
         self.assertFalse(lose["beforeOneSecond"], "线上一整秒之前不该判负")
         self.assertTrue(lose["afterOneSecond"], "停在判负线上满 1 秒必须结束")
 
+        moving = result["loseMoving"]
+        self.assertGreaterEqual(moving["speed"], 0.5, "这颗球应该还在动")
+        self.assertEqual(moving["overMs"], 0, "还在动的球不该计入线上停留时间")
+        self.assertFalse(moving["gameOver"])
+
         pool = result["pool"]
-        self.assertEqual(pool["tiers"], [0, 1, 2, 3, 4], "随机只从最小 5 档取，且五档都可能出现")
+        self.assertEqual(pool["gates"], [3, 4, 5], "生成档位应该随分数开放")
+        self.assertLessEqual(max(pool["lowTiers"]), 3, "低分时不应该出第 4 档以上")
+        self.assertEqual(pool["lowTiers"], [0, 1, 2, 3], "低分时四档都要能出")
+        self.assertEqual(pool["rarestTier"], 3, "低分时最大的可生成档位应该最少出现")
+        self.assertGreaterEqual(pool["smallShare"], 0.5, "最小的两档应该占一半以上")
+        self.assertTrue(pool["richHas4"] and pool["richHas5"], "高分时应该能出第 4、5 档")
+        self.assertLessEqual(pool["spacingViolations"], 1, "大档不该在最近 8 颗里重复出现")
+
+        landing = result["landing"]
+        self.assertTrue(landing["existed"])
+        self.assertTrue(landing["landedOnBall"], "正对着球丢应该预测为落在球上")
+        self.assertLessEqual(
+            landing["predictedY"], landing["ballTop"],
+            "预测落点应该在下面那颗球的顶部之上",
+        )
 
         save = result["save"]
-        self.assertEqual(save["version"], 1)
+        self.assertEqual(save["version"], 2)
         self.assertEqual(save["drops"], 6)
         self.assertTrue(save["scoreSame"])
         self.assertTrue(save["overSame"])

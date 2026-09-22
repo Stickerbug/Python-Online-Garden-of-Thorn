@@ -8,6 +8,7 @@ import {
   ARENA,
   DROP_COOLDOWN_MS,
   MAX_TIER,
+  RULES_VERSION,
   SuikaGame,
   TIERS,
   seedFromText,
@@ -58,6 +59,7 @@ const bestEl = document.getElementById('sk-best');
 const statusEl = document.getElementById('sk-status');
 const nextChipEl = document.getElementById('sk-next-chip');
 const nextNameEl = document.getElementById('sk-next-name');
+const nextHintEl = document.getElementById('sk-next-hint');
 const legendEl = document.getElementById('sk-legend-grid');
 const overlayEl = document.getElementById('sk-overlay');
 const overlayTitleEl = document.getElementById('sk-overlay-title');
@@ -81,6 +83,7 @@ let animationsEnabled = true;
 let aimGuideEnabled = true;
 let bestScore = 0;
 let lastFrameAt = 0;
+let lastDropAt = 0;
 let overlayMode = '';
 let pendingAction = null;
 
@@ -354,17 +357,26 @@ function refreshThemeColors() {
   const styles = getComputedStyle(document.documentElement);
   const read = (name, fallback) => (styles.getPropertyValue(name) || '').trim() || fallback;
   themeColors = {
-    arena: read('--sk-arena', '#e4e9e2'),
-    board: read('--sk-board', '#ccd5cf'),
-    edge: read('--sk-board-edge', '#b3bfb7'),
-    danger: read('--sk-danger', '#c0392b'),
+    arena: read('--sk-arena', '#E4E9E2'),
+    board: read('--sk-board', '#CCD5CF'),
+    edge: read('--sk-board-edge', '#B3BFB7'),
+    danger: read('--sk-danger', '#C0392B'),
+    accent: read('--sk-accent', '#4B3F8F'),
+    text: read('--sk-text', '#2C3E50'),
   };
+}
+
+/** 当前瞄准位置（按下一颗的半径夹进可投放范围）。 */
+function currentAimX() {
+  if (!game) return ARENA.width / 2;
+  const def = tierDef(game.nextTier);
+  return clamp(aimX, ARENA.wall + def.radius, ARENA.width - ARENA.wall - def.radius);
 }
 
 function drawArena() {
   const { width, height, wall, loseLineY, dropLineY } = ARENA;
   if (!themeColors) refreshThemeColors();
-  const { arena, board, edge, danger } = themeColors;
+  const { arena, board, edge, danger, accent, text } = themeColors;
 
   ctx.clearRect(0, 0, width, height);
   ctx.fillStyle = board;
@@ -378,7 +390,19 @@ function drawArena() {
   ctx.fillRect(0, 0, wall, height);
   ctx.fillRect(width - wall, 0, wall, height);
 
-  // 判负线
+  // 顶部：半透明大分数水印（画在失败线上方的空档里）
+  if (game) {
+    ctx.save();
+    ctx.globalAlpha = 0.12;
+    ctx.fillStyle = text;
+    ctx.font = 'italic bold 54px "PingFang SC", "Microsoft YaHei", system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(game.score), width / 2, loseLineY / 2 - 2);
+    ctx.restore();
+  }
+
+  // 失败线 + 线上文字
   const inDanger = !!(game && game.danger);
   ctx.save();
   ctx.setLineDash([14, 12]);
@@ -389,31 +413,51 @@ function drawArena() {
   ctx.lineTo(width - wall, loseLineY);
   ctx.stroke();
   ctx.restore();
+  ctx.save();
+  ctx.globalAlpha = inDanger ? 0.95 : 0.7;
+  ctx.fillStyle = danger;
+  ctx.font = 'bold 15px "PingFang SC", "Microsoft YaHei", system-ui, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText('失败线', wall + 10, loseLineY - 6);
+  ctx.restore();
 
-  // 投放辅助线
+  // 落点预测：虚线 + 落点圆圈 + 顶部那颗待投放的球
   if (aimGuideEnabled && game && !game.gameOver) {
     const def = tierDef(game.nextTier);
-    const x = clamp(aimX, wall + def.radius, width - wall - def.radius);
-    ctx.save();
-    ctx.setLineDash([8, 10]);
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = 'rgba(75, 63, 143, 0.55)';
-    ctx.beginPath();
-    ctx.moveTo(x, dropLineY);
-    ctx.lineTo(x, height - wall);
-    ctx.stroke();
-    ctx.restore();
+    const x = currentAimX();
+    const land = game.predictLanding(x, game.nextTier);
+    // 刚投放过的一小段时间里淡入，避免和老球的位置对不上
+    const sinceDrop = performance.now() - lastDropAt;
+    const alpha = lastDropAt ? Math.max(0, Math.min(1, (sinceDrop - 180) / 220)) : 1;
+    if (alpha > 0.02) {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.setLineDash([9, 9]);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = accent;
+      ctx.beginPath();
+      ctx.moveTo(x, dropLineY + def.radius);
+      ctx.lineTo(land.x, land.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(land.x, land.y, def.radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
     const sprite = art[game.nextTier];
     if (game.nextTier === MAX_TIER) {
       ctx.save();
-      ctx.globalAlpha = 0.72;
+      ctx.globalAlpha = 0.9;
       drawPlayerBall(ctx, x, dropLineY + def.radius, def.radius);
       ctx.restore();
     } else if (sprite) {
-      drawSprite(ctx, sprite, x, dropLineY + def.radius, def.radius, 0, 0.72, true);
+      drawSprite(ctx, sprite, x, dropLineY + def.radius, def.radius, 0, 0.9, true);
     } else {
       ctx.save();
-      ctx.globalAlpha = 0.72;
+      ctx.globalAlpha = 0.9;
       ctx.beginPath();
       ctx.arc(x, dropLineY + def.radius, def.radius, 0, Math.PI * 2);
       ctx.fillStyle = tierColors(game.nextTier).bg;
@@ -506,6 +550,10 @@ function updateNextChip() {
     nextChipEl.style.borderColor = def.art ? 'transparent' : colors.edge;
   }
   if (nextNameEl) nextNameEl.textContent = def.en;
+  if (nextHintEl) {
+    const maxTier = game.maxSpawnTier;
+    nextHintEl.textContent = `当前可抽到 ${tierDef(maxTier).en}（${game.score} 分解锁）`;
+  }
 }
 
 function buildLegend() {
@@ -513,9 +561,10 @@ function buildLegend() {
   legendEl.textContent = '';
   TIERS.forEach((def, index) => {
     const item = document.createElement('div');
-    item.className = 'sk-legend-item';
+    item.className = 'sk-chain-item';
+    item.dataset.tier = String(index);
     const ball = document.createElement('span');
-    ball.className = 'sk-legend-ball';
+    ball.className = 'sk-chain-ball';
     const colors = tierColors(index);
     if (def.art) {
       ball.style.backgroundColor = 'transparent';
@@ -523,16 +572,26 @@ function buildLegend() {
       ball.style.backgroundImage = `url("${def.art}")`;
     } else {
       ball.style.backgroundColor = colors.bg;
-      ball.style.borderColor = colors.edge;
+      ball.style.borderRadius = '50%';
     }
     const name = document.createElement('span');
-    name.className = 'sk-legend-name';
+    name.className = 'sk-chain-name';
     name.textContent = def.en;
     const score = document.createElement('span');
-    score.className = 'sk-legend-score';
+    score.className = 'sk-chain-score';
     score.textContent = `${def.score} 分`;
     item.append(ball, name, score);
     legendEl.append(item);
+  });
+  markNextInLegend();
+}
+
+/** 合成路线里高亮"下一枚"那一档。 */
+function markNextInLegend() {
+  if (!legendEl || !game) return;
+  const next = String(game.nextTier);
+  legendEl.querySelectorAll('.sk-chain-item').forEach((item) => {
+    item.classList.toggle('is-next', item.dataset.tier === next);
   });
 }
 
@@ -568,7 +627,7 @@ function hideOverlay() {
 function saveLocal({ gameOver = false } = {}) {
   if (!game) return;
   const payload = {
-    v: 1,
+    v: RULES_VERSION,
     seed: game.seed,
     score: game.score,
     gameOver: gameOver || game.gameOver,
@@ -586,7 +645,8 @@ function loadLocal() {
   if (!raw) return null;
   try {
     const data = JSON.parse(raw);
-    if (!data || data.v !== 1 || !Array.isArray(data.drops) || !data.seed) return null;
+    // 规则版本不同的旧存档直接作废（v2 改了生成规则与判负判定，重放会对不上）
+    if (!data || data.v !== RULES_VERSION || !Array.isArray(data.drops) || !data.seed) return null;
     return data;
   } catch (_) {
     return null;
@@ -657,6 +717,8 @@ function dropAtAim() {
   game.takeEvents();
   updateScore();
   updateNextChip();
+  markNextInLegend();
+  lastDropAt = performance.now();
   saveLocal();
 }
 

@@ -14,7 +14,7 @@
    friction 0.006 / frictionStatic 0.006 / frictionAir 0 / restitution 0.1，
    固定步长 1000/60ms 推进，保证同样输入得到同样结果。 */
 
-export const RULES_VERSION = 1;
+export const RULES_VERSION = 2;
 export const FIXED_STEP_MS = 1000 / 60;
 
 /** 场地：640×960 逻辑分辨率；左右墙与地板各占 64，底部再留 48 给状态栏（页面上画在画布外）。 */
@@ -38,6 +38,19 @@ export const PHYSICS = Object.freeze({
 export const DROP_COOLDOWN_MS = 500;
 export const LOSE_HOLD_MS = 1000;
 export const RANDOM_TIER_POOL = 5;
+
+/* 规则 v2（对着 47.99.48.177 那套调过手感）：
+   - 判负要求"真的停住"：竖直速度低于 LOSE_MAX_SPEED 才计入线上停留时间；
+   - 生成档位随分数开放：低分只出最小几档，越到后面越容易见到大档；
+   - 按"最大可生成档位的分值"加权（最小的球权重最大），并禁止连着出同一档、
+     禁止最近 SPAWN_HISTORY 颗里同一档出现太多次。 */
+export const LOSE_MAX_SPEED = 0.5;
+export const SPAWN_HISTORY = 10;
+export const SPAWN_MAX_SAME_RUN = 2;     // 连续 2 次相同就不再出这一档
+export const SPAWN_MAX_SAME_TOTAL = 3;   // 最近 10 颗里出现 3 次就不再出
+export const SPAWN_RARE_WINDOW = 8;      // 当前最高档在最近 8 颗里出现过就不再出
+export const SPAWN_GATE_SCORES = Object.freeze([300, 1800]);
+export const SPAWN_GATE_TIERS = Object.freeze([3, 4, 5]);
 
 /** 11 档：半径/分值是经典 Suika 曲线；贴图见 docs/合成大花花-美术清单.md。 */
 export const TIERS = Object.freeze([
@@ -81,11 +94,12 @@ export function seedFromText(text) {
   return value || 0x9E3779B9;
 }
 
-/** 取下一颗要投放的档位：只从最小 5 档等概率。 */
-export function pickTier(rngState) {
-  const state = rngNext(rngState);
-  const roll = (state >>> 8) / 0x1000000;
-  return { tier: Math.min(RANDOM_TIER_POOL - 1, Math.floor(roll * RANDOM_TIER_POOL)), rngState: state };
+/** 当前分数下最高能生成到第几档（低分只出小球，后面才可能出现大档）。 */
+export function maxSpawnTierFor(score) {
+  const value = Number(score) || 0;
+  if (value > SPAWN_GATE_SCORES[1]) return SPAWN_GATE_TIERS[2];
+  if (value > SPAWN_GATE_SCORES[0]) return SPAWN_GATE_TIERS[1];
+  return SPAWN_GATE_TIERS[0];
 }
 
 function clamp(value, min, max) {
@@ -120,6 +134,7 @@ export class SuikaGame {
     this.gameOver = false;
     this.balls = [];
     this.dropLog = [];
+    this.spawnHistory = [];
     this.events = [];
     this.mergeQueue = [];
 
@@ -167,10 +182,76 @@ export class SuikaGame {
     Matter.Composite.add(this.world, bodies);
   }
 
+  /** 均匀取 [0,1) 的随机数（推进种子状态）。 */
+  roll01() {
+    this.rngState = rngNext(this.rngState);
+    return (this.rngState >>> 8) / 0x1000000;
+  }
+
+  get maxSpawnTier() {
+    return Math.min(MAX_TIER, maxSpawnTierFor(this.score));
+  }
+
+  /** 某个档位最近连着出了几次。 */
+  runLength(tier) {
+    let run = 0;
+    for (let i = this.spawnHistory.length - 1; i >= 0; i -= 1) {
+      if (this.spawnHistory[i] !== tier) break;
+      run += 1;
+    }
+    return run;
+  }
+
+  /** 这一档现在能不能出（防连出 / 防短时间内重复 / 大档最近出现过）。 */
+  canSpawn(tier, maxTier) {
+    if (this.runLength(tier) >= SPAWN_MAX_SAME_RUN) return false;
+    const total = this.spawnHistory.filter((value) => value === tier).length;
+    if (total >= SPAWN_MAX_SAME_TOTAL) return false;
+    if (tier === maxTier) {
+      const recent = this.spawnHistory.slice(-SPAWN_RARE_WINDOW);
+      if (recent.includes(tier)) return false;
+    }
+    return true;
+  }
+
+  /** 取下一颗要投放的档位：按分值加权（越小越常见），并过一遍防连出规则。 */
   rollTier() {
-    const picked = pickTier(this.rngState);
-    this.rngState = picked.rngState;
-    return picked.tier;
+    const maxTier = this.maxSpawnTier;
+    const candidates = [];
+    for (let tier = 0; tier <= maxTier; tier += 1) {
+      candidates.push({ tier, weight: tierDef(maxTier - tier).score });
+    }
+    const allowed = candidates.filter((entry) => this.canSpawn(entry.tier, maxTier));
+    const pool = allowed.length
+      ? allowed
+      : candidates.slice().sort((a, b) => this.runLength(b.tier) - this.runLength(a.tier));
+    const total = pool.reduce((sum, entry) => sum + entry.weight, 0);
+    let roll = this.roll01() * total;
+    let picked = pool[pool.length - 1].tier;
+    for (const entry of pool) {
+      roll -= entry.weight;
+      if (roll <= 0) { picked = entry.tier; break; }
+    }
+    this.spawnHistory.push(picked);
+    if (this.spawnHistory.length > SPAWN_HISTORY) this.spawnHistory.shift();
+    return picked;
+  }
+
+  /** 落点预测：这颗球如果现在投放，会停在哪个圆心高度（只看第一个相交的圆，不考虑弹跳/滚动）。 */
+  predictLanding(x, tier = this.nextTier) {
+    const radius = tierDef(tier).radius;
+    const floor = ARENA.height - ARENA.wall - radius;
+    let best = floor;
+    let found = false;
+    for (const record of this.balls) {
+      const otherRadius = tierDef(record.tier).radius;
+      const dx = Math.abs(x - record.body.position.x);
+      if (dx > radius + otherRadius) continue;
+      const y = record.body.position.y - Math.sqrt((radius + otherRadius) ** 2 - dx * dx);
+      if (!found || y < best) { best = y; found = true; }
+    }
+    if (found && best < radius) best = radius;
+    return { x, y: best, landedOnBall: found };
   }
 
   get nextTier() {
@@ -290,7 +371,9 @@ export class SuikaGame {
       if (record.id === newestId) { record.overMs = 0; continue; }
       const def = tierDef(record.tier);
       const top = record.body.position.y - def.radius;
-      if (top < ARENA.loseLineY) {
+      // 规则 v2：要"真的停住"才算（竖直速度很小），避免球在线上弹一下就被判负
+      const slow = Math.abs(record.body.velocity.y) < LOSE_MAX_SPEED;
+      if (top < ARENA.loseLineY && slow) {
         record.overMs += FIXED_STEP_MS;
         danger = true;
         if (record.overMs >= LOSE_HOLD_MS) {
@@ -325,6 +408,7 @@ export class SuikaGame {
       timeMs: Math.round(this.timeMs),
       gameOver: this.gameOver,
       danger: !!this.danger,
+      maxSpawnTier: this.maxSpawnTier,
       queue: this.queue.slice(),
       totalDrops: this.totalDrops,
       dropLog: this.dropLog.map((entry) => ({ ...entry })),
