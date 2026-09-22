@@ -132,6 +132,11 @@
   font-weight: 700;
 }
 
+.mh-inline-em {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
 .mh-badge {
   flex: 0 0 auto;
   padding: 2px 8px;

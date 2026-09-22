@@ -14,6 +14,16 @@ import shutil
 import subprocess
 import unittest
 
+import minigame_2048_service as svc
+
+try:
+    import app as gtn
+except Exception as exc:  # pragma: no cover - 缺依赖时明确跳过
+    gtn = None
+    IMPORT_ERROR = str(exc)
+else:
+    IMPORT_ERROR = ""
+
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 CORE_JS = ROOT / "static" / "js" / "suika_core.js"
 MATTER_JS = ROOT / "static" / "vendor" / "matter.min.js"
@@ -156,6 +166,37 @@ class SuikaCoreTests(unittest.TestCase):
         self.assertTrue(save["scoreSame"])
         self.assertTrue(save["overSame"])
         self.assertTrue(save["ballsSame"])
+
+
+@unittest.skipIf(gtn is None, f"无法导入 app（{IMPORT_ERROR}）")
+class SuikaRouteTests(unittest.TestCase):
+    """页面与 2048 同一套登录判定：未登录 401，登录后能拿到页面外壳。"""
+
+    def setUp(self):
+        self.client = gtn.app.test_client()
+        self.original_db = svc.db_module
+
+    def tearDown(self):
+        svc.db_module = self.original_db
+
+    def test_anonymous_is_rejected(self):
+        self.assertEqual(self.client.get("/minigame/suika").status_code, 401)
+
+    def test_logged_in_account_gets_the_shell(self):
+        class _Roles:
+            def get_user_role_profile(self, identifier):
+                return {"role_type": "player"}
+
+        svc.db_module = _Roles()
+        with self.client.session_transaction() as session:
+            session["user_id"] = 4242
+            session["username"] = "suika_probe"
+        response = self.client.get("/minigame/suika")
+        self.assertEqual(response.status_code, 200)
+        body = response.get_data(as_text=True)
+        for needle in ("sk-canvas", "sk-legend-grid", "matter.min.js", "minigame_suika.js",
+                       "sk-config", "合成大花花"):
+            self.assertIn(needle, body, f"页面缺少 {needle}")
 
 
 if __name__ == "__main__":

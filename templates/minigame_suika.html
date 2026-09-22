@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <title>合成大花花 · 休闲花园</title>
+  <link rel="icon" href="/static/assets/favicon.ico">
+  <link rel="stylesheet" href="/static/css/minigame_suika.css?v={{ static_version|default('dev')|urlencode }}">
+  <script nonce="{{ csp_nonce }}">
+  (() => {
+    const read = (key) => {
+      try { return window.localStorage.getItem(key); } catch (_) { return null; }
+    };
+    const theme = read('gtn_theme') === 'dark' || read('gtn_beta_theme') === 'dark' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', theme);
+  })();
+  </script>
+  <script nonce="{{ csp_nonce }}">
+  /* 兜底：模块/样式没加载出来（例如离线缓存不完整）时，别留一个空白页。 */
+  window.__skBooted = false;
+  window.setTimeout(() => {
+    if (window.__skBooted) return;
+    const box = document.getElementById('sk-boot-error');
+    if (box) box.hidden = false;
+  }, 6000);
+  </script>
+</head>
+<body class="sk-page">
+<main class="sk-frame">
+  <p id="sk-boot-error" class="sk-boot-error" hidden>
+    页面资源没有加载完整（可能是离线缓存或网络问题）。
+    <button class="sk-btn small" type="button" onclick="window.location.reload()">重新加载</button>
+  </p>
+
+  <header class="sk-head">
+    <div class="sk-head-row">
+      <a class="sk-back" href="/minigame" title="返回休闲花园">← 休闲花园</a>
+      <span class="sk-tag">合成大花花</span>
+    </div>
+    <div class="sk-head-row">
+      <h1 class="sk-title">合成大花花</h1>
+      <div class="sk-scores">
+        <div class="sk-score-box">
+          <span class="sk-score-label">分数</span>
+          <strong id="sk-score" class="sk-score-value">0</strong>
+        </div>
+        <div class="sk-score-box">
+          <span class="sk-score-label">最高纪录</span>
+          <strong id="sk-best" class="sk-score-value">0</strong>
+        </div>
+      </div>
+    </div>
+    <p class="sk-subline">
+      <span id="sk-status" class="sk-status" role="status" aria-live="polite">正在读取存档…</span>
+    </p>
+  </header>
+
+  <div class="sk-actions">
+    <button id="sk-new" class="sk-btn" type="button">新游戏</button>
+    <label class="sk-switch">
+      <input type="checkbox" id="sk-anim" checked>
+      <span>动画</span>
+    </label>
+    <label class="sk-switch">
+      <input type="checkbox" id="sk-aim" checked>
+      <span>投放辅助线</span>
+    </label>
+  </div>
+
+  <section class="sk-stage">
+    <div class="sk-board-shell">
+      <canvas id="sk-canvas" class="sk-canvas" width="640" height="960"
+              role="img" aria-label="合成大花花棋盘：点按或拖动选择位置，松手投放"></canvas>
+      <div class="sk-next" aria-live="polite">
+        <span class="sk-next-label">下一个</span>
+        <span id="sk-next-chip" class="sk-next-chip" aria-hidden="true"></span>
+        <span id="sk-next-name" class="sk-next-name">—</span>
+      </div>
+      <div id="sk-overlay" class="sk-overlay" hidden>
+        <div class="sk-overlay-card">
+          <h2 id="sk-overlay-title">游戏结束</h2>
+          <p id="sk-overlay-text">花花堆过了判负线。</p>
+          <p class="sk-overlay-score">本局分数 <strong id="sk-overlay-score">0</strong></p>
+          <div class="sk-overlay-actions">
+            <button id="sk-overlay-primary" class="sk-btn" type="button">再来一局</button>
+            <button id="sk-overlay-secondary" class="sk-btn secondary" type="button" hidden>继续</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <aside class="sk-legend" aria-label="合成顺序">
+      <div class="sk-legend-head"><strong>合成顺序</strong><span>两个一样合成下一档</span></div>
+      <div id="sk-legend-grid" class="sk-legend-grid"></div>
+    </aside>
+  </section>
+
+  <details class="sk-panel">
+    <summary>玩法说明</summary>
+    <div class="sk-panel-body">
+      <p class="sk-hint">
+        左右移动决定投放位置，松手把花花丢下去；两颗一样的撞在一起就合成下一档。
+        方向键 / A、D 移动，空格或 ↓ 投放；手机上直接按住拖动棋盘。
+      </p>
+      <p class="sk-hint">
+        顺序：Bubble → Ant Egg → Ladybug → Ant Hole → Dark Ladybug → Cactus →
+        Uranium Barrel → Gambler → Shiny Ladybug → Mecha Flower → <strong>Player</strong>
+        （最后一档用你自己的皮肤）。
+      </p>
+      <p class="sk-hint">
+        有花花堆到判负线以上并停留约 1 秒就结束本局；刚刚丢下去的那颗不算。
+        每次投放有 0.5 秒间隔。
+      </p>
+      <p class="sk-hint">
+        这一版先做本地存档（刷新可以接着玩）；排行榜与云同步会在下一批接进休闲花园的同一套体系。
+      </p>
+    </div>
+  </details>
+</main>
+
+<script src="/static/vendor/matter.min.js?v=0.19.0"></script>
+<script type="application/json" id="sk-config">{{ {
+  'username': username,
+  'userId': user_id,
+  'staticVersion': static_version|default('dev'),
+} | tojson }}</script>
+<script type="module" src="/static/js/minigame_suika.js?v={{ static_version|default('dev')|urlencode }}"></script>
+</body>
+</html>

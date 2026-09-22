@@ -35044,6 +35044,39 @@ def minigame_2048_page():
     )
 
 
+@app.route('/minigame/suika')
+def minigame_suika_page():
+    """休闲花园 ·「合成大花花」页面（与 2048 同一套登录判定，未登录 401）。
+
+    规则与贴图都在前端：贴图是故事模式敌人图，物理核心是 static/js/suika_core.js，
+    服务端这一批只负责渲染页面外壳；成绩同步 / 排行榜在下一批接进 minigame 那套表。
+    """
+
+    identity, denied = _minigame_2048_guard()
+    if denied is not None:
+        return denied
+    return render_template(
+        'minigame_suika.html',
+        username=identity[1],
+        user_id=identity[0],
+        static_version=GTN_STATIC_VERSION,
+    )
+
+
+@app.route('/minigame/suika/sw.js')
+def minigame_suika_service_worker():
+    """局部 Service Worker（scope=/minigame/suika），只缓存这一页的外壳。"""
+
+    response = send_from_directory(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'minigame-suika'),
+        'sw.js',
+        mimetype='application/javascript',
+    )
+    response.headers['Service-Worker-Allowed'] = '/minigame/suika'
+    response.headers['Cache-Control'] = 'no-cache'
+    return response
+
+
 @app.route('/minigame/2048/sw.js')
 def minigame_2048_service_worker():
     """局部 Service Worker（scope=/minigame/2048），只缓存这一页的外壳。"""

@@ -71,7 +71,9 @@ class RouteAccessTests(unittest.TestCase):
         hub_html = hub.get_data(as_text=True)
         self.assertIn("Craft Eternal", hub_html)
         self.assertIn("合成大花花", hub_html)
-        self.assertIn("制作中", hub_html)
+        # 合成大花花已上线：卡片是能点的入口，不再是"制作中"占位
+        self.assertIn("/minigame/suika", hub_html)
+        self.assertNotIn("制作中", hub_html)
         state = self.client.get("/api/minigame/2048/state")
         self.assertEqual(state.status_code, 200)
         payload = state.get_json()

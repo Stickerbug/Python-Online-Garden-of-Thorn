@@ -1,0 +1,395 @@
+/* 休闲花园 ·「合成大花花」——独立样式，只给这一页用。
+
+   沿用主站的明暗主题开关与 Kreadon 字体（与 2048 / 大厅同一套），
+   颜色变量一律加 --sk- 前缀，不覆盖主模式与故事模式的同名变量。
+   棋盘画布固定 640×960 逻辑分辨率，显示尺寸交给 CSS 等比缩放。 */
+
+@font-face {
+  font-family: 'Kreadon';
+  src: url('/fonts/Kreadon-Regular.subset.woff2?v=3') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: optional;
+}
+
+@font-face {
+  font-family: 'Kreadon';
+  src: url('/fonts/Kreadon-Demi.subset.woff2?v=3') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+[hidden] { display: none !important; }
+
+:root {
+  --sk-bg: #eef2ee;
+  --sk-surface: #ffffff;
+  --sk-surface-soft: #f6f8f5;
+  --sk-text: #24302b;
+  --sk-text-soft: #6c7b73;
+  --sk-line: rgba(36, 48, 43, 0.16);
+  --sk-board: #ccd5cf;
+  --sk-board-edge: #b3bfb7;
+  --sk-arena: #e4e9e2;
+  --sk-accent: #4b3f8f;
+  --sk-accent-text: #ffffff;
+  --sk-btn: #4b3f8f;
+  --sk-btn-text: #ffffff;
+  --sk-overlay: rgba(238, 242, 238, 0.82);
+  --sk-danger: #c0392b;
+}
+
+[data-theme="dark"] {
+  --sk-bg: #161d1a;
+  --sk-surface: #1f2823;
+  --sk-surface-soft: #232e28;
+  --sk-text: #e6ede8;
+  --sk-text-soft: #9fb0a7;
+  --sk-line: rgba(230, 237, 232, 0.18);
+  --sk-board: #26322d;
+  --sk-board-edge: #38473f;
+  --sk-arena: #34443b;
+  --sk-accent: #8f83e0;
+  --sk-accent-text: #161d1a;
+  --sk-btn: #5a4ca0;
+  --sk-btn-text: #ffffff;
+  --sk-overlay: rgba(22, 29, 26, 0.82);
+  --sk-danger: #f0786c;
+}
+
+* { box-sizing: border-box; }
+
+body.sk-page {
+  margin: 0;
+  min-height: 100%;
+  background: var(--sk-bg);
+  color: var(--sk-text);
+  font-family: 'Kreadon', system-ui, -apple-system, 'Segoe UI', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+}
+
+.sk-frame {
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 14px 14px 40px;
+}
+
+.sk-boot-error {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--sk-danger);
+  border-radius: 8px;
+  background: rgba(192, 57, 43, 0.08);
+  color: var(--sk-danger);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ---------- 头部 ---------- */
+
+.sk-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sk-back {
+  color: var(--sk-accent);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.sk-back:hover { text-decoration: underline; }
+
+.sk-tag {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--sk-accent);
+  color: var(--sk-accent-text);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+
+.sk-title {
+  margin: 8px 0 0;
+  font-size: clamp(22px, 5vw, 30px);
+  font-weight: 700;
+}
+
+.sk-scores {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.sk-score-box {
+  min-width: 92px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: var(--sk-surface-soft);
+  border: 1px solid var(--sk-line);
+  text-align: center;
+}
+
+.sk-score-label {
+  display: block;
+  color: var(--sk-text-soft);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+}
+
+.sk-score-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.sk-subline {
+  margin: 8px 0 0;
+  color: var(--sk-text-soft);
+  font-size: 12px;
+}
+
+.sk-status.is-offline { color: var(--sk-danger); }
+
+/* ---------- 操作条 ---------- */
+
+.sk-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+
+.sk-btn {
+  appearance: none;
+  border: 0;
+  border-radius: 8px;
+  padding: 9px 16px;
+  background: var(--sk-btn);
+  color: var(--sk-btn-text);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sk-btn:hover { filter: brightness(1.08); }
+.sk-btn:active { transform: translateY(1px); }
+
+.sk-btn.secondary {
+  background: var(--sk-surface);
+  color: var(--sk-text);
+  border: 1px solid var(--sk-line);
+}
+
+.sk-btn.small { padding: 5px 10px; font-size: 12px; }
+
+.sk-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--sk-line);
+  border-radius: 8px;
+  background: var(--sk-surface);
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sk-switch input { margin: 0; }
+
+/* ---------- 棋盘与图例 ---------- */
+
+.sk-stage {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.sk-board-shell {
+  position: relative;
+  width: min(100%, 440px);
+  flex: 0 0 auto;
+}
+
+.sk-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 14px;
+  background: var(--sk-board);
+  border: 2px solid var(--sk-board-edge);
+  /* 棋盘内的手势不交给浏览器：避免滑动时页面跟着滚动/下拉刷新 */
+  touch-action: none;
+  cursor: pointer;
+}
+
+.sk-next {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--sk-line);
+  pointer-events: none;
+}
+
+[data-theme="dark"] .sk-next { background: rgba(31, 40, 35, 0.78); }
+
+.sk-next-label {
+  color: var(--sk-text-soft);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.sk-next-chip {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background-color: var(--sk-arena);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 88% 88%;
+  border: 1px solid var(--sk-line);
+}
+
+.sk-next-name {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sk-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--sk-overlay);
+}
+
+.sk-overlay-card {
+  width: min(100%, 320px);
+  padding: 18px 20px;
+  border-radius: 14px;
+  background: var(--sk-surface);
+  border: 1px solid var(--sk-line);
+  box-shadow: 0 12px 32px rgba(20, 30, 25, 0.18);
+  text-align: center;
+}
+
+.sk-overlay-card h2 { margin: 0 0 8px; font-size: 20px; }
+.sk-overlay-card p { margin: 0 0 10px; color: var(--sk-text-soft); font-size: 13px; }
+.sk-overlay-score { font-size: 14px !important; color: var(--sk-text) !important; }
+.sk-overlay-score strong { font-size: 20px; }
+.sk-overlay-actions { display: flex; gap: 8px; justify-content: center; margin-top: 12px; }
+
+.sk-legend {
+  flex: 1 1 0;
+  min-width: 210px;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--sk-surface);
+  border: 1px solid var(--sk-line);
+}
+
+.sk-legend-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.sk-legend-head span { color: var(--sk-text-soft); font-size: 11px; }
+
+.sk-legend-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+  gap: 8px;
+}
+
+.sk-legend-item {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+}
+
+.sk-legend-ball {
+  width: 100%;
+  max-width: 56px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 88% 88%;
+  border: 1px solid var(--sk-line);
+}
+
+.sk-legend-name {
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.sk-legend-score {
+  color: var(--sk-text-soft);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 说明面板 ---------- */
+
+.sk-panel {
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--sk-surface);
+  border: 1px solid var(--sk-line);
+}
+
+.sk-panel summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.sk-panel-body { padding-top: 8px; }
+
+.sk-hint {
+  margin: 0 0 8px;
+  color: var(--sk-text-soft);
+  font-size: 12px;
+}
+
+.sk-hint strong { color: var(--sk-text); }
+
+@media (max-width: 780px) {
+  .sk-stage { flex-direction: column; }
+  .sk-board-shell { width: 100%; max-width: 520px; margin: 0 auto; }
+  .sk-legend { width: 100%; order: 2; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sk-btn:active { transform: none; }
+}
