@@ -379,7 +379,8 @@ def _record_progress(conn, state: Dict[str, object], board: Dict[str, object],
 def sync_progress(conn, user_id: int, game_uid: str, from_index: int, ops,
                   *, claimed_score=None, claimed_cells=None, source: str = "online",
                   reached_2048: bool = False, continued=None, now=None,
-                  new_game: bool = False, seed=None) -> Dict[str, object]:
+                  new_game: bool = False, replace_active: bool = False,
+                  seed=None) -> Dict[str, object]:
     """增量同步：从 ``from_index`` 起补操作，服务端重放验证后再落库。
 
     返回 ``{"status": "ok"|"conflict"|"gap"|"rejected"|"stale_game", ...}``。
@@ -402,7 +403,14 @@ def sync_progress(conn, user_id: int, game_uid: str, from_index: int, ops,
     state = _game_state(row)
     if game_uid and str(game_uid) != str(state["game_uid"]):
         # 离线开局的补传：客户端带着自己的种子和完整操作来，服务端从起点重放验证。
-        if new_game and seed is not None:
+        # 只有服务端当前局还是全新的（没有任何操作/分数），或客户端明确表示
+        # 这是"玩家主动重开"时，才允许覆盖活动局；否则一律让客户端回到服务端
+        # 分支。这样刷新时误判成"本地新局"不会把有进度的存档关掉。
+        server_has_progress = (
+            int(state.get("op_index") or 0) > 0
+            or int(state.get("score") or 0) > 0
+        )
+        if new_game and seed is not None and (replace_active or not server_has_progress):
             create_game(conn, user_id, seed=seed, source=source, now=now, game_uid=str(game_uid))
             row = _active_game(conn, user_id)
             state = _game_state(row)
@@ -411,8 +419,10 @@ def sync_progress(conn, user_id: int, game_uid: str, from_index: int, ops,
                     "seed": int(g.normalize_seed(seed))})
             conn.commit()
         else:
-            _audit(conn, user_id, state["game_id"], "stale_game",
-                   {"client": str(game_uid)[:80], "active": state["game_uid"]})
+            kind = "new_game_blocked" if (new_game and seed is not None and server_has_progress) else "stale_game"
+            _audit(conn, user_id, state["game_id"], kind,
+                   {"client": str(game_uid)[:80], "active": state["game_uid"],
+                    "op_index": int(state.get("op_index") or 0)})
             conn.commit()
             return {"status": "stale_game", "active_game_uid": state["game_uid"]}
     text = g.ops_from_list(ops)

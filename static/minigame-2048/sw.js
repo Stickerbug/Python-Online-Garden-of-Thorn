@@ -9,9 +9,8 @@
    整段脚本都跑不起来（棋盘、合成顺序、排行榜全空）。所以这里不再逐个写死文件名，
    而是覆盖这一页会用到的静态资源类型，避免以后新加文件又漏。 */
 
-const CACHE = 'gtn-mg2048-v2';
+const CACHE = 'gtn-mg2048-v3';
 const SHELL = [
-  '/minigame/2048',
   '/static/css/minigame_2048.css',
   '/static/css/shared-lobby-chat.css',
   '/static/js/minigame_2048.js',
@@ -59,11 +58,14 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
   // 接口直连：离线时交给页面处理，绝不返回缓存伪造成功
   if (url.pathname.startsWith('/api/')) return;
-  const isShell = url.pathname === '/minigame/2048';
+  // 页面外壳是按账号渲染的（userId / 用户名 / 聊天身份都在 HTML 里）：
+  // 缓存后换账号或稍后刷新会拿到旧账号的配置，本地存档 key 对不上，
+  // 表现就是"刷新后上一局丢了"。所以文档永远走网络，不缓存。
+  if (url.pathname === '/minigame/2048' || request.destination === 'document') return;
   const isAsset = url.pathname.startsWith('/static/')
     || url.pathname.startsWith('/fonts/')
     || ASSET_DESTINATIONS.has(request.destination);
-  if (!isShell && !isAsset) return;
+  if (!isAsset) return;
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
     const key = cacheKeyFor(request);

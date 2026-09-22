@@ -180,6 +180,49 @@ class SyncTests(unittest.TestCase):
         self.assertEqual(bad["status"], "rejected")
         self.assertEqual(svc.load_state(self.conn, 2)["game"]["op_index"], 0)
 
+    def test_new_game_does_not_clobber_progressed_server_game(self):
+        """刷新时误判成"本地新局"：服务端有进度，必须保留服务器分支。"""
+
+        svc.sync_progress(self.conn, 1, self.game["game_uid"], 0, self.ops,
+                          now="2026-09-20T01:00:00Z")
+        before = svc.load_state(self.conn, 1)["game"]
+        client_seed = 424242
+        ops = valid_ops(client_seed, 4)
+        truth = g.replay(client_seed, ops)
+
+        blocked = svc.sync_progress(
+            self.conn, 1, "local-424242", 0, ops,
+            claimed_score=truth["score"], claimed_cells=truth["cells"],
+            source="offline", new_game=True, seed=client_seed,
+            now="2026-09-20T09:10:00Z",
+        )
+
+        self.assertEqual(blocked["status"], "stale_game")
+        after = svc.load_state(self.conn, 1)["game"]
+        self.assertEqual(after["game_uid"], before["game_uid"])
+        self.assertEqual(after["op_index"], before["op_index"])
+        kinds = {row["kind"] for row in self.conn.execute("SELECT * FROM minigame_2048_audit")}
+        self.assertIn("new_game_blocked", kinds)
+
+    def test_explicit_replace_active_can_adopt_offline_restart(self):
+        """玩家主动重开（/restart 失败后离线开的新局）才允许覆盖活动局。"""
+
+        svc.sync_progress(self.conn, 1, self.game["game_uid"], 0, self.ops,
+                          now="2026-09-20T01:00:00Z")
+        client_seed = 424243
+        ops = valid_ops(client_seed, 4)
+        truth = g.replay(client_seed, ops)
+
+        result = svc.sync_progress(
+            self.conn, 1, "local-424243", 0, ops,
+            claimed_score=truth["score"], claimed_cells=truth["cells"],
+            source="offline", new_game=True, replace_active=True, seed=client_seed,
+            now="2026-09-20T09:15:00Z",
+        )
+
+        self.assertEqual(result["status"], "ok", result)
+        self.assertEqual(svc.load_state(self.conn, 1)["game"]["game_uid"], "local-424243")
+
 
 class LeaderboardTests(unittest.TestCase):
     def setUp(self):

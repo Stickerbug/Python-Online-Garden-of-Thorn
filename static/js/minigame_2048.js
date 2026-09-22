@@ -21,7 +21,9 @@ const PALETTE = JSON.parse(document.getElementById('mg-palette').textContent || 
 const RULES_VERSION = 2;      // v2 = 5×5 + 合并有 15% 概率失败（不翻倍）
 const SAVE_VERSION = 1;
 const MAX_PENDING_OPS = 20000;
-const SYNC_DEBOUNCE_MS = 400;
+/* 同步防抖：原来 400ms 太快，快速连按时会持续打满服务端限流；
+   本地仍然是每一步即时保存，联网同步稍微合并一下不影响进度。 */
+const SYNC_DEBOUNCE_MS = 1000;
 const RETRY_BASE_MS = 1500;
 const RETRY_MAX_MS = 30000;
 const KEY_DIRECTIONS = {
@@ -126,6 +128,7 @@ function saveLocal() {
       continued: state.continued,
       source: state.source,
       localNew: state.localNew === true,
+      replaceActive: state.replaceActive === true,
       declined: state.declined,
     }));
   } catch (exc) {
@@ -496,6 +499,9 @@ async function syncNow() {
     continued: state.continued,
     // 离线自开的局：把种子一起交上去，服务端从起点重放验证（记录离线来源）。
     new_game: state.localNew === true,
+    // 只有"玩家主动重开、但 /restart 请求失败"才允许覆盖服务端活动局；
+    // 刷新/网络错误导致的本地新局不会带这个标记，服务端会保留有进度的旧局。
+    replace_active: state.replaceActive === true,
     seed: state.localNew === true ? state.seed : undefined,
   };
   try {
@@ -518,7 +524,9 @@ async function syncNow() {
     }
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
-      setSyncText(body.error || '同步被拒绝，本地进度已保留', 'error');
+      setSyncText(response.status === 429
+        ? '同步繁忙，本地进度已保留，稍后自动重试'
+        : (body.error || '同步被拒绝，本地进度已保留'), 'error');
       retryDelay = Math.min(retryDelay * 2, RETRY_MAX_MS);
       scheduleSync(retryDelay);
       return;
@@ -563,10 +571,12 @@ async function handleConflict(body) {
 }
 
 function adoptServerState(serverState) {
-  const game = serverState.game;
+  const game = serverState && serverState.game;
+  if (!game) return false;
   const board = serverState.board || {};
   state.gameUid = game.game_uid;
   state.localNew = false;
+  state.replaceActive = false;
   state.seed = Number(game.seed);
   state.ops = String(game.ops || '').split('');
   state.acked = Number(serverState.verified?.op_index || 0);
@@ -575,6 +585,7 @@ function adoptServerState(serverState) {
   state.rngState = Number(board.rng_state || 0);
   saveLocal();
   renderBoard(false);
+  return true;
 }
 
 /* ---------------- 操作 ---------------- */
@@ -681,11 +692,11 @@ async function restartGame({ confirm = true } = {}) {
       return;
     }
   } catch (_) { /* 离线：本地开新局 */ }
-  startLocalGame();
+  startLocalGame(undefined, { replaceActive: true });
   hideOverlay();
 }
 
-function startLocalGame(seed) {
+function startLocalGame(seed, { replaceActive = false } = {}) {
   const value = seed || seedFromText(`${CONFIG.username}:${Date.now()}:${Math.random()}`);
   const initial = initialCells(value >>> 0);
   state = {
@@ -701,6 +712,7 @@ function startLocalGame(seed) {
     continued: false,
     source: navigator.onLine ? 'online' : 'offline',
     localNew: true,
+    replaceActive: replaceActive === true,
     lastSyncLabel: '本地新局：联网后自动验证',
   };
   saveLocal();
@@ -1401,6 +1413,7 @@ async function boot() {
       continued: !!local.continued,
       source: local.source || 'online',
       localNew: local.localNew === true,
+      replaceActive: local.replaceActive === true,
       declined: !!local.declined,
       lastSyncLabel: '已从本机续局（联网后校验）',
     };
@@ -1414,22 +1427,32 @@ async function boot() {
       if (!state) startLocalGame();
       return;
     }
-    const data = await response.json();
-    if (data.rules_upgraded) {
-      // 规则升级（5×5 + 合并失败）：服务端已把旧局作废并开了新局，本地老档直接丢掉
-      adoptServerState(data);
-      state.best = Math.max(state.best || 0, state.score);
-      saveLocal();
-      setSyncText('规则已升级：棋盘 5×5、合并可能碎裂，旧局已作废并开了新局', 'ok');
-    } else if (!state || !state.gameUid) {
-      adoptServerState(data);
-      state.best = Math.max(state.best || 0, state.score);
-      saveLocal();
+    if (!response.ok) {
+      // 429/5xx 不是存档：绝对不能用错误体去 adoptServerState；
+      // 本地进度照常保留，联网恢复后由同步重放校验。
+      const body = await response.json().catch(() => ({}));
+      setSyncText(response.status === 429
+        ? '服务器繁忙，本地进度已保留，稍后自动校验'
+        : (body.error || '在线校验失败，本地进度已保留'), 'error');
+      if (!state) startLocalGame();
     } else {
-      verifiedEl.textContent = String(data.verified?.score || 0);
-      state.best = Math.max(state.best || 0, state.score);
-      setSyncText('在线：正在校验本机进度…');
-      scheduleSync(200);
+      const data = await response.json();
+      if (data.rules_upgraded) {
+        // 规则升级（5×5 + 合并失败）：服务端已把旧局作废并开了新局，本地老档直接丢掉
+        adoptServerState(data);
+        state.best = Math.max(state.best || 0, state.score);
+        saveLocal();
+        setSyncText('规则已升级：棋盘 5×5、合并可能碎裂，旧局已作废并开了新局', 'ok');
+      } else if (!state || !state.gameUid) {
+        adoptServerState(data);
+        state.best = Math.max(state.best || 0, state.score);
+        saveLocal();
+      } else {
+        verifiedEl.textContent = String(data.verified?.score || 0);
+        state.best = Math.max(state.best || 0, state.score);
+        setSyncText('在线：正在校验本机进度…');
+        scheduleSync(200);
+      }
     }
   } catch (_) {
     setSyncText('离线，本地已保存', 'offline');

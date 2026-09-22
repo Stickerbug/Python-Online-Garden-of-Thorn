@@ -793,6 +793,7 @@ GTN_STATIC_VERSION += '-storage-session-before-persistent-1'
 GTN_STATIC_VERSION += '-new-player-entertainment-default-fix-1'
 GTN_STATIC_VERSION += '-casual-mod-draw-1'
 GTN_STATIC_VERSION += '-v2-ui-select-default-1'
+GTN_STATIC_VERSION += '-minigame-2048-sync-cache-fix-1'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 STORY_COOP_ENABLED = os.environ.get('GTN_STORY_COOP_ENABLED', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 GTN_AI_1V1_TEST_ENABLED = os.environ.get('GTN_AI_1V1_TEST_ENABLED', '1').strip().lower() in ('1', 'true', 'yes', 'on')
@@ -34955,9 +34956,16 @@ def _minigame_2048_guard():
     return identity, None
 
 
-def _minigame_2048_rate_limited(ip, key, limit, window=300):
+def _minigame_2048_rate_limited(identity_key, key, limit, window=300):
+    """限流键按**账号**分桶。
+
+    这些接口都已经过登录校验，用账号做键比用 ``request.remote_addr`` 正确：
+    线上 nginx 反代到 127.0.0.1，所有玩家在进程里看到的 remote_addr 都是回环，
+    按 IP 分桶会变成全站共用一个桶（几个人同时玩就会互相把对方打成 429）。
+    """
+
     try:
-        return _rate_limited(ip, key, limit=limit, window=window)
+        return _rate_limited(identity_key, key, limit=limit, window=window)
     except Exception:
         return False
 
@@ -35054,8 +35062,8 @@ def api_minigame_2048_state():
     identity, denied = _minigame_2048_guard()
     if denied is not None:
         return denied
-    if _minigame_2048_rate_limited(request.remote_addr or 'unknown',
-                                   'minigame2048_state', limit=240):
+    if _minigame_2048_rate_limited(
+            f'u{identity[0]}', 'minigame2048_state', limit=1200):
         return _json_error('请求过于频繁，请稍后再试', 429)
     try:
         with get_db_connection() as conn:
@@ -35071,8 +35079,8 @@ def api_minigame_2048_sync():
     identity, denied = _minigame_2048_guard()
     if denied is not None:
         return denied
-    if _minigame_2048_rate_limited(request.remote_addr or 'unknown',
-                                   'minigame2048_sync', limit=600):
+    if _minigame_2048_rate_limited(
+            f'u{identity[0]}', 'minigame2048_sync', limit=3000):
         return _json_error('请求过于频繁，请稍后再试', 429)
     payload = request.get_json(silent=True) or {}
     ops = payload.get('ops')
@@ -35094,6 +35102,7 @@ def api_minigame_2048_sync():
                 reached_2048=bool(payload.get('reached_2048')),
                 continued=payload.get('continued'),
                 new_game=bool(payload.get('new_game')),
+                replace_active=bool(payload.get('replace_active')),
                 seed=payload.get('seed'),
             )
     except Exception as exc:
