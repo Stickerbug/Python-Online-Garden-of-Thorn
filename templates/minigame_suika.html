@@ -41,7 +41,11 @@
     <div class="sk-topbar-row">
       <div class="sk-brand">
         <h1 class="sk-title">合成大花花</h1>
-        <p id="sk-status" class="sk-status" role="status" aria-live="polite">正在读取存档…</p>
+        <p class="sk-status" role="status" aria-live="polite">
+          <span id="sk-status">正在读取存档…</span>
+          <span class="sk-sep">·</span>
+          <span id="sk-verified">已验证上榜分 0</span>
+        </p>
       </div>
       <div class="sk-scores">
         <div class="sk-score-box">
@@ -140,6 +144,15 @@
         <p class="sk-hint">
           分数越高，能抽到的档位越多。
         </p>
+      </section>
+      <section class="sk-card">
+        <h2>排行榜</h2>
+        <div class="sk-rank-tabs">
+          <button class="sk-btn small" data-sk-window="14d" type="button" aria-pressed="true">最近 14 天</button>
+          <button class="sk-btn small secondary" data-sk-window="all" type="button" aria-pressed="false">历史最高</button>
+        </div>
+        <div id="sk-rank-body" class="sk-rank-body">正在读取…</div>
+        <p id="sk-rank-note" class="sk-hint"></p>
       </section>
     </aside>
   </div>

@@ -57,6 +57,9 @@ const ctx = canvas ? canvas.getContext('2d') : null;
 const scoreEl = document.getElementById('sk-score');
 const bestEl = document.getElementById('sk-best');
 const statusEl = document.getElementById('sk-status');
+const verifiedEl = document.getElementById('sk-verified');
+const rankBodyEl = document.getElementById('sk-rank-body');
+const rankNoteEl = document.getElementById('sk-rank-note');
 const nextChipEl = document.getElementById('sk-next-chip');
 const nextNameEl = document.getElementById('sk-next-name');
 const nextHintEl = document.getElementById('sk-next-hint');
@@ -86,6 +89,16 @@ let lastFrameAt = 0;
 let lastDropAt = 0;
 let overlayMode = '';
 let pendingAction = null;
+
+/* 云同步状态：每颗球落定/每次分数增加都上传（失败进重试，离线不阻塞游玩）。 */
+const syncState = {
+  gameUid: '',
+  acked: 0,          // 服务端已确认的投放数
+  verified: 0,       // 已验证入榜的最高分
+  timer: null,
+  inflight: false,
+  lastError: '',
+};
 
 /* ---------- 小工具 ---------- */
 
@@ -633,6 +646,8 @@ function saveLocal({ gameOver = false } = {}) {
     gameOver: gameOver || game.gameOver,
     timeMs: Math.round(game.timeMs),
     drops: game.dropLog.map((entry) => ({ t: entry.t, x: entry.x })),
+    gameUid: syncState.gameUid,
+    acked: syncState.acked,
     savedAt: Date.now(),
   };
   const ok = writeStored(SAVE_KEY, JSON.stringify(payload));
@@ -720,6 +735,150 @@ function dropAtAim() {
   markNextInLegend();
   lastDropAt = performance.now();
   saveLocal();
+  scheduleSync();
+}
+
+/* ---------------- 云同步 + 榜单 ---------------- */
+
+function setVerifiedText() {
+  if (!verifiedEl) return;
+  verifiedEl.textContent = `已验证上榜分 ${syncState.verified}`;
+}
+
+function scheduleSync(delay = 1200) {
+  if (syncState.timer) window.clearTimeout(syncState.timer);
+  syncState.timer = window.setTimeout(() => { void syncNow(); }, delay);
+}
+
+/** 本地是全新一局（没有本地存档）时，云端也开一局新的：否则会和上一局的云端存档对不上，
+   服务端会把上报判成"分数回退"，表现就是"未通过验证"。 */
+async function restartCloudGame() {
+  if (!game) return;
+  try {
+    const response = await fetch('/api/minigame/suika/restart', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ seed: game.seed }),
+    });
+    if (!response.ok) return;
+    const data = await response.json();
+    const remote = data && data.game;
+    if (remote && remote.game_uid) {
+      syncState.gameUid = String(remote.game_uid);
+      syncState.acked = 0;
+    }
+  } catch (_) { /* 离线：下次同步时会走 state 分支 */ }
+}
+
+/** 把"新增投放 + 新总分"立刻上传；服务端落库后再启发式校验能否入榜。 */
+async function syncNow() {
+  if (syncState.timer) { window.clearTimeout(syncState.timer); syncState.timer = null; }
+  if (!game || syncState.inflight) return;
+  if (!syncState.gameUid) {
+    // 还没拿到云端局 ID：先开一局（服务端会返回 seed，与本地一致时才接管）
+    try {
+      const response = await fetch('/api/minigame/suika/state', { credentials: 'same-origin' });
+      if (!response.ok) { syncState.lastError = 'state'; return; }
+      const data = await response.json();
+      const remote = data && data.game;
+      if (remote && remote.game_uid) {
+        syncState.gameUid = String(remote.game_uid);
+        if (Number(remote.score) > syncState.verified) syncState.verified = Number(remote.score);
+        setVerifiedText();
+      }
+    } catch (_) { syncState.lastError = 'offline'; return; }
+  }
+  const drops = game.dropLog.slice(syncState.acked).map((entry) => ({ t: entry.t, x: entry.x }));
+  if (!drops.length && game.score === syncState.verified) return;
+  syncState.inflight = true;
+  try {
+    const response = await fetch('/api/minigame/suika/sync', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        game_uid: syncState.gameUid,
+        from_index: syncState.acked,
+        drops,
+        claimed_score: game.score,
+        claimed_max_tier: MAX_TIER,
+        source: navigator.onLine === false ? 'offline' : 'online',
+      }),
+    });
+    if (!response.ok) throw new Error(`http ${response.status}`);
+    const data = await response.json();
+    const remote = data && data.game;
+    if (remote) {
+      syncState.acked = Number(remote.drop_index) || syncState.acked;
+      if (Number(remote.score) > syncState.verified) syncState.verified = Number(remote.score);
+      setVerifiedText();
+      saveLocal();
+    }
+    if (data && data.verified === false) {
+      setStatus(`未通过验证，未计入排行榜（本地进度已保留）`, { offline: true });
+    } else if (data && data.verified) {
+      setStatus('已同步（成绩已验证）');
+      void refreshLeaderboard();
+    }
+  } catch (_) {
+    syncState.lastError = 'sync';
+    setStatus('网络不可用：进度已存在本机，稍后自动重试', { offline: true });
+    scheduleSync(8000);
+  } finally {
+    syncState.inflight = false;
+  }
+}
+
+let rankWindowMode = '14d';
+
+async function refreshLeaderboard() {
+  if (!rankBodyEl) return;
+  try {
+    const response = await fetch(`/api/minigame/suika/leaderboard?window=${encodeURIComponent(rankWindowMode)}&limit=50`,
+      { credentials: 'same-origin' });
+    if (!response.ok) throw new Error(`http ${response.status}`);
+    const data = await response.json();
+    const rows = (data && data.table && data.table.entries) || [];
+    const me = data && data.me;
+    if (!rows.length) {
+      rankBodyEl.textContent = '还没有已验证的成绩。';
+    } else {
+      rankBodyEl.textContent = '';
+      const meId = me ? String(me.user_id) : '';
+      rows.forEach((row) => {
+        const item = document.createElement('div');
+        item.className = 'sk-rank-row' + (meId && String(row.user_id) === meId ? ' is-me' : '');
+        const no = document.createElement('span');
+        no.className = 'sk-rank-no';
+        no.textContent = `${row.rank}.`;
+        const name = document.createElement('span');
+        name.className = 'sk-rank-name';
+        name.textContent = String(row.username || '?');
+        const sub = document.createElement('span');
+        sub.className = 'sk-rank-sub';
+        sub.textContent = tierDef(Math.max(0, Math.min(MAX_TIER, Number(row.max_tile) || 0))).en;
+        const score = document.createElement('span');
+        score.className = 'sk-rank-score';
+        score.textContent = String(row.score);
+        item.append(no, name, sub, score);
+        rankBodyEl.append(item);
+      });
+      if (me && !rows.some((row) => String(row.user_id) === meId)) {
+        const item = document.createElement('div');
+        item.className = 'sk-rank-row is-me';
+        item.textContent = `我的名次 ${me.rank} · ${me.score} 分`;
+        rankBodyEl.append(item);
+      }
+    }
+    if (rankNoteEl) {
+      const pool = Number(data && data.champion_pool) || 300;
+      const need = Number(data && data.champion_min_accounts) || 3;
+      rankNoteEl.textContent = `每周一 00:00（UTC+8）按最近 14 天发一次冠军奖：总奖池 ${pool} 荆露，至少 ${need} 个有效账号才发。`;
+    }
+  } catch (_) {
+    rankBodyEl.textContent = '读取榜单失败（可能是离线）。';
+  }
 }
 
 function bindInput() {
@@ -873,8 +1032,24 @@ function bindUi() {
     });
   }
   window.addEventListener('beforeunload', () => saveLocal());
-  window.addEventListener('online', () => setStatus('网络已恢复'));
+  window.addEventListener('online', () => { setStatus('网络已恢复'); scheduleSync(300); });
   window.addEventListener('offline', () => setStatus('离线：本机已保存', { offline: true }));
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    void syncNow();
+    void refreshLeaderboard();
+  });
+  document.querySelectorAll('[data-sk-window]').forEach((button) => {
+    button.addEventListener('click', () => {
+      rankWindowMode = button.dataset.skWindow === 'all' ? 'all' : '14d';
+      document.querySelectorAll('[data-sk-window]').forEach((other) => {
+        const active = other === button;
+        other.setAttribute('aria-pressed', active ? 'true' : 'false');
+        other.classList.toggle('secondary', !active);
+      });
+      void refreshLeaderboard();
+    });
+  });
   window.addEventListener('resize', () => { resizeCanvas(); render(); });
   try {
     new MutationObserver(() => { refreshThemeColors(); render(); })
@@ -897,11 +1072,17 @@ async function boot() {
   await loadAllArt();
   const saved = loadLocal();
   if (saved && !saved.gameOver && saved.drops.length) {
+    syncState.gameUid = String(saved.gameUid || '');
+    syncState.acked = Math.max(0, Number(saved.acked) || 0);
     startGame({ seed: saved.seed, drops: saved.drops, uptoMs: saved.timeMs, restored: true });
   } else {
     startGame();
+    void restartCloudGame().then(() => { scheduleSync(400); });
   }
   updateNextChip();
+  setVerifiedText();
+  void refreshLeaderboard();
+  scheduleSync(400);
   bindInput();
   bindUi();
   loadPlayerSkin();

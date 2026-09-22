@@ -263,7 +263,8 @@ def leaderboard(conn, *, window: str = "14d", limit: int = base.DEFAULT_LEADERBO
 
 def self_entry(conn, user_id: int, *, window: str = "14d", now=None):
     ensure_schema(conn)
-    return base.self_entry(conn, user_id, window=window, now=now, game_key=GAME_KEY)
+    return base.self_entry(conn, user_id, window=window, now=now,
+                           game_key=GAME_KEY, rules_version=RULES_VERSION)
 
 
 def period_history(conn, limit: int = 12):

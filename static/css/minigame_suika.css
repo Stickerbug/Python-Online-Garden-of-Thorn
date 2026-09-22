@@ -422,6 +422,34 @@ body.sk-page {
 .sk-hint:last-child { margin-bottom: 0; }
 .sk-hint strong { color: var(--sk-text); }
 
+.sk-sep { color: var(--sk-text-muted); }
+
+/* 排行榜：底部常驻卡片（最近 14 天 / 历史最高），样式与大厅榜单同一套观感 */
+.sk-rank-tabs { display: flex; gap: 8px; margin-bottom: 10px; }
+.sk-rank-tabs .sk-btn[aria-pressed="true"] { background: var(--sk-accent); color: #FFFFFF; }
+.sk-rank-tabs .sk-btn[aria-pressed="false"] { background: var(--sk-surface-soft); color: var(--sk-text); }
+
+.sk-rank-body {
+  max-height: 260px;
+  overflow-y: auto;
+  font-size: 12px;
+}
+
+.sk-rank-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
+.sk-rank-row + .sk-rank-row { margin-top: 2px; }
+.sk-rank-row.is-me { background: color-mix(in srgb, var(--sk-accent) 12%, var(--sk-surface)); }
+.sk-rank-no { width: 26px; color: var(--sk-text-muted); font-variant-numeric: tabular-nums; }
+.sk-rank-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sk-rank-score { font-weight: 700; font-variant-numeric: tabular-nums; }
+.sk-rank-sub { color: var(--sk-text-soft); font-size: 11px; }
+
 /* ---------- 窄屏：单列，棋盘在最上面 ---------- */
 
 @media (max-width: 980px) {
