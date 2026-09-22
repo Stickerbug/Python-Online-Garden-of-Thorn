@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_1" data-name="图层_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 283.46 283.46">
+  <!-- Generator: Adobe Illustrator 29.0.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 186)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: #f4c542;
+        stroke: #cfa231;
+        stroke-miterlimit: 10;
+        stroke-width: 8px;
+      }
+
+      .st1 {
+        fill: #f7f6f0;
+        stroke: #cfcabc;
+        stroke-miterlimit: 10;
+        stroke-width: 9px;
+      }
+
+      .st2 {
+        fill: #231815;
+      }
+
+      .st3 {
+        fill: #c0392b;
+      }
+    </style>
+  </defs>
+  <circle class="st0" cx="203.44" cy="196.18" r="30.14"/>
+  <circle class="st0" cx="203.44" cy="196.18" r="16.42"/>
+  <g transform="translate(112.46 176.42) rotate(-12.4)">
+    <rect class="st1" x="-54.6" y="-54.6" width="109.2" height="109.2" rx="18"/>
+    <circle class="st2" cx="-27.4" cy="-27.4" r="11.2"/>
+    <circle class="st2" cx="0" cy="0" r="11.2"/>
+    <circle class="st2" cx="27.4" cy="27.4" r="11.2"/>
+  </g>
+  <ellipse class="st2" cx="182.74" cy="128.42" rx="84.36" ry="21.94"/>
+  <path class="st2" d="M131.06,129.42h103.36v-63.1c0-9.3-7.54-16.84-16.84-16.84h-69.68c-9.3,0-16.84,7.54-16.84,16.84v63.1Z"/>
+  <rect class="st3" x="131.06" y="104.88" width="103.36" height="24.54"/>
+</svg>
