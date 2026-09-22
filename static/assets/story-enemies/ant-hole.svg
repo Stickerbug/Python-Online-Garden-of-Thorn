@@ -4,57 +4,17 @@
   <defs>
     <style>
       .st0 {
-        fill: #ab8253;
-        stroke: #86603a;
-        stroke-miterlimit: 10;
-        stroke-width: 16px;
+        fill: #685123;
       }
 
       .st1 {
-        fill: #402c1c;
-      }
-
-      .st2 {
-        fill: #241811;
-      }
-
-      .st3 {
-        fill: #936c42;
-      }
-
-      .st4 {
-        fill: #231815;
-      }
-
-      .st5 {
-        fill: none;
-        stroke: #231815;
-        stroke-linecap: round;
+        fill: #866727;
+        stroke: #ab8320;
         stroke-miterlimit: 10;
-        stroke-width: 5px;
+        stroke-width: 30px;
       }
     </style>
   </defs>
-  <circle class="st0" cx="141.73" cy="141.73" r="82.1"/>
-  <circle class="st1" cx="141.73" cy="141.73" r="39.4"/>
-  <circle class="st2" cx="141.73" cy="141.73" r="26.2"/>
-  <ellipse class="st3" cx="86.6" cy="196.4" rx="11.2" ry="6.4" transform="rotate(-30.5 86.6 196.4)"/>
-  <ellipse class="st3" cx="196.9" cy="92.4" rx="8.6" ry="5.2" transform="rotate(-25.8 196.9 92.4)"/>
-  <ellipse class="st3" cx="205.2" cy="186.5" rx="6.8" ry="4.4" transform="rotate(-44.9 205.2 186.5)"/>
-  <g>
-    <ellipse class="st4" cx="104.9" cy="90.8" rx="9.62" ry="6.86" transform="rotate(-45 104.9 90.8)"/>
-    <ellipse class="st4" cx="89.4" cy="106.4" rx="6.12" ry="4.34" transform="rotate(-45 89.4 106.4)"/>
-    <path class="st5" d="M85.5,110.2 L77.6,111"/>
-    <path class="st5" d="M85.5,110.2 L79.4,117.2"/>
-    <path class="st5" d="M104.9,90.8 L111.5,97.4"/>
-    <path class="st5" d="M104.9,90.8 L98.3,84.2"/>
-  </g>
-  <g>
-    <ellipse class="st4" cx="178.6" cy="192.7" rx="9.62" ry="6.86" transform="rotate(135 178.6 192.7)"/>
-    <ellipse class="st4" cx="194.1" cy="177.1" rx="6.12" ry="4.34" transform="rotate(135 194.1 177.1)"/>
-    <path class="st5" d="M198,173.3 L205.9,172.5"/>
-    <path class="st5" d="M198,173.3 L204.1,166.3"/>
-    <path class="st5" d="M178.6,192.7 L172,186.1"/>
-    <path class="st5" d="M178.6,192.7 L185.2,199.3"/>
-  </g>
+  <circle class="st1" cx="141.73" cy="141.73" r="67.54"/>
+  <circle class="st0" cx="141.73" cy="141.73" r="24.65"/>
 </svg>

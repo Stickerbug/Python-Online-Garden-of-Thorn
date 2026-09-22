@@ -302,6 +302,98 @@ body.sk-page {
   background-size: contain;
 }
 
+/* 玩家档预览：内嵌游戏同款 .skin-avatar。suika 页不加载主样式表（本文件顶部注释），
+   所以这里镜像 .skin-avatar 的规则子集（值来自 style.css，改主站皮肤样式时这里要跟着改）：
+   border 7.5cqi、眼睛 10%×20% @ top32% 左右 inset33%、瞳孔 84%×54% 居中、嘴 top63% 38%×20%。 */
+.sk-player-preview {
+  position: relative;
+  display: block;
+  /* 容器必须设在**外层**：.skin-avatar 自己的 border 是 7.5cqi，而元素自身的
+     container-type 不参与它自己的 cqi 解析——没有合适的祖先容器时会回退到视口
+     （1400px 视口 → 105px 巨框把整张脸挤没了，就是"预览只剩一个底"的根因）。 */
+  container-type: inline-size;
+}
+
+.sk-player-preview .skin-avatar {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: var(--skin-main, #FFE763);
+  border: 7.5cqi solid var(--skin-border, #CFBB50);
+  overflow: hidden;
+  box-shadow: inset 0 4px 12px rgba(255, 255, 255, 0.18), inset 0 -8px 20px rgba(0, 0, 0, 0.08);
+}
+
+.sk-player-preview .skin-eye {
+  position: absolute;
+  top: 32%;
+  width: 10%;
+  height: 20%;
+  background: var(--skin-feature, #111);
+  overflow: hidden;
+}
+
+.sk-player-preview .skin-eye-left { left: 33%; }
+.sk-player-preview .skin-eye-right { right: 33%; }
+
+.sk-player-preview .skin-eye-shape-oval .skin-eye { border-radius: 50% / 50%; }
+.sk-player-preview .skin-eye-shape-rectangle .skin-eye { border-radius: 2px; }
+.sk-player-preview .skin-eye-shape-diamond .skin-eye {
+  top: 31%;
+  width: 12%;
+  height: 22%;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+.sk-player-preview .skin-eye-shape-diamond .skin-eye-left { left: 32%; }
+.sk-player-preview .skin-eye-shape-diamond .skin-eye-right { right: 32%; }
+.sk-player-preview .skin-eye-shape-hexagon .skin-eye {
+  clip-path: polygon(22% 0, 78% 0, 100% 50%, 78% 100%, 22% 100%, 0 50%);
+}
+
+.sk-player-preview .skin-pupil {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 84%;
+  height: 54%;
+  border-radius: 50%;
+  background: var(--skin-pupil, #fff);
+  transform: translate(calc(-50% + var(--skin-look-x, 26.6%)), calc(-50% + var(--skin-look-y, -31.4%)));
+}
+
+.sk-player-preview .skin-eye-shape-diamond .skin-pupil,
+.sk-player-preview .skin-eye-shape-hexagon .skin-pupil {
+  width: 62%;
+  height: 62%;
+  border-radius: 0;
+}
+.sk-player-preview .skin-eye-shape-diamond .skin-pupil {
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+.sk-player-preview .skin-eye-shape-hexagon .skin-pupil {
+  clip-path: polygon(22% 0, 78% 0, 100% 50%, 78% 100%, 22% 100%, 0 50%);
+}
+
+.sk-player-preview .skin-mouth {
+  position: absolute;
+  left: 50%;
+  top: 63%;
+  width: 38%;
+  height: 20%;
+  transform: translateX(-50%);
+  overflow: visible;
+}
+
+.sk-player-preview .skin-mouth-line {
+  fill: none;
+  stroke: var(--skin-feature, #111);
+  stroke-width: 5.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .sk-chain-name {
   flex: 1;
   min-width: 0;
@@ -391,6 +483,13 @@ body.sk-page {
   background-size: contain;
   background-color: transparent;
   transition: background-color .2s ease, box-shadow .2s ease;
+}
+
+.sk-next-ball.sk-player-preview .skin-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
 }
 
 .sk-next-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }

@@ -28,9 +28,33 @@ const BEST_KEY = `gtn_suika.v1.best.u${USER_KEY}`;
 const LEGEND_KEY = 'gtn_suika.v1.prefs';
 
 const DEFAULT_SKIN = Object.freeze({ primary: '#FFE763', shape: 'oval', kind: '' });
-const PLAYER_LOOK = Object.freeze({ x: 0.707, y: -0.707 });   // 固定看向右上 45°
-const LOOK_OFFSET_X = 0.38;
-const LOOK_OFFSET_Y = 0.56;
+/* 玩家档的视线：与游戏 skinLookCssVars 同一套系数（look × 常量 = 瞳孔自身尺寸的偏移比例）。
+   游戏里 look 是动态的（看向目标），这里固定看向右上 45°，让球像在望向棋盘。 */
+const PLAYER_LOOK = Object.freeze({ x: 0.707, y: -0.707 });
+const SKIN_LOOK_OFFSET = Object.freeze({ x: 0.38, y: 0.56 });
+
+/* 玩家球的脸部几何，全部以"直径占比"表示——与游戏 .skin-avatar 的 CSS 逐项对齐
+   （border 7.5cqi、眼睛 10%×20% @ top32%/inset33%、瞳孔 84%×54%、嘴 top63% 38%×20%
+   stroke 5.6/100）。菱形眼在游戏里更大（12%×22% @ 31%/32%），菱形/六边形的瞳孔是
+   62%×62%。drawPlayerBall（canvas）与 playerBallSvg（DOM 预览）共用这份表。 */
+const SKIN_FEATURES = Object.freeze({
+  eye: Object.freeze({ w: 0.10, h: 0.20, top: 0.32, inset: 0.33 }),
+  pupil: Object.freeze({ w: 0.84, h: 0.54 }),
+  diamondEye: Object.freeze({ w: 0.12, h: 0.22, top: 0.31, inset: 0.32 }),
+  smallPupil: Object.freeze({ w: 0.62, h: 0.62 }),
+  mouth: Object.freeze({ w: 0.38, h: 0.20, top: 0.63, stroke: 0.056 }),
+  border: 0.075,
+});
+
+function skinFeatureGeometry(shape) {
+  if (shape === 'diamond') {
+    return { eye: SKIN_FEATURES.diamondEye, pupil: SKIN_FEATURES.smallPupil };
+  }
+  if (shape === 'hexagon') {
+    return { eye: SKIN_FEATURES.eye, pupil: SKIN_FEATURES.smallPupil };
+  }
+  return { eye: SKIN_FEATURES.eye, pupil: SKIN_FEATURES.pupil };
+}
 
 /* 每档的**兜底底色**：只在"贴图没加载出来"或"第 10 档玩家球"时用到。
    有贴图的档位不再画底色圆和描边——贴图本身就是这颗球的外框。 */
@@ -257,10 +281,10 @@ function eyePath(target, shape, cx, cy, w, h) {
   const left = cx - w / 2;
   const top = cy - h / 2;
   if (shape === 'diamond') {
-    target.moveTo(cx, cy - h / 2);
+    target.moveTo(cx, top);
     target.lineTo(cx + w / 2, cy);
     target.lineTo(cx, cy + h / 2);
-    target.lineTo(cx - w / 2, cy);
+    target.lineTo(left, cy);
     target.closePath();
     return;
   }
@@ -275,12 +299,75 @@ function eyePath(target, shape, cx, cy, w, h) {
     return;
   }
   if (shape === 'rectangle') {
-    const radius = Math.min(w, h) * 0.18;
+    /* 游戏里矩形眼是 2px 圆角、瞳孔 1px 圆角：按球径折算，小圆角而不是直角 */
+    const radius = Math.min(w, h) * 0.16;
     if (typeof target.roundRect === 'function') target.roundRect(left, top, w, h, radius);
     else target.rect(left, top, w, h);
     return;
   }
   target.ellipse(cx, cy, w / 2, h / 2, 0, 0, Math.PI * 2);
+}
+
+/* 脸（眼睛+瞳孔+嘴），以球心 (x,y)、半径 radius 画。canvas 与 SVG 预览共用同一几何表。 */
+function drawSkinFace(target, x, y, radius, feature, pupilColor) {
+  const shape = playerSkin.shape || 'oval';
+  const { eye, pupil } = skinFeatureGeometry(shape);
+  const eyeW = radius * 2 * eye.w;
+  const eyeH = radius * 2 * eye.h;
+  const eyeY = y - radius + radius * 2 * eye.top + eyeH / 2;
+  const leftX = x - radius + radius * 2 * eye.inset + eyeW / 2;
+  const rightX = x + radius - radius * 2 * eye.inset - eyeW / 2;
+
+  const offsetX = PLAYER_LOOK.x * SKIN_LOOK_OFFSET.x * pupil.w;
+  const offsetY = PLAYER_LOOK.y * SKIN_LOOK_OFFSET.y * pupil.h;
+  const pupilW = eyeW * pupil.w;
+  const pupilH = eyeH * pupil.h;
+  const roundPupil = shape !== 'diamond' && shape !== 'hexagon';
+
+  target.fillStyle = feature;
+  [leftX, rightX].forEach((eyeX) => {
+    eyePath(target, shape, eyeX, eyeY, eyeW, eyeH);
+    target.fill();
+  });
+  target.fillStyle = pupilColor;
+  [leftX, rightX].forEach((eyeX) => {
+    if (!roundPupil) {
+      eyePath(target, shape, eyeX + offsetX, eyeY + offsetY, pupilW, pupilH);
+      target.fill();
+      return;
+    }
+    target.save();
+    if (shape === 'rectangle') {
+      const r = Math.min(pupilW, pupilH) * 0.16;
+      target.beginPath();
+      if (typeof target.roundRect === 'function') target.roundRect(eyeX + offsetX - pupilW / 2, eyeY + offsetY - pupilH / 2, pupilW, pupilH, r);
+      else target.rect(eyeX + offsetX - pupilW / 2, eyeY + offsetY - pupilH / 2, pupilW, pupilH);
+      target.fill();
+      target.restore();
+      return;
+    }
+    target.beginPath();
+    target.ellipse(eyeX + offsetX, eyeY + offsetY, pupilW / 2, pupilH / 2, 0, 0, Math.PI * 2);
+    target.fill();
+    target.restore();
+  });
+
+  /* 嘴：与游戏 .skin-mouth 同位（top 63%、宽 38%、高 20%），同一条曲线
+     （viewBox 100×56 → M20,18 C36,32 64,32 80,18），线宽按直径折算（stroke 5.6/100）。 */
+  const mouthW = radius * 2 * SKIN_FEATURES.mouth.w;
+  const mouthH = radius * 2 * SKIN_FEATURES.mouth.h;
+  const mouthX = x - mouthW / 2;
+  const mouthY = y - radius + radius * 2 * SKIN_FEATURES.mouth.top;
+  const px = (v) => mouthX + (v / 100) * mouthW;
+  const py = (v) => mouthY + (v / 56) * mouthH;
+  target.beginPath();
+  target.moveTo(px(20), py(18));
+  target.bezierCurveTo(px(36), py(32), px(64), py(32), px(80), py(18));
+  target.lineWidth = Math.max(1.2, radius * 2 * SKIN_FEATURES.mouth.stroke);
+  target.strokeStyle = feature;
+  target.lineCap = 'round';
+  target.lineJoin = 'round';
+  target.stroke();
 }
 
 function drawPlayerBall(target, x, y, radius) {
@@ -289,74 +376,43 @@ function drawPlayerBall(target, x, y, radius) {
   const inverted = skinLuminance(color) < 0.22;
   const feature = inverted ? '#ffffff' : '#111111';
   const pupil = inverted ? '#111111' : '#ffffff';
-  const radiusSafe = radius;
+  const diameter = radius * 2;
 
   target.save();
   target.beginPath();
-  target.arc(x, y, radiusSafe, 0, Math.PI * 2);
+  target.arc(x, y, radius, 0, Math.PI * 2);
   target.fillStyle = color;
   target.fill();
-  const borderWidth = Math.max(2, radiusSafe * 0.14);
+  /* 边框与游戏 .skin-avatar 的 7.5cqi 一致（从半径向内画，不改变物理外沿） */
+  const borderWidth = diameter * SKIN_FEATURES.border;
   if (borderWidth > 0) {
     target.lineWidth = borderWidth;
     target.strokeStyle = edge;
     target.stroke();
   }
+  /* 内侧高光/阴影：对应游戏 inset box-shadow（顶部白 18%、底部黑 8%）。 */
+  const highlight = target.createLinearGradient(x, y - radius, x, y + radius);
+  highlight.addColorStop(0, 'rgba(255, 255, 255, 0.18)');
+  highlight.addColorStop(0.5, 'rgba(255, 255, 255, 0)');
+  highlight.addColorStop(1, 'rgba(0, 0, 0, 0.08)');
+  target.fillStyle = highlight;
+  target.beginPath();
+  target.arc(x, y, radius - (borderWidth > 0 ? borderWidth / 2 : 0), 0, Math.PI * 2);
+  target.fill();
 
   if (playerSkin.kind === 'phelren' && phelrenFrame) {
     target.save();
     target.beginPath();
-    target.arc(x, y, radiusSafe - borderWidth / 2, 0, Math.PI * 2);
+    target.arc(x, y, radius - borderWidth / 2, 0, Math.PI * 2);
     target.clip();
-    const size = radiusSafe * 2;
+    const size = radius * 2;
     target.drawImage(phelrenFrame, x - size / 2, y - size / 2, size, size);
     target.restore();
     target.restore();
     return;
   }
 
-  const eyeW = radiusSafe * 2 * 0.10;
-  const eyeH = radiusSafe * 2 * 0.20;
-  const eyeY = y - radiusSafe + radiusSafe * 2 * 0.32 + eyeH / 2;
-  const leftX = x - radiusSafe + radiusSafe * 2 * 0.33 + eyeW / 2;
-  const rightX = x + radiusSafe - radiusSafe * 2 * 0.33 - eyeW / 2;
-  const pupilW = eyeW * 0.84;
-  const pupilH = eyeH * 0.54;
-  const offsetX = PLAYER_LOOK.x * LOOK_OFFSET_X * eyeW;
-  const offsetY = PLAYER_LOOK.y * LOOK_OFFSET_Y * eyeH;
-
-  const shape = playerSkin.shape || 'oval';
-  target.fillStyle = feature;
-  [leftX, rightX].forEach((eyeX) => {
-    eyePath(target, shape, eyeX, eyeY, eyeW, eyeH);
-    target.fill();
-  });
-  target.fillStyle = pupil;
-  [leftX, rightX].forEach((eyeX) => {
-    if (shape === 'diamond' || shape === 'hexagon') {
-      eyePath(target, shape, eyeX + offsetX, eyeY + offsetY, pupilW, pupilH);
-      target.fill();
-      return;
-    }
-    target.beginPath();
-    target.ellipse(eyeX + offsetX, eyeY + offsetY, pupilW / 2, pupilH / 2, 0, 0, Math.PI * 2);
-    target.fill();
-  });
-
-  // 嘴：与站点皮肤同一条曲线（viewBox 100×56 → M20,18 C36,32 64,32 80,18）
-  const mouthW = radiusSafe * 2 * 0.38;
-  const mouthH = radiusSafe * 2 * 0.20;
-  const mouthX = x - mouthW / 2;
-  const mouthY = y - radiusSafe + radiusSafe * 2 * 0.63;
-  const px = (v) => mouthX + (v / 100) * mouthW;
-  const py = (v) => mouthY + (v / 56) * mouthH;
-  target.beginPath();
-  target.moveTo(px(20), py(18));
-  target.bezierCurveTo(px(36), py(32), px(64), py(32), px(80), py(18));
-  target.lineWidth = Math.max(1.5, radiusSafe * 0.09);
-  target.strokeStyle = feature;
-  target.lineCap = 'round';
-  target.stroke();
+  drawSkinFace(target, x, y, radius, feature, pupil);
   target.restore();
 }
 
@@ -571,12 +627,32 @@ function updateNextChip() {
   if (!game) return;
   const tier = game.nextTier;
   const def = tierDef(tier);
-  const colors = tierColors(tier);
   if (nextChipEl) {
-    // 有贴图就直接显示贴图本身（不套底色圆/描边）；玩家档没有贴图，用皮肤色圆代替。
-    nextChipEl.style.backgroundImage = def.art ? `url("${def.art}")` : 'none';
-    nextChipEl.style.backgroundColor = def.art ? 'transparent' : colors.bg;
-    nextChipEl.style.borderColor = def.art ? 'transparent' : colors.edge;
+    if (def.art) {
+      // 有贴图就直接显示贴图本身（不套底色圆/描边）
+      nextChipEl.style.backgroundImage = `url("${def.art}")`;
+      nextChipEl.style.backgroundColor = 'transparent';
+      nextChipEl.style.borderColor = 'transparent';
+      nextChipEl.classList.remove('sk-player-preview');
+      nextChipEl.innerHTML = '';
+    } else if (tier === MAX_TIER) {
+      // 玩家档：换成与游戏一致的带脸小预览（之前只剩一个底色圆）
+      nextChipEl.style.backgroundImage = 'none';
+      nextChipEl.style.backgroundColor = 'transparent';
+      nextChipEl.style.borderColor = 'transparent';
+      if (!nextChipEl.querySelector('.skin-avatar')) {
+        nextChipEl.classList.add('sk-player-preview');
+        nextChipEl.innerHTML = playerBallPreviewEl().innerHTML;
+        updatePlayerPreviews();
+      }
+    } else {
+      nextChipEl.classList.remove('sk-player-preview');
+      nextChipEl.innerHTML = '';
+      const colors = tierColors(tier);
+      nextChipEl.style.backgroundImage = 'none';
+      nextChipEl.style.backgroundColor = colors.bg;
+      nextChipEl.style.borderColor = colors.edge;
+    }
   }
   if (nextNameEl) nextNameEl.textContent = def.en;
   if (nextHintEl) {
@@ -589,6 +665,34 @@ function updateNextChip() {
   }
 }
 
+/** 玩家档的 DOM 预览：一个小 `.skin-avatar`（与游戏同一套 CSS 类渲染）。
+    合成路线/「下一枚」共用；皮肤加载完成后由 updatePlayerPreviews() 刷新。 */
+function playerBallPreviewEl() {
+  const span = document.createElement('span');
+  span.className = 'sk-chain-ball sk-player-preview';
+  span.innerHTML = '<div class="skin-avatar skin-eye-shape-oval">'
+    + '<div class="skin-eye skin-eye-left"><span class="skin-pupil"></span></div>'
+    + '<div class="skin-eye skin-eye-right"><span class="skin-pupil"></span></div>'
+    + '<svg class="skin-mouth" viewBox="0 0 100 56" aria-hidden="true" focusable="false">'
+    + '<path class="skin-mouth-line" d="M 20 18 C 36 32 64 32 80 18"></path>'
+    + '</svg></div>';
+  return span;
+}
+
+/** 把页面上的玩家档预览（合成路线 + 下一枚）同步成当前皮肤。 */
+function updatePlayerPreviews() {
+  const color = playerSkin.primary || DEFAULT_SKIN.primary;
+  const shape = ['oval', 'rectangle', 'diamond', 'hexagon'].includes(String(playerSkin.shape || '')) ? playerSkin.shape : 'oval';
+  const border = skinBorder(color);
+  document.querySelectorAll('.sk-player-preview .skin-avatar').forEach((avatar) => {
+    avatar.className = `skin-avatar skin-eye-shape-${shape}`;
+    avatar.style.setProperty('--skin-main', color);
+    avatar.style.setProperty('--skin-border', border);
+    avatar.style.setProperty('--skin-feature', skinLuminance(color) < 0.22 ? '#ffffff' : '#111111');
+    avatar.style.setProperty('--skin-pupil', skinLuminance(color) < 0.22 ? '#111111' : '#ffffff');
+  });
+}
+
 function buildLegend() {
   if (!legendEl) return;
   legendEl.textContent = '';
@@ -596,15 +700,19 @@ function buildLegend() {
     const item = document.createElement('div');
     item.className = 'sk-chain-item';
     item.dataset.tier = String(index);
-    const ball = document.createElement('span');
-    ball.className = 'sk-chain-ball';
-    const colors = tierColors(index);
+    let ball;
     if (def.art) {
+      ball = document.createElement('span');
+      ball.className = 'sk-chain-ball';
       ball.style.backgroundColor = 'transparent';
       ball.style.borderColor = 'transparent';
       ball.style.backgroundImage = `url("${def.art}")`;
+    } else if (index === MAX_TIER) {
+      ball = playerBallPreviewEl();   // 玩家档：带脸预览，不再是一个裸底色圆
     } else {
-      ball.style.backgroundColor = colors.bg;
+      ball = document.createElement('span');
+      ball.className = 'sk-chain-ball';
+      ball.style.backgroundColor = tierColors(index).bg;
       ball.style.borderRadius = '50%';
     }
     const name = document.createElement('span');
@@ -616,6 +724,7 @@ function buildLegend() {
     item.append(ball, name, score);
     legendEl.append(item);
   });
+  updatePlayerPreviews();
   markNextInLegend();
 }
 
@@ -1037,6 +1146,7 @@ async function loadPlayerSkin() {
   TIER_COLORS[MAX_TIER] = tierColors(MAX_TIER);
   buildLegend();
   updateNextChip();
+  updatePlayerPreviews();
 }
 
 /* ---------- 偏好 ---------- */
