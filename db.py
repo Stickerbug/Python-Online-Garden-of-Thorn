@@ -8783,6 +8783,65 @@ def _title_identity_fields_conn(conn, user_id):
     }
 
 
+def public_identity_batch_conn(conn, user_ids):
+    """批量取"已装备称号 + 名牌配色"（榜单用）。
+
+    与 _title_identity_fields_conn 同样的字段，但**两次查询搞定一批玩家**，
+    避免榜单每行都查一遍（榜单会随同步频繁刷新）。
+    """
+
+    ids = []
+    for value in user_ids or []:
+        try:
+            uid = int(value)
+        except (TypeError, ValueError):
+            continue
+        if uid > 0 and uid not in ids:
+            ids.append(uid)
+    if not ids:
+        return {}
+    titles = _equipped_titles_by_user_conn(conn, ids)
+    placeholders = ','.join('?' for _ in ids)
+    rows = conn.execute(
+        f'''
+        SELECT p.user_id, p.name_title_id, p.name_segment_id, c.*
+        FROM user_title_preferences p
+        JOIN user_titles ut ON ut.user_id = p.user_id
+            AND ut.title_id = p.name_title_id AND ut.quantity > 0
+        JOIN title_catalog c ON c.title_id = p.name_title_id AND c.active = 1
+        WHERE p.user_id IN ({placeholders})
+        ''',
+        ids,
+    ).fetchall()
+    styles = {}
+    for row in rows:
+        style = _title_style_from_row(row)
+        segment = title_style_segment(style, row['name_segment_id'])
+        if not segment:
+            continue
+        styles[int(row['user_id'])] = {
+            'title_id': str(row['name_title_id'] or ''),
+            'segment_id': str(segment.get('id') or ''),
+            'title_name': str(row['name'] or ''),
+            'segment_text': str(segment.get('text') or ''),
+            'paint': segment.get('paint') or {},
+        }
+    result = {}
+    for uid in ids:
+        name_style = styles.get(uid)
+        name_color = None
+        if name_style:
+            name_color = title_style_fallback_color({
+                'segments': [{'text': 'x', 'paint': name_style.get('paint') or {}}],
+            }, None)
+        result[uid] = {
+            'equipped_titles': titles.get(uid, []),
+            'name_style': name_style,
+            'name_color': name_color,
+        }
+    return result
+
+
 def _compact_equipped_titles_conn(conn, user_id):
     uid = int(user_id)
     inventory = {

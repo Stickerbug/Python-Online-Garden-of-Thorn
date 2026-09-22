@@ -675,6 +675,40 @@
 .mg-rank-no { width: 2.2em; text-align: right; opacity: 0.75; font-variant-numeric: tabular-nums; }
 .mg-rank-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* 榜单里的称号前缀与染色昵称（和大厅排行榜同一个意思） */
+.mg-rank-name .player-title-inline {
+  margin-right: 2px;
+  color: inherit;
+  font-weight: 800;
+}
+
+.mg-rank-name .player-name-value {
+  display: inline;
+  color: inherit;
+}
+
+.mg-rank-name .title-paint-gradient {
+  color: transparent !important;
+  background-image: var(--title-paint-gradient);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.mg-rank-name .title-paint-solid,
+.mg-rank-name .title-paint-theme {
+  background-image: none !important;
+  background-clip: border-box;
+  -webkit-background-clip: border-box;
+  -webkit-text-fill-color: currentColor;
+}
+
+.mg-rank-name .title-paint-theme { color: var(--title-paint-light, currentColor) !important; }
+
+[data-theme="dark"] .mg-rank-name .title-paint-theme {
+  color: var(--title-paint-dark, currentColor) !important;
+}
+
 .mg-rank-right { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
 .mg-rank-score { font-variant-numeric: tabular-nums; font-weight: 700; }
 

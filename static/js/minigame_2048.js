@@ -976,11 +976,16 @@ function chatNamePaint(item) {
     : null;
 }
 
-function chatNameHtml(item, fallback) {
-  const name = String((item && item.nickname) || fallback || '?');
+/* 带配色的昵称（聊天行与排行榜共用）：渐变 / 纯色 / 随主题。 */
+function namePaintHtml(item, name) {
+  const text = String(name || '?');
   const paint = chatNamePaint(item);
   return `<span class="player-name-value${paint ? ` ${paint.className}` : ''}"`
-    + `${paint ? ` style="${paint.style}"` : ''}>${escapeHtml(name)}</span>`;
+    + `${paint ? ` style="${paint.style}"` : ''}>${escapeHtml(text)}</span>`;
+}
+
+function chatNameHtml(item, fallback) {
+  return namePaintHtml(item, (item && item.nickname) || fallback || '?');
 }
 
 function isOwnChatItem(item) {
@@ -1171,6 +1176,28 @@ function declineInvite() {
 
 /* 底部常驻榜单：每行"名次 + 账号"在左，右边是"最高方块 + 总分"（AK IOI 那种对照表排版）。 */
 let rankWindowMode = '14d';
+/* 榜单是否隐藏称号（和大厅排行榜共用同一个偏好键；昵称配色不受影响） */
+let leaderboardHideTitles = (() => {
+  try {
+    return (store && store.getItem('gtn_leaderboard_hide_titles')) === '1';
+  } catch (_) { return false; }
+})();
+
+function updateHideTitlesButton() {
+  const button = el('mg-hide-titles');
+  if (!button) return;
+  button.textContent = leaderboardHideTitles ? '显示称号' : '隐藏称号';
+  button.setAttribute('aria-pressed', leaderboardHideTitles ? 'true' : 'false');
+}
+
+function toggleLeaderboardHideTitles() {
+  leaderboardHideTitles = !leaderboardHideTitles;
+  try {
+    if (store) store.setItem('gtn_leaderboard_hide_titles', leaderboardHideTitles ? '1' : '0');
+  } catch (_) { /* 存不了也不影响这次显示 */ }
+  updateHideTitlesButton();
+  void refreshLeaderboard(rankWindowMode);
+}
 
 function rankTileHtml(value) {
   const item = paletteFor(Number(value) || 0);
@@ -1203,7 +1230,7 @@ async function refreshLeaderboard(windowMode = rankWindowMode) {
            title="${escapeHtml(String(item.verified_at || '').replace('T', ' ').replace('Z', ''))}">
         <span class="mg-rank-left">
           <span class="mg-rank-no">${item.rank}</span>
-          <span class="mg-rank-name">${escapeHtml(item.username || '')}</span>
+          <span class="mg-rank-name">${leaderboardHideTitles ? '' : chatTitlesHtml(item)}${namePaintHtml(item, item.username || '')}</span>
         </span>
         <span class="mg-rank-right">
           ${rankTileHtml(item.max_tile)}
@@ -1330,6 +1357,7 @@ async function boot() {
   connectPresence();
   void refreshLeaderboard(rankWindowMode);   // 底部常驻榜单：进页面就加载，之后随同步刷新
   void syncNow();
+  updateHideTitlesButton();
 }
 
 el('mg-new').addEventListener('click', () => { void restartGame(); });
@@ -1364,6 +1392,7 @@ el('mg-rank-section')?.addEventListener('click', (event) => {
   });
   void refreshLeaderboard(tab.dataset.mgWindow);
 });
+el('mg-hide-titles')?.addEventListener('click', toggleLeaderboardHideTitles);
 if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
   animations = false;
   document.documentElement.classList.add('mg-no-anim');

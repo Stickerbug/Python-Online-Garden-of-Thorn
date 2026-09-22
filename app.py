@@ -257,6 +257,7 @@ from db import (
     normalize_username_key,
     preview_gr_match_result,
     process_live_achievement_flags,
+    public_identity_batch_conn,
     process_match_achievements,
     record_chat_message,
     recall_chat_message,
@@ -35158,6 +35159,19 @@ def api_minigame_2048_leaderboard():
         table = minigame_2048_service.leaderboard(conn, window=window, limit=limit)
         me = minigame_2048_service.self_entry(conn, identity[0], window=window)
         periods = minigame_2048_service.period_history(conn, limit=4)
+        # 榜单上要显示「称号 + 染色昵称」：批量取一次身份字段（两次查询，避免逐行查库）
+        try:
+            rows = list(table.get('entries') or [])
+            if me:
+                rows.append(me)
+            identities = public_identity_batch_conn(conn, [row.get('user_id') for row in rows])
+            for row in rows:
+                info = identities.get(int(row.get('user_id') or 0)) or {}
+                row['equipped_titles'] = list(info.get('equipped_titles') or [])
+                row['name_style'] = info.get('name_style')
+                row['name_color'] = info.get('name_color')
+        except Exception as exc:
+            admin_event('error', f'2048 leaderboard identity lookup failed: {exc}')
     return jsonify({'success': True, 'leaderboard': table, 'me': me, 'periods': periods})
 
 
