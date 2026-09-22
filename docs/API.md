@@ -56,7 +56,11 @@
 
 | 方法 | 路径 | 权限 | 说明 |
 |------|------|------|------|
-| GET | <code>/minigame/2048</code> | staff/admin | 小游戏页面；内测未通过返回 401/403 |
+| GET | <code>/minigame</code> | 登录账号 | 休闲花园列表页；<code>?from=lobby\|home</code> 决定返回去处（从大厅来的返回大厅） |
+| GET | <code>/minigame/2048</code> | 登录账号 | Craft Eternal 页面；未登录返回 401 |
+| GET | <code>/minigame/suika</code> | 登录账号 | 合成大花花页面；未登录返回 401 |
+| GET | <code>/minigame/suika/sw.js</code> | 同页面 | 局部 Service Worker（scope=/minigame/suika），只缓存页面外壳，不缓存接口/身份响应 |
+| GET/POST | <code>/api/minigame/prefs</code> | 登录账号 | 小游戏通用偏好：<code>decline_invites</code> 是**账号级**开关（所有小游戏共用），在服务端邀请处理处生效 |
 | GET | <code>/minigame/2048/sw.js</code> | 同页面 | 局部 Service Worker（scope=/minigame/2048），只缓存页面外壳，不缓存接口/身份响应 |
 | GET | <code>/api/minigame/2048/state</code> | staff/admin | 读取当前活动局（棋盘、分数、已验证进度、色板、偏好）；没有活动局时开一局 |
 | POST | <code>/api/minigame/2048/sync</code> | staff/admin | 增量同步：<code>game_uid</code>、<code>from_index</code>、<code>ops</code>（l/r/u/d 串或数组）、可选 <code>claimed_score</code>/<code>claimed_cells</code>、<code>source=online|offline</code>；服务端从检查点重放验证，冲突返回 409 + 服务器分支快照 |

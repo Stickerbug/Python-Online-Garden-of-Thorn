@@ -34,7 +34,7 @@
 
   <header class="sk-topbar">
     <div class="sk-topbar-row">
-      <a class="sk-back" href="/minigame" title="返回休闲花园">← 休闲花园</a>
+      <a class="sk-back" href="{{ back_href|default('/minigame') }}" title="返回休闲花园">← 休闲花园</a>
       <span class="sk-tag">合成大花花</span>
     </div>
     <div class="sk-topbar-row">
@@ -56,6 +56,14 @@
     </div>
   </header>
 
+  <div id="sk-invite" class="sk-invite" hidden>
+    <span id="sk-invite-text">收到对局邀请</span>
+    <span class="sk-invite-actions">
+      <button id="sk-invite-accept" class="sk-btn small" type="button">接受</button>
+      <button id="sk-invite-decline" class="sk-btn secondary small" type="button">拒绝</button>
+    </span>
+  </div>
+
   <div class="sk-main">
     <aside class="sk-col sk-col-left">
       <section class="sk-card">
@@ -72,6 +80,10 @@
           <input type="checkbox" id="sk-aim" checked>
           <span>落点辅助线</span>
         </label>
+        <label class="sk-switch">
+          <input type="checkbox" id="sk-decline-invites">
+          <span>拒绝对局邀请</span>
+        </label>
       </section>
     </aside>
 
@@ -82,7 +94,7 @@
         <div id="sk-overlay" class="sk-overlay" hidden>
           <div class="sk-overlay-card">
             <h2 id="sk-overlay-title">游戏结束</h2>
-            <p id="sk-overlay-text">花花堆过了失败线。</p>
+            <p id="sk-overlay-text">生物或花花堆过了失败线。</p>
             <p class="sk-overlay-score">本局分数 <strong id="sk-overlay-score">0</strong></p>
             <div class="sk-overlay-actions">
               <button id="sk-overlay-primary" class="sk-btn" type="button">再来一局</button>
@@ -107,13 +119,10 @@
       <section class="sk-card">
         <h2>玩法</h2>
         <p class="sk-hint">
-          拖动（或方向键 / A、D）选位置，松手（空格 / ↓）投放；两颗一样的撞在一起合成下一档。
+          拖动（或方向键 / A、D）选位置，松手（空格 / ↓）投放；两个相同生物撞在一起合成下一档。
         </p>
         <p class="sk-hint">
-          有花花停在<strong>失败线</strong>以上约 1 秒就结束本局——球还在动的时候不算，刚丢下去那颗也不算。
-        </p>
-        <p class="sk-hint">
-          分数越高，能抽到的档位越多；同一档不会连着出，也不会短时间内反复出。
+          分数越高，能抽到的档位越多。
         </p>
       </section>
     </aside>
@@ -121,10 +130,13 @@
 </main>
 
 <script src="/static/vendor/matter.min.js?v=0.19.0"></script>
+<script src="/static/vendor/socket.io.min.js?v=4.7.2"></script>
+<script src="/static/js/minigame-presence.js?v={{ static_version|default('dev')|urlencode }}"></script>
 <script type="application/json" id="sk-config">{{ {
   'username': username,
   'userId': user_id,
   'staticVersion': static_version|default('dev'),
+  'gameKey': 'suika',
 } | tojson }}</script>
 <script type="module" src="/static/js/minigame_suika.js?v={{ static_version|default('dev')|urlencode }}"></script>
 </body>

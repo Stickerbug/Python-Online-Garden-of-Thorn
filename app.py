@@ -53,6 +53,7 @@ from flask_socketio import SocketIO, emit, join_room, leave_room
 from werkzeug.security import check_password_hash, generate_password_hash
 import minigame_2048
 import minigame_2048_service
+import minigame_registry
 from ai_local_bridge import LocalAiBridgeError, get_local_ai_worker
 from ai_training_capture import (
     append_public_history as append_ai_training_public_history,
@@ -5145,10 +5146,14 @@ def player_accepts_game_invites(player):
 
 
 def minigame_2048_player_declines_invites(player) -> bool:
-    """小游戏里的「拒绝对局邀请」偏好（按账号存，在邀请处理处判定）。
+    """小游戏里的「拒绝对局邀请」偏好：**按账号存，所有小游戏共用**。
 
-    Round 110：只有当前正在玩小游戏的玩家才受这条偏好约束；回到大厅后恢复
-    正常的对局邀请行为。数据库不可用时按"不拒绝"处理（宁可放行也不误伤）。
+    用户 2026-09-22 决定：这个开关是账号级的（不是每个小游戏各一份），在哪个小游戏里
+    打开都生效。存储沿用已有的 minigame_2048_prefs.decline_invites（本来就是按 user_id
+    存的一行），只是语义扩成"整个休闲花园共用"；以后加了新小游戏也读同一个开关。
+
+    仍然只在"当前正在玩小游戏"（status='minigame'）时读取；回到大厅恢复正常邀请行为。
+    数据库不可用时按"不拒绝"处理（宁可放行也不误伤）。
     """
 
     if not isinstance(player, dict) or player.get('status') != 'minigame':
@@ -5160,7 +5165,7 @@ def minigame_2048_player_declines_invites(player) -> bool:
         with get_db_connection() as conn:
             return minigame_2048_service.prefs_decline_invites(conn, int(user_id))
     except Exception as exc:
-        admin_event('error', f'2048 invite preference check failed: {exc}')
+        admin_event('error', f'minigame invite preference check failed: {exc}')
         return False
 
 
@@ -9459,7 +9464,6 @@ def get_lobby_list(beta_mode=None):
             lobby.append(public_player_info(sid, p))
     lobby.sort(key=lambda item: (
         item.get('status') == 'spectating',
-        item.get('status') == 'minigame',
         item.get('special_role_sort', 99),
         item.get('nickname', '').lower(),
     ))
@@ -20132,18 +20136,22 @@ def index():
     if is_beta_instance():
         return beta_entry_response()
     # 休闲花园（小游戏）已对全部登录账号开放：入口按钮只要登录了就渲染，
-    # 直达 /minigame 与 /minigame/2048 依旧走同一套会话判定（未登录仍会被拦下）。
-    minigame_2048_available = False
+    # 直达小游戏页面依旧走同一套会话判定（未登录仍会被拦下）。
+    # minigame_available = "休闲花园里有任意一个可用小游戏"（总开关暂用 2048 的那个）；
+    # minigame_2048_available 保留给首页旧按钮模板变量。
+    minigame_available = False
     try:
         user_id = session.get('user_id')
         username = str(session.get('username') or '')
         if MINIGAME_2048_ENABLED and user_id and username:
-            minigame_2048_available = minigame_2048_service.can_access_minigame(user_id, username)
+            minigame_available = minigame_2048_service.can_access_minigame(user_id, username)
     except Exception as exc:
-        admin_event('error', f'minigame 2048 entry check failed: {exc}')
-        minigame_2048_available = False
+        admin_event('error', f'minigame entry check failed: {exc}')
+        minigame_available = False
+    minigame_2048_available = minigame_available
     return render_template(
         'index.html',
+        minigame_available=minigame_available,
         minigame_2048_available=minigame_2048_available,
         beta_mode=False,
         static_version=GTN_STATIC_VERSION,
@@ -26756,7 +26764,8 @@ def on_connect():
 def on_minigame_presence(data=None):
     """休闲花园小游戏的在线状态（Round 110 / 用户第九节）。
 
-    * 只标状态，不参与登录接管：后台的 2048 标签页不能把正在对局的人改回可邀请；
+    * 小游戏白名单来自 minigame_registry，以后加小游戏不用改这里；
+    * 只标状态，不参与登录接管：后台的小游戏标签页不能把正在对局的人改回可邀请；
     * 权限用 **服务端会话 + 角色表** 判定，客户端自报的角色无效；
     * 断线时走正常 disconnect 清理，不会为了支持离线游玩伪造在线。
     """
@@ -26764,7 +26773,9 @@ def on_minigame_presence(data=None):
     sid = request.sid
     payload = data if isinstance(data, dict) else {}
     game_key = str(payload.get('game') or '').strip()[:32]
-    if game_key != '2048':
+    # 小游戏注册表是唯一的事实来源：登记过就认，没登记过一律拒绝。
+    # 以后加小游戏只要在 minigame_registry.MINIGAMES 里加一行，presence / 邀请自动支持。
+    if not minigame_registry.is_minigame(game_key):
         _security_illegal(sid, 'minigame_presence', '未知小游戏', emit_error=False, severity='low')
         return
     user_id = session.get('user_id')
@@ -26793,11 +26804,11 @@ def on_minigame_presence(data=None):
         status = player.get('status')
         if status == 'lobby':
             player['status'] = 'minigame'
-            player['minigame'] = '2048'
+            player['minigame'] = game_key
             player['minigame_since'] = time.time()
             changed = True
         elif status == 'minigame':
-            player['minigame'] = '2048'
+            player['minigame'] = game_key
             player['minigame_since'] = time.time()
         else:
             # 正式对局 / 观战 / 重连中优先：小游戏标签页不许改写这些状态
@@ -26808,7 +26819,7 @@ def on_minigame_presence(data=None):
             'reason': blocked_reason,
         })
         return
-    emit('minigame_status', {'ok': True, 'game': '2048', 'status': 'minigame'})
+    emit('minigame_status', {'ok': True, 'game': game_key, 'status': 'minigame'})
     # 小游戏和大厅共用同一条聊天：进入时补推一次历史，否则打开时聊天是空的
     # （大厅玩家的历史随 lobby_update 下发，小游戏玩家不在那份名单里）。
     with _lock:
@@ -28995,7 +29006,7 @@ def on_invite(data):
         # 小游戏内的「拒绝对局邀请」：服务端在邀请处理处执行，不是把按钮变灰。
         if minigame_2048_player_declines_invites(target):
             emit('server_error', {
-                'message': '对方正在玩 2048，暂不接受对局邀请',
+                'message': '对方在休闲花园里，暂不接受对局邀请',
                 'reason': 'minigame_invites_declined',
             })
             return
@@ -35003,19 +35014,28 @@ def ensure_minigame_2048_settlement_worker():
 
 @app.route('/minigame')
 def minigame_hub_page():
-    """休闲花园首页：小游戏列表（2048 已上线，合成大花花制作中）。
+    """休闲花园首页：小游戏列表。
 
     权限跟小游戏本体一致（登录账号即可），直达 URL 也走同一套判定。
+    ``?from=lobby`` 表示是从多人大厅进来的：返回按钮要回到大厅（并让大厅记住原位置），
+    卡片链接也把来源带上，这样一路返回都能回到来处。
     """
 
     identity, denied = _minigame_2048_guard()
     if denied is not None:
         return denied
+    from_key = minigame_registry.normalize_from(request.args.get('from'))
     return render_template(
         'minigame_hub.html',
         username=identity[1],
         user_id=identity[0],
         static_version=GTN_STATIC_VERSION,
+        from_key=from_key,
+        hub_back_href=minigame_registry.minigame_hub_back_href(from_key),
+        game_card_links={
+            key: minigame_registry.with_from(entry['path'], from_key)
+            for key, entry in minigame_registry.MINIGAMES.items()
+        },
     )
 
 
@@ -35024,6 +35044,7 @@ def minigame_2048_page():
     identity, denied = _minigame_2048_guard()
     if denied is not None:
         return denied
+    from_key = minigame_registry.normalize_from(request.args.get('from'))
     # 聊天身份（admin / staff / player）：客户端据此决定要不要显示"撤回"按钮；
     # 真正的权限判定仍由服务端在做撤回时再判一次。
     viewer_chat_role = 'player'
@@ -35041,6 +35062,8 @@ def minigame_2048_page():
         minigame_window_days=minigame_2048_service.RULES_WINDOW_DAYS,
         champion_pool=minigame_2048_service.CHAMPION_POOL,
         champion_min_accounts=minigame_2048_service.CHAMPION_MIN_ACCOUNTS,
+        from_key=from_key,
+        back_href=minigame_registry.with_from('/minigame', from_key),
     )
 
 
@@ -35055,11 +35078,14 @@ def minigame_suika_page():
     identity, denied = _minigame_2048_guard()
     if denied is not None:
         return denied
+    from_key = minigame_registry.normalize_from(request.args.get('from'))
     return render_template(
         'minigame_suika.html',
         username=identity[1],
         user_id=identity[0],
         static_version=GTN_STATIC_VERSION,
+        from_key=from_key,
+        back_href=minigame_registry.with_from('/minigame', from_key),
     )
 
 
@@ -35177,11 +35203,37 @@ def api_minigame_2048_restart():
         return _json_error('重新开始失败，本地进度已保留', 500)
 
 
+@app.route('/api/minigame/prefs', methods=['GET', 'POST'])
+def api_minigame_prefs():
+    """小游戏通用偏好（所有小游戏共用一份，按账号存）。
+
+    目前只有 ``decline_invites``：「拒绝对局邀请」——用户 2026-09-22 决定做成
+    账号级开关，在哪个小游戏里打开都对所有小游戏生效。存储仍是已有的
+    minigame_2048_prefs 那一行（本来按 user_id 存），不额外加表。
+    """
+
+    identity, denied = _minigame_2048_guard()
+    if denied is not None:
+        return denied
+    with get_db_connection() as conn:
+        if request.method == 'GET':
+            prefs = minigame_2048_service.get_prefs(conn, identity[0])
+            return jsonify({'success': True, 'decline_invites': bool(prefs.get('decline_invites'))})
+        payload = request.get_json(silent=True) or {}
+        prefs = minigame_2048_service.set_prefs(
+            conn, identity[0],
+            decline_invites=payload.get('decline_invites'),
+        )
+    return jsonify({'success': True, 'decline_invites': bool(prefs.get('decline_invites'))})
+
+
 @app.route('/api/minigame/2048/prefs', methods=['GET', 'POST'])
 def api_minigame_2048_prefs():
     identity, denied = _minigame_2048_guard()
     if denied is not None:
         return denied
+    # decline_invites 是**账号级、所有小游戏共用**的（用户 2026-09-22 决定）；
+    # show_numbers 是 2048 自己的显示偏好。
     with get_db_connection() as conn:
         if request.method == 'GET':
             return jsonify({'success': True, 'prefs': minigame_2048_service.get_prefs(conn, identity[0])})

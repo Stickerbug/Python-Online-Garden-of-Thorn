@@ -234,6 +234,24 @@ body.sk-page {
 .sk-switch + .sk-switch { margin-top: 8px; }
 .sk-switch input { margin: 0; accent-color: var(--sk-accent); }
 
+/* 对局邀请条（与大厅/2048 同一套语义：只提示，不自动离开棋盘） */
+.sk-invite {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--sk-accent-line);
+  border-radius: var(--sk-radius-lg);
+  background: color-mix(in srgb, var(--sk-accent) 12%, var(--sk-surface));
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.sk-invite-actions { display: inline-flex; gap: 8px; }
+
 /* ---------- 三栏 ---------- */
 
 .sk-main {

@@ -5350,6 +5350,25 @@ const minigameInviteHandoff = (() => {
         return false;
     }
 })();
+/* 从多人大厅进休闲花园时带的是 `?from=lobby`，返回链接会带 `?enter_lobby=1` 回来：
+   这里读到标记后 1) 立刻从地址栏抹掉；2) 自动帮玩家点一次"进入大厅"，
+   于是返回的落点是大厅本身，而不是停在主页登录界面。 */
+const enterLobbyHandoff = (() => {
+    try {
+        const params = new URLSearchParams(window.location.search || '');
+        if (!params.has('enter_lobby')) return false;
+        params.delete('enter_lobby');
+        const query = params.toString();
+        window.history.replaceState(
+            null,
+            '',
+            `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash || ''}`,
+        );
+        return true;
+    } catch (_) {
+        return false;
+    }
+})();
 let transientLoginRetryTimer = null;
 let latencyPingTimer = null;
 let activeAfkCheck = null;
@@ -38890,9 +38909,10 @@ async function init() {
     };
     bindClickOnce('btn-solo-training', showSoloTraining);
     // 休闲花园现在先进"小游戏列表"（首页），由玩家自己挑一个游戏
-    bindClickOnce('btn-minigame-2048', () => { window.location.href = '/minigame'; });
-    // 大厅页脚也有一个入口，行为一致
-    bindClickOnce('btn-lobby-leisure', () => { window.location.href = '/minigame'; });
+    // 带上来源：从首页去的返回首页，从大厅去的要回大厅（休闲花园的返回按钮按这个走）
+    bindClickOnce('btn-minigame-2048', () => { window.location.href = '/minigame?from=home'; });
+    // 大厅页脚也有一个入口，行为一致但来源是大厅
+    bindClickOnce('btn-lobby-leisure', () => { window.location.href = '/minigame?from=lobby'; });
     bindClickOnce('btn-connect', onLogin);
     bindClickOnce('btn-story-mode', openStoryMode);
     bindClickOnce('btn-ai-1v1-test', async () => {
@@ -39569,10 +39589,13 @@ if (window.__GTN_CARD_EXPORTER_RENDERER__) {
     /* 从休闲花园接受邀请跳过来时（?from_minigame_invite=1）：
        自动帮玩家点一次"进入大厅"——那一局是建在前一个会话上的，
        必须真的登录进大厅，服务端才会把重连邀请发过来（见 reconnect_available 的自动接受）。 */
-    if (minigameInviteHandoff) {
+    /* 两个来源共用同一段自动进入大厅：
+       - 从休闲花园接受邀请跳过来（要真的进大厅，服务端才会把重连邀请发过来）；
+       - 从休闲花园点"返回"回到大厅（?enter_lobby=1）。 */
+    if (minigameInviteHandoff || enterLobbyHandoff) {
         const startedAt = Date.now();
         let lastClickAt = 0;
-        const autoEnterLobbyForInvite = () => {
+        const autoEnterLobby = () => {
             const loginView = $('view-login');
             if (!loginView || loginView.classList.contains('hidden')) return;
             const now = Date.now();
@@ -39581,9 +39604,9 @@ if (window.__GTN_CARD_EXPORTER_RENDERER__) {
                 lastClickAt = now;
                 connectBtn.click();
             }
-            if (now - startedAt < 20000) window.setTimeout(autoEnterLobbyForInvite, 400);
+            if (now - startedAt < 20000) window.setTimeout(autoEnterLobby, 400);
         };
-        window.setTimeout(autoEnterLobbyForInvite, 400);
+        window.setTimeout(autoEnterLobby, 400);
     }
 
     window.addEventListener('resize', () => {

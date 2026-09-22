@@ -497,7 +497,7 @@
 <div class="form-row">
 <button id="btn-solo-training" class="btn btn-magic">单人训练场</button>
 </div>
-{% if minigame_2048_available|default(false) %}
+{% if minigame_available|default(false) %}
 <div class="form-row" id="minigame-2048-entry-row">
           <button id="btn-minigame-2048" class="btn btn-leisure" type="button" title="休闲花园">休闲花园</button>
 </div>
@@ -713,11 +713,11 @@
 </div>
 </div>
 <div class="lobby-footer">
-{% if minigame_2048_available|default(false) %}
-<button id="btn-lobby-leisure" class="btn btn-leisure" type="button" title="休闲花园">休闲花园</button>
-{% endif %}
 <button id="btn-lobby-back" class="btn btn-secondary">返回主页</button>
 <button id="btn-lobby-settings" class="btn btn-secondary">设置</button>
+{% if minigame_available|default(false) %}
+<button id="btn-lobby-leisure" class="btn btn-leisure" type="button" title="休闲花园">休闲花园</button>
+{% endif %}
 </div>
 </div>
 </div>

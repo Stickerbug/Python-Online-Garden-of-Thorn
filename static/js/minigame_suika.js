@@ -905,6 +905,7 @@ async function boot() {
   bindInput();
   bindUi();
   loadPlayerSkin();
+  attachPresence();
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/minigame/suika/sw.js', { scope: '/minigame/suika' })
       .catch(() => { /* 缓存不可用不影响游玩 */ });
@@ -914,6 +915,27 @@ async function boot() {
   window.__skArt = () => art.map((item) => (item ? { avg: item.avg, w: item.box.w, h: item.box.h } : null));
   window.__skBooted = true;
   requestAnimationFrame(frame);
+}
+
+/** 在线状态 + 对局邀请：走休闲花园共用的 minigame-presence.js（服务端认注册表里的 gameKey）。 */
+function attachPresence() {
+  const presence = window.GtnMinigamePresence;
+  if (!presence) return;
+  presence.attach({
+    gameKey: CONFIG.gameKey || 'suika',
+    nickname: CONFIG.username || '',
+    inviteBoxId: 'sk-invite',
+    inviteTextId: 'sk-invite-text',
+    acceptBtnId: 'sk-invite-accept',
+    declineBtnId: 'sk-invite-decline',
+    declineToggleId: 'sk-decline-invites',
+    // 连接类信息不抢状态栏（那里在显示存档状态），只有被拒绝/出错才提示
+    onStatus: (text, kind) => {
+      if (kind === 'denied' || kind === 'error') setStatus(text, { offline: true });
+    },
+    // 接受邀请前先把这一局存好（云同步接入后这里会顺便等一次上传）
+    beforeAccept: async () => { saveLocal(); },
+  });
 }
 
 if (document.readyState === 'loading') {

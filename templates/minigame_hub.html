@@ -19,7 +19,7 @@
 <body class="mh-page">
 <main class="mh-frame">
   <header class="mh-head">
-    <a class="mh-back" href="/" title="返回大厅">← 返回大厅</a>
+    <a class="mh-back" href="{{ hub_back_href|default('/') }}" title="返回来处">← 返回来处</a>
     <span class="mh-tag">休闲花园</span>
   </header>
 
@@ -36,7 +36,7 @@
         5×5 棋盘，把同值方块合成更高稀有度；每次合并有 15% 概率碎裂失败
         （只留一个原值方块）。成绩自动同步，每周按最近 14 天榜结算冠军奖励。
       </p>
-      <a class="mh-play" id="mh-play-2048" href="/minigame/2048">开始游戏</a>
+      <a class="mh-play" id="mh-play-2048" href="{{ game_card_links.get('2048', '/minigame/2048') }}">开始游戏</a>
     </article>
 
     <article class="mh-card">
@@ -49,7 +49,7 @@
         两颗一样的撞在一起就升级，堆过判负线就结束。11 档全部用故事模式里的虫子与物件，
         最后一档是你自己的皮肤。
       </p>
-      <a class="mh-play" id="mh-play-suika" href="/minigame/suika">开始游戏</a>
+      <a class="mh-play" id="mh-play-suika" href="{{ game_card_links.get('suika', '/minigame/suika') }}">开始游戏</a>
     </article>
   </section>
 </main>
