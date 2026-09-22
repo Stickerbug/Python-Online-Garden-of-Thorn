@@ -133,16 +133,6 @@ body.sk-page {
 
 .sk-back:hover { text-decoration: underline; }
 
-.sk-tag {
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: var(--sk-accent);
-  color: #FFFFFF;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .04em;
-}
-
 .sk-brand { display: flex; flex-direction: column; gap: 2px; }
 
 .sk-title {
@@ -269,15 +259,10 @@ body.sk-page {
   border-radius: var(--sk-radius-lg);
   box-shadow: var(--sk-shadow);
   padding: 14px;
-  transition: transform .15s ease, box-shadow .15s ease;
 }
-
-.sk-card:hover { transform: translateY(-2px); }
 
 .sk-card h2 {
   margin: 0 0 10px;
-  padding-left: 8px;
-  border-left: 3px solid var(--sk-accent);
   color: var(--sk-accent);
   font-size: 13px;
   font-weight: 700;
@@ -450,6 +435,17 @@ body.sk-page {
 .sk-rank-score { font-weight: 700; font-variant-numeric: tabular-nums; }
 .sk-rank-sub { color: var(--sk-text-soft); font-size: 11px; }
 
+/* 离线申报的成绩标记（来源可见，不另设门槛） */
+.sk-rank-offline {
+  flex: 0 0 auto;
+  padding: 0 4px;
+  border: 1px solid var(--sk-line);
+  border-radius: 4px;
+  color: var(--sk-text-muted);
+  font-size: 10px;
+  line-height: 16px;
+}
+
 /* ---------- 窄屏：单列，棋盘在最上面 ---------- */
 
 @media (max-width: 980px) {
@@ -468,8 +464,7 @@ body.sk-page {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sk-card, .sk-btn { transition: none; }
-  .sk-card:hover { transform: none; }
+  .sk-btn { transition: none; }
 }
 
 /* ---------------- 大厅聊天（与多人游戏、2048 同一条；浮层、默认收起） ----------------

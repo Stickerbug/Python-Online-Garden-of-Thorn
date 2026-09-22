@@ -7,7 +7,8 @@
 - 客户端每颗球落定、每次分数增加就上报 `{drop_index, 新增投放, 新总分}`；
 - 服务端**立刻保存**（这就是用户要的"直接存分数"，云端存档不丢）；
 - 同时用启发式规则判断这条成绩能不能进榜：分数只增不减、单批增量不超过
-  "投放数 × 单次上限"、投放间隔不小于 400ms、总分不超过上限；
+  "投放数 × 单次上限"、投放间隔不小于 400ms、总分不超过上限、
+  **游戏时间的推进不超过墙钟的 1.5 倍 + 2 分钟**（时间锚定，见 TIME_ANCHOR_* 注释）；
 - 通过 → 写入 `minigame_2048_records`（`game_key='suika'`）计入 14 天滚动榜；
   不通过 → 只存进度，返回 `verified=False`，客户端提示"未通过验证，未计入排行榜"，
   **本地进度保留**，不删档；
@@ -20,6 +21,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 import minigame_2048_service as base
@@ -30,9 +32,20 @@ SAVE_VERSION = 1
 
 # 启发式校验阈值（宁可宽一点，避免误伤合法长局；异常量级才拒绝）
 MIN_DROP_INTERVAL_MS = 400          # 投放冷却 500ms，留一点抖动余量
-MAX_GAIN_PER_DROP = 66 * 4          # 一次投放理论上最多连锁合成出的分数上限（留 4 倍余量）
+# 一次投放理论上最多连锁合成出的分数上限。一次投放触发整条 7 级连锁
+# （合成 4→10 档）合法得分就是 15+21+28+36+45+55+66 = 266，两条平行连锁可到 500+，
+# 所以按"最高档分值 × 8"给余量；真正拦批量造假的是下面的时间锚定。
+MAX_GAIN_PER_DROP = 66 * 8
 MAX_TOTAL_SCORE = 10_000_000
 MAX_DROPS_PER_SYNC = 4096
+MAX_TOTAL_DROPS = 100_000           # 一局的累计投放上限（防挂机脚本灌爆 drops 列）
+
+# 时间锚定：游戏时间（投放记录里的 t）不可能比墙钟走得快——页面隐藏时物理是暂停的，
+# 正常游玩 t 的增量 ≤ 两次同步之间的墙钟增量。锚点＝上一次确认状态
+# （有确认投放：最后一投的 t vs 该行 updated_at；否则 0 vs created_at）。
+# 这样"客户端自报时间戳"没法再凭空编出几小时的游戏时间。
+TIME_ANCHOR_RATE = 1.5              # 允许的游戏时间/墙钟比（正常 ≤1.0，留抖动余量）
+TIME_ANCHOR_SLACK_MS = 120_000      # 固定余量：容忍刚开局 / 离线回来后的第一批小时间差
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS minigame_suika_games (
@@ -182,6 +195,32 @@ def _verify_batch(existing: List[Dict[str, float]], incoming: List[Dict[str, flo
     return True, ""
 
 
+def _now_utc(now=None) -> datetime:
+    if now is not None and hasattr(now, "astimezone"):
+        return now.astimezone(timezone.utc)
+    return datetime.now(timezone.utc)
+
+
+def _check_time_anchor(row, kept: List[Dict[str, float]],
+                       incoming: List[Dict[str, float]], now=None) -> tuple:
+    """投放时间戳（游戏时间）的推进不能比墙钟快太多，见 TIME_ANCHOR_* 注释。
+
+    锚点取上一次确认状态：有确认投放时是「最后一投的 t vs 该行 updated_at」，
+    没有时退回「0 vs created_at」。正常游玩 t 增量 ≤ 墙钟增量（页面隐藏物理暂停），
+    离线攒了一批再补报的，墙钟同样过去了那么多时间，不会误伤。"""
+
+    prev_t = float(kept[-1]["t"]) if kept else 0.0
+    prev_wall = base.parse_iso(row["updated_at"] if kept else row["created_at"])
+    if prev_wall is None:
+        return True, ""
+    wall_delta_ms = max(0.0, (_now_utc(now) - prev_wall).total_seconds() * 1000.0)
+    allowed = wall_delta_ms * TIME_ANCHOR_RATE + TIME_ANCHOR_SLACK_MS
+    batch_span_ms = float(incoming[-1]["t"]) - prev_t
+    if batch_span_ms > allowed:
+        return False, "投放节奏与实际时间不符"
+    return True, ""
+
+
 def sync_progress(conn, user_id: int, game_uid: str, from_index: int, drops,
                   *, claimed_score=None, claimed_max_tier=None, source: str = "online",
                   now=None) -> Dict[str, object]:
@@ -206,10 +245,14 @@ def sync_progress(conn, user_id: int, game_uid: str, from_index: int, drops,
     if start > len(previous_drops):
         return {"status": "gap", "expected_index": len(previous_drops), "game": state}
     kept = previous_drops[:start]                     # 只认服务端确认过的前缀
+    if len(kept) + len(incoming) > MAX_TOTAL_DROPS:
+        return {"status": "rejected", "reason": "投放总数超出上限", "game": state}
     score = int(claimed_score if claimed_score is not None else state["score"])
     max_tier = int(claimed_max_tier if claimed_max_tier is not None else state["max_tier"])
     max_tier = max(0, min(10, max_tier))
     ok, reason = _verify_batch(kept, incoming, int(state["score"]), score)
+    if ok and incoming:
+        ok, reason = _check_time_anchor(row, kept, incoming, now)
 
     stamp = base.now_iso(now)
     # 校验不通过时**连投放也不收**：否则这条异常记录会留在序列里，
@@ -261,10 +304,24 @@ def leaderboard(conn, *, window: str = "14d", limit: int = base.DEFAULT_LEADERBO
                             rules_version=RULES_VERSION, game_key=GAME_KEY)
 
 
+def leaderboard_cached(conn, *, window: str = "14d", limit: int = base.DEFAULT_LEADERBOARD_LIMIT, now=None):
+    """与 2048 同一套 15 秒进程内缓存：suika 记录多起来后全量扫描同样会占满事件循环。"""
+
+    ensure_schema(conn)
+    return base.leaderboard_cached(conn, window=window, limit=limit, now=now,
+                                   rules_version=RULES_VERSION, game_key=GAME_KEY)
+
+
 def self_entry(conn, user_id: int, *, window: str = "14d", now=None):
     ensure_schema(conn)
     return base.self_entry(conn, user_id, window=window, now=now,
                            game_key=GAME_KEY, rules_version=RULES_VERSION)
+
+
+def self_entry_from_table(table, user_id):
+    """从已算好的榜单里取自己那一行（避免 self_entry 再扫一遍全表）。"""
+
+    return base.self_entry_from_table(table, user_id)
 
 
 def period_history(conn, limit: int = 12):

@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import sqlite3
 import unittest
+from datetime import timedelta
+from unittest import mock
 
 import minigame_2048_service as base
 import minigame_suika_service as suika
@@ -82,6 +84,66 @@ class SuikaServiceTests(unittest.TestCase):
         cutoff = base.parse_iso('2026-09-21T00:00:00Z')
         self.assertTrue(suika.base.period_key_for(cutoff, 'suika').startswith('suika-'))
         self.assertTrue(base.period_key_for(cutoff).startswith('2048-'))
+
+    def test_time_anchor_rejects_impossible_pace(self):
+        """凭空编时间戳的批量造假：一墙钟秒都没过，却申报了 2.5 分钟的游戏时间。"""
+        conn = _conn()
+        game = suika.load_state(conn, 7, seed=1)
+        first = suika.sync_progress(conn, 7, game['game_uid'], 0,
+                                    [{'t': 0, 'x': 300}, {'t': 600, 'x': 320}],
+                                    claimed_score=9, claimed_max_tier=1)
+        self.assertTrue(first['verified'])
+        bad = suika.sync_progress(conn, 7, game['game_uid'], 2,
+                                  [{'t': 1000 + i * 500, 'x': 300} for i in range(300)],
+                                  claimed_score=1609, claimed_max_tier=3)
+        self.assertEqual(bad['status'], 'ok')
+        self.assertFalse(bad['verified'])
+        self.assertEqual(bad['reason'], '投放节奏与实际时间不符')
+        # 与其他校验不通过一样：异常投放不进序列、分数不抬，后续合法批次仍可上榜
+        self.assertEqual(bad['game']['drop_index'], 2)
+        self.assertEqual(bad['game']['score'], 9)
+
+    def test_time_anchor_allows_realtime_pace(self):
+        """墙钟真过了 10 分钟的离线补报（游戏时间只推进 8.4 分钟）不应被拦。"""
+        conn = _conn()
+        start = base.parse_iso('2026-09-22T00:00:00Z')
+        game = suika.load_state(conn, 7, seed=1, now=start)
+        first = suika.sync_progress(conn, 7, game['game_uid'], 0,
+                                    [{'t': i * 500, 'x': 300} for i in range(10)],
+                                    claimed_score=10, claimed_max_tier=1,
+                                    now=start + timedelta(seconds=30))
+        self.assertTrue(first['verified'])
+        second = suika.sync_progress(
+            conn, 7, game['game_uid'], 10,
+            [{'t': 5000 + i * 500, 'x': 310} for i in range(1000)],
+            claimed_score=2010, claimed_max_tier=3,
+            now=start + timedelta(minutes=10, seconds=30))
+        self.assertTrue(second['verified'], second.get('reason'))
+        self.assertEqual(second['game']['drop_index'], 1010)
+
+    def test_total_drops_cap(self):
+        conn = _conn()
+        game = suika.load_state(conn, 7, seed=1)
+        with mock.patch.object(suika, 'MAX_TOTAL_DROPS', 10):
+            result = suika.sync_progress(conn, 7, game['game_uid'], 0,
+                                         [{'t': i * 500, 'x': 300} for i in range(12)],
+                                         claimed_score=12, claimed_max_tier=1)
+        self.assertEqual(result['status'], 'rejected')
+        self.assertEqual(result['reason'], '投放总数超出上限')
+        self.assertEqual(result['game']['drop_index'], 0)
+
+    def test_leaderboard_cached_matches_uncached(self):
+        conn = _conn()
+        game = suika.load_state(conn, 7, seed=1)
+        suika.sync_progress(conn, 7, game['game_uid'], 0,
+                            [{'t': 0, 'x': 300}], claimed_score=5, claimed_max_tier=1)
+        base.invalidate_leaderboard_cache()
+        cached = suika.leaderboard_cached(conn, window='all', limit=10)
+        uncached = suika.leaderboard(conn, window='all', limit=10)
+        self.assertEqual(cached['entries'], uncached['entries'])
+        me = suika.self_entry_from_table(cached, 7)
+        self.assertIsNotNone(me)
+        self.assertEqual(me['score'], 5)
 
 
 if __name__ == '__main__':

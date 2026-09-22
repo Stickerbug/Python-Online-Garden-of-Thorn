@@ -17,20 +17,24 @@
   })();
   </script>
   <script nonce="{{ csp_nonce }}">
-  /* 兜底：模块/样式没加载出来（例如离线缓存不完整）时，别留一个空白页。 */
+  /* 兜底：模块/样式没加载出来（例如离线缓存不完整）时，别留一个空白页。
+     CSP 禁了内联事件属性（script-src-attr 'none'），所以「重新加载」在这里用委托监听绑。 */
   window.__mgBooted = false;
   window.setTimeout(() => {
     if (window.__mgBooted) return;
     const box = document.getElementById('mg-boot-error');
     if (box) box.hidden = false;
   }, 6000);
+  document.addEventListener('click', (event) => {
+    if (event.target && event.target.id === 'mg-reload-btn') window.location.reload();
+  });
   </script>
 </head>
 <body class="mg-page">
 <main class="mg-frame">
   <p id="mg-boot-error" class="mg-boot-error" hidden>
     页面资源没有加载完整（可能是离线缓存或网络问题）。
-    <button class="mg-btn small" type="button" onclick="window.location.reload()">重新加载</button>
+    <button class="mg-btn small" type="button" id="mg-reload-btn">重新加载</button>
   </p>
   <header class="mg-head">
     <div class="mg-head-row">

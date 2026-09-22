@@ -35179,6 +35179,9 @@ def api_minigame_suika_restart():
     identity, denied = _minigame_2048_guard()
     if denied is not None:
         return denied
+    # 每次调用都会关一行 + 插一行，不加按账号限流就是白送的库表膨胀口子
+    if _minigame_2048_rate_limited(f'u{identity[0]}', 'minigame_suika_restart', limit=60):
+        return _json_error('操作太频繁，请稍后再试', 429)
     payload = request.get_json(silent=True) or {}
     try:
         seed = int(payload.get('seed') or 1) & 0xFFFFFFFF
@@ -35198,6 +35201,8 @@ def api_minigame_suika_leaderboard():
     identity, denied = _minigame_2048_guard()
     if denied is not None:
         return denied
+    if _minigame_2048_rate_limited(f'u{identity[0]}', 'minigame_suika_leaderboard', limit=300):
+        return _json_error('操作太频繁，请稍后再试', 429)
     window = str(request.args.get('window') or '14d')
     if window not in ('14d', 'all'):
         return _json_error('window 只能是 14d 或 all', 400)
@@ -35205,10 +35210,14 @@ def api_minigame_suika_leaderboard():
         limit = int(request.args.get('limit') or minigame_2048_service.DEFAULT_LEADERBOARD_LIMIT)
     except (TypeError, ValueError):
         limit = minigame_2048_service.DEFAULT_LEADERBOARD_LIMIT
+    limit = max(1, min(100, limit))
     try:
         with get_db_connection() as conn:
-            table = minigame_suika_service.leaderboard(conn, window=window, limit=limit)
-            me = minigame_suika_service.self_entry(conn, identity[0], window=window)
+            # 与 2048 同一套：榜单走 15 秒短缓存，self_entry 复用同一份全量榜单，
+            # 不再为「我的名次」把窗口内记录再扫一遍。
+            table = minigame_suika_service.leaderboard_cached(conn, window=window, limit=limit)
+            full_table = minigame_suika_service.leaderboard_cached(conn, window=window, limit=0)
+            me = minigame_suika_service.self_entry_from_table(full_table, identity[0])
             periods = minigame_suika_service.period_history(conn, limit=4)
             try:
                 rows = list(table.get('entries') or [])

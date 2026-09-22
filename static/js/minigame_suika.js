@@ -9,6 +9,7 @@ import {
   DROP_COOLDOWN_MS,
   MAX_TIER,
   RULES_VERSION,
+  SPAWN_GATE_SCORES,
   SuikaGame,
   TIERS,
   seedFromText,
@@ -100,6 +101,10 @@ const syncState = {
   lastError: '',
 };
 
+/* 进行中的云端重开。syncNow 要先等它落地：否则第一次同步会从 /state 领到
+   「分数更高的旧局」，新一局立刻被判「分数回退」，到下次投放前都进不了榜。 */
+let cloudRestartPromise = null;
+
 /* ---------- 小工具 ---------- */
 
 function clamp(value, min, max) {
@@ -153,6 +158,16 @@ function setStatus(text, { offline = false } = {}) {
   if (!statusEl) return;
   statusEl.textContent = text;
   statusEl.classList.toggle('is-offline', !!offline);
+}
+
+/* 撤回通知里的昵称要转义后再进 innerHTML（与 2048 页、共用聊天渲染同口径）。 */
+function escapeHtml(text) {
+  return String(text == null ? '' : text)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
 
 /* ---------- 贴图：加载 + 墨迹归一化 ---------- */
@@ -403,12 +418,13 @@ function drawArena() {
   ctx.fillRect(0, 0, wall, height);
   ctx.fillRect(width - wall, 0, wall, height);
 
-  // 顶部：半透明大分数水印（画在失败线上方的空档里）
+  // 顶部：半透明大分数水印（画在失败线上方的空档里）。
+  // 中文没有真斜体，合成斜体字形会发虚——用站内字体常规字重 + 更淡的透明度。
   if (game) {
     ctx.save();
-    ctx.globalAlpha = 0.12;
+    ctx.globalAlpha = 0.10;
     ctx.fillStyle = text;
-    ctx.font = 'italic bold 54px "PingFang SC", "Microsoft YaHei", system-ui, sans-serif';
+    ctx.font = '400 54px Kreadon, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(String(game.score), width / 2, loseLineY / 2 - 2);
@@ -564,8 +580,12 @@ function updateNextChip() {
   }
   if (nextNameEl) nextNameEl.textContent = def.en;
   if (nextHintEl) {
+    // 显示"下一档什么时候解锁"，不是当前分数（当前分只是已经越过的门槛）。
     const maxTier = game.maxSpawnTier;
-    nextHintEl.textContent = `当前可抽到 ${tierDef(maxTier).en}（${game.score} 分解锁）`;
+    const gateIndex = SPAWN_GATE_SCORES.findIndex((score) => score > game.score);
+    nextHintEl.textContent = gateIndex >= 0
+      ? `当前最大可出 ${tierDef(maxTier).en} · ${SPAWN_GATE_SCORES[gateIndex]} 分后解锁更大档位`
+      : `当前最大可出 ${tierDef(maxTier).en} · 已全部解锁`;
   }
 }
 
@@ -695,6 +715,9 @@ function startGame({ seed = newSeed(), drops = [], uptoMs = 0, restored = false 
   } else {
     setStatus('新的一局，已保存到本机');
     saveLocal();
+    // 云端也跟着开新局（页面里的「新游戏 / 再来一局」都走这里）：否则新局的同步
+    // 会拿 0 分去对老局的云端分数，被判「分数回退」，这一局直到刷新页面都进不了榜。
+    void restartCloudGame().then(() => { scheduleSync(400); });
   }
 }
 
@@ -742,7 +765,7 @@ function dropAtAim() {
 
 function setVerifiedText() {
   if (!verifiedEl) return;
-  verifiedEl.textContent = `已验证上榜分 ${syncState.verified}`;
+  verifiedEl.textContent = `上榜最佳 ${syncState.verified}`;
 }
 
 function scheduleSync(delay = 1200) {
@@ -754,27 +777,38 @@ function scheduleSync(delay = 1200) {
    服务端会把上报判成"分数回退"，表现就是"未通过验证"。 */
 async function restartCloudGame() {
   if (!game) return;
+  const run = (async () => {
+    try {
+      const response = await fetch('/api/minigame/suika/restart', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ seed: game.seed }),
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      const remote = data && data.game;
+      if (remote && remote.game_uid) {
+        syncState.gameUid = String(remote.game_uid);
+        syncState.acked = 0;
+      }
+    } catch (_) { /* 离线：下次同步时会走 state 分支 */ }
+  })();
+  cloudRestartPromise = run;
   try {
-    const response = await fetch('/api/minigame/suika/restart', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ seed: game.seed }),
-    });
-    if (!response.ok) return;
-    const data = await response.json();
-    const remote = data && data.game;
-    if (remote && remote.game_uid) {
-      syncState.gameUid = String(remote.game_uid);
-      syncState.acked = 0;
-    }
-  } catch (_) { /* 离线：下次同步时会走 state 分支 */ }
+    await run;
+  } finally {
+    if (cloudRestartPromise === run) cloudRestartPromise = null;
+  }
 }
 
 /** 把"新增投放 + 新总分"立刻上传；服务端落库后再启发式校验能否入榜。 */
 async function syncNow() {
   if (syncState.timer) { window.clearTimeout(syncState.timer); syncState.timer = null; }
   if (!game || syncState.inflight) return;
+  if (cloudRestartPromise) {
+    try { await cloudRestartPromise; } catch (_) { /* 上面已兜住 */ }
+  }
   if (!syncState.gameUid) {
     // 还没拿到云端局 ID：先开一局（服务端会返回 seed，与本地一致时才接管）
     try {
@@ -802,7 +836,7 @@ async function syncNow() {
         from_index: syncState.acked,
         drops,
         claimed_score: game.score,
-        claimed_max_tier: MAX_TIER,
+        claimed_max_tier: Math.max(0, Math.min(MAX_TIER, Number(game.maxTierSeen) || 0)),
         source: navigator.onLine === false ? 'offline' : 'online',
       }),
     });
@@ -810,16 +844,19 @@ async function syncNow() {
     const data = await response.json();
     const remote = data && data.game;
     if (remote) {
-      syncState.acked = Number(remote.drop_index) || syncState.acked;
+      // 服务端永远是权威：stale_game / gap 时采纳它返回的当前局与下标，
+      // 否则本地会拿着旧局标识无限同步失败（在别处重开/多设备时会出现）。
+      if (remote.game_uid) syncState.gameUid = String(remote.game_uid);
+      syncState.acked = Math.max(0, Number(remote.drop_index) || 0);
       if (Number(remote.score) > syncState.verified) syncState.verified = Number(remote.score);
       setVerifiedText();
       saveLocal();
     }
     if (data && data.verified === false) {
-      setStatus(`未通过验证，未计入排行榜（本地进度已保留）`, { offline: true });
+      setStatus('本批成绩未通过校验，未计入排行榜（进度已保留）', { offline: true });
     } else if (data && data.verified) {
-      setStatus('已同步（成绩已验证）');
-      void refreshLeaderboard();
+      setStatus('成绩已上榜');
+      scheduleLeaderboardRefresh();
     }
   } catch (_) {
     syncState.lastError = 'sync';
@@ -831,6 +868,18 @@ async function syncNow() {
 }
 
 let rankWindowMode = '14d';
+
+/* 榜单刷新节流：有新成绩时最多 15 秒刷一次，避免连续合成时每次加分都打一发
+   /leaderboard。切窗口/进页面/切页签仍然立即刷新（与 2048 页同一套）。 */
+let leaderboardRefreshTimer = null;
+
+function scheduleLeaderboardRefresh(delay = 15000) {
+  if (leaderboardRefreshTimer) return;
+  leaderboardRefreshTimer = window.setTimeout(() => {
+    leaderboardRefreshTimer = null;
+    void refreshLeaderboard();
+  }, delay);
+}
 
 async function refreshLeaderboard() {
   if (!rankBodyEl) return;
@@ -862,6 +911,14 @@ async function refreshLeaderboard() {
         score.className = 'sk-rank-score';
         score.textContent = String(row.score);
         item.append(no, name, sub, score);
+        // 离线申报的成绩照常上榜（物理游戏没法逐位重放），但给个标记让来源可见
+        if (String(row.source || '') === 'offline') {
+          const tag = document.createElement('span');
+          tag.className = 'sk-rank-offline';
+          tag.textContent = '离线';
+          tag.title = '这条成绩是断网时打的，恢复网络后补报';
+          item.append(tag);
+        }
         rankBodyEl.append(item);
       });
       if (me && !rows.some((row) => String(row.user_id) === meId)) {
@@ -874,7 +931,8 @@ async function refreshLeaderboard() {
     if (rankNoteEl) {
       const pool = Number(data && data.champion_pool) || 300;
       const need = Number(data && data.champion_min_accounts) || 3;
-      rankNoteEl.textContent = `每周一 00:00（UTC+8）按最近 14 天发一次冠军奖：总奖池 ${pool} 荆露，至少 ${need} 个有效账号才发。`;
+      rankNoteEl.textContent = `每周一按最近 14 天成绩发一次冠军奖，奖池 ${pool} 荆露。`;
+      rankNoteEl.title = `每周一 00:00（UTC+8）结算；至少 ${need} 个有效账号才发放。`;
     }
   } catch (_) {
     rankBodyEl.textContent = '读取榜单失败（可能是离线）。';
@@ -911,8 +969,10 @@ function bindInput() {
 
   window.addEventListener('keydown', (event) => {
     const target = event.target;
+    // BUTTON 也要排除：点过「新游戏」后焦点留在按钮上，空格会同时投放 + 再点一次按钮
     if (target instanceof HTMLElement
-      && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return;
+        && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName))) return;
+    if (overlayMode) return;   // 「重新开始？」等弹窗开着时不接受棋盘键盘
     if (!game || game.gameOver) return;
     const step = event.shiftKey ? 48 : 16;
     const key = event.key;
@@ -1077,7 +1137,6 @@ async function boot() {
     startGame({ seed: saved.seed, drops: saved.drops, uptoMs: saved.timeMs, restored: true });
   } else {
     startGame();
-    void restartCloudGame().then(() => { scheduleSync(400); });
   }
   updateNextChip();
   setVerifiedText();
@@ -1165,8 +1224,8 @@ function attachChat(socket) {
       const row = log.querySelector(`.chat-msg[data-chat-message-id="${id}"]`);
       if (row) row.remove();
     });
-    const actor = String((payload || {}).actor_name || '管理员');
-    const target = String((payload || {}).target_name || '');
+    const actor = escapeHtml(String((payload || {}).actor_name || '管理员'));
+    const target = escapeHtml(String((payload || {}).target_name || ''));
     const text = (payload || {}).self_recall
       ? `${actor} 撤回了一条消息`
       : `${actor} 撤回了 ${target || '某个玩家'} 的一条消息`;

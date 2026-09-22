@@ -130,6 +130,7 @@ export class SuikaGame {
     this.pendingMs = 0;
     this.dropCooldownMs = 0;
     this.totalDrops = 0;
+    this.maxTierSeen = 0;   // 本局合成出现过的最高档（投放的球不算，合成出来的才算）
     this.nextBallId = 1;
     this.gameOver = false;
     this.balls = [];
@@ -344,6 +345,7 @@ export class SuikaGame {
       const nextTier = Math.min(MAX_TIER, tier + 1);
       const gained = tierDef(nextTier).score;
       this.score += gained;
+      if (nextTier > this.maxTierSeen) this.maxTierSeen = nextTier;
       if (tier < MAX_TIER) {
         const { ballId } = this.spawnBall(nextTier, x, y, { velocity: { x: vx, y: vy } });
         this.events.push({ type: 'merge', tier, nextTier, gained, x, y, ballId, spawned: true });
@@ -409,6 +411,7 @@ export class SuikaGame {
       gameOver: this.gameOver,
       danger: !!this.danger,
       maxSpawnTier: this.maxSpawnTier,
+      maxTierSeen: this.maxTierSeen,
       queue: this.queue.slice(),
       totalDrops: this.totalDrops,
       dropLog: this.dropLog.map((entry) => ({ ...entry })),
