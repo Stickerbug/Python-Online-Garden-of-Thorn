@@ -61,6 +61,10 @@
 | GET | <code>/minigame/suika</code> | 登录账号 | 合成大花花页面；未登录返回 401 |
 | GET | <code>/minigame/suika/sw.js</code> | 同页面 | 局部 Service Worker（scope=/minigame/suika），只缓存页面外壳，不缓存接口/身份响应 |
 | GET/POST | <code>/api/minigame/prefs</code> | 登录账号 | 小游戏通用偏好：<code>decline_invites</code> 是**账号级**开关（所有小游戏共用），在服务端邀请处理处生效 |
+| GET | <code>/api/minigame/suika/state</code> | 登录账号 | 合成大花花的云端存档（没有活动局就开一局）；返回局数据、自己的名次与规则参数 |
+| POST | <code>/api/minigame/suika/sync</code> | 登录账号 | 增量同步：<code>game_uid</code>、<code>from_index</code>、<code>drops</code>（`[{t,x}]`）、<code>claimed_score</code>、<code>claimed_max_tier</code>；**立刻落库** + 启发式校验（分数只增/单批增量上限/投放间隔≥400ms），未通过则只存进度不入榜 |
+| POST | <code>/api/minigame/suika/restart</code> | 登录账号 | 关闭旧局并开新局（旧局记录与未同步投放保留） |
+| GET | <code>/api/minigame/suika/leaderboard</code> | 登录账号 | <code>window=14d|all</code>、<code>limit</code>（默认 100）；最近奖期与奖池参数 |
 | GET | <code>/minigame/2048/sw.js</code> | 同页面 | 局部 Service Worker（scope=/minigame/2048），只缓存页面外壳，不缓存接口/身份响应 |
 | GET | <code>/api/minigame/2048/state</code> | staff/admin | 读取当前活动局（棋盘、分数、已验证进度、色板、偏好）；没有活动局时开一局 |
 | POST | <code>/api/minigame/2048/sync</code> | staff/admin | 增量同步：<code>game_uid</code>、<code>from_index</code>、<code>ops</code>（l/r/u/d 串或数组）、可选 <code>claimed_score</code>/<code>claimed_cells</code>、<code>source=online|offline</code>；服务端从检查点重放验证，冲突返回 409 + 服务器分支快照 |

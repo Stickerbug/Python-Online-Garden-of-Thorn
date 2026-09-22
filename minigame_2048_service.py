@@ -125,6 +125,15 @@ def ensure_schema(conn) -> None:
     """幂等建表（``db.init_db`` 会调用；测试用临时库也直接调）。"""
 
     conn.executescript(SCHEMA_SQL)
+    # 记录表共用给多个小游戏：老库补一列 game_key（纯增量，默认 '2048'，老数据/老榜单不受影响）。
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(minigame_2048_records)").fetchall()}
+    if "game_key" not in columns:
+        conn.execute("ALTER TABLE minigame_2048_records ADD COLUMN game_key TEXT NOT NULL DEFAULT '2048'")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_mg_records_game_window"
+        " ON minigame_2048_records(game_key, rules_version, verified_at, score DESC, max_tile DESC)"
+    )
+    conn.commit()
 
 
 def now_iso(now=None) -> str:
@@ -354,8 +363,11 @@ def _checkpoint_after_append(conn, state: Dict[str, object], board: Dict[str, ob
 
 
 def _record_progress(conn, state: Dict[str, object], board: Dict[str, object],
-                     *, source: str, now=None) -> Optional[Dict[str, object]]:
-    """得分相对已验证进度真实增长时写一条新的已验证记录（刷新窗口）。"""
+                     *, source: str, now=None, game_key: str = "2048") -> Optional[Dict[str, object]]:
+    """得分相对已验证进度真实增长时写一条新的已验证记录（刷新窗口）。
+
+    ``game_key`` 让同一套记录表给多个小游戏共用（默认 2048，老调用行为不变）。
+    """
 
     verified_index, verified_score = _progress_at(conn, state["game_id"])
     score = int(board["score"])
@@ -364,11 +376,11 @@ def _record_progress(conn, state: Dict[str, object], board: Dict[str, object],
     stamp = now_iso(now)
     cursor = conn.execute(
         """INSERT OR IGNORE INTO minigame_2048_records
-           (user_id, game_id, score, max_tile, op_index, rules_version, verified_at, source, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           (user_id, game_id, score, max_tile, op_index, rules_version, verified_at, source, created_at, game_key)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (int(state["user_id"]), int(state["game_id"]), score, int(board["max_tile"]),
          int(state["op_index"]), int(state["rules_version"]), stamp,
-         source if source in SYNC_SOURCES else "online", stamp),
+         source if source in SYNC_SOURCES else "online", stamp, str(game_key or "2048")),
     )
     if not cursor.rowcount:
         return None
@@ -569,7 +581,8 @@ def _display_name(row) -> str:
 
 
 def leaderboard(conn, *, window: str = "14d", limit: int = DEFAULT_LEADERBOARD_LIMIT,
-                now=None, rules_version: int = g.RULES_VERSION) -> Dict[str, object]:
+                now=None, rules_version: int = g.RULES_VERSION,
+                game_key: str = "2048") -> Dict[str, object]:
     """滚动 14 天 / 历史最高：每账号一行，总分降序 + 最高方块降序，全同并列。"""
 
     start, end = _window_bounds(window, now)
@@ -577,9 +590,9 @@ def leaderboard(conn, *, window: str = "14d", limit: int = DEFAULT_LEADERBOARD_L
         "SELECT r.id, r.user_id, r.game_id, r.score, r.max_tile, r.op_index,"
         " r.verified_at, r.source, r.rules_version, u.username AS username"
         " FROM minigame_2048_records r JOIN users u ON u.id = r.user_id"
-        " WHERE r.rules_version = ? AND r.score > 0"
+        " WHERE r.rules_version = ? AND r.score > 0 AND r.game_key = ?"
     )
-    params: List[object] = [int(rules_version)]
+    params: List[object] = [int(rules_version), str(game_key or "2048")]
     if start is not None and end is not None:
         sql += " AND r.verified_at >= ? AND r.verified_at < ?"
         params.extend([now_iso(start), now_iso(end)])
@@ -625,10 +638,11 @@ def leaderboard(conn, *, window: str = "14d", limit: int = DEFAULT_LEADERBOARD_L
     }
 
 
-def self_entry(conn, user_id: int, *, window: str = "14d", now=None) -> Optional[Dict[str, object]]:
+def self_entry(conn, user_id: int, *, window: str = "14d", now=None,
+               game_key: str = "2048") -> Optional[Dict[str, object]]:
     """自己的名次；榜外也能查到（验收 7）。"""
 
-    table = leaderboard(conn, window=window, limit=0, now=now)
+    table = leaderboard(conn, window=window, limit=0, now=now, game_key=game_key)
     for item in table["entries"]:
         if int(item["user_id"]) == int(user_id):
             return item
@@ -638,8 +652,10 @@ def self_entry(conn, user_id: int, *, window: str = "14d", now=None) -> Optional
 # ---------------------------------------------------------------- 每周结算
 
 
-def period_key_for(cutoff: datetime) -> str:
-    return "2048-" + cutoff.astimezone(CZ_TZ).strftime("%Y-%m-%d")
+def period_key_for(cutoff: datetime, game_key: str = "2048") -> str:
+    """奖期键：``<game_key>-YYYY-MM-DD``。前缀就是分账依据——不同小游戏同一天互不串账。"""
+
+    return f"{str(game_key or '2048')}-" + cutoff.astimezone(CZ_TZ).strftime("%Y-%m-%d")
 
 
 def week_cutoffs(now=None, *, start: Optional[datetime] = None) -> List[datetime]:
@@ -705,17 +721,18 @@ def _credit_dew(conn, user_id: int, amount: int, *, period_key: str, reason: str
 
 
 def settle_due(conn, *, now=None, pool: int = CHAMPION_POOL,
-               min_accounts: int = CHAMPION_MIN_ACCOUNTS) -> List[Dict[str, object]]:
+               min_accounts: int = CHAMPION_MIN_ACCOUNTS,
+               game_key: str = "2048") -> List[Dict[str, object]]:
     """结算所有已到点的奖期（补做也走同一条路，用**原截止时点**取榜单）。"""
 
     results: List[Dict[str, object]] = []
     for cutoff in week_cutoffs(now=now):
-        period_key = period_key_for(cutoff)
+        period_key = period_key_for(cutoff, game_key)
         existing = conn.execute(
             "SELECT * FROM minigame_2048_periods WHERE period_key = ?", (period_key,)
         ).fetchone()
         window = leaderboard(conn, window="14d", limit=0,
-                             now=cutoff.astimezone(timezone.utc))
+                             now=cutoff.astimezone(timezone.utc), game_key=game_key)
         participants = int(window["participants"])
         winners = [item for item in window["entries"] if item["rank"] == 1] if participants else []
         amounts = _split_pool(int(pool), [item["user_id"] for item in winners]) if winners else {}
@@ -747,7 +764,7 @@ def settle_due(conn, *, now=None, pool: int = CHAMPION_POOL,
         credited = 0
         for raw_user_id, amount in stored_amounts.items():
             if _credit_dew(conn, int(raw_user_id), int(amount), period_key=period_key,
-                           reason=f"2048 周冠军（{period_key}）", now=now):
+                           reason=f"休闲花园周冠军（{period_key}）", now=now):
                 credited += 1
         conn.execute(
             "UPDATE minigame_2048_periods SET status='paid', completed_at=? WHERE period_key=?",
@@ -760,10 +777,10 @@ def settle_due(conn, *, now=None, pool: int = CHAMPION_POOL,
     return results
 
 
-def period_history(conn, limit: int = 12) -> List[Dict[str, object]]:
+def period_history(conn, limit: int = 12, game_key: str = "2048") -> List[Dict[str, object]]:
     rows = conn.execute(
-        "SELECT * FROM minigame_2048_periods ORDER BY cutoff_at DESC LIMIT ?",
-        (max(1, min(int(limit or 12), 100)),),
+        "SELECT * FROM minigame_2048_periods WHERE period_key LIKE ? ORDER BY cutoff_at DESC LIMIT ?",
+        (f"{str(game_key or '2048')}-%", max(1, min(int(limit or 12), 100))),
     ).fetchall()
     return [
         {

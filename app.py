@@ -54,6 +54,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 import minigame_2048
 import minigame_2048_service
 import minigame_registry
+import minigame_suika_service
 from ai_local_bridge import LocalAiBridgeError, get_local_ai_worker
 from ai_training_capture import (
     append_public_history as append_ai_training_public_history,
@@ -35094,6 +35095,133 @@ def minigame_suika_page():
         from_key=from_key,
         back_href=minigame_registry.with_from('/minigame', from_key),
     )
+
+
+@app.route('/api/minigame/suika/state')
+def api_minigame_suika_state():
+    """合成大花花的云端存档：没有活动局就开一局（每次分数变化都会 sync 到这里）。"""
+
+    identity, denied = _minigame_2048_guard()
+    if denied is not None:
+        return denied
+    if _minigame_2048_rate_limited(f'u{identity[0]}', 'minigame_suika_state', limit=1200):
+        return _json_error('操作太频繁，请稍后再试', 429)
+    try:
+        with get_db_connection() as conn:
+            game = minigame_suika_service.load_state(conn, identity[0])
+            me = minigame_suika_service.self_entry(conn, identity[0], window='14d')
+    except Exception as exc:
+        admin_event('error', f'suika state failed: {exc}')
+        return _json_error('读存档失败，本地进度已保留', 500)
+    return jsonify({
+        'success': True,
+        'game': game,
+        'me': me,
+        'rules': {
+            'rules_version': minigame_suika_service.RULES_VERSION,
+            'window_days': minigame_2048_service.RULES_WINDOW_DAYS,
+            'champion_pool': minigame_2048_service.CHAMPION_POOL,
+            'champion_min_accounts': minigame_2048_service.CHAMPION_MIN_ACCOUNTS,
+        },
+    })
+
+
+@app.route('/api/minigame/suika/sync', methods=['POST'])
+def api_minigame_suika_sync():
+    """增量同步：立刻落库 + 启发式校验（物理游戏没法逐位重放，见服务模块注释）。"""
+
+    identity, denied = _minigame_2048_guard()
+    if denied is not None:
+        return denied
+    if _minigame_2048_rate_limited(f'u{identity[0]}', 'minigame_suika_sync', limit=600):
+        return _json_error('操作太频繁，请稍后再试', 429)
+    payload = request.get_json(silent=True) or {}
+    game_uid = str(payload.get('game_uid') or '')[:64]
+    if not game_uid:
+        return _json_error('缺少局标识', 400)
+    try:
+        from_index = int(payload.get('from_index') or 0)
+    except (TypeError, ValueError):
+        return _json_error('from_index 不是数字', 400)
+    claimed_score = payload.get('claimed_score')
+    claimed_max_tier = payload.get('claimed_max_tier')
+    source = str(payload.get('source') or 'online')
+    try:
+        with get_db_connection() as conn:
+            result = minigame_suika_service.sync_progress(
+                conn, identity[0], game_uid, from_index, payload.get('drops') or [],
+                claimed_score=None if claimed_score is None else int(claimed_score),
+                claimed_max_tier=None if claimed_max_tier is None else int(claimed_max_tier),
+                source=source,
+            )
+    except Exception as exc:
+        admin_event('error', f'suika sync failed: {exc}')
+        return _json_error('同步失败，本地进度已保留', 500)
+    return jsonify({'success': True, **result})
+
+
+@app.route('/api/minigame/suika/restart', methods=['POST'])
+def api_minigame_suika_restart():
+    """关掉旧局、开一局新的（旧局记录与未同步投放都保留）。"""
+
+    identity, denied = _minigame_2048_guard()
+    if denied is not None:
+        return denied
+    payload = request.get_json(silent=True) or {}
+    try:
+        seed = int(payload.get('seed') or 1) & 0xFFFFFFFF
+    except (TypeError, ValueError):
+        seed = 1
+    try:
+        with get_db_connection() as conn:
+            game = minigame_suika_service.restart_game(conn, identity[0], seed=seed)
+    except Exception as exc:
+        admin_event('error', f'suika restart failed: {exc}')
+        return _json_error('重新开始失败，本地进度已保留', 500)
+    return jsonify({'success': True, 'game': game})
+
+
+@app.route('/api/minigame/suika/leaderboard')
+def api_minigame_suika_leaderboard():
+    identity, denied = _minigame_2048_guard()
+    if denied is not None:
+        return denied
+    window = str(request.args.get('window') or '14d')
+    if window not in ('14d', 'all'):
+        return _json_error('window 只能是 14d 或 all', 400)
+    try:
+        limit = int(request.args.get('limit') or minigame_2048_service.DEFAULT_LEADERBOARD_LIMIT)
+    except (TypeError, ValueError):
+        limit = minigame_2048_service.DEFAULT_LEADERBOARD_LIMIT
+    try:
+        with get_db_connection() as conn:
+            table = minigame_suika_service.leaderboard(conn, window=window, limit=limit)
+            me = minigame_suika_service.self_entry(conn, identity[0], window=window)
+            periods = minigame_suika_service.period_history(conn, limit=4)
+            try:
+                rows = list(table.get('entries') or [])
+                if me:
+                    rows.append(me)
+                identities = public_identity_batch_conn(conn, [row.get('user_id') for row in rows])
+                for row in rows:
+                    info = identities.get(int(row.get('user_id') or 0)) or {}
+                    row['equipped_titles'] = list(info.get('equipped_titles') or [])
+                    row['name_style'] = info.get('name_style')
+                    row['name_color'] = info.get('name_color')
+            except Exception as exc:
+                admin_event('error', f'suika leaderboard identity lookup failed: {exc}')
+    except Exception as exc:
+        admin_event('error', f'suika leaderboard failed: {exc}')
+        return _json_error('读取榜单失败', 500)
+    return jsonify({
+        'success': True,
+        'table': table,
+        'me': me,
+        'periods': periods,
+        'window_days': minigame_2048_service.RULES_WINDOW_DAYS,
+        'champion_pool': minigame_2048_service.CHAMPION_POOL,
+        'champion_min_accounts': minigame_2048_service.CHAMPION_MIN_ACCOUNTS,
+    })
 
 
 @app.route('/minigame/suika/sw.js')
