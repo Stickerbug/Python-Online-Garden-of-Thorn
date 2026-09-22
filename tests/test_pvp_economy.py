@@ -307,3 +307,32 @@ def test_rating_rebuild_keeps_original_newcomer_protection(accounts):
             stored=json.loads(conn.execute('SELECT summary_json FROM matches WHERE id=?',(mid,)).fetchone()[0])
             assert stored['gr_result']['newcomer_protected_user_ids']==[2]
             assert stored['gr_result']['season_deltas']['2']==0
+
+
+def _latest_reason(uid):
+    with db.get_db_connection() as conn:
+        return conn.execute("SELECT reason,free_delta FROM user_currency_transactions"
+                            " WHERE user_id=? AND source_type='match_reward'"
+                            " ORDER BY id DESC LIMIT 1",(uid,)).fetchone()
+
+
+def test_zero_reward_reasons_say_why(accounts):
+    """反馈 GB-194：0 奖励的明细要写明原因，不能再只打印奖励公式。"""
+    award(win=1,early=True)
+    reason,delta=_latest_reason(1)
+    assert delta==0
+    assert '对局过早结束' in reason
+
+    award(ids=(3,4),win=0)  # 先给 3/4 各一局正常奖励，作为对照
+    with db.get_db_connection() as conn:
+        stamp=integrity._iso(NOW)
+        conn.execute("INSERT INTO account_link_decisions(user_id_low,user_id_high,state,risk_score,"
+                     "categories_json,reasons_json,input_fingerprint,recompute_id,rule_version,created_at,updated_at)"
+                     " VALUES (3,4,'confirmed',100,'[]','[]','test','test','test',?,?)",(stamp,stamp))
+        conn.commit()
+    result=award(ids=(3,4),win=0)
+    assert result['awarded'][0]['amount']==0
+    reason,delta=_latest_reason(3)
+    assert delta==0
+    assert '关联账号' in reason
+    assert '基础' not in reason

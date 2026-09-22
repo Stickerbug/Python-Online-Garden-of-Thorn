@@ -178,10 +178,16 @@ def settle_conn(conn,match_id,summary,award_time=None):
         free=max(0,int(user['thorn_dew_free'] or 0))+amount
         paid=max(0,int(user['thorn_dew_paid'] or 0))
         reward_note='娱乐×0.75 ' if casual else ''
-        reason=(
-            f'有效对局奖励 {mode} {outcome}；{reward_note}'
-            f'基础{base} 连胜+{streak_bonus} 新人×{profile["reward_multiplier"]} 衰减×{multiplier:g}'
-        )
+        if early or not allowed:
+            # 0 奖励必须把原因写明白（反馈 GB-194）：此前仍打印基础/连胜公式，
+            # 玩家看到「赢了 0 荆露 + 一串乘数」完全不知道为什么。
+            block_note='对局过早结束，无奖励' if early else '对手被判定为关联账号，对局不计奖励'
+            reason=f'有效对局奖励 {mode} {outcome}；{block_note}'
+        else:
+            reason=(
+                f'有效对局奖励 {mode} {outcome}；{reward_note}'
+                f'基础{base} 连胜+{streak_bonus} 新人×{profile["reward_multiplier"]} 衰减×{multiplier:g}'
+            )
         source=f'match:{mid}:u:{uid}:pvp-v1'
         conn.execute('UPDATE users SET thorn_dew_free=? WHERE id=?',(free,uid))
         conn.execute('''INSERT INTO user_currency_transactions

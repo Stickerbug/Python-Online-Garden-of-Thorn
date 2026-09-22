@@ -2743,6 +2743,11 @@ function isPvpMatchFlowActive() {
 // 设置面板与卡牌数据使用的模式：多人流程内以当前对局模式为准，流程外按娱乐
 // （casual）处理，这样主页/单人训练场的模组选择与数据都不会被残留的天梯模式影响。
 function getSettingsModMatchMode() {
+    // 反馈 GB-193/182：观战时以被观战房间的实际模式为准——观战者自己的偏好可能是
+    // 天梯，天梯口径会自动禁用娱乐模组，把对局里实际在场的卡算成"无法抽到"。
+    if (isSpectating && gameState && gameState.match_mode) {
+        return normalizeMatchModeKey(gameState.match_mode);
+    }
     return isPvpMatchFlowActive() ? getCurrentPvpMatchMode() : 'casual_1v1';
 }
 
@@ -10006,14 +10011,18 @@ function beginPendingServerAction(name, options = {}) {
     const timeoutMs = Math.max(2500, Number(options.timeoutMs) || SERVER_ACTION_TIMEOUT_MS);
     pendingServerActionTimer = setTimeout(() => {
         const stillPending = !!pendingServerAction;
-        clearPendingServerAction();
+        // 连接还在时先别把乐观扣费显示弹回去（GB-198）：10 秒级延迟下，6 秒回滚 +
+        // 玩家照旧重放，看起来就像「0 能量打出」——服务端校验一直是对的，是显示在骗人。
+        // 扣费显示保留到补发的状态同步回来为止；4 秒后仍无响应才真正回滚（见下）。
+        const connected = !!(socket && socket.connected);
+        clearPendingServerAction({ keepOptimistic: connected && stillPending });
         pendingPlayCard = null;
         clearSelectedPlayCard();
-        if (gameState && gameState.phase) renderGame(gameState);
+        if (gameState && gameState.phase && !(connected && stillPending)) renderGame(gameState);
         if (stillPending) {
             // 6 秒没等到回应时先分清「请求丢了」还是「服务器慢」：只要连接还在，
             // 就补发一次状态查询；等它带回 state_update 就说明对局没丢，否则再报错。
-            if (socket && socket.connected) {
+            if (connected) {
                 requestResyncAfterActionTimeout();
             } else {
                 flashStatus(UI.server_no_response || UI.operation_failed, 3200, 'error');
@@ -10049,6 +10058,10 @@ function requestResyncAfterActionTimeout() {
         actionResyncTimer = null;
         if (socket && socket.connected) {
             flashStatus(UI.server_no_response || UI.operation_failed, 3200, 'error');
+            // 补发的状态同步也没回来：这时才真正回滚乐观扣费显示（GB-198）。
+            const hadOptimistic = !!optimisticResourceOverride;
+            clearPendingServerAction();
+            if (hadOptimistic && gameState && gameState.phase) renderGame(gameState);
         }
     }, 4000);
 }
@@ -11617,7 +11630,9 @@ function spectateModDataKeyFromState(state = gameState) {
     const communityHash = state.mod_source === 'community'
         ? String(state.community_mod_hash || '').trim()
         : 'official';
-    return `${state.room_id || ''}:${disabled || 'none'}:${communityHash}`;
+    // 房间模式也进键：观战者自己的偏好（天梯）与房间实际模式（娱乐）不同时，要重取（GB-193/182）
+    const matchMode = normalizeMatchModeKey(state.match_mode || 'casual_1v1');
+    return `${state.room_id || ''}:${matchMode}:${disabled || 'none'}:${communityHash}`;
 }
 
 function ensureSpectateCardDataForState(state = gameState) {
@@ -17070,6 +17085,15 @@ function connectSocket(serverUrl) {
         }
         if (isNetworkMatchPhase(nextPhase)) markNetworkMatchTransition(`game_phase:${nextPhase}`);
         prepareRuntimeForBattleEntry(previousPhase, nextPhase);
+        // 反馈 GB-193/182：对局数据口径要跟房间的实际模式。此前它只跟着本地偏好走，
+        // 偏好天梯的玩家进娱乐局时，/api/cards 会按天梯自动禁用娱乐模组，
+        // 对局里实际在场的娱乐卡就被算成"无法抽到"。只改内存值，不写回偏好存储。
+        if (nextPhase !== 'lobby' && data.match_mode && !data.spectating) {
+            const roomMode = normalizeMatchModeKey(data.match_mode);
+            if (roomMode && roomMode !== activePvpMatchMode) {
+                activePvpMatchMode = roomMode;
+            }
+        }
         phase = nextPhase;
         if (phase === 'mod_draw_complete') {
             const finalMods = Array.isArray(data.official_mods) ? data.official_mods : [];
@@ -17086,6 +17110,12 @@ function connectSocket(serverUrl) {
                 'info',
             );
             phase = 'mod_draw';
+        }
+        // 数据缓存键包含对局模式：进对局时如果与进局前拉取的口径不一致
+        // （偏好天梯、实际娱乐局），按对局口径重取一次卡牌数据——
+        // 否则对局内概率/可用性仍是进局前的口径（GB-193/182）。
+        if (isPvpMatchFlowActive()) {
+            void ensureCardDataForCurrentMods().catch(() => {});
         }
         rememberActiveMatchRoute(data || {}, `game_phase:${nextPhase}`);
         if (!data.spectating) {
@@ -17375,6 +17405,12 @@ function connectSocket(serverUrl) {
             spectateCardDataKey = '';
         }
         maybeRefreshCardDefsForPayload(data, 'state_update');
+        // 战斗中的每次状态同步都对一下数据键：对局模式若与拉取口径不一致
+        // （GB-193/182，例如偏好天梯的玩家在娱乐局里），这里兜底重取；
+        // 键一致时是零成本比较，不会反复请求。
+        if (!isSpectating && isPvpMatchFlowActive()) {
+            void ensureCardDataForCurrentMods().catch(() => {});
+        }
         if (isSpectating) ensureSpectateCardDataForState(data);
         if (!isSpectating && data.your_id != null) playerId = data.your_id;
         mergeSkinLooksFromPayload(data);
