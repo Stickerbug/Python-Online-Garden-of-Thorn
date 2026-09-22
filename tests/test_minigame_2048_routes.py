@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest import mock
 
 import minigame_2048_service as svc
 
@@ -65,15 +66,18 @@ class RouteAccessTests(unittest.TestCase):
                 return {"role_type": "staff"}
 
         svc.db_module = _Roles()
-        self.assertEqual(self.client.get("/minigame/2048").status_code, 200)
-        hub = self.client.get("/minigame")
-        self.assertEqual(hub.status_code, 200)
-        hub_html = hub.get_data(as_text=True)
-        self.assertIn("Craft Eternal", hub_html)
-        self.assertIn("合成大花花", hub_html)
-        # 合成大花花已上线：卡片是能点的入口，不再是"制作中"占位
-        self.assertIn("/minigame/suika", hub_html)
-        self.assertNotIn("制作中", hub_html)
+        # 合成大花花的入口/页面已改为仅管理员可见（_minigame_suika_guard）：
+        # 这里的会话账号要用 staff 身份，hub 里的 suika 卡片才会渲染。
+        with mock.patch.object(gtn, "user_role_type", lambda uid: "staff"):
+            self.assertEqual(self.client.get("/minigame/2048").status_code, 200)
+            hub = self.client.get("/minigame")
+            self.assertEqual(hub.status_code, 200)
+            hub_html = hub.get_data(as_text=True)
+            self.assertIn("Craft Eternal", hub_html)
+            self.assertIn("合成大花花", hub_html)
+            # 管理员看到的是能点的入口，不再是"制作中"占位
+            self.assertIn("/minigame/suika", hub_html)
+            self.assertNotIn("制作中", hub_html)
         state = self.client.get("/api/minigame/2048/state")
         self.assertEqual(state.status_code, 200)
         payload = state.get_json()

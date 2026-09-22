@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest import mock
 
 import minigame_2048_service as svc
 import minigame_registry as reg
@@ -87,6 +88,9 @@ class LobbyRouteTests(unittest.TestCase):
 
     def tearDown(self):
         svc.db_module = self.original_db
+        if getattr(self, 'role_patch', None):
+            self.role_patch.stop()
+            self.role_patch = None
 
     def _login(self):
         class _Roles:
@@ -94,6 +98,10 @@ class LobbyRouteTests(unittest.TestCase):
                 return {"role_type": "player"}
 
         svc.db_module = _Roles()
+        # 本文件测的是"链接把 from 带回去"的管线；合成大花花的入口/页面现在仅
+        # 管理员可见（_minigame_suika_guard），所以把角色表指成 staff 才覆盖得到 suika。
+        self.role_patch = mock.patch.object(gtn, 'user_role_type', lambda uid: 'staff')
+        self.role_patch.start()
         with self.client.session_transaction() as session:
             session["user_id"] = 4242
             session["username"] = "lobby_probe"

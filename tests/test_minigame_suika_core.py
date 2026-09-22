@@ -13,6 +13,7 @@ import pathlib
 import shutil
 import subprocess
 import unittest
+from unittest import mock
 
 import minigame_2048_service as svc
 
@@ -257,7 +258,9 @@ class SuikaRouteTests(unittest.TestCase):
         with self.client.session_transaction() as session:
             session["user_id"] = 4242
             session["username"] = "suika_probe"
-        response = self.client.get("/minigame/suika")
+        # 页面已改为仅管理员可见（_minigame_suika_guard）：这里以 staff 身份取外壳
+        with mock.patch.object(gtn, "user_role_type", lambda uid: "staff"):
+            response = self.client.get("/minigame/suika")
         self.assertEqual(response.status_code, 200)
         body = response.get_data(as_text=True)
         for needle in ("sk-canvas", "sk-legend-grid", "matter.min.js", "minigame_suika.js",

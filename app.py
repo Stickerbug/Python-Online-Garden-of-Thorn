@@ -26788,6 +26788,16 @@ def on_minigame_presence(data=None):
     if not MINIGAME_2048_ENABLED:
         emit('server_error', {'message': '小游戏暂不可用', 'reason': 'minigame_disabled'})
         return
+    # 合成大花花仅管理员（与 _minigame_suika_guard 同口径）：页面进不去，也不应能挂在线状态
+    if game_key == 'suika':
+        try:
+            suika_role = _chat_role_for_account(user_id)
+        except Exception:
+            suika_role = 'player'
+        if suika_role not in ('admin', 'staff'):
+            emit('server_error', {'message': '合成大花花还在内部测试，暂时只有管理员能进',
+                                  'reason': 'minigame_denied'})
+            return
     try:
         allowed = minigame_2048_service.can_access_minigame(user_id, username)
     except Exception as exc:
@@ -34984,6 +34994,24 @@ def _minigame_2048_rate_limited(identity_key, key, limit, window=300):
         return False
 
 
+def _minigame_suika_guard():
+    """合成大花花的门禁：休闲花园其它部分对所有登录账号开放，这一款仅管理员
+    （admin / staff，与聊天身份同一套角色表）可进——用户 2026-09-22 拍板，
+    页面与全部接口共用同一判定，客户端自报的角色无效。"""
+
+    identity, denied = _minigame_2048_guard()
+    if denied is not None:
+        return None, denied
+    try:
+        role = _chat_role_for_account(identity[0])
+    except Exception as exc:
+        admin_event('error', f'suika gate role lookup failed: {exc}')
+        role = 'player'
+    if role not in ('admin', 'staff'):
+        return None, _json_error('合成大花花还在内部测试，暂时只有管理员能进', 403)
+    return identity, None
+
+
 def _minigame_2048_settlement_worker():
     while True:
         try:
@@ -35037,6 +35065,12 @@ def minigame_hub_page():
     identity, denied = _minigame_2048_guard()
     if denied is not None:
         return denied
+    # 合成大花花仅管理员可见可进（与 _minigame_suika_guard 同口径）：其他人列表里直接不显示
+    try:
+        suika_unlocked = _chat_role_for_account(identity[0]) in ('admin', 'staff')
+    except Exception as exc:
+        admin_event('error', f'hub suika gate role lookup failed: {exc}')
+        suika_unlocked = False
     from_key = minigame_registry.normalize_from(request.args.get('from'))
     return render_template(
         'minigame_hub.html',
@@ -35045,6 +35079,7 @@ def minigame_hub_page():
         static_version=GTN_STATIC_VERSION,
         from_key=from_key,
         hub_back_href=minigame_registry.minigame_hub_back_href(from_key),
+        suika_unlocked=suika_unlocked,
         game_card_links={
             key: minigame_registry.with_from(entry['path'], from_key)
             for key, entry in minigame_registry.MINIGAMES.items()
@@ -35082,13 +35117,13 @@ def minigame_2048_page():
 
 @app.route('/minigame/suika')
 def minigame_suika_page():
-    """休闲花园 ·「合成大花花」页面（与 2048 同一套登录判定，未登录 401）。
+    """休闲花园 ·「合成大花花」页面（仅管理员，见 _minigame_suika_guard）。
 
     规则与贴图都在前端：贴图是故事模式敌人图，物理核心是 static/js/suika_core.js，
     服务端这一批只负责渲染页面外壳；成绩同步 / 排行榜在下一批接进 minigame 那套表。
     """
 
-    identity, denied = _minigame_2048_guard()
+    identity, denied = _minigame_suika_guard()
     if denied is not None:
         return denied
     from_key = minigame_registry.normalize_from(request.args.get('from'))
@@ -35113,7 +35148,7 @@ def minigame_suika_page():
 def api_minigame_suika_state():
     """合成大花花的云端存档：没有活动局就开一局（每次分数变化都会 sync 到这里）。"""
 
-    identity, denied = _minigame_2048_guard()
+    identity, denied = _minigame_suika_guard()
     if denied is not None:
         return denied
     if _minigame_2048_rate_limited(f'u{identity[0]}', 'minigame_suika_state', limit=1200):
@@ -35142,7 +35177,7 @@ def api_minigame_suika_state():
 def api_minigame_suika_sync():
     """增量同步：立刻落库 + 启发式校验（物理游戏没法逐位重放，见服务模块注释）。"""
 
-    identity, denied = _minigame_2048_guard()
+    identity, denied = _minigame_suika_guard()
     if denied is not None:
         return denied
     if _minigame_2048_rate_limited(f'u{identity[0]}', 'minigame_suika_sync', limit=600):
@@ -35176,7 +35211,7 @@ def api_minigame_suika_sync():
 def api_minigame_suika_restart():
     """关掉旧局、开一局新的（旧局记录与未同步投放都保留）。"""
 
-    identity, denied = _minigame_2048_guard()
+    identity, denied = _minigame_suika_guard()
     if denied is not None:
         return denied
     # 每次调用都会关一行 + 插一行，不加按账号限流就是白送的库表膨胀口子
@@ -35198,7 +35233,7 @@ def api_minigame_suika_restart():
 
 @app.route('/api/minigame/suika/leaderboard')
 def api_minigame_suika_leaderboard():
-    identity, denied = _minigame_2048_guard()
+    identity, denied = _minigame_suika_guard()
     if denied is not None:
         return denied
     if _minigame_2048_rate_limited(f'u{identity[0]}', 'minigame_suika_leaderboard', limit=300):
@@ -35346,6 +35381,9 @@ def api_minigame_2048_restart():
     identity, denied = _minigame_2048_guard()
     if denied is not None:
         return denied
+    # 与 suika 同口径：每次调用都写库（关一行 + 插一行），按账号限流防灌表
+    if _minigame_2048_rate_limited(f'u{identity[0]}', 'minigame2048_restart', limit=60):
+        return _json_error('请求过于频繁，请稍后再试', 429)
     payload = request.get_json(silent=True) or {}
     seed = payload.get('seed') if payload.get('client_seed') is None else payload.get('client_seed')
     source = str(payload.get('source') or 'online')
@@ -35407,11 +35445,15 @@ def api_minigame_2048_leaderboard():
     identity, denied = _minigame_2048_guard()
     if denied is not None:
         return denied
+    # 服务端已有 15 秒短缓存，这里是兜底：单账号每 300 秒最多 300 次
+    if _minigame_2048_rate_limited(f'u{identity[0]}', 'minigame2048_leaderboard', limit=300):
+        return _json_error('请求过于频繁，请稍后再试', 429)
     window = str(request.args.get('window') or '14d')
     try:
         limit = int(request.args.get('limit') or minigame_2048_service.DEFAULT_LEADERBOARD_LIMIT)
     except ValueError:
         limit = minigame_2048_service.DEFAULT_LEADERBOARD_LIMIT
+    limit = max(1, min(100, limit))
     if window not in ('14d', 'all'):
         return _json_error('window 只能是 14d 或 all', 400)
     with get_db_connection() as conn:

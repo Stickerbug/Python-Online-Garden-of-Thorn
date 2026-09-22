@@ -12,6 +12,9 @@ def test_rate_limit_is_per_account_not_proxy_loopback():
     assert "_minigame_2048_rate_limited(request.remote_addr" not in app
     assert "f'u{identity[0]}', 'minigame2048_state', limit=1200" in app
     assert "f'u{identity[0]}', 'minigame2048_sync', limit=3000" in app
+    # 榜单（服务端已有 15 秒缓存，这是兜底）与 restart 也按账号限流（与 suika 同口径）
+    assert "f'u{identity[0]}', 'minigame2048_leaderboard', limit=300" in app
+    assert "f'u{identity[0]}', 'minigame2048_restart', limit=60" in app
 
 
 def test_service_worker_does_not_cache_user_specific_document():
