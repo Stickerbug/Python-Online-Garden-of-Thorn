@@ -7310,6 +7310,28 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   transform: translateY(-3px);
 }
 
+/* 图鉴卡牌的分类角标（反馈 GS-200）：贴在磁贴左下角，不遮卡面内容 */
+.story-codex-card-tile {
+  position: relative;
+}
+
+.story-codex-owner-badge {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  z-index: 3;
+  padding: 1px 5px;
+  border-radius: 999px;
+  border: 1px solid var(--story-line-soft);
+  background: color-mix(in srgb, var(--story-surface) 88%, transparent);
+  color: var(--story-text);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.4;
+  pointer-events: none;
+  backdrop-filter: blur(3px);
+}
+
 .story-codex-card-grid .story-card.card.is-related-target {
   outline: 3px solid var(--magic);
   outline-offset: 2px;

@@ -3697,7 +3697,14 @@ body {
 }
 
 .account-replay-playback-bar.collapsed {
-  width: min(520px, calc(100vw - 20px));
+  /* 收起后缩成一个小胶囊停靠右上角：不再压在顶部中央的魔力/状态栏上
+     （反馈 GS-199，2v2 的四行状态尤其被挡）。 */
+  top: 10px;
+  left: auto;
+  right: 12px;
+  transform: none;
+  width: auto;
+  max-width: min(420px, calc(100vw - 24px));
 }
 
 .account-replay-playback-head {

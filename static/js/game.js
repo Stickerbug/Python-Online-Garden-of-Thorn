@@ -20256,6 +20256,9 @@ function renderAccountReplayPlaybackBar() {
     const bar = ensureAccountReplayPlaybackBar();
     bar.classList.toggle('hidden', !replayMode);
     bar.classList.toggle('collapsed', !!accountReplayControlsCollapsed);
+    // 收起时箭头向下（提示可以展开），展开时向上（反馈 GS-199：让这个开关更容易被发现）
+    const collapseToggleBtn = bar.querySelector('[data-account-replay-live-control="toggle"]');
+    if (collapseToggleBtn) collapseToggleBtn.textContent = accountReplayControlsCollapsed ? '▾' : '▴';
     const progress = $('account-replay-live-progress');
     if (progress) {
         progress.max = String(Math.max(0, (accountReplayTotalFrames || accountReplayTimeline.length) - 1));

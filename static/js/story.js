@@ -127,6 +127,7 @@
     const storyActiveMechanicalTrackCards = new Map();
     const storyCodexRarities = new Set();
     const storyCodexTypes = new Set();
+    const storyCodexOwners = new Set();
     const STORY_AFK_ACTIVITY_REPORT_INTERVAL_MS = 20000;
     const STORY_PRESERVED_SCROLL_SELECTORS = Object.freeze([
         '.story-map-scroll',
@@ -535,7 +536,7 @@
             runDeck: 'Full Deck', viewRunDeck: 'View Full Deck',
             codexTitle: 'Story Compendium', viewCodex: 'View Story Compendium',
             codexCards: 'Cards', codexEnemies: 'Enemies', codexTalents: 'Talents', codexBooks: 'Enchantment Books', codexTerms: 'Terms',
-            codexSearch: 'Search discovered content', codexRarity: 'Rarity', codexType: 'Type',
+            codexSearch: 'Search discovered content', codexRarity: 'Rarity', codexType: 'Type', codexOwner: 'Category', codexOwnerNeutral: 'Neutral', codexOwnerCommonFlower: 'Common Flower',
             codexAll: 'All', codexClear: 'Clear', codexResults: (count) => `${count} result(s)`,
             codexDiscovered: (found, total) => `Discovered ${found}/${total}`,
             codexEmpty: 'No matching discoveries', codexUnknownTalent: 'Unnamed blessing',
@@ -646,7 +647,7 @@
             runDeck: '总牌库', viewRunDeck: '查看总牌库',
             codexTitle: '故事图鉴', viewCodex: '查看故事图鉴',
             codexCards: '卡牌', codexEnemies: '生物', codexTalents: '天赋', codexBooks: '附魔书', codexTerms: '术语',
-            codexSearch: '搜索已发现内容', codexRarity: '稀有度', codexType: '类型',
+            codexSearch: '搜索已发现内容', codexRarity: '稀有度', codexType: '类型', codexOwner: '分类', codexOwnerNeutral: '中立', codexOwnerCommonFlower: '普花',
             codexAll: '全选', codexClear: '清空', codexResults: (count) => `${count} 项`,
             codexDiscovered: (found, total) => `已发现 ${found}/${total}`,
             codexEmpty: '没有符合条件的已发现内容', codexUnknownTalent: '未命名赐福',
@@ -751,7 +752,7 @@
             runDeck: 'Deck complet', viewRunDeck: 'Voir le deck complet', battleWon: 'Victoire',
             codexTitle: 'Compendium', viewCodex: 'Voir le compendium',
             codexCards: 'Cartes', codexEnemies: 'Ennemis', codexTalents: 'Talents', codexBooks: 'Livres enchantés', codexTerms: 'Termes',
-            codexSearch: 'Rechercher le contenu découvert', codexRarity: 'Rareté', codexType: 'Type',
+            codexSearch: 'Rechercher le contenu découvert', codexRarity: 'Rareté', codexType: 'Type', codexOwner: 'Catégorie', codexOwnerNeutral: 'Neutre', codexOwnerCommonFlower: 'Fleur commune',
             codexAll: 'Tout', codexClear: 'Effacer', codexResults: (count) => `${count} résultat(s)`,
             codexDiscovered: (found, total) => `Découvert ${found}/${total}`,
             codexEmpty: 'Aucune découverte correspondante', codexUnknownTalent: 'Bénédiction sans nom',
@@ -878,7 +879,7 @@
             runDeck: '全デッキ', viewRunDeck: '全デッキを見る',
             codexTitle: '物語図鑑', viewCodex: '物語図鑑を見る',
             codexCards: 'カード', codexEnemies: '敵', codexTalents: '天賦', codexBooks: 'エンチャント本', codexTerms: '用語',
-            codexSearch: '発見済みを検索', codexRarity: 'レア度', codexType: 'タイプ',
+            codexSearch: '発見済みを検索', codexRarity: 'レア度', codexType: 'タイプ', codexOwner: '分類', codexOwnerNeutral: '中立', codexOwnerCommonFlower: '普花',
             codexAll: 'すべて', codexClear: '解除', codexResults: (count) => `${count}件`,
             codexDiscovered: (found, total) => `発見 ${found}/${total}`,
             codexEmpty: '一致する発見はありません', codexUnknownTalent: '名前のない祝福',
@@ -10073,6 +10074,7 @@
             search: storyCodexSearch,
             rarities: [...storyCodexRarities],
             types: [...storyCodexTypes],
+            owners: [...storyCodexOwners],
         };
     }
 
@@ -10087,6 +10089,8 @@
         (snapshot.rarities || []).forEach((value) => storyCodexRarities.add(String(value)));
         storyCodexTypes.clear();
         (snapshot.types || []).forEach((value) => storyCodexTypes.add(String(value)));
+        storyCodexOwners.clear();
+        (snapshot.owners || []).forEach((value) => storyCodexOwners.add(String(value)));
         const input = $('story-codex-search');
         if (input) input.value = storyCodexSearch;
     }
@@ -10497,8 +10501,22 @@
         records.forEach((record) => {
             storyCodexRarities.add(String(record.definition.rarity || 'common'));
             storyCodexTypes.add(String(record.definition.type || ''));
+            storyCodexOwners.add(storyCodexOwnerKey(record.definition));
         });
         storyCodexCardFiltersReady = true;
+    }
+
+    /* 反馈 GS-200：图鉴卡牌显示所属分类。数据侧的 owner 字段：
+       primary＝普花（普通的花花）的池子、neutral＝中立、其余＝对应角色的专属池。 */
+    function storyCodexOwnerKey(definition) {
+        return String((definition && definition.owner) || 'neutral');
+    }
+
+    function storyCodexOwnerLabel(ownerKey) {
+        if (ownerKey === 'neutral') return t.codexOwnerNeutral;
+        if (ownerKey === 'primary') return t.codexOwnerCommonFlower;
+        const character = storyContent?.characters?.[ownerKey];
+        return character ? localize(character.name) : ownerKey;
     }
 
     function renderStoryCodexCards(sidebar, detail) {
@@ -10506,12 +10524,49 @@
         ensureStoryCodexCardFilters(records);
         const rarityCounts = new Map();
         const typeCounts = new Map();
+        const ownerCounts = new Map();
+        const OWNER_ORDER = ['primary', 'mage', 'neutral'];
         records.forEach((record) => {
             const rarity = String(record.definition.rarity || 'common');
             const type = String(record.definition.type || '');
+            const owner = storyCodexOwnerKey(record.definition);
             rarityCounts.set(rarity, (rarityCounts.get(rarity) || 0) + 1);
             typeCounts.set(type, (typeCounts.get(type) || 0) + 1);
+            ownerCounts.set(owner, (ownerCounts.get(owner) || 0) + 1);
         });
+
+        /* 分类筛选（GS-200）：与稀有度/类型同一套选项样式 */
+        const ownerTitle = document.createElement('strong');
+        ownerTitle.className = 'story-codex-filter-title';
+        ownerTitle.textContent = t.codexOwner;
+        sidebar.append(ownerTitle, storyCodexFilterActions(
+            () => {
+                ownerCounts.forEach((_, key) => storyCodexOwners.add(key));
+                renderStoryCodex();
+            },
+            () => {
+                storyCodexOwners.clear();
+                renderStoryCodex();
+            },
+        ));
+        const ownerOptions = document.createElement('div');
+        ownerOptions.className = 'story-codex-filter-options';
+        ownerOptions.dataset.storyScrollKey = 'codex-card-owner-options';
+        [...ownerCounts.keys()].sort((left, right) => {
+            const li = OWNER_ORDER.indexOf(left);
+            const ri = OWNER_ORDER.indexOf(right);
+            return (li < 0 ? 999 : li) - (ri < 0 ? 999 : ri) || left.localeCompare(right);
+        }).forEach((key) => {
+            const option = storyCodexFilterOption(
+                key,
+                { name: { zh: storyCodexOwnerLabel(key), en: storyCodexOwnerLabel(key) } },
+                ownerCounts.get(key) || 0,
+                storyCodexOwners,
+                renderStoryCodex,
+            );
+            ownerOptions.append(option);
+        });
+        sidebar.append(ownerOptions);
 
         const rarityTitle = document.createElement('strong');
         rarityTitle.className = 'story-codex-filter-title';
@@ -10593,6 +10648,7 @@
         const visible = records.filter((record) => (
             storyCodexRarities.has(String(record.definition.rarity || 'common'))
             && storyCodexTypes.has(String(record.definition.type || ''))
+            && storyCodexOwners.has(storyCodexOwnerKey(record.definition))
             && storyCodexSearchMatches(record.id, record.definition)
         ));
         resultCount.textContent = t.codexResults(visible.length);
@@ -10616,6 +10672,13 @@
             });
             cardElement.classList.add('story-codex-card-tile');
             cardElement.classList.toggle('is-related-target', storyCodexSelectedId === record.id);
+            const ownerKey = storyCodexOwnerKey(record.definition);
+            const ownerBadge = document.createElement('span');
+            ownerBadge.className = 'story-codex-owner-badge';
+            ownerBadge.dataset.owner = ownerKey;
+            ownerBadge.textContent = storyCodexOwnerLabel(ownerKey);
+            ownerBadge.title = `${t.codexOwner}：${storyCodexOwnerLabel(ownerKey)}`;
+            cardElement.appendChild(ownerBadge);
             cardElement.dataset.storyCodexCardId = record.id;
             storyCardTermOptions.set(cardElement, { allowedUpgradeStates });
             grid.append(cardElement);
