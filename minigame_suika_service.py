@@ -27,7 +27,9 @@ from typing import Dict, List, Optional
 import minigame_2048_service as base
 
 GAME_KEY = "suika"
-RULES_VERSION = 1
+# v2（2026-09-23）：场地 640→768、二道生成门槛 1800→1200（物理变了，旧榜记录
+# 留在 v1 不再参与排名，新成绩从 v2 重新计）。
+RULES_VERSION = 2
 SAVE_VERSION = 1
 
 # 启发式校验阈值（宁可宽一点，避免误伤合法长局；异常量级才拒绝）

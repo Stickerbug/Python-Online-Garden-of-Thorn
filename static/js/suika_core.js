@@ -14,12 +14,15 @@
    friction 0.006 / frictionStatic 0.006 / frictionAir 0 / restitution 0.1，
    固定步长 1000/60ms 推进，保证同样输入得到同样结果。 */
 
-export const RULES_VERSION = 2;
+export const RULES_VERSION = 3;
 export const FIXED_STEP_MS = 1000 / 60;
 
-/** 场地：640×960 逻辑分辨率；左右墙与地板各占 64，底部再留 48 给状态栏（页面上画在画布外）。 */
+/** 场地：768×960 逻辑分辨率；左右墙与地板各占 64，底部再留 48 给状态栏（页面上画在画布外）。
+    规则 v3 把宽度从 640 提到 768（可玩宽 512→640）：640 恰好等于两颗机械花（第 9 档）
+    并排的宽度——此前两颗第 9 档在场地上根本放不进去，两颗 Player 相消的顶层机制
+    实际不可达；加宽后竖叠双 Player 也能在场内完成合成。 */
 export const ARENA = Object.freeze({
-  width: 640,
+  width: 768,
   height: 960,
   wall: 64,
   loseLineY: 84,
@@ -49,7 +52,10 @@ export const SPAWN_HISTORY = 10;
 export const SPAWN_MAX_SAME_RUN = 2;     // 连续 2 次相同就不再出这一档
 export const SPAWN_MAX_SAME_TOTAL = 3;   // 最近 10 颗里出现 3 次就不再出
 export const SPAWN_RARE_WINDOW = 8;      // 当前最高档在最近 8 颗里出现过就不再出
-export const SPAWN_GATE_SCORES = Object.freeze([300, 1800]);
+/* 生成门槛（按分数单向解锁）：300 解锁第 4 档生成，1200 解锁第 5 档。
+    v3 把第二道门槛从 1800 降到 1200：1800 只有顶级长局才碰得到，
+    仙人掌解锁基本是死内容；1200 让好局中段就能见到。 */
+export const SPAWN_GATE_SCORES = Object.freeze([300, 1200]);
 export const SPAWN_GATE_TIERS = Object.freeze([3, 4, 5]);
 
 /** 11 档：半径/分值是经典 Suika 曲线；贴图见 docs/合成大花花-美术清单.md。 */
