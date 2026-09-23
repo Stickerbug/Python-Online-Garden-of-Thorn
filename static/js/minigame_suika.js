@@ -33,16 +33,21 @@ const DEFAULT_SKIN = Object.freeze({ primary: '#FFE763', shape: 'oval', kind: ''
 const PLAYER_LOOK = Object.freeze({ x: 0.707, y: -0.707 });
 const SKIN_LOOK_OFFSET = Object.freeze({ x: 0.38, y: 0.56 });
 
-/* 玩家球的脸部几何，全部以"直径占比"表示——与游戏 .skin-avatar 的 CSS 逐项对齐
-   （border 7.5cqi、眼睛 10%×20% @ top32%/inset33%、瞳孔 84%×54%、嘴 top63% 38%×20%
-   stroke 5.6/100）。菱形眼在游戏里更大（12%×22% @ 31%/32%），菱形/六边形的瞳孔是
-   62%×62%。drawPlayerBall（canvas）与 playerBallSvg（DOM 预览）共用这份表。 */
+/* 玩家球的脸部几何——与游戏 .skin-avatar 的 CSS 逐项对齐。注意 CSS 的百分比
+   子元素（眼睛/嘴）都落在 **border 内侧的 content 盒**（直径的 85%）里，
+   所以这里的占比也都是相对"内圆"（radius - border）而非物理半径：
+   border 7.5cqi、眼睛 10%×20% @ top32%/inset33%、瞳孔 84%×54%、嘴 top63% 盒高 20%
+   （盒内 SVG viewBox 100×56、线宽 5.6 个单位）。菱形眼 12%×22% @ 31%/32%，
+   菱形/六边形瞳孔 62%×62%。drawPlayerBall（canvas）与 DOM 预览共用同一几何。 */
 const SKIN_FEATURES = Object.freeze({
   eye: Object.freeze({ w: 0.10, h: 0.20, top: 0.32, inset: 0.33 }),
   pupil: Object.freeze({ w: 0.84, h: 0.54 }),
   diamondEye: Object.freeze({ w: 0.12, h: 0.22, top: 0.31, inset: 0.32 }),
   smallPupil: Object.freeze({ w: 0.62, h: 0.62 }),
-  mouth: Object.freeze({ w: 0.38, h: 0.20, top: 0.63, stroke: 0.056 }),
+  /* 嘴：top=盒顶（内圆占比）、h=盒高（内圆占比）、stroke=线宽（viewBox 单位）。
+     CSS 的 SVG 等比缩放（meet）：s=内圆直径×20%/56，有效线宽=5.6×s≈内圆的 2%
+     （球的 1.7%）——此前误按"整球直径×5.6%"画，粗了三倍多。 */
+  mouth: Object.freeze({ top: 0.63, h: 0.20, stroke: 5.6 }),
   border: 0.075,
 });
 
@@ -77,8 +82,9 @@ const SCAN = 256;
    这样"看上去挨住"就是"真的碰到"（没有底色圆兜着，缩小会让手感对不上）。 */
 const BOX_FILL = 1;
 /* 柔和投影直接烘焙进缓存贴图：运行时逐球设 shadowBlur 是每帧一次的软件模糊，
-   低端机上正是卡顿主因（反馈：性能较差的设备会比较卡）。烘焙时按 SCAN 比例取
-   blur ≈ 0.22×半径（与原先 drawSprite 里的取法一致），缩放绘制时阴影随图等比。 */
+   低端机上正是卡顿主因（反馈：性能较差的设备会比较卡）。2026-09-24 反馈
+   「碰撞箱比看起来的要小」：光晕会在球沿外再溢出约一个 blur 的暗圈，把球的
+   视觉轮廓撑大——从 0.22×半径 收到 0.11×半径，保住柔影又不放大视觉外沿。 */
 const SHADOW_BAKE_MARGIN = Math.ceil(SCAN * 0.16);
 
 const canvas = document.getElementById('sk-canvas');
@@ -232,7 +238,7 @@ async function prepareArt(index) {
   baked.height = size;
   const bakedCtx = baked.getContext('2d');
   bakedCtx.shadowColor = 'rgba(24, 34, 28, 0.32)';
-  bakedCtx.shadowBlur = Math.max(3, SCAN * 0.11);
+  bakedCtx.shadowBlur = Math.max(3, SCAN * 0.055);
   bakedCtx.drawImage(img, SHADOW_BAKE_MARGIN, SHADOW_BAKE_MARGIN, SCAN, SCAN);
   return {
     img: baked,
@@ -351,18 +357,17 @@ function drawSkinFace(target, x, y, radius, feature, pupilColor) {
     target.restore();
   });
 
-  /* 嘴：与游戏 .skin-mouth 同位（top 63%、宽 38%、高 20%），同一条曲线
-     （viewBox 100×56 → M20,18 C36,32 64,32 80,18），线宽按直径折算（stroke 5.6/100）。 */
-  const mouthW = radius * 2 * SKIN_FEATURES.mouth.w;
-  const mouthH = radius * 2 * SKIN_FEATURES.mouth.h;
-  const mouthX = x - mouthW / 2;
-  const mouthY = y - radius + radius * 2 * SKIN_FEATURES.mouth.top;
-  const px = (v) => mouthX + (v / 100) * mouthW;
-  const py = (v) => mouthY + (v / 56) * mouthH;
+  /* 嘴：与游戏 .skin-mouth 同位同形（viewBox 100×56 的同一条曲线 M20,18 C36,32 64,32 80,18）。
+     CSS 的 SVG 等比缩放（meet）：s=直径×20%/56，水平居中、线宽 5.6×s（≈直径 2%）。
+     嘴的可见宽度由曲线本身决定（60×s ≈ 直径 21%），不另设盒宽。 */
+  const mouthScale = radius * 2 * SKIN_FEATURES.mouth.h / 56;
+  const mouthTop = y - radius + radius * 2 * SKIN_FEATURES.mouth.top;
+  const px = (v) => x + (v - 50) * mouthScale;
+  const py = (v) => mouthTop + v * mouthScale;
   target.beginPath();
   target.moveTo(px(20), py(18));
   target.bezierCurveTo(px(36), py(32), px(64), py(32), px(80), py(18));
-  target.lineWidth = Math.max(1.2, radius * 2 * SKIN_FEATURES.mouth.stroke);
+  target.lineWidth = Math.max(1.2, SKIN_FEATURES.mouth.stroke * mouthScale);
   target.strokeStyle = feature;
   target.lineCap = 'round';
   target.lineJoin = 'round';
@@ -382,11 +387,15 @@ function drawPlayerBall(target, x, y, radius) {
   target.arc(x, y, radius, 0, Math.PI * 2);
   target.fillStyle = color;
   target.fill();
-  /* 边框与游戏 .skin-avatar 的 7.5cqi 一致（从半径向内画，不改变物理外沿） */
+  /* 边框与游戏 .skin-avatar 的 7.5cqi 一致：CSS 的 border 在盒内（border-box），
+     而 canvas 的 stroke 以路径为中心线——路径必须缩到 radius-borderWidth/2，
+     整圈落在物理圆内。否则描边外溢 3.75% 直径，球看着比碰撞箱大。 */
   const borderWidth = diameter * SKIN_FEATURES.border;
   if (borderWidth > 0) {
     target.lineWidth = borderWidth;
     target.strokeStyle = edge;
+    target.beginPath();
+    target.arc(x, y, radius - borderWidth / 2, 0, Math.PI * 2);
     target.stroke();
   }
   /* 内侧高光/阴影：对应游戏 inset box-shadow（顶部白 18%、底部黑 8%）。 */
@@ -411,7 +420,9 @@ function drawPlayerBall(target, x, y, radius) {
     return;
   }
 
-  drawSkinFace(target, x, y, radius, feature, pupil);
+  /* 脸画在边框内侧的 content 圆里（CSS 的百分比子元素同样只占 border 内侧），
+     否则眼睛/嘴会比游戏里的皮肤大一圈。 */
+  drawSkinFace(target, x, y, radius - borderWidth, feature, pupil);
   target.restore();
 }
 

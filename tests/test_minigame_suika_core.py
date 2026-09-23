@@ -228,7 +228,7 @@ class SuikaCoreTests(unittest.TestCase):
         )
 
         save = result["save"]
-        self.assertEqual(save["version"], 4)
+        self.assertEqual(save["version"], 5)
         self.assertEqual(save["drops"], 6)
         self.assertTrue(save["scoreSame"])
         self.assertTrue(save["overSame"])
