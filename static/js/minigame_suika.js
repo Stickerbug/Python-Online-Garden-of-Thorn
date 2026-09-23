@@ -1063,10 +1063,13 @@ async function refreshLeaderboard() {
       }
     }
     if (rankNoteEl) {
-      const pool = Number(data && data.champion_pool) || 300;
+      const prizes = (data && data.champion_prizes) || {};
+      const p1 = Number(prizes[1]) || 1000;
+      const p2 = Number(prizes[2]) || 500;
+      const p3 = Number(prizes[3]) || 200;
       const need = Number(data && data.champion_min_accounts) || 3;
-      rankNoteEl.textContent = `每周一按最近 14 天成绩发一次冠军奖，奖池 ${pool} 荆露。`;
-      rankNoteEl.title = `每周一 00:00（UTC+8）结算；至少 ${need} 个有效账号才发放。`;
+      rankNoteEl.textContent = `每周一按最近 14 天成绩发奖：第一名 ${p1}、第二名 ${p2}、第三名 ${p3} 荆露。`;
+      rankNoteEl.title = `每周一 00:00（UTC+8）结算；同分并列均分该名次奖金；至少 ${need} 个有效账号才发放。`;
     }
   } catch (_) {
     rankBodyEl.textContent = '读取榜单失败（可能是离线）。';

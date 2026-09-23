@@ -334,7 +334,6 @@ def period_history(conn, limit: int = 12):
     return base.period_history(conn, limit=limit, game_key=GAME_KEY)
 
 
-def settle_due(conn, *, now=None, pool: int = base.CHAMPION_POOL,
-               min_accounts: int = base.CHAMPION_MIN_ACCOUNTS):
+def settle_due(conn, *, now=None, min_accounts: int = base.CHAMPION_MIN_ACCOUNTS):
     ensure_schema(conn)
-    return base.settle_due(conn, now=now, pool=pool, min_accounts=min_accounts, game_key=GAME_KEY)
+    return base.settle_due(conn, now=now, min_accounts=min_accounts, game_key=GAME_KEY)

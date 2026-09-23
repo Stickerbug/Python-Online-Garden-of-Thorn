@@ -127,7 +127,9 @@
         稀有度名称是本小游戏的固定顺序，不代表其他作品里的等级关系。
       </p>
       <p class="mg-hint">
-        每周一 00:00（UTC+8）按最近 {{ minigame_window_days }} 天成绩结算：冠军总奖池 {{ champion_pool }} 荆露。
+        每周一 00:00（UTC+8）按最近 {{ minigame_window_days }} 天成绩结算：
+        第一名 {{ champion_prizes[1] }}、第二名 {{ champion_prizes[2] }}、第三名 {{ champion_prizes[3] }} 荆露
+        （同分并列均分该名次奖金）。
       </p>
     </div>
   </details>
@@ -167,7 +169,7 @@
   'chatRole': chat_role|default('player'),
   'gameKey': '2048',
   'windowDays': minigame_window_days,
-  'championPool': champion_pool,
+  'championPrizes': champion_prizes,
   'championMinAccounts': champion_min_accounts,
 } | tojson }}</script>
 <script nonce="{{ csp_nonce }}" type="application/json" id="mg-palette">{{ rarity_table | tojson }}</script>

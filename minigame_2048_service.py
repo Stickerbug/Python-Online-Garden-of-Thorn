@@ -34,7 +34,9 @@ except Exception:  # pragma: no cover - 极端环境下只影响默认连接
 
 GAME_KEY = "2048"
 GAME_TITLE = "2048"
-CHAMPION_POOL = 300
+# 周榜奖励（2026-09-23 起）：前三名固定名次奖金，取代旧的「300 奖池由并列冠军均分」。
+# 同分并列同名次（竞赛排名 1,1,3 式）：并列者均分该名次的奖金。
+PRIZE_BY_RANK = {1: 1000, 2: 500, 3: 200}
 CHAMPION_MIN_ACCOUNTS = 3
 RULES_WINDOW_DAYS = 14
 DEFAULT_LEADERBOARD_LIMIT = 100
@@ -742,6 +744,18 @@ def _split_pool(pool: int, winners: List[int]) -> Dict[int, int]:
     return amounts
 
 
+def prize_amounts(entries: List[Dict[str, object]]) -> Dict[int, int]:
+    """按名次发奖：1/2/3 名各得 PRIZE_BY_RANK 里的奖金；同分并列均分该名次奖金。"""
+
+    amounts: Dict[int, int] = {}
+    for rank, prize in PRIZE_BY_RANK.items():
+        winners = [int(item["user_id"]) for item in entries
+                   if int(item.get("rank") or 0) == int(rank)]
+        for user_id, amount in _split_pool(int(prize), winners).items():
+            amounts[user_id] = amounts.get(user_id, 0) + amount
+    return amounts
+
+
 def _credit_dew(conn, user_id: int, amount: int, *, period_key: str, reason: str,
                 now=None) -> bool:
     """荆露入账（与奖期写在同一个事务里）；重复调用不会重复入账。"""
@@ -773,7 +787,7 @@ def _credit_dew(conn, user_id: int, amount: int, *, period_key: str, reason: str
     return True
 
 
-def settle_due(conn, *, now=None, pool: int = CHAMPION_POOL,
+def settle_due(conn, *, now=None,
                min_accounts: int = CHAMPION_MIN_ACCOUNTS,
                game_key: str = "2048") -> List[Dict[str, object]]:
     """结算所有已到点的奖期（补做也走同一条路，用**原截止时点**取榜单）。"""
@@ -787,8 +801,10 @@ def settle_due(conn, *, now=None, pool: int = CHAMPION_POOL,
         window = leaderboard(conn, window="14d", limit=0,
                              now=cutoff.astimezone(timezone.utc), game_key=game_key)
         participants = int(window["participants"])
-        winners = [item for item in window["entries"] if item["rank"] == 1] if participants else []
-        amounts = _split_pool(int(pool), [item["user_id"] for item in winners]) if winners else {}
+        winners = [item for item in window["entries"]
+                   if int(item.get("rank") or 0) in PRIZE_BY_RANK] if participants else []
+        amounts = prize_amounts(window["entries"]) if participants else {}
+        pool_total = sum(int(value) for value in amounts.values())
         if existing is None:
             status = "pending" if winners else "skipped"
             reason = "" if winners else "窗口内没有达到资格的成绩"
@@ -800,7 +816,7 @@ def settle_due(conn, *, now=None, pool: int = CHAMPION_POOL,
                    (period_key, cutoff_at, participants, pool, winners_json, amounts_json,
                     status, reason, created_at, completed_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (period_key, now_iso(cutoff.astimezone(timezone.utc)), participants, int(pool),
+                (period_key, now_iso(cutoff.astimezone(timezone.utc)), participants, pool_total,
                  json.dumps([item["user_id"] for item in winners]), json.dumps(amounts),
                  status, reason, now_iso(now), now_iso(now) if status == "skipped" else None),
             )

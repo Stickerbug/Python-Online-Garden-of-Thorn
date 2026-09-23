@@ -35080,7 +35080,7 @@ def minigame_2048_page():
         static_version=GTN_STATIC_VERSION,
         rarity_table=minigame_2048.rarity_table_payload(),
         minigame_window_days=minigame_2048_service.RULES_WINDOW_DAYS,
-        champion_pool=minigame_2048_service.CHAMPION_POOL,
+        champion_prizes=minigame_2048_service.PRIZE_BY_RANK,
         champion_min_accounts=minigame_2048_service.CHAMPION_MIN_ACCOUNTS,
         from_key=from_key,
         back_href=minigame_registry.with_from('/minigame', from_key),
@@ -35139,7 +35139,7 @@ def api_minigame_suika_state():
         'rules': {
             'rules_version': minigame_suika_service.RULES_VERSION,
             'window_days': minigame_2048_service.RULES_WINDOW_DAYS,
-            'champion_pool': minigame_2048_service.CHAMPION_POOL,
+            'champion_prizes': minigame_2048_service.PRIZE_BY_RANK,
             'champion_min_accounts': minigame_2048_service.CHAMPION_MIN_ACCOUNTS,
         },
     })
@@ -35247,7 +35247,7 @@ def api_minigame_suika_leaderboard():
         'me': me,
         'periods': periods,
         'window_days': minigame_2048_service.RULES_WINDOW_DAYS,
-        'champion_pool': minigame_2048_service.CHAMPION_POOL,
+        'champion_prizes': minigame_2048_service.PRIZE_BY_RANK,
         'champion_min_accounts': minigame_2048_service.CHAMPION_MIN_ACCOUNTS,
     })
 

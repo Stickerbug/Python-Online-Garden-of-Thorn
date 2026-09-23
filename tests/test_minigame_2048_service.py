@@ -294,7 +294,7 @@ class SettlementTests(unittest.TestCase):
                          ["2026-09-21", "2026-09-28", "2026-10-05"])
         self.assertEqual(svc.week_cutoffs("2026-09-20T00:00:00+08:00"), [])
 
-    def test_three_accounts_split_the_pool(self):
+    def test_top_three_ranks_get_fixed_prizes(self):
         for user_id in (1, 2, 3):
             self._record(user_id, 1000 * user_id, 256 * user_id, "2026-09-25T00:00:00Z")
         results = svc.settle_due(self.conn, now="2026-10-01T00:00:00+08:00")
@@ -304,18 +304,34 @@ class SettlementTests(unittest.TestCase):
         self.assertEqual(len(rows), 2)
         self.assertEqual(rows[1]["status"], "paid")
         self.assertEqual(int(rows[1]["participants"]), 3)
+        # 1/2/3 名固定奖金；奖池列存实际发放总额
+        rewards = {int(row["user_id"]): int(row["amount"])
+                   for row in self.conn.execute("SELECT * FROM minigame_2048_rewards").fetchall()}
+        self.assertEqual(rewards, {3: 1000, 2: 500, 1: 200})
+        self.assertEqual(int(rows[1]["pool"]), 1700)
         ledger = self.conn.execute(
             "SELECT SUM(free_delta) AS total FROM user_currency_transactions").fetchone()["total"]
-        self.assertEqual(int(ledger), svc.CHAMPION_POOL)
+        self.assertEqual(int(ledger), 1700)
 
-    def test_ties_share_the_pool_exactly(self):
+    def test_tied_leaders_split_the_first_prize(self):
+        # 三人同分并列第 1（没有人排第 2/3 名）：均分第一名奖金 1000
         for user_id in (2, 3, 4):
             self._record(user_id, 777, 256, "2026-09-25T00:00:00Z")
         svc.settle_due(self.conn, now="2026-10-01T00:00:00+08:00")
         rewards = self.conn.execute("SELECT * FROM minigame_2048_rewards").fetchall()
         self.assertEqual(len(rewards), 3)
-        self.assertEqual(sum(int(row["amount"]) for row in rewards), svc.CHAMPION_POOL)
-        self.assertEqual(sorted(int(row["amount"]) for row in rewards), [100, 100, 100])
+        self.assertEqual(sum(int(row["amount"]) for row in rewards), 1000)
+        self.assertEqual(sorted(int(row["amount"]) for row in rewards), [333, 333, 334])
+
+    def test_two_tied_first_then_third_rank(self):
+        # 竞赛排名 1,1,3：并列第 1 均分 1000，第 3 名拿 200，第 2 名奖金无人领
+        self._record(2, 777, 256, "2026-09-25T00:00:00Z")
+        self._record(3, 777, 256, "2026-09-25T01:00:00Z")
+        self._record(4, 500, 256, "2026-09-25T02:00:00Z")
+        svc.settle_due(self.conn, now="2026-10-01T00:00:00+08:00")
+        rewards = {int(row["user_id"]): int(row["amount"])
+                   for row in self.conn.execute("SELECT * FROM minigame_2048_rewards").fetchall()}
+        self.assertEqual(rewards, {2: 500, 3: 500, 4: 200})
 
     def test_settlement_is_idempotent_and_late_uploads_do_not_rewrite_it(self):
         for user_id in (1, 2, 3):
