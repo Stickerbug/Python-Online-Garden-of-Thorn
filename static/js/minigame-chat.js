@@ -193,6 +193,11 @@
       if (Number.isFinite(id) && id > 0) entriesById.set(id, item);
     }
 
+    /* 服务端消息的标识字段是 message_id（GB-204：append 守卫与 render 游标
+       此前误读 item.id——服务端没有这个字段，游标恒为 0（死代码）、
+       重复投递的单条消息每条都计未读，红点曾炸到几十条）。 */
+    const messageKey = (item) => Number((item && (item.message_id || item.messageId)) || 0);
+
     function updateUnreadBadge() {
       const badge = els(options.unreadId);
       if (!badge) return;
@@ -226,8 +231,15 @@
     function append(item) {
       const log = els(options.logId);
       if (!log || !item) return;
+      /* 重连/重进时服务端可能重发已见过的消息：按 id 去重（GB-204：重复投递
+         曾把未读红点炸到几十条）。render 路径本就有游标去重，这里补单条路径。 */
+      const itemId = messageKey(item);
+      if (Number.isFinite(itemId) && itemId > 0 && entriesById.has(itemId)) return;
       if (log.querySelector('p.mg-hint')) log.innerHTML = '';
       remember(item);
+      /* 游标跟着已展示的消息走：这条消息若随后又随整段历史（render）到达，
+         不会在两条路径各计一次未读。 */
+      if (itemId > unreadCursor) unreadCursor = itemId;
       const open = chatPanelOpen();
       const pin = open && chatNearBottom(log);
       log.insertAdjacentHTML('beforeend', lineHtml(item));
@@ -260,7 +272,7 @@
       }
       // 未读按消息 id 计：首屏只记游标，之后新增（且面板收起）的才算未读
       const rows = list;
-      const maxId = rows.reduce((max, item) => Math.max(max, Number((item && item.id) || 0)), 0);
+      const maxId = rows.reduce((max, item) => Math.max(max, messageKey(item)), 0);
       if (!unreadCursorReady) {
         unreadCursorReady = true;
         unreadCursor = maxId;
@@ -271,7 +283,7 @@
       if (!panel || panel.hidden) {
         rows.forEach((item) => {
           if (!item || item.type === 'time' || item.system) return;
-          if ((Number(item.id) || 0) <= unreadCursor) return;
+          if (messageKey(item) <= unreadCursor) return;
           if (isOwn(item)) return;
           unread += 1;
         });

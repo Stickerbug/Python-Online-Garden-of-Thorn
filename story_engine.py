@@ -753,23 +753,23 @@ def _is_story_primary_card(card):
 
 
 def _enchantment_damage_effect(effect, damage_bonus):
-    """把附魔书给的「伤害+D」并进一条攻击效果（反馈 #103）。
+    """把附魔书给的「伤害+D」挂到攻击效果上（反馈 #103，GB-206 改口径）。
 
-    ``damage`` / ``damage_per_status`` / ``damage_per_active_discard`` /
-    ``damage_per_elixir`` 的 ``amount`` 就是每段基础伤害，直接相加即可；
-    ``damage_from_shield`` 的 ``amount`` 是护盾层数的倍数，加在这里会被乘上护盾
-    层数，它的平添伤害在 ``bonus`` 字段，所以加在那里。
+    加成**不再直接折进 amount**：每段基础伤害在运行期才知道段数（damage 的
+    hits、damage_per_status 的层数、damage_per_elixir 的 X 消耗），折进 amount
+    会让每一段都吃满 D（3 段 +15 变 +45）。这里只挂 ``enchantment_damage_bonus``
+    字段，由 ``_player_attack_effect_segment`` 按当次段数 ceil(D/段数) 分摊——
+    与多人模式 ``ceil(power/hits)`` 同口径。``damage_from_shield`` 的 ``bonus``
+    是一次性平添（段数为 1），同样走新字段。
     """
     effect_type = str(effect.get('type') or '')
-    if effect_type == 'damage_from_shield':
+    if effect_type == 'damage_from_shield' or effect_type in STORY_PLAYER_ATTACK_EFFECT_TYPES:
+        bonus = max(0, int(damage_bonus or 0))
+        if not bonus:
+            return effect
         return {
             **effect,
-            'bonus': max(0, int(effect.get('bonus') or 0) + damage_bonus),
-        }
-    if effect_type in STORY_PLAYER_ATTACK_EFFECT_TYPES:
-        return {
-            **effect,
-            'amount': max(0, int(effect.get('amount') or 0) + damage_bonus),
+            'enchantment_damage_bonus': max(0, int(effect.get('enchantment_damage_bonus') or 0)) + bonus,
         }
     return effect
 
@@ -844,6 +844,8 @@ def _card_values(card):
             values['effects'] = tuple(boosted_effects)
         damage_bonus = int(modifiers.get('damage_bonus') or 0)
         if damage_bonus:
+            # 只挂字段，不折 amount：段数在运行期才知道，分摊在
+            # _player_attack_effect_segment 里按 ceil(D/段数) 做（GB-206）。
             values['effects'] = tuple(
                 _enchantment_damage_effect(effect, damage_bonus)
                 for effect in values.get('effects') or ()
@@ -2732,6 +2734,11 @@ def _player_attack_effect_segment(state, effect, target, context):
         hits = int(context.get('x_cost') or 0)
     else:
         return None
+    # 附魔书/威力加成按段分摊（GB-206，与多人 ceil(power/hits) 同口径）：
+    # 每段 + ceil(D/段数)，而不是把 D 折进 amount 让每段吃满。
+    enchant_bonus = int(effect.get('enchantment_damage_bonus') or 0)
+    if enchant_bonus > 0 and hits > 0:
+        base_amount += int(math.ceil(enchant_bonus / hits))
     return max(0, base_amount), max(0, hits)
 
 

@@ -39635,15 +39635,17 @@ if (window.__GTN_CARD_EXPORTER_RENDERER__) {
         const startedAt = Date.now();
         let lastClickAt = 0;
         const autoEnterLobby = () => {
+            const now = Date.now();
+            // 先续命再判断：登录视图在加载/自动登录过渡时可能短暂隐藏，
+            // 以前这里直接 return 掉整个轮询，返回就停在主页（用户反馈）。
+            if (now - startedAt < 20000) window.setTimeout(autoEnterLobby, 400);
             const loginView = $('view-login');
             if (!loginView || loginView.classList.contains('hidden')) return;
-            const now = Date.now();
             const connectBtn = $('btn-connect');
             if (connectBtn && !connectBtn.disabled && now - lastClickAt > 2500) {
                 lastClickAt = now;
                 connectBtn.click();
             }
-            if (now - startedAt < 20000) window.setTimeout(autoEnterLobby, 400);
         };
         window.setTimeout(autoEnterLobby, 400);
     }

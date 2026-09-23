@@ -41,6 +41,7 @@
     pendingInviterSid: '',
     identityRejected: false,
     ready: false,
+    startFailedAt: 0,
   };
 
   const el = (id) => document.getElementById(id);
@@ -55,7 +56,8 @@
     const box = el(state.options.inviteBoxId);
     const text = el(state.options.inviteTextId);
     if (!box || !text) return;
-    const from = (payload && payload.from) || '对方';
+    /* 服务端字段是 inviter_name（GB-205：此前只读 from，邀请人永远显示「对方」）。 */
+    const from = (payload && (payload.inviter_name || payload.from)) || '对方';
     const mode = payload && payload.mode ? `（${payload.mode}）` : '';
     text.textContent = `${from} 邀请你对局${mode}`;
     box.hidden = false;
@@ -137,6 +139,16 @@
       state.pendingInviterSid = '';
       hideInvitePrompt();
     });
+    /* 接受邀请后开局失败（模式不一致/天梯资格等）服务端只发这个事件：
+     * 小游戏页此前没监听，失败就是"点了没反应"（GB-205）。失败时留在小游戏页
+     * （进度不丢），错误提示在状态栏。 */
+    socket.on('match_start_failed', (payload) => {
+      const message = (payload && payload.message) || '邀请已失效，进入对局失败';
+      status(message, 'denied');
+      state.pendingInviterSid = '';
+      state.startFailedAt = Date.now();
+      hideInvitePrompt();
+    });
     socket.on('server_error', handleServerError);
     try {
       if (state.options.onSocket) state.options.onSocket(socket);
@@ -164,8 +176,11 @@
     state.socket.emit('accept_invite', { inviter_sid: inviterSid });
     state.pendingInviterSid = '';
     status('正在进入对局…（本地进度已保存）');
-    window.setTimeout(() => { window.location.href = state.options.acceptRedirect; },
-      state.options.acceptDelayMs);
+    window.setTimeout(() => {
+      // 700ms 内开局失败事件先到：不跳走，留在小游戏页（错误已在状态栏提示）
+      if (state.startFailedAt && Date.now() - state.startFailedAt < 15000) return;
+      window.location.href = state.options.acceptRedirect;
+    }, state.options.acceptDelayMs);
   }
 
   function declineInvite() {

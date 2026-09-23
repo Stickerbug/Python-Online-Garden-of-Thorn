@@ -8,6 +8,7 @@ from story_engine import (
     _card_values,
     _gain_enchantment_book,
     _new_card,
+    _player_attack_effect_segment,
     _player_physical_hit,
     _player_raw_damage,
     _resolve_enemy_effect,
@@ -305,13 +306,22 @@ def test_sharp_power_is_consumed_when_the_enchanted_card_is_played():
     card = state['combat']['hand'][0]
     assert card['modifiers']['damage_bonus'] == 15
     assert card['modifiers']['enchantment_labels'] == {'damage_bonus': 'sharp'}
+    # GB-206 起加成只挂字段不折 amount（分摊在结算层按段数做）
+    assert (
+        next(
+            effect.get('enchantment_damage_bonus')
+            for effect in _card_values(card)['effects']
+            if effect['type'] == 'damage'
+        )
+        == 15
+    )
     assert (
         next(
             effect['amount']
             for effect in _card_values(card)['effects']
             if effect['type'] == 'damage'
         )
-        == base_damage + 15
+        == base_damage
     )
 
     state, _ = _play_card_by_id(
@@ -323,6 +333,33 @@ def test_sharp_power_is_consumed_when_the_enchanted_card_is_played():
     assert 'damage_bonus' not in (played.get('modifiers') or {})
     assert 'enchantment_power' not in (played.get('modifiers') or {})
     assert 'enchantment_labels' not in (played.get('modifiers') or {})
+
+
+def test_sharp_power_is_split_across_hits_like_multiplayer():
+    """GB-206：威力按段分摊——每段 +ceil(威力/段数)，与多人模式
+    ``ceil(power/hits)`` 同口径；此前每一段都吃满 +15（3 段 = +45）。"""
+    state = {'combat': {}}
+    # 目标 3 种状态（按种类数）：damage_per_status 打 3 段
+    target = {'poison': 2, 'fire': 1, 'bleed': 1}
+    effect = {'type': 'damage_per_status', 'amount': 5, 'enchantment_damage_bonus': 15}
+    base, hits = _player_attack_effect_segment(state, effect, target, {})
+    assert hits == 3
+    assert base == 5 + 5            # ceil(15/3)=5 每段，总加成 15 而不是 45
+
+    # 单段（普通 damage）吃满：6 + 15
+    base1, hits1 = _player_attack_effect_segment(
+        state, {'type': 'damage', 'amount': 6, 'enchantment_damage_bonus': 15}, target, {})
+    assert (base1, hits1) == (21, 1)
+
+    # hits=2：每段 +ceil(15/2)=8，总 16（向上取整的口径与多人一致）
+    base2, hits2 = _player_attack_effect_segment(
+        state, {'type': 'damage', 'amount': 6, 'hits': 2, 'enchantment_damage_bonus': 15}, target, {})
+    assert (base2, hits2) == (14, 2)
+
+    # 没有加成的卡不受影响
+    base3, _ = _player_attack_effect_segment(
+        state, {'type': 'damage', 'amount': 6}, target, {})
+    assert base3 == 6
 
 
 def test_stacked_power_books_are_all_consumed_after_the_card_is_played():

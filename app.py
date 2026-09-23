@@ -29190,6 +29190,12 @@ def on_accept_invite(data):
             community_fields, loadout = pending_loadout
             apply_mod_loadout_to_player(accepter, loadout, community_fields)
         inviter_match_mode = player_match_mode(inviter)
+        # 挂在休闲花园小游戏页的接受者只是一个"在线占位"：presence 登录写死的
+        # casual_1v1 不代表真实偏好（GB-205：邀请方在其它模式时被"双方模式
+        # 不一致"静默拒绝）。接受时以邀请方的模式为准，人反正要离开小游戏页。
+        if str(accepter.get('status') or '') == 'minigame':
+            accepter['match_mode'] = inviter_match_mode
+            accepter['mode'] = inviter.get('mode')
         if player_match_mode(accepter) != inviter_match_mode:
             emit_match_start_failed([inviter_sid, sid], '邀请已失效：双方模式不一致', reason='match_mode_mismatch')
             return
