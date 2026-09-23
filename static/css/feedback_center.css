@@ -1,3 +1,22 @@
+/* 反馈中心是独立页，只加载这一个样式文件；@font-face 必须自带，
+   否则下方 --fc-font-main 里的 'Kreadon' 落空、整页回退系统字体。
+   字体文件与 style.css 同源同版本。 */
+@font-face {
+  font-family: 'Kreadon';
+  src: url('/fonts/Kreadon-Regular.subset.woff2?v=3') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Kreadon';
+  src: url('/fonts/Kreadon-Demi.subset.woff2?v=3') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --fc-bg: #f4f5f7;
   --fc-surface: #ffffff;
@@ -743,11 +762,15 @@ button.fc-account-popover-link:focus-visible {
   letter-spacing: -0.35px;
 }
 
-.fc-detail-side {
+/* 状态徽章并入标题行（原来是孤悬在右上角的独立块） */
+.fc-detail-title {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 9px;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.fc-detail-title .fc-status {
   flex: none;
 }
 
@@ -773,22 +796,82 @@ button.fc-account-popover-link:focus-visible {
   margin: 18px 0;
 }
 
-.fc-vote-box {
+/* 标题下互动条：投票 / 关注 / 举报（投票是第一动作，不再沉到正文底部） */
+.fc-detail-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin: 0 0 22px;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 14px 0 0;
 }
 
-.fc-vote-count {
-  font-size: 24px;
+.fc-vote-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 2px 13px;
+  border: 1px solid var(--fc-accent);
+  border-radius: 17px;
+  background: #fff;
+  color: var(--fc-accent);
   font-weight: 700;
-  color: var(--fc-text);
+  white-space: nowrap;
+  transition: background 80ms linear, color 80ms linear;
 }
 
-.fc-vote-label {
-  color: var(--fc-muted);
+.fc-vote-pill:hover {
+  background: var(--fc-accent);
+  color: #fff;
+  text-decoration: none;
+}
+
+.fc-vote-pill:disabled {
+  border-color: var(--fc-line-strong);
+  color: #8993a4;
+  background: #fff;
+  cursor: not-allowed;
+}
+
+.fc-vote-pill.has-voted {
+  border-color: #1f845a;
+  color: #1f845a;
+}
+
+.fc-vote-pill.has-voted:hover {
+  background: #1f845a;
+  color: #fff;
+}
+
+.fc-vote-pill-static {
+  border: 0;
+  padding-left: 0;
+  color: var(--fc-text);
+  cursor: default;
+}
+
+.fc-vote-pill-arrow {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 7px solid currentColor;
+}
+
+.fc-vote-pill-count {
+  font-size: 15px;
+}
+
+.fc-vote-pill-label {
   font-size: 12px;
+  font-weight: 600;
+}
+
+.fc-vote-pill-hint {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--fc-muted);
 }
 
 .fc-section {
@@ -895,21 +978,19 @@ button.fc-account-popover-link:focus-visible {
   border-bottom-color: #e2e6f4;
 }
 
-.fc-info-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px 18px;
-  max-width: 860px;
+/* 右侧元数据窄栏的条目样式（结构见文件后段 .fc-detail-rail） */
+.fc-rail-item {
+  padding: 9px 0;
+  border-bottom: 1px solid #f0f1f4;
 }
 
-.fc-info-grid > div {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
+.fc-rail-item:last-child {
+  border-bottom: 0;
 }
 
-.fc-info-grid > div > span {
+.fc-rail-item > span {
+  display: block;
+  margin-bottom: 3px;
   color: #6b778c;
   font-size: 11px;
   font-weight: 700;
@@ -917,8 +998,9 @@ button.fc-account-popover-link:focus-visible {
   letter-spacing: 0.3px;
 }
 
-.fc-info-wide {
-  grid-column: 1 / -1;
+.fc-rail-item > strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
 .fc-tag-list,
@@ -1368,7 +1450,74 @@ html.fc-scroll-locked body {
 
 .fc-issue-status-line {
   display: flex;
+  align-items: center;
+  gap: 10px;
   margin-top: 6px;
+}
+
+/* 行内元信息：置顶标 / 相对更新时间 / 票数与评论数 */
+.fc-row-pin {
+  padding: 0 5px;
+  border-radius: 8px;
+  background: #fff3d6;
+  color: #a3520a;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.fc-row-time {
+  margin-left: auto;
+  color: #8993a4;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.fc-row-counts {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #6b778c;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.fc-row-votes,
+.fc-row-comments {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.fc-caret {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 6px solid currentColor;
+}
+
+.fc-row-cicon {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+}
+
+/* 已收口（已修复/已采纳/重复等）的行整体降对比，扫一眼区分还有哪些没处理 */
+.fc-issue-row.is-resolved .fc-issue-summary {
+  color: #8593a8;
+}
+
+.fc-issue-row.is-resolved .fc-issue-key,
+.fc-issue-row.is-resolved .fc-issue-key[data-fc-status],
+.fc-issue-row.is-resolved.is-selected .fc-issue-key[data-fc-status] {
+  color: #94a1b3;
+}
+
+.fc-issue-row.is-resolved .fc-row-icon {
+  opacity: 0.45;
 }
 
 .fc-issue-title strong {
@@ -1464,9 +1613,50 @@ html.fc-scroll-locked body {
   max-width: 720px;
 }
 
-.fc-vote-box,
-.fc-detail-subline {
+.fc-detail-subline,
+.fc-detail-actions {
   max-width: 720px;
+}
+
+/* 详情主列 + 右侧元数据窄栏（Jira Details 面板式） */
+.fc-detail-body-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 720px) 232px;
+  gap: 32px;
+  margin-top: 6px;
+}
+
+.fc-detail-main {
+  min-width: 0;
+}
+
+.fc-detail-rail {
+  align-self: start;
+  position: sticky;
+  top: 8px;
+  border-left: 1px solid #ebecf0;
+  padding-left: 18px;
+}
+
+.fc-detail-rail h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--fc-text-soft);
+}
+
+@media (max-width: 1120px) {
+  .fc-detail-body-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .fc-detail-rail {
+    position: static;
+    border-left: 0;
+    padding-left: 0;
+  }
 }
 
 .fc-staff,
@@ -1492,10 +1682,6 @@ html.fc-scroll-locked body {
 
   .fc-detail-pane:not(#fc-detail-empty) {
     padding: 14px;
-  }
-
-  .fc-info-grid {
-    grid-template-columns: 1fr 1fr;
   }
 
   .fc-detail-nav {

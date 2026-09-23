@@ -19,6 +19,11 @@
       unhide_issue: '恢复反馈', hide_comment: '隐藏评论', unhide_comment: '恢复评论',
       internal_note: '内部备注', history: '状态历史', deleted_player: '已注销玩家',
       author: '发布者', updated: '更新于 {0}', login: '去登录', account_label: '账号',
+      watch: '关注', watched: '已关注', rail_details: '详情', rail_version: '游戏版本',
+      rail_fix_version: '修复版本', rail_tags: '标签', rail_related: '关联问题',
+      rail_watchers: '关注人数', rail_replay: '回放',
+      ago_now: '刚刚', ago_min: '{0} 分钟前', ago_hour: '{0} 小时前', ago_day: '{0} 天前',
+      ago_week: '{0} 周前', ago_month: '{0} 个月前',
       messages_title: '消息', messages_empty: '暂无新消息',
       messages_login: '请先登录账号后查看消息。', messages_back: '返回反馈列表',
       messages_mark_all_read: '全部已读',
@@ -53,6 +58,11 @@
       unhide_issue: 'Restore report', hide_comment: 'Hide comment', unhide_comment: 'Restore comment',
       internal_note: 'Internal note', history: 'Status history', deleted_player: 'Deleted Player',
       author: 'Reported by', updated: 'Updated {0}', login: 'Sign in', account_label: 'Account',
+      watch: 'Watch', watched: 'Watching', rail_details: 'Details', rail_version: 'Game version',
+      rail_fix_version: 'Fixed in', rail_tags: 'Labels', rail_related: 'Related',
+      rail_watchers: 'Watchers', rail_replay: 'Replay',
+      ago_now: 'just now', ago_min: '{0}m ago', ago_hour: '{0}h ago', ago_day: '{0}d ago',
+      ago_week: '{0}w ago', ago_month: '{0}mo ago',
       messages_title: 'Messages', messages_empty: 'No new messages',
       messages_login: 'Sign in to view your messages.', messages_back: 'Back to reports',
       messages_mark_all_read: 'Mark all read',
@@ -88,6 +98,11 @@
       unhide_issue: 'Restaurer', hide_comment: 'Masquer le commentaire', unhide_comment: 'Restaurer',
       internal_note: 'Note interne', history: 'Historique', deleted_player: 'Joueur supprimé',
       author: 'Auteur', updated: 'Mis à jour {0}', login: 'Connexion', account_label: 'Compte',
+      watch: 'Suivre', watched: 'Suivi', rail_details: 'Détails', rail_version: 'Version du jeu',
+      rail_fix_version: 'Corrigé dans', rail_tags: 'Étiquettes', rail_related: 'Liens',
+      rail_watchers: 'Suiveurs', rail_replay: 'Replay',
+      ago_now: 'à l’instant', ago_min: 'il y a {0} min', ago_hour: 'il y a {0} h', ago_day: 'il y a {0} j',
+      ago_week: 'il y a {0} sem.', ago_month: 'il y a {0} mois',
       report: 'Signaler', report_comment: 'Signaler le commentaire', report_title: 'Signaler',
       submit_report: 'Envoyer', replay_hint: 'ID de partie : {0}', need_login: 'Connectez-vous.',
       own_issue: 'Vous ne pouvez pas voter sur votre propre signalement.',
@@ -118,6 +133,11 @@
       unhide_issue: '復元', hide_comment: 'コメント非表示', unhide_comment: 'コメント復元',
       internal_note: '内部メモ', history: '履歴', deleted_player: '削除されたプレイヤー',
       author: '投稿者', updated: '更新 {0}', login: 'ログイン', account_label: 'アカウント',
+      watch: 'ウォッチ', watched: 'ウォッチ中', rail_details: '詳細', rail_version: 'ゲームバージョン',
+      rail_fix_version: '修正バージョン', rail_tags: 'タグ', rail_related: '関連問題',
+      rail_watchers: 'ウォッチ人数', rail_replay: 'リプレイ',
+      ago_now: 'たった今', ago_min: '{0}分前', ago_hour: '{0}時間前', ago_day: '{0}日前',
+      ago_week: '{0}週間前', ago_month: '{0}か月前',
       report: '通報', report_comment: 'コメントを通報', report_title: '通報',
       submit_report: '送信', replay_hint: 'リプレイID：{0}', need_login: 'ログインしてください。',
       own_issue: '自分の報告には投票できません',
@@ -156,6 +176,16 @@
     bug: new Set(['new', 'needs_info', 'confirmed', 'in_progress']),
     suggestion: new Set(['new', 'under_review']),
   };
+
+  /* 已收口状态（投票已关闭、无需玩家再跟进）：列表行整体降对比（Mojira 对已解决问题的处理）。 */
+  const CLOSED_STATUS = {
+    bug: new Set(['fixed', 'duplicate', 'unreproducible', 'by_design', 'invalid']),
+    suggestion: new Set(['accepted', 'planned', 'rejected', 'duplicate']),
+    internal: new Set(['fixed', 'duplicate', 'invalid']),
+  };
+
+  const COMMENT_ICON = '<svg class="fc-row-cicon" viewBox="0 0 16 16" aria-hidden="true">' +
+    '<path d="M2.75 2.5h10.5c.69 0 1.25.56 1.25 1.25v6.5c0 .69-.56 1.25-1.25 1.25H8.53l-3.4 2.34a.5.5 0 0 1-.78-.41V11.5h-1.6A1.25 1.25 0 0 1 1.5 10.25v-6.5c0-.69.56-1.25 1.25-1.25z"/></svg>';
 
   const REPORT_CATEGORIES = [
     'abusive_language', 'sexual_content', 'spam', 'privacy_leak', 'harassment',
@@ -212,6 +242,24 @@
       }
     } catch (_) {}
     return String(value || '');
+  }
+
+  /* 列表行用的相对时间：刚刚 / N 分钟前 / … / 超过一年回退完整日期。 */
+  function timeAgo(value) {
+    const date = new Date(String(value || '').replace('Z', '+00:00'));
+    if (!Number.isFinite(date.getTime())) return String(value || '');
+    const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+    if (seconds < 0) return fmt(value);
+    if (seconds < 60) return t('ago_now');
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return t('ago_min').replace('{0}', String(minutes));
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return t('ago_hour').replace('{0}', String(hours));
+    const days = Math.floor(hours / 24);
+    if (days < 7) return t('ago_day').replace('{0}', String(days));
+    if (days < 30) return t('ago_week').replace('{0}', String(Math.floor(days / 7)));
+    if (days < 365) return t('ago_month').replace('{0}', String(Math.floor(days / 30)));
+    return fmt(value);
   }
 
   async function api(path, { method = 'GET', body } = {}) {
@@ -685,10 +733,21 @@
         : issue.kind === 'internal'
           ? `<span class="fc-row-icon fc-row-icon-internal" aria-hidden="true">内</span>`
           : `<span class="fc-row-icon fc-row-icon-suggestion" aria-hidden="true">✦</span>`;
-      return `<a class="fc-issue-row${selected}" href="${esc(canonicalIssuePath(issue))}" data-open-issue="${issue.id}">` +
-        `<span class="fc-issue-top">${icon}<span class="fc-issue-key"${statusAttr(issue.status)}>${esc(issue.key || `#${issue.id}`)}</span></span>` +
+      const closed = (CLOSED_STATUS[issue.kind] || new Set()).has(issue.status);
+      const votes = Number(issue.vote_count || 0);
+      const commentTotal = Number(issue.comment_count || 0);
+      const counts = votes || commentTotal
+        ? `<span class="fc-row-counts">` +
+          `${votes ? `<span class="fc-row-votes" title="${esc(t('votes'))}"><i class="fc-caret" aria-hidden="true"></i>${votes}</span>` : ''}` +
+          `${commentTotal ? `<span class="fc-row-comments" title="${esc(t('comments'))}">${COMMENT_ICON}${commentTotal}</span>` : ''}` +
+          `</span>`
+        : '';
+      return `<a class="fc-issue-row${selected}${closed ? ' is-resolved' : ''}" href="${esc(canonicalIssuePath(issue))}" data-open-issue="${issue.id}">` +
+        `<span class="fc-issue-top">${icon}<span class="fc-issue-key"${statusAttr(issue.status)}>${esc(issue.key || `#${issue.id}`)}</span>` +
+        `${issue.pinned ? `<span class="fc-row-pin">${esc(t('pin'))}</span>` : ''}` +
+        `<time class="fc-row-time">${esc(timeAgo(issue.updated_at))}</time></span>` +
         `<span class="fc-issue-summary">${esc(issue.title)}</span>` +
-        `<span class="fc-issue-status-line">${statusChip(issue.kind, issue.status)}</span></a>`;
+        `<span class="fc-issue-status-line">${statusChip(issue.kind, issue.status)}${counts}</span></a>`;
     }).join('');
   }
 
@@ -855,14 +914,22 @@
     const logged = !!state.account;
     const isAuthor = !!(state.account && detail.author && Number(detail.author.user_id) === Number(state.account.id));
     const voteState = VOTABLE[detail.kind] && VOTABLE[detail.kind].has(detail.status) && !isAuthor;
-    let voteButton;
-    if (isAuthor) {
-      voteButton = `<span class="fc-muted">${esc(t('own_issue'))}</span>`;
-    } else if (logged) {
-      voteButton = `<button type="button" class="fc-button ${detail.own_vote ? 'fc-button-secondary' : 'fc-button-primary'}" data-action="vote"${voteState ? '' : ' disabled'}>` +
-        `${esc(detail.own_vote ? t('remove_vote') : t('vote'))}</button>`;
-    } else {
-      voteButton = `<a class="fc-button fc-button-secondary fc-button-small" href="/" target="_blank" rel="noopener">${esc(t('login'))}</a>`;
+    const voteCount = Number(detail.vote_count || 0);
+    let voteWidget = '';
+    if (detail.kind !== 'internal') {
+      if (isAuthor) {
+        voteWidget = `<span class="fc-vote-pill fc-vote-pill-static">` +
+          `<span class="fc-vote-pill-arrow" aria-hidden="true"></span><span class="fc-vote-pill-count">${voteCount}</span>` +
+          `<span class="fc-vote-pill-label">${esc(t('votes'))}</span><span class="fc-vote-pill-hint">${esc(t('own_issue'))}</span></span>`;
+      } else if (logged) {
+        voteWidget = `<button type="button" class="fc-vote-pill${detail.own_vote ? ' has-voted' : ''}" data-action="vote"${voteState ? '' : ' disabled'} title="${esc(detail.own_vote ? t('remove_vote') : t('vote'))}">` +
+          `<span class="fc-vote-pill-arrow" aria-hidden="true"></span><span class="fc-vote-pill-count">${voteCount}</span>` +
+          `<span class="fc-vote-pill-label">${esc(detail.own_vote ? t('remove_vote') : t('vote'))}</span></button>`;
+      } else {
+        voteWidget = `<a class="fc-vote-pill" href="/" target="_blank" rel="noopener" title="${esc(t('login'))}">` +
+          `<span class="fc-vote-pill-arrow" aria-hidden="true"></span><span class="fc-vote-pill-count">${voteCount}</span>` +
+          `<span class="fc-vote-pill-label">${esc(t('vote'))}</span></a>`;
+      }
     }
 
     let privateBlock = '';
@@ -943,8 +1010,6 @@
       : `<p class="fc-muted">${esc(t('login_hint'))}</p>`;
     commentSection += `</section>`;
 
-    const replay = detail.replay_id
-      ? `<p class="fc-muted">${esc(t('replay_hint', 'Replay {0}').replace('{0}', detail.replay_id))}</p>` : '';
     const canReport = state.account
       && detail.kind !== 'internal'
       && detail.author
@@ -956,10 +1021,10 @@
     }).join('');
 
     const watchButton = detail.kind === 'internal'
-      ? '<span class="fc-muted">—</span>'
+      ? ''
       : state.account
-        ? `<button type="button" class="fc-button fc-button-small ${detail.watching ? 'fc-button-secondary' : 'fc-button-primary'}" data-action="watch">${detail.watching ? '已关注' : '关注'}</button>`
-        : `<a class="fc-button fc-button-secondary fc-button-small" href="/" target="_blank" rel="noopener">登录后关注</a>`;
+        ? `<button type="button" class="fc-button fc-button-small ${detail.watching ? 'fc-button-secondary' : 'fc-button-primary'}" data-action="watch">${esc(detail.watching ? t('watched') : t('watch'))}</button>`
+        : `<a class="fc-button fc-button-secondary fc-button-small" href="/" target="_blank" rel="noopener">${esc(t('login'))}</a>`;
     const tagsHtml = (Array.isArray(detail.tags) ? detail.tags : []).length
       ? `<div class="fc-tag-list">${(detail.tags || []).map((tag) => `<span class="fc-tag">${esc(tag)}</span>`).join('')}</div>`
       : '<span class="fc-muted">—</span>';
@@ -973,13 +1038,25 @@
         }).join('')}</div>`
       : '<span class="fc-muted">—</span>';
 
-    const infoPanel = `<section class="fc-info-grid fc-section">` +
-      `<div><span>游戏版本</span><strong>${esc(detail.game_version || '—')}</strong></div>` +
-      `<div><span>修复版本</span><strong>${esc(detail.fix_version || '—')}</strong></div>` +
-      `<div><span>关注</span><strong>${Number(detail.watcher_count || 0)} ${watchButton}</strong></div>` +
-      `<div class="fc-info-wide"><span>标签</span>${tagsHtml}</div>` +
-      `<div class="fc-info-wide"><span>关联问题</span>${relatedHtml}</div>` +
-      `</section>`;
+    /* 右侧元数据窄栏（Jira Details 面板式）：正文列保持宽，元信息竖排收拢 */
+    const rail = `<aside class="fc-detail-rail"><h3>${esc(t('rail_details'))}</h3>` +
+      `<div class="fc-rail-item"><span>${esc(t('rail_version'))}</span><strong>${esc(detail.game_version || '—')}</strong></div>` +
+      `<div class="fc-rail-item"><span>${esc(t('rail_fix_version'))}</span><strong>${esc(detail.fix_version || '—')}</strong></div>` +
+      (detail.kind === 'internal'
+        ? ''
+        : `<div class="fc-rail-item"><span>${esc(t('rail_watchers'))}</span><strong>${Number(detail.watcher_count || 0)}</strong></div>`) +
+      (detail.replay_id
+        ? `<div class="fc-rail-item"><span>${esc(t('rail_replay'))}</span><strong title="${esc(t('replay_hint', 'Replay {0}').replace('{0}', detail.replay_id))}">${esc(detail.replay_id)}</strong></div>`
+        : '') +
+      `<div class="fc-rail-item"><span>${esc(t('rail_tags'))}</span>${tagsHtml}</div>` +
+      `<div class="fc-rail-item"><span>${esc(t('rail_related'))}</span>${relatedHtml}</div>` +
+      `</aside>`;
+
+    /* 标题下互动条：投票 / 关注 / 举报（投票是第一动作） */
+    const actionBar = voteWidget || watchButton || canReport
+      ? `<div class="fc-detail-actions">${voteWidget}${watchButton}` +
+        `${canReport ? `<button type="button" class="fc-button fc-button-secondary fc-button-small fc-action-report" data-action="report-issue">${esc(t('report'))}</button>` : ''}</div>`
+      : '';
 
     let notFixedBlock = '';
     if (detail.kind === 'bug' && detail.status === 'fixed') {
@@ -1000,18 +1077,16 @@
       `<a href="/" target="_blank" rel="noopener">${esc(t('back_game'))}</a></div>` +
       `<div class="fc-detail-head"><div class="fc-detail-title-wrap">` +
       `<div class="fc-detail-key"><span class="fc-detail-key-value"${statusAttr(detail.status)}>${esc(detail.key)}</span> · ${esc(kindLabel(detail.kind))}</div>` +
-      `<h2>${esc(detail.title)}</h2></div>` +
-      `<div class="fc-detail-side">${statusChip(detail.kind, detail.status)}` +
-      `${canReport ? `<button type="button" class="fc-button fc-button-secondary fc-button-small" data-action="report-issue">${esc(t('report'))}</button>` : ''}</div></div>` +
+      `<h2 class="fc-detail-title">${esc(detail.title)}${statusChip(detail.kind, detail.status)}</h2></div></div>` +
       `<div class="fc-detail-subline">${detail.author ? userHtml(detail.author) : ''}<span>${esc(fmt(detail.created_at))}</span></div>` +
-      `${replay}<div class="fc-body">${esc(detail.body)}</div>` +
-      infoPanel +
+      actionBar +
+      `<div class="fc-detail-body-grid"><div class="fc-detail-main">` +
+      `<div class="fc-body">${esc(detail.body)}</div>` +
       notFixedBlock +
-      `${detail.kind === 'internal' ? '' : `<div class="fc-vote-box"><span class="fc-vote-count">${Number(detail.vote_count || 0)}</span>` +
-      `<span class="fc-vote-label">${esc(t('votes'))}</span>${voteButton}</div>`}` +
       commentSection + privateBlock +
       `<section class="fc-section"><h3>${esc(t('history'))}</h3><div class="fc-history">${history || '<span class="fc-muted">—</span>'}</div></section>` +
-      staffBlock;
+      staffBlock +
+      `</div>${rail}</div>`;
   }
 
   function issueContainer() {
