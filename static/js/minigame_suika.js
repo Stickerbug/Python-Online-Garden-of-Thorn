@@ -76,6 +76,10 @@ const SCAN = 256;
 /* 贴图墨迹占球直径的比例：1 = 图片外框正好等于物理半径画出来的圆，
    这样"看上去挨住"就是"真的碰到"（没有底色圆兜着，缩小会让手感对不上）。 */
 const BOX_FILL = 1;
+/* 柔和投影直接烘焙进缓存贴图：运行时逐球设 shadowBlur 是每帧一次的软件模糊，
+   低端机上正是卡顿主因（反馈：性能较差的设备会比较卡）。烘焙时按 SCAN 比例取
+   blur ≈ 0.22×半径（与原先 drawSprite 里的取法一致），缩放绘制时阴影随图等比。 */
+const SHADOW_BAKE_MARGIN = Math.ceil(SCAN * 0.16);
 
 const canvas = document.getElementById('sk-canvas');
 const ctx = canvas ? canvas.getContext('2d') : null;
@@ -229,13 +233,24 @@ async function prepareArt(index) {
     }
   }
   if (!count) return { img, box: { cx: 0.5, cy: 0.5, w: 1, h: 1 }, avg: '#cccccc' };
+  const ink = { cx: (minX + maxX + 1) / 2 / SCAN, cy: (minY + maxY + 1) / 2 / SCAN, w: (maxX - minX + 1) / SCAN, h: (maxY - minY + 1) / SCAN };
+  /* 带投影的缓存贴图：墨迹居中放进"SCAN + 2×margin"的画布，阴影一次性画好。
+     box 相对整张烘焙图重算，drawSprite 缩放时墨迹仍精确落在物理半径上。 */
+  const size = SCAN + SHADOW_BAKE_MARGIN * 2;
+  const baked = document.createElement('canvas');
+  baked.width = size;
+  baked.height = size;
+  const bakedCtx = baked.getContext('2d');
+  bakedCtx.shadowColor = 'rgba(24, 34, 28, 0.32)';
+  bakedCtx.shadowBlur = Math.max(3, SCAN * 0.11);
+  bakedCtx.drawImage(img, SHADOW_BAKE_MARGIN, SHADOW_BAKE_MARGIN, SCAN, SCAN);
   return {
-    img,
+    img: baked,
     box: {
-      cx: (minX + maxX + 1) / 2 / SCAN,
-      cy: (minY + maxY + 1) / 2 / SCAN,
-      w: (maxX - minX + 1) / SCAN,
-      h: (maxY - minY + 1) / SCAN,
+      cx: (SHADOW_BAKE_MARGIN + ink.cx * SCAN) / size,
+      cy: (SHADOW_BAKE_MARGIN + ink.cy * SCAN) / size,
+      w: (ink.w * SCAN) / size,
+      h: (ink.h * SCAN) / size,
     },
     avg: rgbToHex({ r: sumR / count, g: sumG / count, b: sumB / count }),
   };
@@ -252,24 +267,18 @@ async function loadAllArt() {
   }));
 }
 
-function drawSprite(target, sprite, x, y, radius, rotation = 0, alpha = 1, shadow = false) {
+function drawSprite(target, sprite, x, y, radius, rotation = 0, alpha = 1) {
   if (!sprite) return;
   const { img, box } = sprite;
   const size = radius * 2 * BOX_FILL;
   const full = size / Math.max(box.w, box.h);
   target.save();
   target.globalAlpha = alpha;
-  if (shadow) {
-    // 很淡的原图（例如半透明的泡泡）在浅色底上会看不清：给贴图一层柔和投影，
-    // 跟故事模式敌人立绘的处理一致。它是阴影，不是外框——形状仍由贴图自己决定。
-    const scale = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
-    target.shadowColor = 'rgba(24, 34, 28, 0.32)';
-    target.shadowBlur = Math.max(3, radius * 0.22) * scale;
-  }
   target.translate(x, y);
   if (rotation) target.rotate(rotation);
   // 用整张图当源（3 参数形式）：不依赖 naturalWidth —— SVG 的固有尺寸可能是 0，
   // 那样 9 参数写法会算出一个画布外的源矩形，浏览器会**静默**什么都不画。
+  // 柔和投影已在 prepareArt 里烘焙进缓存图（原先逐帧 shadowBlur 是低端设备卡顿主因）。
   target.drawImage(img, -box.cx * full, -box.cy * full, full, full);
   target.restore();
 }
@@ -539,7 +548,7 @@ function drawArena() {
       drawPlayerBall(ctx, x, dropLineY + def.radius, def.radius);
       ctx.restore();
     } else if (sprite) {
-      drawSprite(ctx, sprite, x, dropLineY + def.radius, def.radius, 0, 0.9, true);
+      drawSprite(ctx, sprite, x, dropLineY + def.radius, def.radius, 0, 0.9);
     } else {
       ctx.save();
       ctx.globalAlpha = 0.9;
@@ -564,7 +573,7 @@ function drawBalls() {
     if (isPlayer) {
       drawPlayerBall(ctx, x, y, def.radius);
     } else if (art[tier]) {
-      drawSprite(ctx, art[tier], x, y, def.radius, record.body.angle || 0, 1, true);
+      drawSprite(ctx, art[tier], x, y, def.radius, record.body.angle || 0, 1);
     } else {
       const colors = tierColors(tier);
       ctx.save();
@@ -613,14 +622,25 @@ function render(now = performance.now()) {
 
 /* ---------- 界面状态 ---------- */
 
+let lastShownScore = null;
+let lastShownBest = null;
+
 function updateScore() {
   const score = game ? game.score : 0;
-  if (scoreEl) scoreEl.textContent = String(score);
+  /* 每帧调用但只在变化时写 DOM / 标脏（画布大分数水印也要跟着重画） */
+  if (score !== lastShownScore) {
+    lastShownScore = score;
+    if (scoreEl) scoreEl.textContent = String(score);
+    markRenderDirty();
+  }
   if (score > bestScore) {
     bestScore = score;
     writeStored(BEST_KEY, String(bestScore));
   }
-  if (bestEl) bestEl.textContent = String(bestScore);
+  if (bestEl && bestScore !== lastShownBest) {
+    lastShownBest = bestScore;
+    bestEl.textContent = String(bestScore);
+  }
 }
 
 function updateNextChip() {
@@ -816,6 +836,8 @@ function startGame({ seed = newSeed(), drops = [], uptoMs = 0, restored = false 
   }
   pops.length = 0;
   aimX = ARENA.width / 2;
+  lastAimRenderX = null;
+  markRenderDirty();
   hideOverlay();
   updateScore();
   updateNextChip();
@@ -1110,6 +1132,37 @@ function handleEvents(events) {
   }
 }
 
+/* ---------- 脏标记渲染：静止时整帧跳过重画（低端设备的占用大头） ----------
+   需要重画：有球在动 / 合成波纹未完 / 投放后引导线淡入窗口 / 瞄准位置变了 /
+   外部要求（resize、主题、字体加载完成）。canvas 不重画就保留上一帧。
+   探针可读 window.__skRenderStats 观察绘制/跳过比例。 */
+let renderDirty = true;
+let lastAimRenderX = null;
+const renderStats = { frames: 0, draws: 0 };
+
+function markRenderDirty() {
+  renderDirty = true;
+}
+
+function sceneNeedsRedraw(now) {
+  if (renderDirty) return true;
+  if (pops.length) return true;
+  if (game && game.gameOver) return false;   // 终局棋盘静止（结算弹窗是 DOM）
+  if (lastDropAt && now - lastDropAt < 700) return true;   // 引导线淡入/落定窗口
+  const aimXNow = currentAimX();
+  if (lastAimRenderX === null || Math.abs(aimXNow - lastAimRenderX) > 0.5) {
+    lastAimRenderX = aimXNow;
+    return true;
+  }
+  if (game) {
+    for (const record of game.balls) {
+      const v = record.body.velocity;
+      if (Math.abs(v.x) + Math.abs(v.y) > 0.08) return true;
+    }
+  }
+  return false;
+}
+
 function frame(now) {
   if (!lastFrameAt) lastFrameAt = now;
   const dt = Math.min(120, Math.max(0, now - lastFrameAt));
@@ -1118,7 +1171,12 @@ function frame(now) {
     handleEvents(game.advance(dt));
     updateScore();
   }
-  render(now);
+  renderStats.frames += 1;
+  if (sceneNeedsRedraw(now)) {
+    renderDirty = false;
+    renderStats.draws += 1;
+    render(now);
+  }
   requestAnimationFrame(frame);
 }
 
@@ -1147,6 +1205,7 @@ async function loadPlayerSkin() {
   buildLegend();
   updateNextChip();
   updatePlayerPreviews();
+  markRenderDirty();   // 皮肤就绪后棋盘上的玩家球（若在场）要换新顔
 }
 
 /* ---------- 偏好 ---------- */
@@ -1188,12 +1247,14 @@ function bindUi() {
     animToggle.addEventListener('change', () => {
       animationsEnabled = animToggle.checked;
       savePrefs();
+      markRenderDirty();
     });
   }
   if (aimToggle) {
     aimToggle.addEventListener('change', () => {
       aimGuideEnabled = aimToggle.checked;
       savePrefs();
+      markRenderDirty();   // 静止时辅助线的出现/消失也要立即重画
     });
   }
   if (canvas) {
@@ -1220,9 +1281,9 @@ function bindUi() {
       void refreshLeaderboard();
     });
   });
-  window.addEventListener('resize', () => { resizeCanvas(); render(); });
+  window.addEventListener('resize', () => { resizeCanvas(); markRenderDirty(); });
   try {
-    new MutationObserver(() => { refreshThemeColors(); render(); })
+    new MutationObserver(() => { refreshThemeColors(); markRenderDirty(); })
       .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   } catch (_) { /* 浏览器不支持就算了，颜色退回默认值 */ }
 }
@@ -1260,9 +1321,14 @@ async function boot() {
     navigator.serviceWorker.register('/minigame/suika/sw.js', { scope: '/minigame/suika' })
       .catch(() => { /* 缓存不可用不影响游玩 */ });
   }
+  // Kreadon 是 font-display:swap：加载完成后画布文字（分数水印/失败线）要重画一次
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => { markRenderDirty(); }).catch(() => {});
+  }
   // 浏览器探针用的只读钩子（不参与玩法）
   window.__skSnapshot = () => (game ? game.snapshot() : null);
   window.__skArt = () => art.map((item) => (item ? { avg: item.avg, w: item.box.w, h: item.box.h } : null));
+  window.__skRenderStats = renderStats;
   window.__skBooted = true;
   requestAnimationFrame(frame);
 }

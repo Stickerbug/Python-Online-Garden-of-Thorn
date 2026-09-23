@@ -15,7 +15,7 @@
   src: url('/fonts/Kreadon-Regular.subset.woff2?v=3') format('woff2');
   font-weight: 400;
   font-style: normal;
-  font-display: optional;
+  font-display: swap;
 }
 
 @font-face {
@@ -87,6 +87,17 @@
     system-ui, sans-serif;
   font-size: 16px;
   -webkit-text-size-adjust: 100%;
+  /* 触控多击/长按不要整页选中；聊天恢复可选（棋盘本就已禁选） */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.mg-page .gtn-lobby-chat-log,
+.mg-page .gtn-lobby-chat-input {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
 }
 
 .mg-frame {

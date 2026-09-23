@@ -10,7 +10,7 @@
   src: url('/fonts/Kreadon-Regular.subset.woff2?v=3') format('woff2');
   font-weight: 400;
   font-style: normal;
-  font-display: optional;
+  font-display: swap;
 }
 
 @font-face {
@@ -85,6 +85,18 @@ body.sk-page {
   -webkit-text-size-adjust: 100%;
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
+  /* 触控多击/长按不要出现文字选中（反馈：多点棋盘会被选中）。整页默认禁选，
+     聊天记录与输入框恢复可选（要能复制内容）。 */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+body.sk-page .sk-chat .gtn-lobby-chat-log,
+body.sk-page .sk-chat input {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
 }
 
 .sk-frame {
@@ -426,7 +438,9 @@ body.sk-page {
   box-shadow: var(--sk-shadow-frame);
   overflow: hidden;
   touch-action: none;
+  -webkit-user-select: none;
   user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .sk-canvas {
