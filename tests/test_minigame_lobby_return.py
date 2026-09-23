@@ -98,9 +98,9 @@ class LobbyRouteTests(unittest.TestCase):
                 return {"role_type": "player"}
 
         svc.db_module = _Roles()
-        # 本文件测的是"链接把 from 带回去"的管线；合成大花花的入口/页面现在仅
-        # 管理员可见（_minigame_suika_guard），所以把角色表指成 staff 才覆盖得到 suika。
-        self.role_patch = mock.patch.object(gtn, 'user_role_type', lambda uid: 'staff')
+        # 本文件测的是"链接把 from 带回去"的管线；合成大花花 2026-09-23 起
+        # 对全员开放，普通 player 身份就能覆盖到 suika 的入口与页面。
+        self.role_patch = mock.patch.object(gtn, 'user_role_type', lambda uid: 'player')
         self.role_patch.start()
         with self.client.session_transaction() as session:
             session["user_id"] = 4242

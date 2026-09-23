@@ -39,8 +39,6 @@
       <a class="mh-play" id="mh-play-2048" href="{{ game_card_links.get('2048', '/minigame/2048') }}">开始游戏</a>
     </article>
 
-    {# 合成大花花还在内部测试：仅管理员（admin/staff）能看到这张卡片 #}
-    {% if suika_unlocked %}
     <article class="mh-card">
       <div class="mh-card-top">
         <h2 class="mh-card-title">合成大花花</h2>
@@ -53,7 +51,6 @@
       </p>
       <a class="mh-play" id="mh-play-suika" href="{{ game_card_links.get('suika', '/minigame/suika') }}">开始游戏</a>
     </article>
-    {% endif %}
   </section>
 </main>
 </body>

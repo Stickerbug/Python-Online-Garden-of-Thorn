@@ -26788,16 +26788,6 @@ def on_minigame_presence(data=None):
     if not MINIGAME_2048_ENABLED:
         emit('server_error', {'message': '小游戏暂不可用', 'reason': 'minigame_disabled'})
         return
-    # 合成大花花仅管理员（与 _minigame_suika_guard 同口径）：页面进不去，也不应能挂在线状态
-    if game_key == 'suika':
-        try:
-            suika_role = _chat_role_for_account(user_id)
-        except Exception:
-            suika_role = 'player'
-        if suika_role not in ('admin', 'staff'):
-            emit('server_error', {'message': '合成大花花还在内部测试，暂时只有管理员能进',
-                                  'reason': 'minigame_denied'})
-            return
     try:
         allowed = minigame_2048_service.can_access_minigame(user_id, username)
     except Exception as exc:
@@ -34995,21 +34985,10 @@ def _minigame_2048_rate_limited(identity_key, key, limit, window=300):
 
 
 def _minigame_suika_guard():
-    """合成大花花的门禁：休闲花园其它部分对所有登录账号开放，这一款仅管理员
-    （admin / staff，与聊天身份同一套角色表）可进——用户 2026-09-22 拍板，
-    页面与全部接口共用同一判定，客户端自报的角色无效。"""
+    """合成大花花与 2048 同口径：登录账号即可（2026-09-23 起对全员开放，
+    此前的「仅管理员内测」门槛已移除；保留这一层是为了统一登录校验入口）。"""
 
-    identity, denied = _minigame_2048_guard()
-    if denied is not None:
-        return None, denied
-    try:
-        role = _chat_role_for_account(identity[0])
-    except Exception as exc:
-        admin_event('error', f'suika gate role lookup failed: {exc}')
-        role = 'player'
-    if role not in ('admin', 'staff'):
-        return None, _json_error('合成大花花还在内部测试，暂时只有管理员能进', 403)
-    return identity, None
+    return _minigame_2048_guard()
 
 
 def _minigame_2048_settlement_worker():
@@ -35065,12 +35044,6 @@ def minigame_hub_page():
     identity, denied = _minigame_2048_guard()
     if denied is not None:
         return denied
-    # 合成大花花仅管理员可见可进（与 _minigame_suika_guard 同口径）：其他人列表里直接不显示
-    try:
-        suika_unlocked = _chat_role_for_account(identity[0]) in ('admin', 'staff')
-    except Exception as exc:
-        admin_event('error', f'hub suika gate role lookup failed: {exc}')
-        suika_unlocked = False
     from_key = minigame_registry.normalize_from(request.args.get('from'))
     return render_template(
         'minigame_hub.html',
@@ -35079,7 +35052,6 @@ def minigame_hub_page():
         static_version=GTN_STATIC_VERSION,
         from_key=from_key,
         hub_back_href=minigame_registry.minigame_hub_back_href(from_key),
-        suika_unlocked=suika_unlocked,
         game_card_links={
             key: minigame_registry.with_from(entry['path'], from_key)
             for key, entry in minigame_registry.MINIGAMES.items()
@@ -35117,10 +35089,10 @@ def minigame_2048_page():
 
 @app.route('/minigame/suika')
 def minigame_suika_page():
-    """休闲花园 ·「合成大花花」页面（仅管理员，见 _minigame_suika_guard）。
+    """休闲花园 ·「合成大花花」页面（登录账号即可，见 _minigame_suika_guard）。
 
     规则与贴图都在前端：贴图是故事模式敌人图，物理核心是 static/js/suika_core.js，
-    服务端这一批只负责渲染页面外壳；成绩同步 / 排行榜在下一批接进 minigame 那套表。
+    服务端只渲染页面外壳；成绩同步 / 排行榜走 minigame 那套表。
     """
 
     identity, denied = _minigame_suika_guard()
