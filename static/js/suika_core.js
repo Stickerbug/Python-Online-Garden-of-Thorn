@@ -14,7 +14,7 @@
    friction 0.006 / frictionStatic 0.006 / frictionAir 0 / restitution 0.1，
    固定步长 1000/60ms 推进，保证同样输入得到同样结果。 */
 
-export const RULES_VERSION = 3;
+export const RULES_VERSION = 4;
 export const FIXED_STEP_MS = 1000 / 60;
 
 /** 场地：768×960 逻辑分辨率；左右墙与地板各占 64，底部再留 48 给状态栏（页面上画在画布外）。
@@ -58,20 +58,24 @@ export const SPAWN_RARE_WINDOW = 8;      // 当前最高档在最近 8 颗里出
 export const SPAWN_GATE_SCORES = Object.freeze([300, 1200]);
 export const SPAWN_GATE_TIERS = Object.freeze([3, 4, 5]);
 
-/** 11 档：半径/分值是经典 Suika 曲线；贴图见 docs/合成大花花-美术清单.md。 */
+/** 11 档：半径/分值是经典 Suika 曲线；贴图见 docs/合成大花花-美术清单.md。
+    规则 v4（2026-09-23）：所有球半径整体缩到 95%——场地不变，球略小，堆叠更宽松。
+    旧存档不作废：恢复时只继承分数、盘面重开（见 minigame_suika.js 的 legacy 分支）；
+    榜单不分桶，分数继续累计。 */
+export const RADIUS_SCALE = 0.95;
 export const TIERS = Object.freeze([
-  { id: 'bubble', zh: '泡泡', en: 'Bubble', radius: 24, score: 1, art: '/static/assets/story-enemies/bubble.svg' },
-  { id: 'ant_egg', zh: '蚂蚁卵', en: 'Ant Egg', radius: 32, score: 3, art: '/static/assets/story-enemies/ant-egg.svg' },
-  { id: 'ladybug', zh: '瓢虫', en: 'Ladybug', radius: 40, score: 6, art: '/static/assets/story-enemies/ladybug.svg' },
-  { id: 'ant_hole', zh: '蚁穴', en: 'Ant Hole', radius: 56, score: 10, art: '/static/assets/story-enemies/ant-hole.svg' },
-  { id: 'dark_ladybug', zh: '深色瓢虫', en: 'Dark Ladybug', radius: 64, score: 15, art: '/static/assets/story-enemies/dark-ladybug.svg' },
-  { id: 'cactus', zh: '仙人掌', en: 'Cactus', radius: 72, score: 21, art: '/static/assets/story-enemies/cactus.svg' },
-  { id: 'uranium_barrel', zh: '铀桶', en: 'Uranium Barrel', radius: 84, score: 28, art: '/static/assets/story-enemies/uranium-barrel.svg' },
-  { id: 'gambler', zh: '赌徒', en: 'Gambler', radius: 96, score: 36, art: '/static/assets/story-enemies/gambler.svg' },
-  { id: 'shiny_ladybug', zh: '闪亮瓢虫', en: 'Shiny Ladybug', radius: 128, score: 45, art: '/static/assets/story-enemies/shiny-ladybug.svg' },
-  { id: 'mecha_flower', zh: '机械花', en: 'Mecha Flower', radius: 160, score: 55, art: '/static/assets/story-enemies/mechanical-flower.svg' },
+  { id: 'bubble', zh: '泡泡', en: 'Bubble', radius: 24 * RADIUS_SCALE, score: 1, art: '/static/assets/story-enemies/bubble.svg' },
+  { id: 'ant_egg', zh: '蚂蚁卵', en: 'Ant Egg', radius: 32 * RADIUS_SCALE, score: 3, art: '/static/assets/story-enemies/ant-egg.svg' },
+  { id: 'ladybug', zh: '瓢虫', en: 'Ladybug', radius: 40 * RADIUS_SCALE, score: 6, art: '/static/assets/story-enemies/ladybug.svg' },
+  { id: 'ant_hole', zh: '蚁穴', en: 'Ant Hole', radius: 56 * RADIUS_SCALE, score: 10, art: '/static/assets/story-enemies/ant-hole.svg' },
+  { id: 'dark_ladybug', zh: '深色瓢虫', en: 'Dark Ladybug', radius: 64 * RADIUS_SCALE, score: 15, art: '/static/assets/story-enemies/dark-ladybug.svg' },
+  { id: 'cactus', zh: '仙人掌', en: 'Cactus', radius: 72 * RADIUS_SCALE, score: 21, art: '/static/assets/story-enemies/cactus.svg' },
+  { id: 'uranium_barrel', zh: '铀桶', en: 'Uranium Barrel', radius: 84 * RADIUS_SCALE, score: 28, art: '/static/assets/story-enemies/uranium-barrel.svg' },
+  { id: 'gambler', zh: '赌徒', en: 'Gambler', radius: 96 * RADIUS_SCALE, score: 36, art: '/static/assets/story-enemies/gambler.svg' },
+  { id: 'shiny_ladybug', zh: '闪亮瓢虫', en: 'Shiny Ladybug', radius: 128 * RADIUS_SCALE, score: 45, art: '/static/assets/story-enemies/shiny-ladybug.svg' },
+  { id: 'mecha_flower', zh: '机械花', en: 'Mecha Flower', radius: 160 * RADIUS_SCALE, score: 55, art: '/static/assets/story-enemies/mechanical-flower.svg' },
   // 第 10 档不给贴图：运行时用当前玩家的皮肤画（游客＝初始皮肤）。
-  { id: 'player', zh: '玩家', en: 'Player', radius: 192, score: 66, art: null },
+  { id: 'player', zh: '玩家', en: 'Player', radius: 192 * RADIUS_SCALE, score: 66, art: null },
 ]);
 
 export const MAX_TIER = TIERS.length - 1;

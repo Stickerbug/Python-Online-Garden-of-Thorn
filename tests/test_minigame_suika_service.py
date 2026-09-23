@@ -132,6 +132,25 @@ class SuikaServiceTests(unittest.TestCase):
         self.assertEqual(result['reason'], '投放总数超出上限')
         self.assertEqual(result['game']['drop_index'], 0)
 
+    def test_rules_migration_carries_score_in_same_game(self):
+        """规则 v4 迁移：旧档只保留分数——同一云端局 from_index=0 重放新投放，
+        分数从旧分继续累计，max_tier 只升不降（不被新盘面的 0 冲掉）。"""
+        conn = _conn()
+        game = suika.load_state(conn, 7, seed=1)
+        suika.sync_progress(conn, 7, game['game_uid'], 0,
+                            [{'t': i * 500, 'x': 300} for i in range(4)],
+                            claimed_score=777, claimed_max_tier=6)
+        # 迁移后第一批：from_index=0（替换投放序列）、分数沿用 777 起步
+        result = suika.sync_progress(conn, 7, game['game_uid'], 0,
+                                     [{'t': 600, 'x': 210}, {'t': 1400, 'x': 420}],
+                                     claimed_score=777 + 9, claimed_max_tier=0)
+        self.assertEqual(result['status'], 'ok')
+        self.assertTrue(result['verified'])
+        self.assertEqual(result['game']['game_uid'], game['game_uid'])  # 不换局
+        self.assertEqual(result['game']['drop_index'], 2)               # 投放序列已重置
+        self.assertEqual(result['game']['score'], 786)
+        self.assertEqual(result['game']['max_tier'], 6)                 # 档位不被 0 冲掉
+
     def test_leaderboard_cached_matches_uncached(self):
         conn = _conn()
         game = suika.load_state(conn, 7, seed=1)

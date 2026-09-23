@@ -252,6 +252,9 @@ def sync_progress(conn, user_id: int, game_uid: str, from_index: int, drops,
     score = int(claimed_score if claimed_score is not None else state["score"])
     max_tier = int(claimed_max_tier if claimed_max_tier is not None else state["max_tier"])
     max_tier = max(0, min(10, max_tier))
+    # 档位只升不降：规则迁移继承分数时盘面重开、客户端 maxTierSeen 从 0 起步，
+    # 不能把整局已到的最高档冲掉（榜单 max_tile 用它）。
+    max_tier = max(max_tier, int(state["max_tier"]))
     ok, reason = _verify_batch(kept, incoming, int(state["score"]), score)
     if ok and incoming:
         ok, reason = _check_time_anchor(row, kept, incoming, now)

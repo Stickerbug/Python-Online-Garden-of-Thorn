@@ -799,8 +799,10 @@ function loadLocal() {
   if (!raw) return null;
   try {
     const data = JSON.parse(raw);
-    // 规则版本不同的旧存档直接作废（v2 改了生成规则与判负判定，重放会对不上）
-    if (!data || data.v !== RULES_VERSION || !Array.isArray(data.drops) || !data.seed) return null;
+    // 结构必须有 seed + drops。规则版本旧的存档不作废（规则 v4 起球半径变了）：
+    // 调用方对旧版本只继承分数、盘面重开；比当前版本新的存档（降级/换设备）不认。
+    if (!data || !Array.isArray(data.drops) || !data.seed) return null;
+    if (!(Number(data.v) > 0) || Number(data.v) > RULES_VERSION) return null;
     return data;
   } catch (_) {
     return null;
@@ -812,7 +814,7 @@ function newSeed() {
   return seedFromText(text) >>> 0;
 }
 
-function startGame({ seed = newSeed(), drops = [], uptoMs = 0, restored = false } = {}) {
+function startGame({ seed = newSeed(), drops = [], uptoMs = 0, restored = false, carriedScore = 0 } = {}) {
   game = new SuikaGame(Matter, { seed });
   if (drops.length) {
     game.seekTo(0);
@@ -824,6 +826,11 @@ function startGame({ seed = newSeed(), drops = [], uptoMs = 0, restored = false 
     game.seekTo(Number(uptoMs) || 0);
     game.takeEvents();
   }
+  if (carriedScore > 0) {
+    // 规则迁移（如 v4 半径 95%）：旧档只保留分数。只抬分数，盘面/投放序列全新；
+    // 生成门槛按分数解锁（SPAWN_GATE_SCORES），继承分数后口径一致。
+    game.score = Math.floor(carriedScore);
+  }
   pops.length = 0;
   aimX = ARENA.width / 2;
   lastAimRenderX = null;
@@ -833,6 +840,12 @@ function startGame({ seed = newSeed(), drops = [], uptoMs = 0, restored = false 
   updateNextChip();
   if (restored) {
     setStatus(`已恢复上一局（${drops.length} 次投放）`);
+  } else if (carriedScore > 0) {
+    // 不调 restartCloudGame：沿用旧云端局（uid 不变、acked 清零），同步时
+    // from_index=0 重放新投放，服务端按旧分数做增量校验——分数无缝延续。
+    setStatus('规则已更新：已保留上一局的分数，盘面重新开始');
+    saveLocal();
+    scheduleSync(400);
   } else {
     setStatus('新的一局，已保存到本机');
     saveLocal();
@@ -1292,10 +1305,16 @@ async function boot() {
   buildLegend();
   await loadAllArt();
   const saved = loadLocal();
-  if (saved && !saved.gameOver && saved.drops.length) {
+  if (saved && !saved.gameOver && saved.drops.length && Number(saved.v) === RULES_VERSION) {
     syncState.gameUid = String(saved.gameUid || '');
     syncState.acked = Math.max(0, Number(saved.acked) || 0);
     startGame({ seed: saved.seed, drops: saved.drops, uptoMs: saved.timeMs, restored: true });
+  } else if (saved && !saved.gameOver && Number(saved.score) > 0) {
+    // 旧规则版本的存档：不作废，只保留分数。沿用旧云端局（uid 不变）、acked 清零，
+    // 盘面重开——旧 drops 在新物理下重放会对不上，直接弃置。
+    syncState.gameUid = String(saved.gameUid || '');
+    syncState.acked = 0;
+    startGame({ carriedScore: Math.floor(Number(saved.score) || 0) });
   } else {
     startGame();
   }
