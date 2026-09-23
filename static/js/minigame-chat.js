@@ -112,12 +112,16 @@
     };
 
     function originBadgeHtml(item) {
-      const origin = String((item && item.origin) || '').toLowerCase();
+      /* 服务端的字段名是 chat_origin（旧内联实现也读这个）；只认 item.origin 的话
+         [休闲]/[故事] 前缀从来没渲染出来过——迁移到外壳后才被探针暴露 */
+      const origin = String((item && (item.chat_origin || item.origin)) || '').toLowerCase();
       const text = (item && item.origin_label) || (origin === 'leisure' ? '休闲' : origin === 'story' ? '故事' : '');
       if (!text) return '';
       const cls = origin === 'leisure' ? 'chat-origin-leisure'
         : origin === 'story' ? 'chat-origin-story' : 'chat-origin-multiplayer';
-      return `<span class="chat-origin-badge ${cls}">[${escapeHtml(text)}]</span>`;
+      /* 类名用 shared-lobby-chat.css 认的 chat-origin-prefix（此前写成 chat-origin-badge，
+         没有任何样式——[休闲] 前缀的紫色一直没生效，迁移后才被发现） */
+      return `<span class="chat-origin-prefix ${cls}">[${escapeHtml(text)}]</span>`;
     }
 
     function titlesHtml(item) {
@@ -204,13 +208,32 @@
       updateUnreadBadge();
     }
 
+    /* 滑动进度缓存（反馈：每次打开聊天都翻回顶部）。面板隐藏时 display:none 会让
+       scrollTop 归零，隐藏状态下的 render/append 也不能写滚动（scrollHeight=0）。
+       规则：收起时记下位置、打开时恢复；面板可见且贴底时新消息跟随到底；
+       可见且在往上翻时重渲染保持原位，不被新消息拽走。 */
+    let savedScrollTop = null;
+
+    function chatPanelOpen() {
+      const panel = els(options.panelId);
+      return !!(panel && !panel.hidden);
+    }
+
+    function chatNearBottom(log) {
+      return log.scrollHeight - log.scrollTop - log.clientHeight <= 40;
+    }
+
     function append(item) {
       const log = els(options.logId);
       if (!log || !item) return;
       if (log.querySelector('p.mg-hint')) log.innerHTML = '';
       remember(item);
+      const open = chatPanelOpen();
+      const pin = open && chatNearBottom(log);
       log.insertAdjacentHTML('beforeend', lineHtml(item));
-      log.scrollTop = log.scrollHeight;
+      if (pin) log.scrollTop = log.scrollHeight;
+      /* 面板收起时收到别人的消息自动计未读（红点在 toggle 打开时清零） */
+      if (!open) markUnread(item);
     }
 
     function render(items) {
@@ -226,8 +249,15 @@
         remember(item);
         html.push(lineHtml(item));
       });
+      const openNow = chatPanelOpen();
+      const wasNearBottom = openNow ? chatNearBottom(log) : false;
+      const prevTop = openNow ? log.scrollTop : 0;
       log.innerHTML = html.filter(Boolean).join('') || options.emptyHtml;
-      log.scrollTop = log.scrollHeight;
+      if (openNow) {
+        log.scrollTop = (wasNearBottom || savedScrollTop === null)
+          ? log.scrollHeight
+          : prevTop;
+      }
       // 未读按消息 id 计：首屏只记游标，之后新增（且面板收起）的才算未读
       const rows = list;
       const maxId = rows.reduce((max, item) => Math.max(max, Number((item && item.id) || 0)), 0);
@@ -256,15 +286,49 @@
       updateUnreadBadge();
     }
 
+    /* 有人撤回消息：把对应行从日志里拿掉，补一条转义过的提示。 */
+    function recall(payload) {
+      const log = els(options.logId);
+      if (!log) return;
+      const ids = (((payload || {}).message_ids) || [])
+        .map((value) => Number(value) || 0)
+        .filter((value) => value > 0);
+      ids.forEach((id) => {
+        entriesById.delete(id);
+        const row = log.querySelector(`.chat-msg[data-chat-message-id="${id}"]`);
+        if (row) row.remove();
+      });
+      const actor = escapeHtml(String((payload || {}).actor_name || '管理员'));
+      const target = escapeHtml(String((payload || {}).target_name || ''));
+      const text = (payload || {}).self_recall
+        ? `${actor} 撤回了一条消息`
+        : `${actor} 撤回了 ${target || '某个玩家'} 的一条消息`;
+      const pin = chatPanelOpen() && chatNearBottom(log);
+      log.insertAdjacentHTML('beforeend', `<div class="chat-msg chat-recall-entry">${text}</div>`);
+      if (pin) log.scrollTop = log.scrollHeight;
+    }
+
     function toggle(force) {
       const panel = els(options.panelId);
       const toggleBtn = els(options.toggleId);
       if (!panel) return;
       const open = force === undefined ? panel.hidden : !!force;
+      if (!open) {
+        const log = els(options.logId);
+        if (log) savedScrollTop = log.scrollTop;   // 收起：记下滑动进度
+      }
       panel.hidden = !open;
       if (toggleBtn) toggleBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
       if (open) {
         clearUnread();
+        const log = els(options.logId);
+        if (log) {
+          // 打开：恢复上次的滑动进度；从未记录（首次）则贴底。
+          // 重显后先读一次 scrollHeight 强制布局，scrollTop 才写得进去。
+          log.scrollTop = savedScrollTop === null
+            ? log.scrollHeight
+            : Math.max(0, Math.min(savedScrollTop, log.scrollHeight));
+        }
         const input = els(options.inputId);
         if (input) input.focus();
       }
@@ -279,28 +343,39 @@
       input.value = '';
     }
 
-    /* 举报 / 撤回按钮是渲染进 HTML 字符串的，用事件委托按消息 id 找回来（与 2048 一致） */
+    /* 举报 / 撤回按钮是渲染进 HTML 字符串的，用事件委托按消息 id 找回来。
+       按钮由 chatActionButtonsHtml 渲染，选择器跟着它的类名/数据属性走
+       （.report-inline-btn[data-chat-report] / .chat-recall-btn[data-chat-recall]）——
+       此前这里找的是不存在的 [data-chat-action]，两个按钮在小游戏页点了都没反应；
+       参数签名也要对齐 shared-chat-actions：举报 (entry, labels)，
+       撤回 (entry, {socket, labels, confirm})。 */
     function bindActions() {
       const log = els(options.logId);
       if (!log || typeof actions.chatActionButtonsHtml !== 'function') return;
       log.addEventListener('click', (event) => {
-        const button = event.target.closest('[data-chat-action]');
-        if (!button) return;
-        event.preventDefault();
-        const row = button.closest('[data-chat-message-id]');
-        const id = Number(row && row.dataset.chatMessageId);
-        const item = entriesById.get(id) || {};
-        const label = String(button.dataset.chatAction || '');
-        const names = labels();
-        if (label === String(names.report || '举报') && typeof actions.openChatReportDialog === 'function') {
-          actions.openChatReportDialog(item, options.socket);
+        const reportBtn = event.target.closest('.report-inline-btn[data-chat-report]');
+        if (reportBtn) {
+          event.preventDefault();
+          const id = Number(reportBtn.dataset.chatReport || 0);
+          const item = entriesById.get(id) || {};
+          if (typeof actions.openChatReportDialog === 'function') {
+            void actions.openChatReportDialog(item, labels());
+          }
           return;
         }
-        if (label === String(names.recall || '撤回') && typeof actions.confirmChatRecall === 'function') {
-          actions.confirmChatRecall(item, options.socket, () => {
-            entriesById.delete(id);
-            if (row) row.remove();
-          });
+        const recallBtn = event.target.closest('.chat-recall-btn[data-chat-recall]');
+        if (recallBtn) {
+          event.preventDefault();
+          const id = Number(recallBtn.dataset.chatRecall || 0);
+          const item = entriesById.get(id) || {};
+          if (typeof actions.confirmChatRecall === 'function') {
+            /* 行的移除等 chat_recall 广播（recall()）来做：用户取消确认时不能提前删 */
+            actions.confirmChatRecall(item, {
+              socket: options.socket,
+              labels: labels(),
+              confirm: options.confirmRecall,
+            });
+          }
         }
       });
     }
@@ -316,7 +391,7 @@
     }
 
     bind();
-    return { render, append, toggle, send, markUnread, lineHtml, clearUnread };
+    return { render, append, recall, toggle, send, markUnread, lineHtml, clearUnread };
   }
 
   window.GtnMinigameChat = { attach };

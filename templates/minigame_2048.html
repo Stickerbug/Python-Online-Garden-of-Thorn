@@ -165,6 +165,7 @@
   'username': username,
   'userId': user_id,
   'chatRole': chat_role|default('player'),
+  'gameKey': '2048',
   'windowDays': minigame_window_days,
   'championPool': champion_pool,
   'championMinAccounts': champion_min_accounts,
@@ -172,6 +173,7 @@
 <script nonce="{{ csp_nonce }}" type="application/json" id="mg-palette">{{ rarity_table | tojson }}</script>
   <script src="/static/vendor/socket.io.min.js?v=4.7.2"></script>
   <script src="/static/js/shared-chat-actions.js?v={{ static_version|default('dev')|urlencode }}"></script>
+  <script src="/static/js/minigame-chat.js?v={{ static_version|default('dev')|urlencode }}"></script>
   <script type="module" src="/static/js/minigame_2048.js?v={{ static_version|default('dev')|urlencode }}"></script>
 </body>
 </html>

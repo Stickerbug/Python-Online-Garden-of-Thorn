@@ -9,12 +9,14 @@
    整段脚本都跑不起来（棋盘、合成顺序、排行榜全空）。所以这里不再逐个写死文件名，
    而是覆盖这一页会用到的静态资源类型，避免以后新加文件又漏。 */
 
-const CACHE = 'gtn-mg2048-v3';
+const CACHE = 'gtn-mg2048-v4';
 const SHELL = [
   '/static/css/minigame_2048.css',
   '/static/css/shared-lobby-chat.css',
   '/static/js/minigame_2048.js',
   '/static/js/minigame_2048_core.js',
+  '/static/js/minigame-chat.js',
+  '/static/js/shared-chat-actions.js',
   '/static/assets/favicon.ico',
 ];
 

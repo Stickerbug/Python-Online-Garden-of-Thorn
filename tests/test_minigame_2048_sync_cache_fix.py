@@ -19,7 +19,7 @@ def test_rate_limit_is_per_account_not_proxy_loopback():
 
 def test_service_worker_does_not_cache_user_specific_document():
     sw = (ROOT / 'static' / 'minigame-2048' / 'sw.js').read_text(encoding='utf-8')
-    assert "const CACHE = 'gtn-mg2048-v3';" in sw
+    assert "const CACHE = 'gtn-mg2048-v4';" in sw
     assert "if (url.pathname === '/minigame/2048' || request.destination === 'document') return;" in sw
     shell_block = sw.split('const SHELL = [', 1)[1].split('];', 1)[0]
     assert "'/minigame/2048'" not in shell_block

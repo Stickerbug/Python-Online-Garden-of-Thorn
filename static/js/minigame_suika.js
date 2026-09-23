@@ -188,16 +188,6 @@ function setStatus(text, { offline = false } = {}) {
   statusEl.classList.toggle('is-offline', !!offline);
 }
 
-/* 撤回通知里的昵称要转义后再进 innerHTML（与 2048 页、共用聊天渲染同口径）。 */
-function escapeHtml(text) {
-  return String(text == null ? '' : text)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-}
-
 /* ---------- 贴图：加载 + 墨迹归一化 ---------- */
 
 async function prepareArt(index) {
@@ -1385,28 +1375,13 @@ function attachChat(socket) {
   });
   socket.on('chat', (payload) => {
     try {
-      chat.append(payload);
+      chat.append(payload);   // 面板收起时外壳自动计未读红点
     } catch (error) {
       window.__skChatError = String((error && error.stack) || error);
     }
-    const panel = document.getElementById('sk-chat');
-    if (panel && panel.hidden) chat.markUnread(payload);
   });
   socket.on('chat_recall', (payload) => {
-    const ids = ((payload || {}).message_ids || []).map((value) => Number(value) || 0).filter(Boolean);
-    const log = document.getElementById('sk-chat-log');
-    if (!log) return;
-    ids.forEach((id) => {
-      const row = log.querySelector(`.chat-msg[data-chat-message-id="${id}"]`);
-      if (row) row.remove();
-    });
-    const actor = escapeHtml(String((payload || {}).actor_name || '管理员'));
-    const target = escapeHtml(String((payload || {}).target_name || ''));
-    const text = (payload || {}).self_recall
-      ? `${actor} 撤回了一条消息`
-      : `${actor} 撤回了 ${target || '某个玩家'} 的一条消息`;
-    log.insertAdjacentHTML('beforeend', `<div class="chat-msg chat-recall-entry">${text}</div>`);
-    log.scrollTop = log.scrollHeight;
+    chat.recall(payload);     // 行移除 + 转义提示都在外壳里
   });
 }
 

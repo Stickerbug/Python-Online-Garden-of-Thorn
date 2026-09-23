@@ -11,11 +11,6 @@ import {
   BOARD_SIZE, CELL_COUNT, DIRECTION_CHARS, DIRECTIONS, ETERNAL_VALUE, initialCells,
   isGameOver, maxTile, seedFromText, stepMove,
 } from './minigame_2048_core.js';
-/* 举报 / 撤回的共享实现（shared-chat-actions.js 是经典脚本，挂在 window 上） */
-const {
-  chatActionButtonsHtml, chatActionLabels, confirmChatRecall, openChatReportDialog,
-} = window.GtnChatActions || {};
-
 const CONFIG = JSON.parse(document.getElementById('mg-config').textContent || '{}');
 const PALETTE = JSON.parse(document.getElementById('mg-palette').textContent || '[]');
 const RULES_VERSION = 2;      // v2 = 5×5 + 合并有 15% 概率失败（不翻倍）
@@ -788,11 +783,39 @@ boardEl.addEventListener('touchcancel', () => { touchStart = null; }, { passive:
    断线（关页、断网）走正常清理，不会伪造在线。 */
 
 let socket = null;
+let mgChat = null;               // 大厅聊天：共用外壳 minigame-chat.js 的实例
 let pendingInviterSid = '';      // 最近一条待处理邀请的发起方 sid（接受时必须带上）
 
 function connectPresence() {
   if (typeof io !== 'function') return;
   socket = io({ transports: ['websocket', 'polling'], withCredentials: true });
+  /* 大厅聊天与合成大花花同一份外壳：渲染 / 滑动进度缓存 / 未读红点 / 举报撤回都在里面。 */
+  const chatFactory = window.GtnMinigameChat;
+  if (chatFactory) {
+    mgChat = chatFactory.attach({
+      socket,
+      gameKey: String(CONFIG.gameKey || '2048'),
+      userId: CONFIG.userId,
+      username: CONFIG.username,
+      chatRole: String(CONFIG.chatRole || 'player'),
+      toggleId: 'mg-chat-toggle',
+      panelId: 'mg-chat',
+      closeId: 'mg-chat-close',
+      logId: 'mg-chat-log',
+      formId: 'mg-chat-form',
+      inputId: 'mg-chat-input',
+      unreadId: 'mg-chat-unread',
+      emptyHtml: '<p class="mg-hint">还没有人说话。</p>',
+      /* 撤回确认用本页的弹窗（外壳默认是 window.confirm，页面可覆盖） */
+      confirmRecall: (message) => mgConfirm({
+        title: '撤回消息',
+        text: message,
+        confirmLabel: '撤回',
+        cancelLabel: '取消',
+      }),
+    });
+    window.__mgChat = mgChat;   // 排查 / 自动化检查用（与 suika 的 __skChat 同约定）
+  }
   window.__mgSocket = socket;                  // 便于排查（也是自动化检查用的入口）
   window.__mgEventLog = window.__mgEventLog || [];
   ['login_ok', 'login_fail', 'minigame_status', 'lobby_chat_history', 'server_error'].forEach((name) => {
@@ -822,15 +845,12 @@ function connectPresence() {
   socket.on('login_fail', (payload) => {
     setSyncText(`聊天/在线不可用：${(payload && payload.reason) || '登录失败'}`, 'denied');
   });
-  // 大厅聊天（与多人游戏同一条）：历史 + 新消息
+  // 大厅聊天（与多人游戏同一条）：历史 + 新消息，全部交给共用外壳
   socket.on('lobby_chat_history', (payload) => {
-    renderChatHistory(payload && payload.items);
+    if (mgChat) mgChat.render(payload && payload.items);
   });
   socket.on('chat', (payload) => {
-    appendChatLine(payload);
-    // 面板收起时给个未读红点（历史消息不算未读）
-    const panel = el('mg-chat');
-    if (panel && panel.hidden) markChatUnread(payload);
+    if (mgChat) mgChat.append(payload);   // 面板收起时外壳自动计未读红点
   });
   // 撤回结果：成功提示一句（被撤回的那条会随刷新后的历史一起消失）
   socket.on('admin_chat_recall_result', (payload) => {
@@ -838,27 +858,9 @@ function connectPresence() {
     setSyncText(recalled > 0 ? `已撤回 ${recalled} 条消息` : '撤回失败：消息可能已被撤回，或你没有权限',
       recalled > 0 ? 'ok' : 'error');
   });
-  // 别人（或自己）撤回消息：把对应行从日志里拿掉，并补一条撤回提示
+  // 别人（或自己）撤回消息：行移除 + 转义提示都在外壳里（chat.recall）
   socket.on('chat_recall', (payload) => {
-    const ids = ((payload || {}).message_ids || [])
-      .map((value) => Number(value) || 0)
-      .filter((value) => value > 0);
-    if (!ids.length) return;
-    const log = el('mg-chat-log');
-    if (log) {
-      ids.forEach((id) => {
-        chatEntriesById.delete(id);
-        const row = log.querySelector(`.chat-msg[data-chat-message-id="${id}"]`);
-        if (row) row.remove();
-      });
-      const actor = escapeHtml(String((payload || {}).actor_name || '管理员'));
-      const target = escapeHtml(String((payload || {}).target_name || ''));
-      const text = (payload || {}).self_recall
-        ? `${actor}撤回了一条消息`
-        : `${actor}撤回了${target || '某人'}的一条消息`;
-      log.insertAdjacentHTML('beforeend', `<div class="chat-msg chat-recall-entry">${text}</div>`);
-      log.scrollTop = log.scrollHeight;
-    }
+    if (mgChat) mgChat.recall(payload);
   });
   socket.on('minigame_status', () => { /* 状态已生效 */ });
   socket.on('server_error', (payload) => {
@@ -895,368 +897,6 @@ function showInvitePrompt(payload) {
 function hideInvitePrompt() {
   const box = el('mg-invite');
   if (box) box.hidden = true;
-}
-
-/* ---------------- 大厅聊天（与多人游戏共用同一条） ----------------
-   面板、标题、日志、输入框、每条消息的类名和样式都和多人游戏大厅完全一致
-   （见 shared-lobby-chat.css 的 .gtn-lobby-chat-* 与 .chat-msg/.chat-nick），
-   所以休闲花园里的聊天就是大厅聊天本身；[休闲] 前缀由服务端给的 chat_origin 渲染。 */
-
-const CHAT_LABELS = {
-  zh: {
-    multiplayer: '多人', story: '故事', leisure: '休闲', system: '系统',
-    newcomer: '新人', lowReputation: '低信誉', spectator: '观战', console: '控制台',
-  },
-  en: {
-    multiplayer: 'Multiplayer', story: 'Story', leisure: 'Casual', system: 'System',
-    newcomer: 'Newcomer', lowReputation: 'Low reputation', spectator: 'Spectating', console: 'Console',
-  },
-  fr: {
-    multiplayer: 'Multijoueur', story: 'Histoire', leisure: 'Détente', system: 'Système',
-    newcomer: 'Nouveau', lowReputation: 'Faible réputation', spectator: 'Spectateur', console: 'Console',
-  },
-  ja: {
-    multiplayer: 'マルチ', story: 'ストーリー', leisure: 'レジャー', system: 'システム',
-    newcomer: '新人', lowReputation: '低評価', spectator: '観戦', console: 'コンソール',
-  },
-};
-
-function chatLabels() {
-  let lang = '';
-  try {
-    lang = String((store && store.getItem('gtn_lang')) || '').toLowerCase();
-  } catch (_) { lang = ''; }
-  return CHAT_LABELS[lang] || CHAT_LABELS.zh;
-}
-
-function chatOriginBadgeHtml(item) {
-  const origin = String((item && item.chat_origin) || '').toLowerCase();
-  const labels = chatLabels();
-  if (!labels[origin]) return '';
-  return `<span class="chat-origin-prefix chat-origin-${origin}">[${escapeHtml(labels[origin])}]</span>`;
-}
-
-/* 称号配色：与 game.js 的 titleColorCss 同一张表（多人大厅就是这么给称号上色的）。
-   色板 / 称号色调整时两边一起改。 */
-const TITLE_COLOR_TOKENS = {
-  admin: '#C0392B', thorn: '#C0392B', bloom: '#1ABC9C', root: '#8D6E63', guard: '#2980B9',
-  curse: '#704B87', infect: '#7E9638', health: '#2ECC71', elixir: '#F1C40F', energy: '#F1C40F',
-  magic: '#3498DB', damage: '#C0392B', electric: '#4BA3FF', poison: '#8E44AD', fire: '#E67E22',
-  armor: '#95A5A6', precision: '#546E7A', banish: '#6C3483', indestructible: '#D4AC0D',
-  critical: '#D4AC0D', primary: '#7EEF6D', common: '#7EEF6D', unusual: '#FFE65D', rare: '#4D52E3',
-  epic: '#861FDE', legendary: '#DE1F1F', mythic: '#1FDBDE', ultra: '#FF2B75', super: '#2BFFA3',
-  omega: '#F329D9', eternal: '#EEEEEE', unique: '#555555', milestone: '#5AA469', hidden: '#7257A8',
-  neutral: '#7F8C8D', spectator: '#95A5A6',
-};
-
-function titleColorCss(color) {
-  const key = String(color || '').trim().toLowerCase();
-  if (TITLE_COLOR_TOKENS[key]) return TITLE_COLOR_TOKENS[key];
-  if (/^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i.test(key)) return key;
-  return '';
-}
-
-/* 游戏称号前缀：和多人游戏大厅一样渲染成 [称号名]（按称号自带颜色）。 */
-function chatTitlesHtml(item) {
-  const titles = Array.isArray(item && item.equipped_titles) ? item.equipped_titles : [];
-  return titles.slice(0, 3).map((title) => {
-    const name = String((title && title.name) || '').trim();
-    if (!name) return '';
-    const color = titleColorCss(title.color);
-    return `<span class="player-title-inline"${color ? ` style="color:${color}"` : ''}>[${escapeHtml(name)}]</span>`;
-  }).join('');
-}
-
-/* 信誉徽章：新人 / 低信誉（与多人大厅同名同类，样式见 shared-lobby-chat.css）。 */
-function chatReputationHtml(item) {
-  const labels = chatLabels();
-  const profile = (item && item.reputation_profile) || null;
-  const newcomer = profile && profile.newcomer && profile.newcomer.is_newcomer === true
-    ? `<span class="reputation-badge newcomer-badge">${escapeHtml(labels.newcomer)}</span>`
-    : '';
-  const level = String((profile && profile.level) || '');
-  if (!['yellow', 'orange', 'red'].includes(level)) return newcomer;
-  return newcomer
-    + `<span class="reputation-badge reputation-${level}">${escapeHtml(labels.lowReputation)}</span>`;
-}
-
-/* 昵称名牌配色：数据形状与 game.js 的 getPlayerNamePaint / titlePaintPresentation 一致——
-   渐变（含彩虹）与随主题变色都存在 ``name_style.paint`` 里，不是 name_style.kind。
-   返回 ``{ className, style }``；没有自定义名牌时返回 null（用默认色）。 */
-function chatNamePaint(item) {
-  const style = (item && item.name_style) || null;
-  const paint = (style && typeof style.paint === 'object' && style.paint) || null;
-  if (paint) {
-    const kind = String(paint.kind || '').toLowerCase();
-    if (kind === 'gradient' || kind === 'rainbow') {
-      const colors = (Array.isArray(paint.colors) ? paint.colors : [])
-        .map((color) => titleColorCss(color))
-        .filter(Boolean)
-        .slice(0, 12);
-      if (colors.length >= 2) {
-        const numeric = Number(paint.angle);
-        const angle = Number.isFinite(numeric) ? ((numeric % 360) + 360) % 360 : 90;
-        return {
-          className: 'title-paint-gradient',
-          style: `--title-paint-gradient:linear-gradient(${angle}deg,${colors.join(',')})`,
-        };
-      }
-    } else if (kind === 'theme') {
-      const light = titleColorCss(paint.light && paint.light.color) || titleColorCss('neutral');
-      const dark = titleColorCss(paint.dark && paint.dark.color) || titleColorCss('neutral');
-      return {
-        className: 'title-paint-theme',
-        style: `--title-paint-light:${light};--title-paint-dark:${dark};background-image:none;-webkit-text-fill-color:currentColor`,
-      };
-    } else if (kind === 'solid') {
-      const color = titleColorCss(paint.color);
-      if (color) {
-        return {
-          className: 'title-paint-solid',
-          style: `color:${color};background-image:none;-webkit-text-fill-color:currentColor`,
-        };
-      }
-    }
-  }
-  const solid = titleColorCss(item && item.name_color);
-  return solid
-    ? { className: 'title-paint-solid', style: `color:${solid};background-image:none;-webkit-text-fill-color:currentColor` }
-    : null;
-}
-
-/* 带配色的昵称（聊天行与排行榜共用）：渐变 / 纯色 / 随主题。 */
-function namePaintHtml(item, name) {
-  const text = String(name || '?');
-  const paint = chatNamePaint(item);
-  return `<span class="player-name-value${paint ? ` ${paint.className}` : ''}"`
-    + `${paint ? ` style="${paint.style}"` : ''}>${escapeHtml(text)}</span>`;
-}
-
-function chatNameHtml(item, fallback) {
-  return namePaintHtml(item, (item && item.nickname) || fallback || '?');
-}
-
-function isOwnChatItem(item) {
-  if (!item) return false;
-  if (CONFIG.userId != null && item.user_id != null
-      && String(item.user_id) === String(CONFIG.userId)) return true;
-  return String(item.nickname || '') !== ''
-    && String(item.nickname) === String(CONFIG.username || '');
-}
-
-function chatTextHtml(item) {
-  let out = escapeHtml((item && item.text) || '');
-  const mentions = Array.isArray(item && item.mentions) ? item.mentions : [];
-  const ownUserId = CONFIG.userId != null ? String(CONFIG.userId) : '';
-  mentions.slice(0, 8).forEach((mention) => {
-    const name = escapeHtml((mention && mention.nickname) || '');
-    if (!name) return;
-    const token = `@${name}`;
-    // 点到自己的时候额外加个描边（和大厅一样），别人只是蓝色
-    const isSelf = !!ownUserId && mention && mention.user_id != null
-      && String(mention.user_id) === ownUserId;
-    const cls = `chat-mention-token${isSelf ? ' mention-self' : ''}`;
-    out = out.split(token).join(`<span class="${cls}">${token}</span>`);
-  });
-  return out;
-}
-
-function chatLineHtml(item) {
-  if (!item) return '';
-  if (item.type === 'time') {
-    const label = escapeHtml(String(item.display_time || '').trim());
-    return label ? `<div class="chat-time-separator">${label}</div>` : '';
-  }
-  const labels = chatLabels();
-  const system = !!item.system;
-  const name = escapeHtml(String(item.nickname || '').trim());
-  const spectator = item.is_spectator
-    ? `<span class="chat-spectator-prefix">[${escapeHtml(labels.spectator)}]</span>`
-    : '';
-  const consolePrefix = (!system && (item.console_player || item.special_role === 'console'))
-    ? `<span class="player-title-inline">[${escapeHtml(labels.console)}]</span>`
-    : '';
-  const head = system
-    ? `${name || `[${escapeHtml(labels.system)}]`} `
-    : spectator
-      + '<span class="chat-player-name">'
-      + chatReputationHtml(item)
-      + consolePrefix
-      + chatTitlesHtml(item)
-      + chatNameHtml(item, name || '?')
-      + '</span>: ';
-  const messageId = Number(item.message_id || item.messageId || 0);
-  return `<div class="chat-msg"${messageId > 0 ? ` data-chat-message-id="${messageId}"` : ''}>`
-    + `<span class="chat-nick${system ? ' system-name' : ''}">${chatOriginBadgeHtml(item)}${head}</span>`
-    + chatTextHtml(item)
-    + chatActionsHtml(item)
-    + '</div>';
-}
-
-/* 举报 / 撤回按钮（共享脚本没加载出来时就不显示，不影响聊天本身） */
-function chatActionsHtml(item) {
-  if (typeof chatActionButtonsHtml !== 'function') return '';
-  return chatActionButtonsHtml(item, chatViewer(), typeof chatActionLabels === 'function' ? chatActionLabels() : {});
-}
-
-/* 当前登录者（撤回按钮的权限判定用；身份只用于显示，服务端还会再判一次） */
-function chatViewer() {
-  return { role: String(CONFIG.chatRole || 'player').toLowerCase(), user_id: CONFIG.userId };
-}
-
-/* 撤回/举报按钮是渲染进 HTML 字符串的，这里用事件委托按消息 id 找回来 */
-const chatEntriesById = new Map();
-
-function rememberChatEntry(item) {
-  if (!item) return;
-  const id = Number(item.message_id || item.messageId || 0);
-  if (Number.isFinite(id) && id > 0) chatEntriesById.set(id, item);
-}
-
-// 便于自动化检查：按当前规则把一条聊天负载渲染成 HTML（纯函数，不改状态）
-window.__mgChatLineHtml = (item) => chatLineHtml(item || {});
-
-function renderChatHistory(items) {
-  const log = el('mg-chat-log');
-  if (!log) return;
-  const list = (Array.isArray(items) ? items : []).slice(-200);
-  const html = [];
-  list.forEach((item, index) => {
-    // 和多人游戏一样：撤掉消息后没了下文的时间分隔符不再显示
-    if (item && item.type === 'time') {
-      const next = list[index + 1];
-      if (!next || next.type === 'time') return;
-    }
-    rememberChatEntry(item);
-    html.push(chatLineHtml(item));
-  });
-  log.innerHTML = html.filter(Boolean).join('')
-    || '<p class="mg-hint">还没有人说话。</p>';
-  log.scrollTop = log.scrollHeight;
-  countChatUnreadFromHistory(list);
-}
-
-function appendChatLine(item) {
-  const log = el('mg-chat-log');
-  if (!log || !item) return;
-  if (log.querySelector('p.mg-hint')) log.innerHTML = '';
-  rememberChatEntry(item);
-  log.insertAdjacentHTML('beforeend', chatLineHtml(item));
-  log.scrollTop = log.scrollHeight;
-}
-
-/* 聊天未读红点：面板收起时收到别人的消息就计数，打开面板即清零。 */
-let chatUnreadCount = 0;
-
-function updateChatUnreadBadge() {
-  const badge = el('mg-chat-unread');
-  if (!badge) return;
-  const count = Math.max(0, Number(chatUnreadCount) || 0);
-  badge.hidden = count <= 0;
-  badge.textContent = count > 99 ? '99+' : String(count);
-  badge.setAttribute('aria-label', count > 0 ? `${count} 条未读消息` : '没有未读消息');
-}
-
-function markChatUnread(item) {
-  if (!item || item.type === 'time' || item.system) return;
-  if (isOwnChatItem(item)) return;                 // 自己发的不算未读
-  chatUnreadCount += 1;
-  updateChatUnreadBadge();
-}
-
-/* 小游戏页收大厅消息靠"整段历史刷新"（不是逐条 chat 事件），
-   所以未读按历史里的消息 id 计：首屏只记游标，之后新增的才算未读。 */
-let chatUnreadCursor = 0;
-let chatUnreadCursorReady = false;
-
-function countChatUnreadFromHistory(list) {
-  const rows = Array.isArray(list) ? list : [];
-  const maxId = rows.reduce((max, item) => Math.max(max, Number(item && item.id) || 0), 0);
-  if (!chatUnreadCursorReady) {
-    chatUnreadCursorReady = true;
-    chatUnreadCursor = maxId;
-    return;
-  }
-  if (maxId <= chatUnreadCursor) return;
-  const panel = el('mg-chat');
-  const panelHidden = !panel || panel.hidden;
-  if (panelHidden) {
-    rows.forEach((item) => {
-      if (!item || item.type === 'time' || item.system) return;
-      if ((Number(item.id) || 0) <= chatUnreadCursor) return;
-      if (isOwnChatItem(item)) return;
-      chatUnreadCount += 1;
-    });
-    updateChatUnreadBadge();
-  }
-  chatUnreadCursor = maxId;
-}
-
-function clearChatUnread() {
-  if (!chatUnreadCount) return;
-  chatUnreadCount = 0;
-  updateChatUnreadBadge();
-}
-
-function toggleChat(force) {
-  const panel = el('mg-chat');
-  const toggle = el('mg-chat-toggle');
-  if (!panel) return;
-  const open = force === undefined ? panel.hidden : !!force;
-  panel.hidden = !open;
-  if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-  if (open) {
-    clearChatUnread();
-    el('mg-chat-input')?.focus();
-  }
-}
-
-function sendChat() {
-  const input = el('mg-chat-input');
-  if (!input || !socket) return;
-  const text = input.value.trim();
-  if (!text) return;
-  socket.emit('chat', { text });
-  input.value = '';
-}
-
-/* 聊天行的举报 / 撤回：按钮由 chatActionButtonsHtml 渲染，这里统一接管点击 */
-function bindChatLogActions() {
-  const log = el('mg-chat-log');
-  if (!log || log.dataset.actionsBound === '1') return;
-  log.dataset.actionsBound = '1';
-  log.addEventListener('click', (event) => {
-    const target = event.target;
-    if (!target || !target.closest) return;
-    const reportBtn = target.closest('.report-inline-btn');
-    if (reportBtn) {
-      event.preventDefault();
-      const id = Number(reportBtn.dataset.chatReport || 0);
-      const entry = chatEntriesById.get(id);
-      if (!entry || typeof openChatReportDialog !== 'function') return;
-      void openChatReportDialog(entry, chatActionLabels()).then((ok) => {
-        if (ok) setSyncText('举报已提交', 'ok');
-      });
-      return;
-    }
-    const recallBtn = target.closest('.chat-recall-btn');
-    if (recallBtn) {
-      event.preventDefault();
-      const id = Number(recallBtn.dataset.chatRecall || 0);
-      const entry = chatEntriesById.get(id);
-      if (!entry || typeof confirmChatRecall !== 'function') return;
-      confirmChatRecall(entry, {
-        socket,
-        labels: chatActionLabels(),
-        confirm: (message) => mgConfirm({
-          title: '撤回消息',
-          text: message,
-          confirmLabel: '撤回',
-          cancelLabel: '取消',
-        }),
-      });
-    }
-  });
 }
 
 async function acceptInvite() {
@@ -1509,19 +1149,12 @@ async function boot() {
       .catch(() => { /* 缓存不可用不影响游玩 */ });
   }
   connectPresence();
-  bindChatLogActions();
   void refreshLeaderboard(rankWindowMode);   // 底部常驻榜单：进页面就加载，之后随同步刷新
   void syncNow();
   updateHideTitlesButton();
 }
 
 el('mg-new').addEventListener('click', () => { void restartGame(); });
-el('mg-chat-toggle').addEventListener('click', () => toggleChat());
-el('mg-chat-close').addEventListener('click', () => toggleChat(false));
-el('mg-chat-form').addEventListener('submit', (event) => {
-  event.preventDefault();
-  sendChat();
-});
 el('mg-invite-accept').addEventListener('click', () => { void acceptInvite(); });
 el('mg-invite-decline').addEventListener('click', () => { declineInvite(); });
 el('mg-rank').addEventListener('click', () => {
