@@ -10,6 +10,7 @@
 """
 
 import pytest
+import re
 
 from pathlib import Path
 
@@ -362,6 +363,26 @@ def test_official_frost_cost_and_shield_absorb_through_declarations():
     engine._deal_direct_damage(1, 6, '测试', 0)
     assert engine.players[1].health == 100
     assert engine.players[1].custom_statuses.get('jungle:shield') == 4
+
+
+def test_shield_absorb_log_has_no_trailing_decimal():
+    """op 算术层 _to_number 全转 float：min(6.0,10.0)=6.0 曾把『护盾抵扣6.0点伤害』
+    泄进日志（用户反馈：护盾抵扣的伤害带小数点）。算术归一 + 日志渲染两层都不出 ``.0``。"""
+    engine = make_engine()
+    engine.players[1].health = 100
+    engine.players[1].custom_statuses['jungle:shield'] = 10
+    engine._deal_direct_damage(1, 6, '测试', 0)
+    absorb_lines = [str(line) for line in engine.log if '护盾抵扣' in str(line)]
+    assert absorb_lines, '应有护盾抵扣日志'
+    match = re.search(r'护盾抵扣([\d.]+)点', absorb_lines[-1])
+    assert match, absorb_lines[-1]
+    assert match.group(1) == str(int(float(match.group(1)))), absorb_lines[-1]
+
+    # 渲染兜底：真除等仍以浮点传递的整数变量，日志里也不带 .0
+    from mod_runtime_v2 import _format_log_value
+    assert _format_log_value(6.0) == '6'
+    assert _format_log_value(3.5) == '3.5'
+    assert _format_log_value(7) == '7'
 
 
 def test_official_fragile_and_root_armor_go_through_modifiers():

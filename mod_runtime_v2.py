@@ -1962,15 +1962,18 @@ def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
         if values is None:
             values = [expr.get("a", 0), expr.get("b", 0)]
         nums = [_to_number(eval_v2_value(engine, context, value)) for value in values]
+        # `_to_number` 一律转 float：加减乘/min/max 的整数结果会以 6.0 的形态
+        # 泄进日志与层数（反馈：护盾抵扣带小数点）。整数浮点归一回 int；
+        # div 不动——真除保留浮点是 Round 49 的既定契约。
         if math_op == "add":
-            return sum(nums)
+            return _as_clean_number(sum(nums))
         if math_op == "sub":
-            return nums[0] - sum(nums[1:]) if nums else 0
+            return _as_clean_number(nums[0] - sum(nums[1:]) if nums else 0)
         if math_op == "mul":
             out = 1
             for num in nums:
                 out *= num
-            return out
+            return _as_clean_number(out)
         if math_op == "div":
             if len(nums) < 2 or nums[1] == 0:
                 return 0
@@ -1984,7 +1987,7 @@ def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
             if rounding in ("round", "nearest", "half_up", "四舍五入"):
                 return int(round(nums[0] / nums[1]))
             return nums[0] / nums[1]
-        return min(nums) if math_op == "min" and nums else (max(nums) if nums else 0)
+        return _as_clean_number(min(nums) if math_op == "min" and nums else (max(nums) if nums else 0))
     if op == "clamp":
         value = _to_number(eval_v2_value(engine, context, expr.get("value", 0)))
         lo = _to_number(eval_v2_value(engine, context, expr.get("min", 0)))
@@ -4217,6 +4220,23 @@ def _to_number(value: Any) -> float:
         return 0.0
 
 
+def _as_clean_number(value: Any) -> Any:
+    """整数结果的浮点（6.0）归一回 int：``_to_number`` 全转 float，
+    算术结果直接进日志/层数会带着 ``.0``（反馈：护盾抵扣的伤害带小数点）。
+    非整数浮点（如真除的 3.5）原样返回。"""
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return value
+
+
+def _format_log_value(value: Any) -> str:
+    """日志占位符的数字渲染：整数浮点不带 ``.0``（与算术层归一同一口径，
+    兜住真除等仍以浮点传递的值）。"""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
 def _to_int(value: Any) -> int:
     try:
         return int(math.floor(float(value)))
@@ -4436,7 +4456,7 @@ def _format_message(message: str, context: Dict[str, Any], engine=None, card=Non
     try:
         text = re.sub(
             r"\{([A-Za-z_][A-Za-z0-9_]*)\}",
-            lambda match: str(fields_map[match.group(1)]) if match.group(1) in fields_map else match.group(0),
+            lambda match: _format_log_value(fields_map[match.group(1)]) if match.group(1) in fields_map else match.group(0),
             message,
         )
     except Exception:
