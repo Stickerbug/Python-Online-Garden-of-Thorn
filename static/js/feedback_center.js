@@ -937,8 +937,8 @@
       const messages = Array.isArray(detail.private_messages) ? detail.private_messages : [];
       privateBlock = `<section class="fc-section fc-private"><h3>${esc(t('private_title'))}</h3>` +
         messages.map((message) =>
-          `<div class="fc-comment"><div>${userHtml(message.sender)}</div><div class="fc-comment-body">` +
-          `<div class="fc-muted">${esc(fmt(message.created_at))}</div><div class="fc-comment-text">${esc(message.message)}</div></div></div>`,
+          `<div class="fc-comment"><div class="fc-comment-head">${userHtml(message.sender)}<span class="fc-comment-time">${esc(fmt(message.created_at))}</span></div>` +
+          `<div class="fc-comment-body"><div class="fc-comment-text">${esc(message.message)}</div></div></div>`,
         ).join('') +
         `<div class="fc-composer"><textarea id="fc-private-input" maxlength="2000" placeholder="${esc(t('private_placeholder'))}"></textarea>` +
         `<div class="fc-inline-actions"><button type="button" class="fc-button fc-button-primary fc-button-small" data-action="private-send">${esc(t('send'))}</button></div></div></section>`;
@@ -968,14 +968,14 @@
         (Array.isArray(detail.reopen_requests) && detail.reopen_requests.some((request) => request.status === 'pending')
           ? `<div class="fc-section"><h3>待复核“仍未修复”</h3>` +
             detail.reopen_requests.filter((request) => request.status === 'pending').map((request) =>
-              `<div class="fc-comment"><div>${userHtml(request.author)}</div><div class="fc-comment-body">` +
+              `<div class="fc-comment"><div class="fc-comment-head">${userHtml(request.author)}</div><div class="fc-comment-body">` +
               `<div class="fc-comment-text">${esc(request.message)}</div>` +
               `${request.replay_id ? `<div class="fc-muted">回放：${esc(request.replay_id)}</div>` : ''}` +
               `<div class="fc-inline-actions">` +
               `<button type="button" class="fc-button fc-button-primary fc-button-small" data-action="admin-reopen-request" data-request="${request.id}" data-action-kind="accept">接受并重新开启</button>` +
               `<button type="button" class="fc-button fc-button-secondary fc-button-small" data-action="admin-reopen-request" data-request="${request.id}" data-action-kind="reject">拒绝</button>` +
               `</div></div></div>`).join('') + `</div>` : '') +
-        notes.map((note) => `<div class="fc-comment"><div>${userHtml(note.staff)}</div><div class="fc-comment-body"><div class="fc-comment-text">${esc(note.note)}</div></div></div>`).join('') +
+        notes.map((note) => `<div class="fc-comment"><div class="fc-comment-head">${userHtml(note.staff)}</div><div class="fc-comment-body"><div class="fc-comment-text">${esc(note.note)}</div></div></div>`).join('') +
         `</section>`;
     }
 
@@ -996,8 +996,9 @@
       if (state.account && comment.author && Number(comment.author.user_id) !== Number(state.account.id)) {
         actions += `<button type="button" class="fc-button fc-button-secondary fc-button-small" data-action="report-comment" data-comment="${comment.id}" data-author="${comment.author.user_id || ''}">${esc(t('report_comment'))}</button>`;
       }
-      commentSection += `<div class="fc-comment" data-comment-root="${comment.id}"><div>${userHtml(comment.author)}</div>` +
-        `<div class="fc-comment-body"><div class="fc-muted">${esc(fmt(comment.created_at))}</div>` +
+      commentSection += `<div class="fc-comment" data-comment-root="${comment.id}">` +
+        `<div class="fc-comment-head">${userHtml(comment.author)}<span class="fc-comment-time">${esc(fmt(comment.created_at))}</span></div>` +
+        `<div class="fc-comment-body">` +
         `<div class="fc-comment-text" data-comment-text="${comment.id}">${esc(comment.body)}</div>` +
         `<div class="fc-inline-actions">${actions}</div></div></div>`;
     });

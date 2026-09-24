@@ -889,15 +889,30 @@ button.fc-account-popover-link:focus-visible {
   color: var(--fc-text-soft);
 }
 
+/* 评论：昵称（带头像/称号）与时间在内容**上方**一行——此前头像昵称占左列，
+   长昵称会把评论内容挤到右边（反馈：昵称应在评论内容上面）。 */
 .fc-comment {
   display: flex;
-  gap: 12px;
+  flex-direction: column;
+  gap: 5px;
   padding: 12px 0;
   border-bottom: 1px solid #f0f1f4;
 }
 
+.fc-comment-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.fc-comment-time {
+  color: var(--fc-muted);
+  font-size: 12px;
+}
+
 .fc-comment-body {
-  flex: 1;
   min-width: 0;
 }
 
