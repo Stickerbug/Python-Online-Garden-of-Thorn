@@ -117,6 +117,27 @@ class AfdianServiceTests(unittest.TestCase):
         result = afdian_service.ingest_order(self._order(status=1))
         self.assertEqual(result['status'], 'ignored')
 
+    def test_renewal_without_remark_follows_afdian_user(self):
+        """按月方案的自动续费单不带留言：同一爱发电账号此前到账过则自动认领入同一账号。"""
+        code = afdian_service.bind_code_for(self.user['id'])
+        with mock.patch.object(afdian_service, 'requery_recent', lambda **kw: {'ok': False}):
+            afdian_service.admin_set_plan('plan_monthly', 500, '月档')
+        first = afdian_service.ingest_order(
+            self._order(out_trade_no='AFD-M1', remark=f'码 {code}',
+                        plan_id='plan_monthly', user_id='afd-sub-1'))
+        self.assertEqual(first['status'], 'credited')
+        renewal = afdian_service.ingest_order(
+            self._order(out_trade_no='AFD-M2', remark='',
+                        plan_id='plan_monthly', user_id='afd-sub-1'))
+        self.assertEqual(renewal['status'], 'credited')
+        self.assertEqual(renewal['dew'], 500)
+        self.assertEqual(db.get_user_thorn_dew(self.user['id'])['paid'], 1000)
+        # 陌生爱发电账号的无留言单仍是 unmatched
+        stranger = afdian_service.ingest_order(
+            self._order(out_trade_no='AFD-M3', remark='',
+                        plan_id='plan_monthly', user_id='afd-stranger'))
+        self.assertEqual(stranger['status'], 'unmatched')
+
     def test_admin_credit_manual(self):
         code = afdian_service.bind_code_for(self.user['id'])
         afdian_service.ingest_order(self._order(out_trade_no='AFD-BAD', remark='忘了写码'))

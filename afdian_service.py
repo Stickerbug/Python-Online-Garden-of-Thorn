@@ -155,6 +155,19 @@ def _user_id_for_code(conn, code: str) -> Optional[int]:
     return int(row['id']) if row else None
 
 
+def _user_id_for_afdian_history(conn, afdian_user_id: str) -> Optional[int]:
+    """老客自动认领：按月赞助的自动续费单**不带留言**（拿不到绑定码），但订单里有
+    爱发电 user_id——该账号此前有一笔到账记录时，后续订单自动入同一游戏账号。"""
+    if not afdian_user_id:
+        return None
+    row = conn.execute(
+        'SELECT game_user_id FROM afdian_orders '
+        'WHERE afdian_user_id = ? AND game_user_id IS NOT NULL '
+        'ORDER BY credited_at DESC LIMIT 1',
+        (str(afdian_user_id),)).fetchone()
+    return int(row['game_user_id']) if row else None
+
+
 def ingest_order(order: Dict[str, Any], *, via: str = 'webhook') -> Dict[str, Any]:
     """登记一条爱发电订单并尽量入账。返回 {status, out_trade_no, detail}。
     幂等：同一订单号只入账一次；unmapped/unmatched 的旧单在条件满足时补结。"""
@@ -213,6 +226,9 @@ def _settle(out_trade_no: str, *, via: str) -> Dict[str, Any]:
         game_user_id = row['game_user_id']
         if game_user_id is None:
             game_user_id = _user_id_for_code(conn, str(row['bind_code'] or ''))
+        if game_user_id is None:
+            # 无绑定码（如按月方案的自动续费单）：同一爱发电账号此前到账过则自动认领
+            game_user_id = _user_id_for_afdian_history(conn, str(row['afdian_user_id'] or ''))
         dew_per, plan_name = _plan_dew(conn, str(row['plan_id'] or ''))
         month = max(1, int(row['month'] or 1))
         if game_user_id is None:
