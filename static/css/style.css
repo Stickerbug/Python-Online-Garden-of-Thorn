@@ -1135,8 +1135,71 @@ body {
 
 .title-shop-tabs {
   flex: 0 0 auto;
-  grid-template-columns: minmax(100px, 160px);
+  grid-template-columns: repeat(auto-fit, minmax(100px, 160px));
   justify-content: start;
+}
+
+/* 商店「赞助」tab：爱发电兑换付费荆露 */
+.title-shop-afdian-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 12.5px;
+}
+
+.title-shop-afdian-panel.hidden {
+  display: none;
+}
+
+.title-shop-afdian-intro {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.title-shop-afdian-code-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.title-shop-afdian-code {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  padding: 4px 12px;
+  border: 1px dashed var(--text-secondary);
+  border-radius: 6px;
+}
+
+.title-shop-afdian-plans {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.title-shop-afdian-plan {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 2px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.18);
+}
+
+.title-shop-afdian-note {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+a.title-shop-afdian-link {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
 }
 
 .title-shop-toolbar {

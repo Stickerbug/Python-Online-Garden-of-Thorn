@@ -248,24 +248,21 @@ class AfdianWebhookRouteTests(unittest.TestCase):
 
 
 
-    def test_entry_is_admin_only_for_now(self):
-        """赞助入口内测期仅管理员：普通账号页面重定向、API 403。"""
+    def test_entry_open_to_all_accounts(self):
+        """赞助入口对全员开放（2026-09-24）：任意登录账号页面 200、API 可用、主页渲染赞助 tab。"""
         with self.client.session_transaction() as sess:
             sess['user_id'] = self.user['id']
             sess['username'] = 'AfdianRoute'
         with mock.patch.object(self._app, 'feedback_is_staff', lambda uid: False):
             page = self.client.get('/afdian')
-            self.assertEqual(page.status_code, 302)
-            api = self.client.get('/api/afdian/status')
-            self.assertEqual(api.status_code, 403)
-            reset = self.client.post('/api/afdian/bind/reset')
-            self.assertEqual(reset.status_code, 403)
-        with mock.patch.object(self._app, 'feedback_is_staff', lambda uid: True):
-            page = self.client.get('/afdian')
             self.assertEqual(page.status_code, 200)
             api = self.client.get('/api/afdian/status')
             self.assertEqual(api.status_code, 200)
             self.assertIn('bind_code', api.get_json())
+        home = self.client.get('/')
+        self.assertEqual(home.status_code, 200)
+        self.assertIn('title-shop-tab-afdian', home.get_data(as_text=True))
+        self.assertIn('title-shop-afdian-panel', home.get_data(as_text=True))
 
 if __name__ == '__main__':
     unittest.main()

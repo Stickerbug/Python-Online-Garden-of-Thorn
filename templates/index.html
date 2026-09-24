@@ -274,7 +274,8 @@
     <button id="btn-title-shop-close" class="account-close-btn" type="button">×</button>
   </div>
   <div class="account-mode-tabs title-shop-tabs">
-    <button id="title-shop-tab-titles" class="account-mode-tab active" type="button">称号</button>
+    <button id="title-shop-tab-titles" class="account-mode-tab active" type="button" data-shop-tab="titles">称号</button>
+    <button id="title-shop-tab-afdian" class="account-mode-tab" type="button" data-shop-tab="afdian">赞助</button>
   </div>
   <div class="title-shop-toolbar">
     <span id="title-shop-countdown" class="title-shop-countdown"></span>
@@ -284,6 +285,16 @@
     </div>
   </div>
   <div id="title-shop-status" class="account-replay-sub"></div>
+  <div id="title-shop-afdian-panel" class="title-shop-afdian-panel hidden">
+    <p class="title-shop-afdian-intro">通过爱发电赞助获得<b>付费荆露</b>：付款时在订单留言里填写你的绑定码，到账全自动。</p>
+    <div class="title-shop-afdian-code-row">
+      <span id="title-shop-afdian-code" class="title-shop-afdian-code">……</span>
+      <button id="btn-title-shop-afdian-copy" class="mini-btn" type="button">复制</button>
+    </div>
+    <div id="title-shop-afdian-plans" class="title-shop-afdian-plans"></div>
+    <p id="title-shop-afdian-note" class="title-shop-afdian-note"></p>
+    <a id="title-shop-afdian-link" class="mini-btn title-shop-afdian-link" href="/afdian" target="_blank" rel="noopener">完整兑换页（重置绑定码 / 查询补单）</a>
+  </div>
   <div id="title-shop-grid" class="title-shop-grid"></div>
 </div>
 <div id="friends-popover" class="account-popover friends-popover hidden">
@@ -504,7 +515,6 @@
 {% endif %}
 <div class="form-row login-utility-row">
 <a id="btn-public-feedback-center" class="btn-settings" href="/feedback-center" target="_blank" rel="noopener">反馈中心</a>
-{% if afdian_entry_visible %}<a id="btn-afdian" class="btn-settings" href="/afdian" target="_blank" rel="noopener">赞助兑换</a>{% endif %}
 <button id="btn-open-feedback" class="btn-settings">反馈</button>
 <button id="btn-open-about" class="btn-settings">关于</button>
 </div>

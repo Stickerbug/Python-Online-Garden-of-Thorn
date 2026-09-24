@@ -6793,6 +6793,8 @@ function updateStaticText() {
     if (titleShopTitle) titleShopTitle.textContent = lt({ zh: '商店', en: 'Shop', fr: 'Boutique', ja: 'ショップ' });
     const titleShopTab = $('title-shop-tab-titles');
     if (titleShopTab) titleShopTab.textContent = lt({ zh: '称号', en: 'Titles', fr: 'Titres', ja: '称号' });
+    const afdianTab = $('title-shop-tab-afdian');
+    if (afdianTab) afdianTab.textContent = lt({ zh: '赞助', en: 'Support', fr: 'Soutien', ja: '支援' });
     document.querySelectorAll('[data-achievement-tab]').forEach(btn => {
         const tab = btn.dataset.achievementTab || '';
         const labels = {
@@ -19095,6 +19097,64 @@ function toggleTitleShopPopover(force) {
         toggleChangelogPopover(false);
         loadTitleShop(false);
         titleShopCountdownTimer = setInterval(updateTitleShopCountdown, 15000);
+        switchTitleShopTab(titleShopAfdianTabActive ? 'afdian' : 'titles');
+        if (titleShopAfdianTabActive) void loadTitleShopAfdian();
+    } else {
+        switchTitleShopTab('titles');
+    }
+}
+
+/* ---------- 商店「赞助」tab：爱发电兑换付费荆露 ---------- */
+
+let titleShopAfdianTabActive = false;
+
+function switchTitleShopTab(tab) {
+    titleShopAfdianTabActive = tab === 'afdian';
+    const tabs = document.querySelectorAll('#title-shop-popover [data-shop-tab]');
+    tabs.forEach((btn) => btn.classList.toggle('active', btn.dataset.shopTab === tab));
+    const toolbar = document.querySelector('#title-shop-popover .title-shop-toolbar');
+    const grid = $('title-shop-grid');
+    const status = $('title-shop-status');
+    const afdianPanel = $('title-shop-afdian-panel');
+    const showTitles = !titleShopAfdianTabActive;
+    if (toolbar) toolbar.classList.toggle('hidden', !showTitles);
+    if (grid) grid.classList.toggle('hidden', !showTitles);
+    if (status) status.classList.toggle('hidden', !showTitles);
+    if (afdianPanel) afdianPanel.classList.toggle('hidden', !titleShopAfdianTabActive);
+    const countdown = $('title-shop-countdown');
+    if (countdown && !showTitles) countdown.textContent = '';
+}
+
+async function loadTitleShopAfdian() {
+    const codeEl = $('title-shop-afdian-code');
+    const plansEl = $('title-shop-afdian-plans');
+    const noteEl = $('title-shop-afdian-note');
+    if (!codeEl || !plansEl) return;
+    try {
+        const response = await fetch('/api/afdian/status', { credentials: 'same-origin' });
+        if (response.status === 401) {
+            codeEl.textContent = '——';
+            noteEl.textContent = lt({ zh: '登录后显示你的绑定码。', en: 'Sign in to see your bind code.', fr: 'Connectez-vous pour voir votre code.', ja: 'ログインするとコードが表示されます。' });
+            plansEl.innerHTML = '';
+            return;
+        }
+        const data = await response.json();
+        if (!data.success) {
+            codeEl.textContent = '——';
+            noteEl.textContent = data.error || '加载失败';
+            return;
+        }
+        codeEl.textContent = data.bind_code || '——';
+        const plans = data.plans || [];
+        plansEl.innerHTML = plans.length
+            ? plans.map((p) => `<div class="title-shop-afdian-plan"><span>${escapeHtml(p.name || p.plan_id)}</span><b>${Number(p.dew_amount) || 0} 荆露</b></div>`).join('')
+            : '';
+        noteEl.textContent = plans.length
+            ? lt({ zh: '付款时在订单留言填上面的绑定码；稍等即自动到账。', en: 'Put the code in the order remark when sponsoring; dew arrives automatically.', fr: 'Mettez le code en remarque de la commande ; la rosée arrive automatiquement.', ja: '寄付時に注文メモへコードを記入すると、自動で反映されます。' })
+            : '';
+    } catch (_) {
+        codeEl.textContent = '——';
+        noteEl.textContent = lt({ zh: '网络不可用，稍后再试。', en: 'Network unavailable.', fr: 'Réseau indisponible.', ja: 'ネットワークエラー。' });
     }
 }
 
@@ -39031,6 +39091,22 @@ async function init() {
     if ($('btn-achievements-popover-close')) $('btn-achievements-popover-close').addEventListener('click', () => toggleAchievementsPopover(false));
     if ($('btn-title-shop-top')) $('btn-title-shop-top').addEventListener('click', () => toggleTitleShopPopover());
     if ($('btn-title-shop-close')) $('btn-title-shop-close').addEventListener('click', () => toggleTitleShopPopover(false));
+    document.querySelectorAll('#title-shop-popover [data-shop-tab]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            switchTitleShopTab(btn.dataset.shopTab || 'titles');
+            if ((btn.dataset.shopTab || '') === 'afdian') void loadTitleShopAfdian();
+        });
+    });
+    if ($('btn-title-shop-afdian-copy')) {
+        $('btn-title-shop-afdian-copy').addEventListener('click', async () => {
+            const code = $('title-shop-afdian-code')?.textContent || '';
+            try {
+                await navigator.clipboard.writeText(code);
+                const btn = $('btn-title-shop-afdian-copy');
+                if (btn) { btn.textContent = '已复制'; setTimeout(() => { btn.textContent = '复制'; }, 2000); }
+            } catch (_) { /* 剪贴板不可用（如非安全上下文）：完整页里也有复制 */ }
+        });
+    }
     if ($('btn-title-shop-refresh')) $('btn-title-shop-refresh').addEventListener('click', refreshTitleShop);
     if ($('btn-title-shop-lock')) $('btn-title-shop-lock').addEventListener('click', toggleTitleShopLock);
     document.querySelectorAll('[data-achievement-tab]').forEach((btn) => {
