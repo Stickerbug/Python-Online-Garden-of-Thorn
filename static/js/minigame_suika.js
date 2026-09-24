@@ -646,7 +646,9 @@ function updateScore() {
 
 function updateNextChip() {
   if (!game) return;
-  const tier = game.nextTier;
+  // 投放线上已经画着 queue[0]（这一枚）；"下一枚"芯片显示其后那颗（反馈：
+  // 此前读 nextTier，显示的和手里那颗是同一颗）。
+  const tier = game.upcomingTier;
   const def = tierDef(tier);
   if (nextChipEl) {
     if (def.art) {
@@ -752,7 +754,8 @@ function buildLegend() {
 /** 合成路线里高亮"下一枚"那一档。 */
 function markNextInLegend() {
   if (!legendEl || !game) return;
-  const next = String(game.nextTier);
+  // 与"下一枚"芯片同口径：投放线上那颗（queue[0]）已经在场，高亮其后那颗。
+  const next = String(game.upcomingTier);
   legendEl.querySelectorAll('.sk-chain-item').forEach((item) => {
     item.classList.toggle('is-next', item.dataset.tier === next);
   });

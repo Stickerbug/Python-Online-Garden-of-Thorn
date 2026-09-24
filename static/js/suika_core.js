@@ -271,6 +271,12 @@ export class SuikaGame {
     return this.queue.length ? this.queue[0] : 0;
   }
 
+  /** 投放线之后的那颗（"下一枚"预览用）：队列始终保有两颗，取 queue[1]。
+   *  投放线上画着的已经是 queue[0]（这一枚），预览再显示 queue[0] 就是重复。 */
+  get upcomingTier() {
+    return this.queue.length > 1 ? this.queue[1] : (this.queue[0] || 0);
+  }
+
   /** 往世界里放一颗球（投放与合成都走这里）。
    *  ``isStatic`` 只给测试/调试用：让球悬在原地验证判负线规则。 */
   spawnBall(tier, x, y, options = {}) {
