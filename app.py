@@ -11233,6 +11233,26 @@ ADMIN_COMMAND_TREE = {
             'reconcile': {'summary': '拉取爱发电订单对账补单', 'usage': 'afdian reconcile [页数]'},
         },
     },
+    'minigame': {
+        'summary': '休闲花园小游戏（2048 / 合成大花花）管理',
+        'usage': 'minigame <state|score|record|reset|top|periods|settle> <2048|suika> ...',
+        'children': {
+            'state': {'summary': '查看账号活动局与最近记录', 'usage': 'minigame state <2048|suika> <账号>'},
+            'score': {'summary': '设置账号活动局分数（云端权威存档）', 'usage': 'minigame score <2048|suika> <账号> <分数>'},
+            'record': {
+                'summary': '榜单记录修正',
+                'usage': 'minigame record <add|clear> <2048|suika> <账号> [分数] [最大档]',
+                'children': {
+                    'add': {'summary': '插入一条已验证榜单记录', 'usage': 'minigame record add <2048|suika> <账号> <分数> [最大档]'},
+                    'clear': {'summary': '清除账号榜单记录（可指定分数）', 'usage': 'minigame record clear <2048|suika> <账号> [分数]'},
+                },
+            },
+            'reset': {'summary': '关闭账号活动局（下次进入开新局）', 'usage': 'minigame reset <2048|suika> <账号>'},
+            'top': {'summary': '查看榜单', 'usage': 'minigame top <2048|suika> [14d|all] [数量]'},
+            'periods': {'summary': '查看周榜奖期历史', 'usage': 'minigame periods <2048|suika> [数量]'},
+            'settle': {'summary': '立即结算到期奖期（幂等）', 'usage': 'minigame settle <2048|suika>'},
+        },
+    },
     'community': {
         'summary': '社区公告、投票与运营记录',
         'usage': 'community <list|announcement|poll> ...',
@@ -11592,6 +11612,14 @@ ADMIN_COMMAND_DIRECT_TRANSLATIONS = {
     ('afdian', 'orders'): 'afdian-orders',
     ('afdian', 'credit'): 'afdian-credit',
     ('afdian', 'reconcile'): 'afdian-reconcile',
+    ('minigame', 'state'): 'minigame-state',
+    ('minigame', 'score'): 'minigame-score',
+    ('minigame', 'record', 'add'): 'minigame-record-add',
+    ('minigame', 'record', 'clear'): 'minigame-record-clear',
+    ('minigame', 'reset'): 'minigame-reset',
+    ('minigame', 'top'): 'minigame-top',
+    ('minigame', 'periods'): 'minigame-periods',
+    ('minigame', 'settle'): 'minigame-settle',
     ('publicfeedback', 'hide', 'issue'): ('publicfeedback-hide', 'issue'),
     ('publicfeedback', 'hide', 'comment'): ('publicfeedback-hide', 'comment'),
     ('publicfeedback', 'audit'): 'publicfeedback-audit',
@@ -13640,6 +13668,14 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
         'afdian-orders',
         'afdian-credit',
         'afdian-reconcile',
+        'minigame-state',
+        'minigame-score',
+        'minigame-record-add',
+        'minigame-record-clear',
+        'minigame-reset',
+        'minigame-top',
+        'minigame-periods',
+        'minigame-settle',
     }:
         if not DB_AVAILABLE:
             return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
@@ -13725,6 +13761,175 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
                 raise
             except (TypeError, ValueError) as exc:
                 return {'success': False, 'output': f'参数无效：{exc}'}
+        if cmd.startswith('minigame-'):
+
+            def _mg_service(game):
+                if game == 'suika':
+                    return minigame_suika_service, 'minigame_suika_games'
+                return minigame_2048_service, 'minigame_2048_games'
+
+            def _mg_resolve_account(conn, token):
+                token = str(token or '').strip()
+                if re.fullmatch(r'[0-9]+', token):
+                    row = conn.execute('SELECT id, username FROM users WHERE id = ?',
+                                       (int(token),)).fetchone()
+                    if row is not None:
+                        return row
+                return conn.execute('SELECT id, username FROM users WHERE username_lower = ?',
+                                    (token.lower(),)).fetchone()
+
+            def _mg_active_game(conn, table, uid):
+                return conn.execute(
+                    'SELECT * FROM ' + table + " WHERE user_id = ? AND status = 'active'"
+                    ' ORDER BY id DESC LIMIT 1', (uid,)).fetchone()
+
+            try:
+                game_key = parts[1].lower() if len(parts) >= 2 else ''
+                if game_key not in ('2048', 'suika'):
+                    return {'success': False, 'output': '游戏必须是 2048 或 suika'}
+                svc, games_table = _mg_service(game_key)
+                with closing(get_db_connection()) as conn:
+                    svc.ensure_schema(conn)
+
+                if cmd == 'minigame-state':
+                    with closing(get_db_connection()) as conn:
+                        account = _mg_resolve_account(conn, parts[2])
+                        if account is None:
+                            return {'success': False, 'output': '账号不存在：' + parts[2]}
+                        game = _mg_active_game(conn, games_table, account['id'])
+                        records = conn.execute(
+                            'SELECT score, max_tile, verified_at FROM minigame_2048_records '
+                            'WHERE user_id = ? ORDER BY verified_at DESC LIMIT 5',
+                            (account['id'],)).fetchall()
+                    lines = ['账号 ' + account['username'] + '(#' + str(account['id']) + ') ' + game_key + ' 活动局：']
+                    if game is None:
+                        lines.append('  无活动局')
+                    else:
+                        lines.append('  uid=' + str(game['game_uid']) + ' score=' + str(game['score'])
+                                     + ' ops=' + str(game['op_index']) + ' updated=' + str(game['updated_at'])[:16])
+                    lines.append('最近记录：' + ('；'.join(
+                        str(r['score']) + '分/' + str(r['max_tile']) + '档@' + str(r['verified_at'])[:10]
+                        for r in records) or '无'))
+                    return {'success': True, 'output': chr(10).join(lines)}
+                if cmd == 'minigame-score':
+                    if len(parts) < 4:
+                        return {'success': False, 'output': '用法：minigame score <2048|suika> <账号> <分数>'}
+                    new_score = max(0, int(parts[3]))
+                    with closing(get_db_connection()) as conn:
+                        account = _mg_resolve_account(conn, parts[2])
+                        if account is None:
+                            return {'success': False, 'output': '账号不存在：' + parts[2]}
+                        game = _mg_active_game(conn, games_table, account['id'])
+                        if game is None:
+                            return {'success': False, 'output': '该账号没有活动局'}
+                        conn.execute(
+                            'UPDATE ' + games_table + ' SET score = ?, updated_at = ? WHERE id = ?',
+                            (new_score, minigame_2048_service.now_iso(), game['id']))
+                        conn.commit()
+                    admin_event('game', 'minigame score set ' + game_key + ' '
+                                + account['username'] + ' ' + str(game['score']) + ' -> ' + str(new_score))
+                    return {'success': True,
+                            'output': ('已把 ' + account['username'] + ' 的 ' + game_key + ' 活动局分数从 '
+                                       + str(game['score']) + ' 改为 ' + str(new_score)
+                                       + '（客户端分数更低时会被分数回退规则拒绝同步，追上后恢复）')}
+                if cmd in ('minigame-record-add', 'minigame-record-clear'):
+                    sub = 'add' if cmd == 'minigame-record-add' else 'clear'
+                    token = parts[2] if len(parts) >= 3 else ''
+                    with closing(get_db_connection()) as conn:
+                        account = _mg_resolve_account(conn, token)
+                        if account is None:
+                            return {'success': False, 'output': '账号不存在：' + token}
+                        if sub == 'add':
+                            if len(parts) < 4:
+                                return {'success': False,
+                                        'output': '用法：minigame record add <2048|suika> <账号> <分数> [最大档]'}
+                            score = max(0, int(parts[3]))
+                            max_tile = int(parts[4]) if len(parts) >= 5 else 0
+                            game = _mg_active_game(conn, games_table, account['id'])
+                            if game is None:
+                                svc.load_state(conn, account['id'])
+                                game = _mg_active_game(conn, games_table, account['id'])
+                            max_op = conn.execute(
+                                'SELECT COALESCE(MAX(op_index), 0) AS m FROM minigame_2048_records '
+                                'WHERE game_id = ?', (game['id'],)).fetchone()['m']
+                            stamp = minigame_2048_service.now_iso()
+                            conn.execute(
+                                'INSERT INTO minigame_2048_records'
+                                ' (user_id, game_id, score, max_tile, op_index, rules_version,'
+                                '  verified_at, source, created_at, game_key)'
+                                " VALUES (?, ?, ?, ?, ?, ?, ?, 'manual', ?, ?)",
+                                (account['id'], game['id'], score, max(0, max_tile),
+                                 int(max_op) + 1, svc.RULES_VERSION, stamp, stamp, game_key))
+                            conn.commit()
+                        else:
+                            if len(parts) >= 4:
+                                cursor = conn.execute(
+                                    'DELETE FROM minigame_2048_records WHERE user_id = ? AND score = ?',
+                                    (account['id'], int(parts[3])))
+                            else:
+                                cursor = conn.execute(
+                                    'DELETE FROM minigame_2048_records WHERE user_id = ?',
+                                    (account['id'],))
+                            conn.commit()
+                            removed = cursor.rowcount
+                    admin_event('game', 'minigame record ' + sub + ' ' + game_key + ' ' + account['username']
+                                + ' by ' + actor)
+                    if sub == 'add':
+                        return {'success': True,
+                                'output': '已为 ' + account['username'] + ' 插入 ' + game_key
+                                          + ' 榜单记录：' + str(score) + ' 分'}
+                    return {'success': True,
+                            'output': '已清除 ' + account['username'] + ' 的 ' + str(removed)
+                                      + ' 条 ' + game_key + ' 榜单记录'}
+                if cmd == 'minigame-reset':
+                    token = parts[2] if len(parts) >= 3 else ''
+                    with closing(get_db_connection()) as conn:
+                        account = _mg_resolve_account(conn, token)
+                        if account is None:
+                            return {'success': False, 'output': '账号不存在：' + token}
+                        svc.restart_game(conn, account['id'])
+                    admin_event('game', 'minigame reset ' + game_key + ' ' + account['username'])
+                    return {'success': True,
+                            'output': '已关闭 ' + account['username'] + ' 的 ' + game_key + ' 活动局，下次进入开新局'}
+                if cmd == 'minigame-top':
+                    window = parts[2] if len(parts) >= 3 and parts[2] in ('14d', 'all') else '14d'
+                    try:
+                        limit = int(parts[3]) if len(parts) >= 4 else 10
+                    except ValueError:
+                        limit = 10
+                    limit = max(1, min(limit, 50))
+                    with closing(get_db_connection()) as conn:
+                        table = svc.leaderboard_cached(conn, window=window, limit=limit)
+                    lines = ['#' + str(e['rank']) + ' ' + str(e['username']) + ' ' + str(e['score'])
+                             + '分（最高档 ' + str(e['max_tile']) + '）'
+                             for e in table.get('entries') or []]
+                    return {'success': True,
+                            'output': game_key + ' 榜单（' + window + '）：' + chr(10) + (chr(10).join(lines) or '暂无')}
+                if cmd == 'minigame-periods':
+                    try:
+                        limit = int(parts[2]) if len(parts) >= 3 else 8
+                    except ValueError:
+                        limit = 8
+                    with closing(get_db_connection()) as conn:
+                        rows = (svc.period_history(conn, limit=limit, game_key=game_key)
+                                if game_key == '2048'
+                                else svc.period_history(conn, limit=limit))
+                    if not rows:
+                        return {'success': True, 'output': '暂无奖期记录'}
+                    lines = [str(r['period_key']) + '  ' + str(r['status']) + '  参与者'
+                             + str(r['participants']) + '  发放' + str(r['pool']) for r in rows]
+                    return {'success': True, 'output': '奖期历史：' + chr(10) + chr(10).join(lines)}
+                if cmd == 'minigame-settle':
+                    with closing(get_db_connection()) as conn:
+                        results = svc.settle_due(conn)
+                    summary = '、'.join(r['period_key'] + ':' + r['status'] for r in results) or '无到期奖期'
+                    return {'success': True, 'output': '结算完成：' + summary}
+            except sqlite3.OperationalError as exc:
+                if 'locked' in str(exc).lower() or 'busy' in str(exc).lower():
+                    return {'success': False, 'output': '数据库暂时繁忙，请稍后再试。'}
+                raise
+            except (TypeError, ValueError) as exc:
+                return {'success': False, 'output': '参数无效：' + str(exc)}
         status_names = {
             'new': '待确认', 'needs_info': '需补充', 'confirmed': '已确认',
             'in_progress': '修复中', 'fixed': '已修复', 'duplicate': '重复',
@@ -16047,6 +16252,18 @@ def admin_completions(line):
     if position == 1:
         return filtered(visible_children(root))
     sub = parts[1].lower() if len(parts) > 1 else ''
+
+    if cmd == 'minigame':
+        if position == 2:
+            return filtered(['state', 'score', 'record', 'reset', 'top', 'periods', 'settle'])
+        if position == 3:
+            return filtered(['2048', 'suika'])
+        if cmd_parts_len_ok(position, 4) and parts[2] in ('record',):
+            return filtered(['add', 'clear'])
+        if position == 4 and parts[2] == 'top':
+            return filtered(['14d', 'all'])
+        if position == 4 and parts[2] in ('state', 'score', 'reset', 'periods', 'settle', 'record'):
+            return filtered(account_values())
 
     if cmd == 'afdian':
         if position == 2:
