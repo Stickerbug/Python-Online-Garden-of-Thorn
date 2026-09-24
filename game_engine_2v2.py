@@ -320,6 +320,10 @@ class GameEngine2v2(GameEngine):
             return {'success': False, 'error': '不在选牌阶段'}
         if not self.player_draft_started[player_id]:
             return {'success': False, 'error': '该玩家尚未开始选牌'}
+        # 目标数上限守卫：1v1 版本有、2v2 此前遗漏——双击/网络重试的多余选牌
+        # 会越过目标数追加（实测出现过 16/15），随后开局校验拒绝、整局永久卡死。
+        if len(self.draft_picks[player_id]) >= self.draft_target_count(player_id):
+            return {'success': False, 'error': '选牌数已满'}
         options = self.draft_options[player_id]
         found = None
         for c in options:

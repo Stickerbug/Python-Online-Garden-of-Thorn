@@ -1284,6 +1284,10 @@ EVENT_REVEAL_TIMEOUT_SECONDS = _env_float('GTN_EVENT_REVEAL_TIMEOUT_SECONDS', 40
 EVENT_SUB_CHOICE_TIMEOUT_SECONDS = _env_float('GTN_EVENT_SUB_CHOICE_TIMEOUT_SECONDS', 60)
 FLORAL_ARRANGEMENT_TIMEOUT_BONUS_SECONDS = 30
 ROOM_TIMER_TICK_SECONDS = _env_float('GTN_ROOM_TIMER_TICK_SECONDS', 1)
+# pregame（选牌/配装等）阶段断线的兜底：部分断线超过 FORCE 秒即由系统代替其完成；
+# 全员离线超过 CLOSE 秒直接关房。此前断线会无限期暂停 pregame 倒计时 → 幽灵房。
+PREGAME_DISCONNECT_FORCE_SECONDS = _env_float('GTN_PREGAME_DISCONNECT_FORCE_SECONDS', 90)
+PREGAME_DISCONNECT_CLOSE_SECONDS = _env_float('GTN_PREGAME_DISCONNECT_CLOSE_SECONDS', 300)
 PREGAME_STATE_RESEND_SECONDS = _env_float('GTN_PREGAME_STATE_RESEND_SECONDS', 8)
 _LOBBY_BROADCAST_LOCK = threading.Lock()
 _LOBBY_BROADCAST_PENDING = False
@@ -6522,17 +6526,56 @@ def _room_timer_worker():
                         timer_broadcast_rooms.add(room)
                     player_count = len(getattr(room, 'player_sids', []) or [])
                     if _room_has_blocking_disconnect(room):
-                        _pause_pregame_deadlines_locked(room, now)
-                        if hasattr(engine, 'get_player_status'):
-                            for pidx in range(player_count):
-                                try:
-                                    status = engine.get_player_status(pidx)
-                                except Exception:
-                                    status = None
-                                if _pregame_timeout_for_status(status, room, pidx) is not None:
-                                    pregame_timer_updates.add((room, pidx, status))
-                        continue
+                        # 断线会暂停 pregame 倒计时（等重连），但**不能无限冻结**：
+                        # 此前一场选牌阶段有人断线，整局就永久卡死、房间变幽灵。
+                        # 部分离线超过 PREGAME_DISCONNECT_FORCE_SECONDS：把这些玩家的
+                        # 槽位标记 timeout_defeated，走既有 auto-complete 机器代替打完；
+                        # 全员离线超过 PREGAME_DISCONNECT_CLOSE_SECONDS：直接关房。
+                        since = getattr(room, '_pregame_blocking_since', None)
+                        if since is None:
+                            room._pregame_blocking_since = now
+                            since = now
+                        blocked_seconds = now - float(since)
+                        online_sids = [
+                            sid for sid in (room.player_sids or [])
+                            if sid in (players or {})
+                        ]
+                        if blocked_seconds >= PREGAME_DISCONNECT_CLOSE_SECONDS and not online_sids:
+                            room_id = getattr(room, 'room_id', '?')
+                            for psid in (room.player_sids or []):
+                                info = players.get(psid)
+                                if info is not None:
+                                    info['room_id'] = None
+                                    if info.get('status') == 'minigame':
+                                        pass
+                                    else:
+                                        info['status'] = 'lobby'
+                            rooms.pop(getattr(room, 'room_id', None), None)
+                            admin_event('game', f'pregame room {room_id} closed: all players offline {blocked_seconds:.0f}s', room_id=room_id)
+                            continue
+                        if blocked_seconds >= PREGAME_DISCONNECT_FORCE_SECONDS:
+                            disconnected_indexes = {
+                                pidx for pidx, sid in enumerate(room.player_sids or [])
+                                if sid not in (players or {})
+                            }
+                            defeated = set(getattr(room, 'disconnect_timeout_defeated', set()) or set())
+                            defeated |= disconnected_indexes
+                            room.disconnect_timeout_defeated = defeated
+                            _clear_pregame_deadline_pause(room)
+                            # 落到下方常规 deadline 处理：defeated 槽位立即 force_progress
+                        else:
+                            _pause_pregame_deadlines_locked(room, now)
+                            if hasattr(engine, 'get_player_status'):
+                                for pidx in range(player_count):
+                                    try:
+                                        status = engine.get_player_status(pidx)
+                                    except Exception:
+                                        status = None
+                                    if _pregame_timeout_for_status(status, room, pidx) is not None:
+                                        pregame_timer_updates.add((room, pidx, status))
+                            continue
                     _clear_pregame_deadline_pause(room)
+                    room._pregame_blocking_since = None
                     pregame_statuses = []
                     timeout_defeated = set(getattr(room, 'disconnect_timeout_defeated', set()) or set())
                     for pidx in range(player_count):
@@ -15722,6 +15765,10 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
                 e._check_game_over()
             admin_match_record(room, result='admin_endgame')
             broadcast_game_state(room)
+            # 全员离线的房间里 broadcast 不会挂清扫定时器（没有接收者），
+            # 显式补挂，否则强制的 game_over 房间会永远留着（幽灵房）。
+            if getattr(e, 'game_over', False):
+                _schedule_game_over_cleanup(room)
         admin_event('admin', f'endgame room {room_id} winner={winner_token}')
         return {'success': True, 'output': f'已强制结束房间 {room_id}'}
     if cmd == 'set':
@@ -35558,6 +35605,31 @@ def api_minigame_2048_sync():
                 replace_active=bool(payload.get('replace_active')),
                 seed=payload.get('seed'),
             )
+    except sqlite3.OperationalError as exc:
+        # 写锁竞争高峰（故事模式/结算 worker 并发写）会偶发 database is locked，
+        # 玩家端表现为排行榜读取失败、最高分归零（GB-209）。等 250ms 重试一次。
+        if 'locked' in str(exc).lower() or 'busy' in str(exc).lower():
+            try:
+                time.sleep(0.25)
+                with get_db_connection() as conn:
+                    result = minigame_2048_service.sync_progress(
+                        conn, identity[0], str(payload.get('game_uid') or ''),
+                        payload.get('from_index') or 0, ops_text,
+                        claimed_score=payload.get('claimed_score'),
+                        claimed_cells=payload.get('claimed_cells'),
+                        source=source,
+                        reached_2048=bool(payload.get('reached_2048')),
+                        continued=payload.get('continued'),
+                        new_game=bool(payload.get('new_game')),
+                        replace_active=bool(payload.get('replace_active')),
+                        seed=payload.get('seed'),
+                    )
+            except Exception as retry_exc:
+                admin_event('error', f'2048 sync failed (retry): {retry_exc}')
+                return _json_error('同步失败，本地进度已保留', 500)
+        else:
+            admin_event('error', f'2048 sync failed: {exc}')
+            return _json_error('同步失败，本地进度已保留', 500)
     except Exception as exc:
         admin_event('error', f'2048 sync failed: {exc}')
         return _json_error('同步失败，本地进度已保留', 500)

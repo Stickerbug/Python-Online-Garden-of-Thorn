@@ -5317,7 +5317,12 @@ class GameEngine:
             if not self.player_draft_started[player_id]:
                 return False, f'draft_not_started:{player_id}', details
             expected = self.draft_target_count(player_id)
-            if len(self.draft_picks[player_id]) != expected:
+            if len(self.draft_picks[player_id]) > expected:
+                # 自愈：极端情况下（如断线恢复重放重复计入）选牌数可能超过目标。
+                # 裁掉多余部分继续开局，而不是让整局永久卡在选牌（幽灵房根源之一）。
+                del self.draft_picks[player_id][expected:]
+                details['draft_counts'] = [len(picks) for picks in self.draft_picks]
+            elif len(self.draft_picks[player_id]) != expected:
                 return False, f'draft_count_invalid:{player_id}', details
             for def_id in self.draft_picks[player_id]:
                 if def_id not in CARD_DEFS or not self._card_allowed(def_id):
@@ -20747,6 +20752,16 @@ class GameEngine:
                         damage_type=DAMAGE_TYPE_MAGIC,
                     )
             if stacks > 0:
+                # 伤害结算途中状态可能被清空/重置（如世界树之叶复活"清除所有效果"，
+                # GB-210）：此时不得用结算前捕获的层数回写，否则清空的灼烧会复活。
+                if attr == 'fire' or str(status).strip().lower() in ('burn', 'fire', '灼烧'):
+                    current = max(0, int(getattr(ps, 'fire', 0) or 0))
+                elif attr == 'poison' or str(status).strip().lower() in ('poison', '中毒', 'p'):
+                    current = max(0, int(getattr(ps, 'poison', 0) or 0))
+                else:
+                    current = max(0, int(self._get_status_count(target_id, status) or 0))
+                if current != stacks:
+                    continue
                 remaining = max(0, stacks - max(0, reduce_amount))
                 if attr == 'fire':
                     ps.fire = remaining
