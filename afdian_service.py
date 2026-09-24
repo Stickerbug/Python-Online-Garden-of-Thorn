@@ -90,6 +90,11 @@ CREATE TABLE IF NOT EXISTS afdian_orders (
 );
 CREATE INDEX IF NOT EXISTS idx_afdian_orders_user ON afdian_orders(game_user_id);
 CREATE INDEX IF NOT EXISTS idx_afdian_orders_bind ON afdian_orders(bind_code);
+CREATE TABLE IF NOT EXISTS afdian_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL
+);
 """
 
 
@@ -476,6 +481,37 @@ def public_plans() -> List[Dict[str, Any]]:
                         'price': '',
                         'kind': 'plan'})
     return out
+
+
+def get_page_url() -> str:
+    """作者的爱发电主页链接（兑换页/商店面板的「前往爱发电赞助」入口）。"""
+    with db.get_db_connection() as conn:
+        ensure_schema(conn)
+        row = conn.execute(
+            "SELECT value FROM afdian_settings WHERE key = 'page_url'").fetchone()
+        return str(row['value'] or '') if row else ''
+
+
+def admin_set_page_url(url: str) -> Dict[str, Any]:
+    """设置/清除爱发电主页链接；只收 afdian.com 域名，空串=清除。"""
+    raw = str(url or '').strip()
+    if raw:
+        if '://' not in raw:
+            raw = 'https://' + raw
+        parsed = urllib.parse.urlparse(raw)
+        host = str(parsed.hostname or '').lower()
+        if not host.endswith('afdian.com'):
+            return {'ok': False, 'error': '链接必须是爱发电（afdian.com）的地址'}
+        raw = 'https://' + host + parsed.path.rstrip('/') + (('?' + parsed.query) if parsed.query else '')
+    now = _now_iso()
+    with db.get_db_connection() as conn:
+        ensure_schema(conn)
+        conn.execute(
+            """INSERT INTO afdian_settings (key, value, updated_at) VALUES ('page_url', ?, ?)
+               ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at""",
+            (raw, now))
+        conn.commit()
+    return {'ok': True, 'page_url': raw}
 
 
 def _price_key(value: Any) -> str:

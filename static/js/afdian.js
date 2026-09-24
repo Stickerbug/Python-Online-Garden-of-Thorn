@@ -8,6 +8,11 @@
     $('bind-loading').hidden = true;
     $('bind-body').hidden = false;
     $('bind-code').textContent = data.bind_code || '';
+    const go = document.getElementById('afdian-go');
+    if (go) {
+      if (data.page_url) { go.href = data.page_url; go.hidden = false; }
+      else go.hidden = true;
+    }
     const plans = data.plans || [];
     if (plans.length) {
       const hasMonthly = plans.some((p) => p.kind === 'plan');

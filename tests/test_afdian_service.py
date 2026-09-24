@@ -236,6 +236,19 @@ class AfdianServiceTests(unittest.TestCase):
         plans = [p for p in afdian_service.public_plans() if p['kind'] == 'plan']
         self.assertFalse(any(p['plan_id'] == 'plan_x' for p in plans))
 
+    def test_page_url_setting_roundtrip(self):
+        """爱发电主页链接：设置/读取/清除；非 afdian.com 域名拒绝。"""
+        self.assertEqual(afdian_service.get_page_url(), '')
+        r = afdian_service.admin_set_page_url('afdian.com/a/stickerbug/')
+        self.assertTrue(r.get('ok'), r)
+        self.assertEqual(r['page_url'], 'https://afdian.com/a/stickerbug')
+        self.assertEqual(afdian_service.get_page_url(), 'https://afdian.com/a/stickerbug')
+        bad = afdian_service.admin_set_page_url('https://evil.example/x')
+        self.assertFalse(bad.get('ok'))
+        r2 = afdian_service.admin_set_page_url('')
+        self.assertTrue(r2.get('ok'))
+        self.assertEqual(afdian_service.get_page_url(), '')
+
     def test_admin_credit_manual(self):
         code = afdian_service.bind_code_for(self.user['id'])
         afdian_service.ingest_order(self._order(out_trade_no='AFD-BAD', remark='忘了写码'))
@@ -299,8 +312,12 @@ class AfdianWebhookRouteTests(unittest.TestCase):
             self.assertIn('bind_code', api.get_json())
         home = self.client.get('/')
         self.assertEqual(home.status_code, 200)
-        self.assertIn('title-shop-tab-afdian', home.get_data(as_text=True))
-        self.assertIn('title-shop-afdian-panel', home.get_data(as_text=True))
+        home_html = home.get_data(as_text=True)
+        # 入口在商店头部「赞助」按钮（tab 已撤），面板与前往爱发电链接常驻
+        self.assertIn('btn-title-shop-afdian', home_html)
+        self.assertIn('title-shop-afdian-panel', home_html)
+        self.assertIn('title-shop-afdian-go', home_html)
+        self.assertNotIn('title-shop-tab-afdian', home_html)
 
 if __name__ == '__main__':
     unittest.main()

@@ -6793,8 +6793,10 @@ function updateStaticText() {
     if (titleShopTitle) titleShopTitle.textContent = lt({ zh: '商店', en: 'Shop', fr: 'Boutique', ja: 'ショップ' });
     const titleShopTab = $('title-shop-tab-titles');
     if (titleShopTab) titleShopTab.textContent = lt({ zh: '称号', en: 'Titles', fr: 'Titres', ja: '称号' });
-    const afdianTab = $('title-shop-tab-afdian');
-    if (afdianTab) afdianTab.textContent = lt({ zh: '赞助', en: 'Support', fr: 'Soutien', ja: '支援' });
+    const afdianShopBtn = $('btn-title-shop-afdian');
+    if (afdianShopBtn) afdianShopBtn.textContent = lt({ zh: '赞助', en: 'Support', fr: 'Soutien', ja: '支援' });
+    const afdianGo = $('title-shop-afdian-go');
+    if (afdianGo) afdianGo.textContent = lt({ zh: '前往爱发电赞助 ↗', en: 'Sponsor on Afdian ↗', fr: 'Soutenir sur Afdian ↗', ja: '愛発電で支援する ↗' });
     document.querySelectorAll('[data-achievement-tab]').forEach(btn => {
         const tab = btn.dataset.achievementTab || '';
         const labels = {
@@ -19130,9 +19132,11 @@ async function loadTitleShopAfdian() {
     const plansEl = $('title-shop-afdian-plans');
     const noteEl = $('title-shop-afdian-note');
     if (!codeEl || !plansEl) return;
+    const goEl = $('title-shop-afdian-go');
     try {
         const response = await fetch('/api/afdian/status', { credentials: 'same-origin' });
         if (response.status === 401) {
+            if (goEl) goEl.hidden = true;
             codeEl.textContent = '——';
             noteEl.textContent = lt({ zh: '登录后显示你的绑定码。', en: 'Sign in to see your bind code.', fr: 'Connectez-vous pour voir votre code.', ja: 'ログインするとコードが表示されます。' });
             plansEl.innerHTML = '';
@@ -19145,6 +19149,10 @@ async function loadTitleShopAfdian() {
             return;
         }
         codeEl.textContent = data.bind_code || '——';
+        if (goEl) {
+            if (data.page_url) { goEl.href = data.page_url; goEl.hidden = false; }
+            else goEl.hidden = true;
+        }
         const plans = data.plans || [];
         plansEl.innerHTML = plans.length
             ? plans.map((p) => `<div class="title-shop-afdian-plan"><span>${escapeHtml(p.name || p.plan_id)}${p.price ? '（¥' + escapeHtml(p.price) + '）' : ''}</span><b>${Number(p.dew_amount) || 0} 荆露</b></div>`).join('')
@@ -39096,6 +39104,11 @@ async function init() {
             switchTitleShopTab(btn.dataset.shopTab || 'titles');
             if ((btn.dataset.shopTab || '') === 'afdian') void loadTitleShopAfdian();
         });
+    });
+    const afdianShopToggle = $('btn-title-shop-afdian');
+    if (afdianShopToggle) afdianShopToggle.addEventListener('click', () => {
+        switchTitleShopTab(titleShopAfdianTabActive ? 'titles' : 'afdian');
+        if (titleShopAfdianTabActive) void loadTitleShopAfdian();
     });
     if ($('btn-title-shop-afdian-copy')) {
         $('btn-title-shop-afdian-copy').addEventListener('click', async () => {

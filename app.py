@@ -11231,6 +11231,7 @@ ADMIN_COMMAND_TREE = {
             'orders': {'summary': '查看最近订单账本', 'usage': 'afdian orders [数量]'},
             'credit': {'summary': '手动入账（兜底）', 'usage': 'afdian credit <订单号> <账号ID> <荆露> [原因]'},
             'reconcile': {'summary': '拉取爱发电订单对账补单', 'usage': 'afdian reconcile [页数]'},
+            'pageurl': {'summary': '设置/查看爱发电主页链接（兑换页展示）', 'usage': 'afdian pageurl [https://afdian.com/a/…] （空=清除）'},
         },
     },
     'minigame': {
@@ -11612,6 +11613,7 @@ ADMIN_COMMAND_DIRECT_TRANSLATIONS = {
     ('afdian', 'orders'): 'afdian-orders',
     ('afdian', 'credit'): 'afdian-credit',
     ('afdian', 'reconcile'): 'afdian-reconcile',
+    ('afdian', 'pageurl'): 'afdian-pageurl',
     ('minigame', 'state'): 'minigame-state',
     ('minigame', 'score'): 'minigame-score',
     ('minigame', 'record', 'add'): 'minigame-record-add',
@@ -13668,6 +13670,7 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
         'afdian-orders',
         'afdian-credit',
         'afdian-reconcile',
+        'afdian-pageurl',
         'minigame-state',
         'minigame-score',
         'minigame-record-add',
@@ -13754,6 +13757,18 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
                         return {'success': False, 'output': str(result.get('error') or '入账失败')}
                     return {'success': True,
                             'output': f"已手动入账 {result['out_trade_no']}：+{result['dew']} 付费荆露"}
+                if cmd == 'afdian-pageurl':
+                    current = afdian_service.get_page_url()
+                    if len(parts) < 3 or not parts[2].strip():
+                        return {'success': True,
+                                'output': f'当前爱发电主页链接：{current or "（未设置）"}'
+                                          '。用法：afdian pageurl https://afdian.com/a/…（空串清除）'}
+                    result = afdian_service.admin_set_page_url(parts[2])
+                    if not result.get('ok'):
+                        return {'success': False, 'output': str(result.get('error') or '设置失败')}
+                    admin_event('admin', f'afdian pageurl set by {actor}')
+                    return {'success': True,
+                            'output': f"已设置爱发电主页链接：{result['page_url'] or '（已清除）'}"}
                 if cmd == 'afdian-reconcile':
                     try:
                         pages = int(parts[2]) if len(parts) >= 3 else 2
@@ -16277,7 +16292,7 @@ def admin_completions(line):
 
     if cmd == 'afdian':
         if position == 2:
-            return filtered(['plans', 'plan', 'sku', 'orders', 'credit', 'reconcile'])
+            return filtered(['plans', 'plan', 'sku', 'orders', 'credit', 'reconcile', 'pageurl'])
         if sub == 'plan' and position == 3:
             return filtered(['set'])
         if sub == 'sku' and position == 3:
@@ -22560,6 +22575,7 @@ def api_afdian_status():
         return jsonify({'success': True,
                         'bind_code': afdian_service.bind_code_for(user_id),
                         'plans': afdian_service.public_plans(),
+                        'page_url': afdian_service.get_page_url(),
                         'api_configured': bool(afdian_service.config()['token']),
                         'orders': _afdian_orders_payload(user_id)})
     except sqlite3.OperationalError as exc:
