@@ -26,6 +26,7 @@ import json
 import os
 import re
 import secrets
+import unicodedata
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
@@ -36,7 +37,12 @@ import db
 AFDIAN_API_BASE = 'https://afdian.com/api/open/'
 BIND_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'   # 去掉 I/O/0/1 防误读
 BIND_CODE_LEN = 8
-BIND_CODE_RE = re.compile(r'\b([A-Z2-9]{8})\b')
+# 留言识别要扛住随意书写（反馈：前缀/后缀其他字符或空格、大小写混淆）：
+# - 先 NFKC 归一（全角字母/数字 → 半角）再 upper()（小写 → 大写）；
+# - 边界用 ASCII 字母数字的 lookaround 而不是 \b——\b 认为 CJK 也是"单词字符"，
+#   "绑定码ABCD2345"这种紧贴中文的写法会匹配失败；改用 (?<![A-Z0-9]) / (?![A-Z0-9])
+#   后紧贴中文、紧贴标点、带空格都能识别，而 9 位以上连续字母数字串仍不会误切。
+BIND_CODE_RE = re.compile(r'(?<![A-Z0-9])([A-Z2-9]{8})(?![A-Z0-9])')
 LEDGER_LIMIT = 20
 REQUERY_MAX_PAGES = 5          # 补单/对账最多翻 5 页（每页 50 条）
 
@@ -131,7 +137,8 @@ def reset_bind_code(user_id: int) -> str:
 
 
 def extract_bind_code(remark: str) -> str:
-    match = BIND_CODE_RE.search(str(remark or '').upper())
+    text = unicodedata.normalize('NFKC', str(remark or '')).upper()
+    match = BIND_CODE_RE.search(text)
     return match.group(1) if match else ''
 
 

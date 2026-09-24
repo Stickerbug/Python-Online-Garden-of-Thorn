@@ -63,6 +63,22 @@ class AfdianServiceTests(unittest.TestCase):
         self.assertNotEqual(new_code, code)
         self.assertEqual(afdian_service.bind_code_for(self.user['id']), new_code)
 
+    def test_extract_bind_code_tolerates_messy_remarks(self):
+        """留言识别：大小写/空格/前后缀标点与中文/全角字符都不影响；9 位串不误切。"""
+        f = afdian_service.extract_bind_code
+        self.assertEqual(f('ABCD2345'), 'ABCD2345')
+        self.assertEqual(f('abcd2345'), 'ABCD2345')                      # 小写
+        self.assertEqual(f('  ABCD2345  '), 'ABCD2345')                  # 空格
+        self.assertEqual(f('赞助！ABCD2345，谢谢'), 'ABCD2345')          # 全角标点
+        self.assertEqual(f('绑定码ABCD2345'), 'ABCD2345')                # 紧贴中文无空格
+        self.assertEqual(f('ABCD2345谢谢投喂'), 'ABCD2345')              # 尾贴中文
+        self.assertEqual(f('ＡＢＣＤ２３４５'), 'ABCD2345')              # 全角字母数字
+        self.assertEqual(f('我的码是 abcd2345 感谢'), 'ABCD2345')        # 混合随意书写
+        self.assertEqual(f('ABCD23456'), '')                             # 9 位串不误切
+        self.assertEqual(f('XABCD2345'), '')                             # 前面多一位同理
+        self.assertEqual(f(''), '')
+        self.assertEqual(f('没有码'), '')
+
     def test_ingest_credits_paid_dew_idempotently(self):
         code = afdian_service.bind_code_for(self.user['id'])
         with mock.patch.object(afdian_service, 'requery_recent', lambda **kw: {'ok': False}):
