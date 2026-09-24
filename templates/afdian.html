@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>赞助兑换 · 荆棘花园</title>
+  <link rel="icon" href="/static/assets/icons/favicon.ico" sizes="any">
+  <style>
+    :root {
+      --bg: #f4f5f7; --surface: #fff; --line: #dfe1e6; --text: #172b4d;
+      --soft: #5e6c84; --accent: #9466d2; --accent-deep: #7a4cc0;
+      --ok: #1f845a; --warn: #a4650c;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text);
+      font-family: 'Kreadon', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+      font-size: 14px; line-height: 1.6; }
+    @font-face {
+      font-family: 'Kreadon';
+      src: url('/fonts/Kreadon-Regular.subset.woff2?v=3') format('woff2');
+      font-display: swap;
+    }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 24px 16px 48px; }
+    .card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+      padding: 20px 22px; margin-bottom: 16px; }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    h2 { font-size: 15px; margin: 0 0 12px; }
+    .sub { color: var(--soft); font-size: 13px; margin-bottom: 18px; }
+    ol { margin: 0; padding-left: 20px; }
+    li { margin: 6px 0; }
+    .code-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .code { font-size: 26px; letter-spacing: 6px; font-weight: 700;
+      font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--accent-deep);
+      background: #f6f1fc; border: 1px dashed #d5c2f0; border-radius: 8px; padding: 8px 18px; }
+    button { font: inherit; cursor: pointer; border-radius: 6px; border: 1px solid var(--line);
+      background: #fff; color: var(--text); padding: 6px 14px; }
+    button:hover { background: #f0f1f3; }
+    .primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .primary:hover { background: var(--accent-deep); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #f0f1f4; }
+    th { color: var(--soft); font-size: 12px; font-weight: 700; }
+    .muted { color: var(--soft); }
+    .ok { color: var(--ok); font-weight: 600; }
+    .warn { color: var(--warn); font-weight: 600; }
+    .note { font-size: 12.5px; color: var(--soft); margin-top: 10px; }
+    #msg { min-height: 1.4em; margin: 8px 0 0; font-size: 13px; color: var(--warn); }
+    a { color: var(--accent-deep); text-decoration: none; }
+    .empty { color: var(--soft); text-align: center; padding: 18px 0; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>赞助兑换</h1>
+    <p class="sub">通过爱发电赞助荆棘花园，按方案兑换<b>付费荆露</b>（与游戏内获取的荆露分账）。感谢支持！</p>
+    <h2>使用步骤</h2>
+    <ol>
+      <li>记住下面的<b>个人绑定码</b>（只属于你，可随时重置）。</li>
+      <li>前往爱发电选择对应档位的赞助方案，<b>在订单留言里填写你的绑定码</b>后付款。</li>
+      <li>付款成功后稍等片刻会自动到账；若一直未到账，点下方「我已赞助，查询补单」。</li>
+    </ol>
+  </div>
+
+  <div class="card" id="bind-card">
+    <h2>我的绑定码</h2>
+    <div id="bind-loading" class="muted">加载中…</div>
+    <div id="bind-body" hidden>
+      <div class="code-row">
+        <span class="code" id="bind-code"></span>
+        <button type="button" id="copy">复制</button>
+        <button type="button" id="reset">重置</button>
+      </div>
+      <p class="note">重置后旧码立即失效；已到账的订单不受影响。换绑后请在下次赞助时使用新码。</p>
+    </div>
+    <div id="login-hint" hidden>
+      <p class="muted">请先登录账号后再获取绑定码。</p>
+      <a class="primary" style="display:inline-block;padding:6px 14px;border-radius:6px;" href="/" target="_blank" rel="noopener">去登录</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>当前可兑换档位</h2>
+    <div id="plans" class="muted">加载中…</div>
+    <p class="note" id="plans-note" hidden>档位尚未配置——作者还没定好兑换比例，稍后再来看看。</p>
+  </div>
+
+  <div class="card">
+    <h2>最近到账记录</h2>
+    <div id="orders" class="muted">加载中…</div>
+    <div style="margin-top:12px">
+      <button type="button" class="primary" id="requery">我已赞助，查询补单</button>
+      <span class="note" style="margin-left:8px">到账通常在付款后一分钟内；偶尔推送延迟可用此按钮补。</span>
+    </div>
+    <p id="msg"></p>
+  </div>
+
+  <div class="card">
+    <h2>说明</h2>
+    <p class="muted" style="margin:0">
+      荆露到账后可在游戏内查看流水（来源：爱发电赞助）。如对订单有疑问，请通过反馈中心联系，
+      附上爱发电订单号。赞助属自愿支持行为，兑换的荆露仅为感谢回馈。
+      <a href="/feedback-center/bug" target="_blank" rel="noopener">反馈中心</a> ·
+      <a href="/" target="_blank" rel="noopener">返回游戏</a>
+    </p>
+  </div>
+</div>
+
+<script nonce="{{ csp_nonce }}" src="/static/js/afdian.js?v={{ static_version|default('dev')|urlencode }}"></script>
+</body>
+</html>

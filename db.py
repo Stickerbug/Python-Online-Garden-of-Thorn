@@ -960,6 +960,11 @@ def init_db(
             conn.execute('ALTER TABLE users ADD COLUMN thorn_dew_free INTEGER DEFAULT 0')
         if 'thorn_dew_paid' not in existing_columns:
             conn.execute('ALTER TABLE users ADD COLUMN thorn_dew_paid INTEGER DEFAULT 0')
+        if 'afdian_bind_code' not in existing_columns:
+            # 爱发电赞助兑换：玩家把绑定码填进订单留言，webhook 据此入账（可重置）
+            conn.execute("ALTER TABLE users ADD COLUMN afdian_bind_code TEXT")
+            conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_afdian_bind_code '
+                         'ON users(afdian_bind_code) WHERE afdian_bind_code IS NOT NULL')
         if 'password_changed_at' not in existing_columns:
             conn.execute('ALTER TABLE users ADD COLUMN password_changed_at TEXT')
         if 'total_gr' not in existing_columns:

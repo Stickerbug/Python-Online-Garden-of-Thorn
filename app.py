@@ -55,6 +55,7 @@ import minigame_2048
 import minigame_2048_service
 import minigame_registry
 import minigame_suika_service
+import afdian_service
 from ai_local_bridge import LocalAiBridgeError, get_local_ai_worker
 from ai_training_capture import (
     append_public_history as append_ai_training_public_history,
@@ -11165,6 +11166,23 @@ ADMIN_COMMAND_TREE = {
             },
         },
     },
+    'afdian': {
+        'summary': '爱发电赞助兑换（付费荆露）',
+        'usage': 'afdian <plans|plan|orders|credit|reconcile> ...',
+        'children': {
+            'plans': {'summary': '查看方案兑换配置', 'usage': 'afdian plans'},
+            'plan': {
+                'summary': '配置方案兑换荆露数',
+                'usage': 'afdian plan set <plan_id> <荆露/月> [名称]',
+                'children': {
+                    'set': {'summary': '设置方案兑换', 'usage': 'afdian plan set <plan_id> <荆露/月> [名称]'},
+                },
+            },
+            'orders': {'summary': '查看最近订单账本', 'usage': 'afdian orders [数量]'},
+            'credit': {'summary': '手动入账（兜底）', 'usage': 'afdian credit <订单号> <账号ID> <荆露> [原因]'},
+            'reconcile': {'summary': '拉取爱发电订单对账补单', 'usage': 'afdian reconcile [页数]'},
+        },
+    },
     'community': {
         'summary': '社区公告、投票与运营记录',
         'usage': 'community <list|announcement|poll> ...',
@@ -11518,6 +11536,11 @@ ADMIN_COMMAND_DIRECT_TRANSLATIONS = {
     ('publicfeedback', 'reopen'): 'publicfeedback-reopen',
     ('publicfeedback', 'votes', 'invalid'): ('publicfeedback-votes', 'invalid'),
     ('publicfeedback', 'votes', 'restore'): ('publicfeedback-votes', 'restore'),
+    ('afdian', 'plans'): 'afdian-plans',
+    ('afdian', 'plan', 'set'): 'afdian-plan-set',
+    ('afdian', 'orders'): 'afdian-orders',
+    ('afdian', 'credit'): 'afdian-credit',
+    ('afdian', 'reconcile'): 'afdian-reconcile',
     ('publicfeedback', 'hide', 'issue'): ('publicfeedback-hide', 'issue'),
     ('publicfeedback', 'hide', 'comment'): ('publicfeedback-hide', 'comment'),
     ('publicfeedback', 'audit'): 'publicfeedback-audit',
@@ -13560,9 +13583,76 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
         'publicfeedback-hide',
         'publicfeedback-audit',
         'publicfeedback-oldfeedback',
+        'afdian-plans',
+        'afdian-plan-set',
+        'afdian-orders',
+        'afdian-credit',
+        'afdian-reconcile',
     }:
         if not DB_AVAILABLE:
             return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
+        if cmd.startswith('afdian-'):
+            try:
+                if cmd == 'afdian-plans':
+                    plans = afdian_service.admin_list_plans()
+                    if not plans:
+                        return {'success': True,
+                                'output': '还没有配置方案兑换。用法：afdian plan set <plan_id> <荆露/月> [名称]'}
+                    lines = [f"{p['plan_id']}  {p['dew_amount']} 荆露/月  {p['name']}  "
+                             f"{'启用' if p['active'] else '停用'}" for p in plans]
+                    return {'success': True, 'output': '方案兑换配置：\n' + '\n'.join(lines)}
+                if cmd == 'afdian-plan-set':
+                    if len(parts) < 5 or parts[2] != 'set':
+                        return {'success': False, 'output': '用法：afdian plan set <plan_id> <荆露/月> [名称]'}
+                    # parts: afdian plan set <plan_id> <dew> [name...]
+                    result = afdian_service.admin_set_plan(parts[3], int(parts[4]), ' '.join(parts[5:])[:60])
+                    if not result.get('ok'):
+                        return {'success': False, 'output': str(result.get('error') or '配置失败')}
+                    suffix = f"（{' '.join(parts[5:])[:60]}）" if len(parts) > 5 else ''
+                    return {'success': True,
+                            'output': f"已配置方案 {result['plan_id']} = {result['dew_amount']} 荆露/月{suffix}"}
+                if cmd == 'afdian-orders':
+                    try:
+                        limit = int(parts[2]) if len(parts) >= 3 else 20
+                    except (TypeError, ValueError):
+                        limit = 20
+                    orders = afdian_service.admin_list_orders(limit)
+                    if not orders:
+                        return {'success': True, 'output': '订单账本为空。'}
+                    status_names = {'credited': '已到账', 'unmatched': '无绑定码', 'unmapped': '未配方案',
+                                    'manual': '人工入账', 'pending': '处理中'}
+                    lines = [
+                        f"{o['out_trade_no']}  {o['status']}({status_names.get(o['status'], o['status'])})  "
+                        f"{o['plan_name'] or o['plan_id']}×{o['month']}  {o['dew_amount']}荆露  "
+                        f"码={o['bind_code'] or '-'}  user={o['game_user_id'] or '-'}  {o['received_at'][:16]}"
+                        for o in orders]
+                    return {'success': True, 'output': f'最近 {len(orders)} 条订单：\n' + '\n'.join(lines)}
+                if cmd == 'afdian-credit':
+                    if len(parts) < 5:
+                        return {'success': False, 'output': '用法：afdian credit <订单号> <账号ID> <荆露> [原因]'}
+                    result = afdian_service.admin_credit(parts[2], int(parts[4]), int(parts[3]),
+                                                         reason=' '.join(parts[5:])[:120])
+                    if not result.get('ok'):
+                        return {'success': False, 'output': str(result.get('error') or '入账失败')}
+                    return {'success': True,
+                            'output': f"已手动入账 {result['out_trade_no']}：+{result['dew']} 付费荆露"}
+                if cmd == 'afdian-reconcile':
+                    try:
+                        pages = int(parts[2]) if len(parts) >= 3 else 2
+                    except (TypeError, ValueError):
+                        pages = 2
+                    result = afdian_service.requery_recent(pages=pages)
+                    if not result.get('ok'):
+                        return {'success': False, 'output': str(result.get('error') or '对账失败')}
+                    counted = result.get('counted') or {}
+                    detail = '，'.join(f"{k}×{v}" for k, v in counted.items()) or '无新订单'
+                    return {'success': True, 'output': f"对账完成：拉取 {result.get('total', 0)} 条（{detail}）"}
+            except sqlite3.OperationalError as exc:
+                if 'locked' in str(exc).lower() or 'busy' in str(exc).lower():
+                    return {'success': False, 'output': '数据库暂时繁忙，请稍后再试。'}
+                raise
+            except (TypeError, ValueError) as exc:
+                return {'success': False, 'output': f'参数无效：{exc}'}
         status_names = {
             'new': '待确认', 'needs_info': '需补充', 'confirmed': '已确认',
             'in_progress': '修复中', 'fixed': '已修复', 'duplicate': '重复',
@@ -15881,6 +15971,12 @@ def admin_completions(line):
     if position == 1:
         return filtered(visible_children(root))
     sub = parts[1].lower() if len(parts) > 1 else ''
+
+    if cmd == 'afdian':
+        if position == 2:
+            return filtered(['plans', 'plan', 'orders', 'credit', 'reconcile'])
+        if sub == 'plan' and position == 3:
+            return filtered(['set'])
 
     if cmd == 'publicfeedback':
         if position == 2:
@@ -22121,6 +22217,103 @@ def feedback_center_messages():
         'feedback_center.html',
         static_version=GTN_STATIC_VERSION,
     )
+
+
+# ---------------------------------------------------------------- 爱发电赞助兑换
+
+@app.route('/afdian')
+def afdian_page():
+    return render_template('afdian.html', static_version=GTN_STATIC_VERSION)
+
+
+def _afdian_orders_payload(user_id):
+    status_names = {'credited': '已到账', 'unmatched': '留言无绑定码', 'unmapped': '待配置方案',
+                    'manual': '人工入账', 'pending': '处理中'}
+    out = []
+    for row in afdian_service.ledger_for_user(user_id):
+        out.append({
+            'out_trade_no': row.get('out_trade_no'),
+            'plan_name': row.get('plan_name') or row.get('plan_id'),
+            'month': row.get('month'),
+            'total_amount': row.get('total_amount'),
+            'dew_amount': row.get('dew_amount'),
+            'status': row.get('status'),
+            'status_text': status_names.get(str(row.get('status')), str(row.get('status'))),
+            'created_at': row.get('order_created_at') or row.get('received_at'),
+        })
+    return out
+
+
+@app.route('/api/afdian/status')
+def api_afdian_status():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    try:
+        return jsonify({'success': True,
+                        'bind_code': afdian_service.bind_code_for(user_id),
+                        'plans': afdian_service.public_plans(),
+                        'api_configured': bool(afdian_service.config()['token']),
+                        'orders': _afdian_orders_payload(user_id)})
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+
+
+@app.route('/api/afdian/bind/reset', methods=['POST'])
+def api_afdian_bind_reset():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    try:
+        return jsonify({'success': True,
+                        'bind_code': afdian_service.reset_bind_code(user_id)})
+    except sqlite3.OperationalError as exc:
+        return _db_busy_response(exc)
+
+
+@app.route('/api/afdian/requery', methods=['POST'])
+def api_afdian_requery():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user_id, _, auth_error = _require_account_json()
+    if auth_error:
+        return auth_error
+    if _rate_limited(f'uid:{user_id}', 'afdian_requery', limit=1, window=60):
+        return _json_error('查询太频繁，请一分钟后再试', 429)
+    result = afdian_service.requery_recent(pages=2)
+    if not result.get('ok'):
+        return _json_error(str(result.get('error') or '查询失败'), 502)
+    return jsonify({'success': True, 'counted': result.get('counted') or {},
+                    'orders': _afdian_orders_payload(user_id)})
+
+
+@app.route('/api/afdian/webhook/<secret>', methods=['POST'])
+def api_afdian_webhook(secret):
+    """爱发电订单回调（webhook 本身无签名，用路径密钥防伪造）。
+    按官方要求正常返回 {"ec":200}；内部异常返回 5xx 让爱发电择机重推。"""
+    expected = afdian_service.config()['webhook_secret']
+    if not expected or str(secret or '') != expected:
+        return jsonify({'ec': 403, 'em': 'forbidden'}), 403
+    if not DB_AVAILABLE:
+        return jsonify({'ec': 500, 'em': 'db unavailable'}), 500
+    try:
+        payload = request.get_json(silent=True) or {}
+        data = payload.get('data') or {}
+        if data.get('type') == 'order' and data.get('order'):
+            afdian_service.ingest_order(data.get('order') or {}, via='webhook')
+    except sqlite3.OperationalError as exc:
+        if 'locked' in str(exc).lower() or 'busy' in str(exc).lower():
+            return jsonify({'ec': 500, 'em': 'busy'}), 500
+        app.logger.exception('afdian webhook error')
+        return jsonify({'ec': 500, 'em': 'error'}), 500
+    except Exception:
+        app.logger.exception('afdian webhook error')
+        return jsonify({'ec': 500, 'em': 'error'}), 500
+    return jsonify({'ec': 200, 'em': ''})
 
 
 @app.route('/feedback-center/issues/<path:issue_key>')
