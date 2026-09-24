@@ -27,6 +27,8 @@
       messages_title: '消息', messages_empty: '暂无新消息',
       messages_login: '请先登录账号后查看消息。', messages_back: '返回反馈列表',
       messages_mark_all_read: '全部已读',
+      mark_read: '标为已读', notification_status: '状态', notification_comment: '新评论',
+      notification_private: '私密补充', notification_reopen: '仍未修复请求',
       notification_staff: '待处理请求', notification_watched: '关注更新', notification_author: '你的反馈更新',
       report: '举报', report_comment: '举报评论', report_title: '举报', submit_report: '提交举报',
       replay_hint: '回放 ID：{0}（登录游戏后可查看）', need_login: '请先登录账号。',
@@ -66,6 +68,8 @@
       messages_title: 'Messages', messages_empty: 'No new messages',
       messages_login: 'Sign in to view your messages.', messages_back: 'Back to reports',
       messages_mark_all_read: 'Mark all read',
+      mark_read: 'Mark read', notification_status: 'Status', notification_comment: 'New comment',
+      notification_private: 'Private note', notification_reopen: 'Not-fixed request',
       notification_staff: 'Pending request', notification_watched: 'Watched update', notification_author: 'Your report update',
       report: 'Report', report_comment: 'Report comment', report_title: 'Report', submit_report: 'Submit report',
       replay_hint: 'Replay ID: {0} (viewable in game)', need_login: 'Sign in to continue.',
@@ -98,6 +102,9 @@
       unhide_issue: 'Restaurer', hide_comment: 'Masquer le commentaire', unhide_comment: 'Restaurer',
       internal_note: 'Note interne', history: 'Historique', deleted_player: 'Joueur supprimé',
       author: 'Auteur', updated: 'Mis à jour {0}', login: 'Connexion', account_label: 'Compte',
+      messages_mark_all_read: 'Tout marquer lu',
+      mark_read: 'Marquer lu', notification_status: 'Statut', notification_comment: 'Nouveau commentaire',
+      notification_private: 'Note privée', notification_reopen: 'Signalement « non réparé »',
       watch: 'Suivre', watched: 'Suivi', rail_details: 'Détails', rail_version: 'Version du jeu',
       rail_fix_version: 'Corrigé dans', rail_tags: 'Étiquettes', rail_related: 'Liens',
       rail_watchers: 'Suiveurs', rail_replay: 'Replay',
@@ -133,6 +140,9 @@
       unhide_issue: '復元', hide_comment: 'コメント非表示', unhide_comment: 'コメント復元',
       internal_note: '内部メモ', history: '履歴', deleted_player: '削除されたプレイヤー',
       author: '投稿者', updated: '更新 {0}', login: 'ログイン', account_label: 'アカウント',
+      messages_mark_all_read: 'すべて既読',
+      mark_read: '既読にする', notification_status: '状態', notification_comment: '新着コメント',
+      notification_private: '非公開補足', notification_reopen: '未修正の報告',
       watch: 'ウォッチ', watched: 'ウォッチ中', rail_details: '詳細', rail_version: 'ゲームバージョン',
       rail_fix_version: '修正バージョン', rail_tags: 'タグ', rail_related: '関連問題',
       rail_watchers: 'ウォッチ人数', rail_replay: 'リプレイ',
@@ -606,18 +616,11 @@
       return;
     }
     const items = state.notifications.map((item) => {
-      const typeText = item.type === 'staff'
-        ? '待处理请求'
-        : item.type === 'watched' ? '关注更新' : '你的反馈更新';
-      const reason = item.action === 'reopen_request'
-        ? esc(item.message || '')
-        : item.action === 'private'
-          ? esc(item.message || '')
-          : `${esc(item.from_status || '—')} → ${esc(item.to_status || '')}`;
+      const reason = notificationSummary(item);
       return `<button type="button" class="fc-account-popover-item" data-open-issue="${Number(item.issue?.id || 0)}">` +
         `<strong>${esc(item.issue?.key || '')}</strong>` +
         `<span>${esc(item.issue?.title || '')}</span>` +
-        `<small>${esc(typeText)} · ${esc(reason || '')}</small></button>`;
+        `<small>${esc(notificationTypeText(item))} · ${esc(reason)}</small></button>`;
     }).join('');
     panel.innerHTML = `<div class="fc-account-popover-head">消息</div><div class="fc-account-popover-list">${items}</div>` +
       `<button type="button" class="fc-account-popover-link fc-mark-all-read" data-mark-all-read>${esc(t('messages_mark_all_read'))}</button>` +
@@ -630,10 +633,36 @@
     return t('notification_author');
   }
 
+  /* 消息摘要：动作 + 本地化内容。状态变更用该反馈类型的语言标签（此前显示
+     裸 slug 如 "new → fixed"）并带上理由；评论/私密补充给正文前 60 字。 */
   function notificationSummary(item) {
-    if (item?.action === 'private') return String(item?.message || '');
-    if (item?.action === 'reopen_request') return String(item?.message || '');
-    return `${String(item?.from_status || '—')} → ${String(item?.to_status || '')}`;
+    const brief = String(item?.message || '').trim();
+    const excerpt = brief.length > 60 ? `${brief.slice(0, 60)}…` : brief;
+    if (item?.action === 'comment') return `${t('notification_comment')}：${excerpt}`;
+    if (item?.action === 'private') return `${t('notification_private')}：${excerpt}`;
+    if (item?.action === 'reopen_request') return `${t('notification_reopen')}：${excerpt}`;
+    const kind = item?.issue?.kind || 'bug';
+    const from = item?.from_status ? statusLabel(kind, item.from_status) : '';
+    const to = item?.to_status ? statusLabel(kind, item.to_status) : '';
+    let text = from ? `${from} → ${to}` : to;
+    const reason = String(item?.reason || '').trim();
+    if (reason) {
+      const short = reason.length > 60 ? `${reason.slice(0, 60)}…` : reason;
+      text += `：${short}`;
+    }
+    return text;
+  }
+
+  /* 单条标为已读：读标记推进后该消息即从列表消失（列表是按未读推导的）。 */
+  async function markSingleNotificationRead(issueId) {
+    if (!Number(issueId)) return;
+    try {
+      await api(`/api/public-feedback/issues/${Number(issueId)}/read`, { method: 'POST', body: {} });
+    } catch (_) {}
+    await refreshFeedbackUnread();
+    if (window.location.pathname.startsWith('/feedback-center/messages')) {
+      await renderMessagesView();
+    }
   }
 
   async function renderMessagesView() {
@@ -678,7 +707,9 @@
           `<span class="fc-message-key">${esc(issue.key || `#${issue.id || ''}`)}</span>` +
           `<span><strong class="fc-message-title">${esc(issue.title || '')}</strong>` +
           `<small class="fc-message-meta">${esc(typeText)} · ${esc(reason)}</small></span>` +
-          `<time datetime="${esc(item.created_at || '')}">${esc(fmt(item.created_at))}</time></a>`;
+          `<time datetime="${esc(item.created_at || '')}">${esc(fmt(item.created_at))}</time>` +
+          `<button type="button" class="fc-message-mark" data-mark-read="${Number(issue.id || 0)}" ` +
+          `title="${esc(t('mark_read'))}" aria-label="${esc(t('mark_read'))}">×</button></a>`;
       }).join('');
     } catch (err) {
       const list = messages.querySelector('.fc-messages-list');
@@ -1442,6 +1473,13 @@
     document.querySelectorAll('[data-close-report]').forEach((button) => button.addEventListener('click', () => closeDialog('fc-report-dialog')));
 
     document.addEventListener('click', (event) => {
+      const markRead = event.target.closest('[data-mark-read]');
+      if (markRead) {
+        event.preventDefault();
+        event.stopPropagation();
+        void markSingleNotificationRead(Number(markRead.dataset.markRead || 0));
+        return;
+      }
       if (event.target.closest('[data-mark-all-read]')) {
         event.preventDefault();
         void markAllNotificationsRead();

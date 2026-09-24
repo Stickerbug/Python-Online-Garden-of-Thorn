@@ -2007,6 +2007,25 @@ def public_feedback_notifications(user_id, limit=50):
                     'message': str(private['message'])[:120],
                     'created_at': private['created_at'],
                 })
+            # 别人对你反馈的新评论（反馈：消息里看不出太多信息——此前只有
+            # 状态变更/私密补充会通知，评论这种最常见的更新完全不产生消息）。
+            comment = conn.execute(
+                '''
+                SELECT body, created_at FROM public_issue_comments
+                WHERE issue_id = ? AND author_user_id <> ? AND hidden = 0
+                  AND (? IS NULL OR created_at > ?)
+                ORDER BY id DESC LIMIT 1
+                ''',
+                (issue_id, uid, read_at, read_at),
+            ).fetchone()
+            if comment:
+                items.append({
+                    'type': 'author',
+                    'action': 'comment',
+                    'issue': _issue_brief_payload_conn(conn, row),
+                    'message': str(comment['body'])[:120],
+                    'created_at': comment['created_at'],
+                })
 
         watcher_rows = conn.execute(
             '''
@@ -2074,6 +2093,10 @@ def mark_public_feedback_read(viewer_user_id, issue_id):
             ''',
             (issue_id, uid),
         ).fetchone()
+        # 三个身份可能叠加（例如管理员同时是某条反馈的作者或关注者）：
+        # 此前是 elif 链——staff 命中后就不再推进作者/关注标记，导致
+        # 「已读」后关注类消息永远清不掉（反馈：无法去除已读消息）。
+        updated_any = False
         if _is_staff_conn(conn, uid):
             conn.execute(
                 '''
@@ -2091,7 +2114,8 @@ def mark_public_feedback_read(viewer_user_id, issue_id):
                 ''',
                 (now_iso, issue_id),
             )
-        elif int(issue['author_user_id']) == uid:
+            updated_any = True
+        if int(issue['author_user_id']) == uid:
             conn.execute(
                 '''
                 UPDATE public_issues
@@ -2100,7 +2124,8 @@ def mark_public_feedback_read(viewer_user_id, issue_id):
                 ''',
                 (now_iso, now_iso, issue_id),
             )
-        elif watcher:
+            updated_any = True
+        if watcher:
             conn.execute(
                 '''
                 UPDATE public_issue_watchers
@@ -2109,7 +2134,8 @@ def mark_public_feedback_read(viewer_user_id, issue_id):
                 ''',
                 (now_iso, issue_id, uid),
             )
-        else:
+            updated_any = True
+        if not updated_any:
             conn.rollback()
             raise PublicFeedbackError('FORBIDDEN', '权限不足', 403)
         conn.commit()
