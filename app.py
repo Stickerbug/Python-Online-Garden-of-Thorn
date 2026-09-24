@@ -20247,10 +20247,19 @@ def index():
         admin_event('error', f'minigame entry check failed: {exc}')
         minigame_available = False
     minigame_2048_available = minigame_available
+    # 赞助兑换入口：先只对管理员开放（内测打通全链路），公开放开时去掉这层
+    afdian_entry_visible = False
+    try:
+        _uid = session.get('user_id')
+        if _uid and feedback_is_staff(_uid):
+            afdian_entry_visible = True
+    except Exception:
+        afdian_entry_visible = False
     return render_template(
         'index.html',
         minigame_available=minigame_available,
         minigame_2048_available=minigame_2048_available,
+        afdian_entry_visible=afdian_entry_visible,
         beta_mode=False,
         static_version=GTN_STATIC_VERSION,
         instance_id=GTN_INSTANCE_ID,
@@ -22221,8 +22230,21 @@ def feedback_center_messages():
 
 # ---------------------------------------------------------------- 爱发电赞助兑换
 
+def _afdian_entry_allowed(user_id) -> bool:
+    """赞助兑换暂对管理员内测开放（公开放开时去掉调用处的这层判断）。"""
+    if not user_id:
+        return False
+    try:
+        return bool(feedback_is_staff(user_id))
+    except Exception:
+        return False
+
+
 @app.route('/afdian')
 def afdian_page():
+    user_id = session.get('user_id')
+    if not _afdian_entry_allowed(user_id):
+        return redirect('/')
     return render_template('afdian.html', static_version=GTN_STATIC_VERSION)
 
 
@@ -22251,6 +22273,8 @@ def api_afdian_status():
     user_id, _, auth_error = _require_account_json()
     if auth_error:
         return auth_error
+    if not _afdian_entry_allowed(user_id):
+        return _json_error('赞助兑换暂未开放', 403)
     try:
         return jsonify({'success': True,
                         'bind_code': afdian_service.bind_code_for(user_id),
@@ -22268,6 +22292,8 @@ def api_afdian_bind_reset():
     user_id, _, auth_error = _require_account_json()
     if auth_error:
         return auth_error
+    if not _afdian_entry_allowed(user_id):
+        return _json_error('赞助兑换暂未开放', 403)
     try:
         return jsonify({'success': True,
                         'bind_code': afdian_service.reset_bind_code(user_id)})
@@ -22282,6 +22308,8 @@ def api_afdian_requery():
     user_id, _, auth_error = _require_account_json()
     if auth_error:
         return auth_error
+    if not _afdian_entry_allowed(user_id):
+        return _json_error('赞助兑换暂未开放', 403)
     if _rate_limited(f'uid:{user_id}', 'afdian_requery', limit=1, window=60):
         return _json_error('查询太频繁，请一分钟后再试', 429)
     result = afdian_service.requery_recent(pages=2)

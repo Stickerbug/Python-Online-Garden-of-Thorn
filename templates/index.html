@@ -504,7 +504,7 @@
 {% endif %}
 <div class="form-row login-utility-row">
 <a id="btn-public-feedback-center" class="btn-settings" href="/feedback-center" target="_blank" rel="noopener">反馈中心</a>
-<a id="btn-afdian" class="btn-settings" href="/afdian" target="_blank" rel="noopener">赞助兑换</a>
+{% if afdian_entry_visible %}<a id="btn-afdian" class="btn-settings" href="/afdian" target="_blank" rel="noopener">赞助兑换</a>{% endif %}
 <button id="btn-open-feedback" class="btn-settings">反馈</button>
 <button id="btn-open-about" class="btn-settings">关于</button>
 </div>
