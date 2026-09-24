@@ -35973,25 +35973,46 @@ def api_minigame_2048_leaderboard():
     limit = max(1, min(100, limit))
     if window not in ('14d', 'all'):
         return _json_error('window 只能是 14d 或 all', 400)
-    with get_db_connection() as conn:
-        # 短 TTL 缓存 + 复用同一份完整榜单：不再为 self_entry 扫第二遍全表。
-        table = minigame_2048_service.leaderboard_cached(conn, window=window, limit=limit)
-        full_table = minigame_2048_service.leaderboard_cached(conn, window=window, limit=0)
-        me = minigame_2048_service.self_entry_from_table(full_table, identity[0])
-        periods = minigame_2048_service.period_history(conn, limit=4)
-        # 榜单上要显示「称号 + 染色昵称」：批量取一次身份字段（两次查询，避免逐行查库）
-        try:
-            rows = list(table.get('entries') or [])
-            if me:
-                rows.append(me)
-            identities = public_identity_batch_conn(conn, [row.get('user_id') for row in rows])
-            for row in rows:
-                info = identities.get(int(row.get('user_id') or 0)) or {}
-                row['equipped_titles'] = list(info.get('equipped_titles') or [])
-                row['name_style'] = info.get('name_style')
-                row['name_color'] = info.get('name_color')
-        except Exception as exc:
-            admin_event('error', f'2048 leaderboard identity lookup failed: {exc}')
+    # 与 suika 端点同口径：此前这里没有兜底，DB 一忙就是裸 500，
+    # 客户端把一切失败都显示成「离线，暂时读不到排行榜」。
+    try:
+        with get_db_connection() as conn:
+            # 短 TTL 缓存 + 复用同一份完整榜单：不再为 self_entry 扫第二遍全表。
+            table = minigame_2048_service.leaderboard_cached(conn, window=window, limit=limit)
+            full_table = minigame_2048_service.leaderboard_cached(conn, window=window, limit=0)
+            me = minigame_2048_service.self_entry_from_table(full_table, identity[0])
+            periods = minigame_2048_service.period_history(conn, limit=4)
+            # 榜单上要显示「称号 + 染色昵称」：批量取一次身份字段（两次查询，避免逐行查库）
+            try:
+                rows = list(table.get('entries') or [])
+                if me:
+                    rows.append(me)
+                identities = public_identity_batch_conn(conn, [row.get('user_id') for row in rows])
+                for row in rows:
+                    info = identities.get(int(row.get('user_id') or 0)) or {}
+                    row['equipped_titles'] = list(info.get('equipped_titles') or [])
+                    row['name_style'] = info.get('name_style')
+                    row['name_color'] = info.get('name_color')
+            except Exception as exc:
+                admin_event('error', f'2048 leaderboard identity lookup failed: {exc}')
+    except sqlite3.OperationalError as exc:
+        if 'locked' in str(exc).lower() or 'busy' in str(exc).lower():
+            time.sleep(0.25)
+            try:
+                with get_db_connection() as conn:
+                    table = minigame_2048_service.leaderboard_cached(conn, window=window, limit=limit)
+                    full_table = minigame_2048_service.leaderboard_cached(conn, window=window, limit=0)
+                    me = minigame_2048_service.self_entry_from_table(full_table, identity[0])
+                    periods = minigame_2048_service.period_history(conn, limit=4)
+            except Exception as retry_exc:
+                admin_event('error', f'2048 leaderboard failed (retry): {retry_exc}')
+                return _db_busy_response(retry_exc)
+        else:
+            admin_event('error', f'2048 leaderboard failed: {exc}')
+            return _json_error('读取榜单失败', 500)
+    except Exception as exc:
+        admin_event('error', f'2048 leaderboard failed: {exc}')
+        return _json_error('读取榜单失败', 500)
     return jsonify({'success': True, 'leaderboard': table, 'me': me, 'periods': periods})
 
 

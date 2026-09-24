@@ -923,14 +923,36 @@ def record_identity_event(user_id, device_hash, network_hash, *, source='login',
     return inserted or login_inserted
 
 
+_RECENT_LINKS_LAST_RUN = None
+_RECENT_LINKS_MIN_INTERVAL_SECONDS = 1500   # 重算最多 25 分钟一轮（worker 600s 触发时大多跳过）
+_RECENT_LINKS_YIELD_SECONDS = 0.08          # 每个用户之间让出写锁，别饿死并发的玩家写入
+
+
 def refresh_recent_account_links(*, now=None):
+    """重算近期活跃用户的账号关联。
+
+    生产实测：全量 24h 窗口约 125 用户、连续写事务跑 19 秒+，期间写锁几乎被独占，
+    全站爆发 database is locked（2048/suika 同步、榜单、auth/me 连锁 500）。
+    两个修正：**增量**——只重算「上次运行之后有新身份事件」的用户（回退窗口仍是
+    24h）；**让步**——用户之间 sleep，把写锁间隙留给并发请求。runs in tpool（真线程），
+    time.sleep 不挡事件循环。
+    """
+    global _RECENT_LINKS_LAST_RUN
+    import time as _time_mod
     now = _time(now)
+    since = now - timedelta(days=1)
+    if _RECENT_LINKS_LAST_RUN is not None:
+        gap = (now - _RECENT_LINKS_LAST_RUN).total_seconds()
+        if gap < _RECENT_LINKS_MIN_INTERVAL_SECONDS:
+            since = max(since, _RECENT_LINKS_LAST_RUN)
     with closing(db.get_db_connection()) as conn:
         ids = [r['user_id'] for r in conn.execute('''SELECT DISTINCT e.user_id FROM account_identity_events e
             JOIN users u ON u.id=e.user_id WHERE e.created_at>=? AND u.deleted_at IS NULL''',
-            (_iso(now-timedelta(days=1)),))]
+            (_iso(since),))]
     for uid in ids:
         recompute_account_links(uid,now=now)
+        _time_mod.sleep(_RECENT_LINKS_YIELD_SECONDS)
+    _RECENT_LINKS_LAST_RUN = now
     return len(ids)
 
 

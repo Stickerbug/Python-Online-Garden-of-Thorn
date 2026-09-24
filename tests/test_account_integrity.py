@@ -11,6 +11,46 @@ import db
 NOW = datetime(2026, 9, 1, 4, tzinfo=timezone.utc)
 
 
+def test_refresh_recent_account_links_is_incremental_and_yields(monkeypatch, tmp_path):
+    """锁风暴根因（2026-09-25）：全量重算连发写事务 ~19 秒独占写锁。
+    增量化：第二次运行只算有新事件的用户；且用户之间让出写锁。"""
+    monkeypatch.setattr(db, 'DB_PATH', str(tmp_path / 'links.sqlite3'))
+    db.init_db()
+    with db.get_db_connection() as conn:
+        for uid in (1, 2):
+            conn.execute('INSERT INTO users(id,username,username_lower,password_hash,created_at) VALUES (?,?,?,?,?)',
+                         (uid, f'u{uid}', f'u{uid}', 'unused', integrity._iso(NOW)))
+        conn.execute("INSERT INTO account_identity_events(user_id,device_hash,network_hash,source,event_day,is_registration,created_at)"
+                     " VALUES (1,'a'*64,'','login','2026-09-01',0,?)", (integrity._iso(NOW - timedelta(hours=2)),))
+        conn.execute("INSERT INTO account_identity_events(user_id,device_hash,network_hash,source,event_day,is_registration,created_at)"
+                     " VALUES (2,'b'*64,'','login','2026-09-01',0,?)", (integrity._iso(NOW - timedelta(hours=2)),))
+        conn.commit()
+    integrity._RECENT_LINKS_LAST_RUN = None
+    monkeypatch.setattr(integrity, '_RECENT_LINKS_YIELD_SECONDS', 0)
+
+    recomputed = []
+    def fake_recompute(uid, *, now=None):
+        recomputed.append(uid)
+        return []
+    monkeypatch.setattr(integrity, 'recompute_account_links', fake_recompute)
+
+    n1 = integrity.refresh_recent_account_links(now=NOW)
+    assert n1 == 2 and sorted(recomputed) == [1, 2]
+    # 25 分钟内再跑：没有新事件 → 0 个用户
+    recomputed.clear()
+    n2 = integrity.refresh_recent_account_links(now=NOW + timedelta(minutes=5))
+    assert n2 == 0 and recomputed == []
+    # 用户 1 有新事件 → 只重算它
+    with db.get_db_connection() as conn:
+        conn.execute("INSERT INTO account_identity_events(user_id,device_hash,network_hash,source,event_day,is_registration,created_at)"
+                     " VALUES (1,'a'*64,'','session','2026-09-01',0,?)",
+                     (integrity._iso(NOW + timedelta(minutes=6)),))
+        conn.commit()
+    n3 = integrity.refresh_recent_account_links(now=NOW + timedelta(minutes=10))
+    assert n3 == 1 and recomputed == [1]
+    integrity._RECENT_LINKS_LAST_RUN = None
+
+
 @pytest.fixture
 def accounts(tmp_path, monkeypatch):
     monkeypatch.setattr(db, 'DB_PATH', str(tmp_path / 'integrity.sqlite3'))
