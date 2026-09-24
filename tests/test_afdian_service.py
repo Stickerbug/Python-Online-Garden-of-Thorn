@@ -154,6 +154,50 @@ class AfdianServiceTests(unittest.TestCase):
                         plan_id='plan_monthly', user_id='afd-stranger'))
         self.assertEqual(stranger['status'], 'unmatched')
 
+    def test_sale_order_sku_mapping_and_combos(self):
+        """售卖项多价格方案：按 SKU 名称映射；单项多次/多项组合都按 份数×荆露 求和；
+        未配置的 SKU 安全挂起；到账一次后自动学会 sku_id。"""
+        code = afdian_service.bind_code_for(self.user['id'])
+        with mock.patch.object(afdian_service, 'requery_recent', lambda **kw: {'ok': False}):
+            afdian_service.admin_set_sku(250, 'Y1 档')
+            afdian_service.admin_set_sku(800, 'Y3 档')
+        order = {
+            'out_trade_no': 'AFD-SKU1', 'plan_id': 'plan_shop', 'month': 1, 'status': 2,
+            'remark': f'码 {code}', 'total_amount': '3.00',
+            'sku_detail': [{'sku_id': 'sku-aaa', 'name': 'Y3 档', 'count': 2}],
+        }
+        result = afdian_service.ingest_order(order)
+        self.assertEqual(result['status'], 'credited')
+        self.assertEqual(result['dew'], 1600)          # 800 × 2 份
+        # 组合：两项各不同份数
+        combo = afdian_service.ingest_order({
+            'out_trade_no': 'AFD-SKU2', 'plan_id': 'plan_shop', 'month': 1, 'status': 2,
+            'remark': f'码 {code}', 'total_amount': '7.00',
+            'sku_detail': [
+                {'sku_id': 'sku-aaa', 'name': 'Y3 档', 'count': 1},
+                {'sku_id': 'sku-bbb', 'name': 'Y1 档', 'count': 3},
+            ],
+        })
+        self.assertEqual(combo['status'], 'credited')
+        self.assertEqual(combo['dew'], 800 + 250 * 3)  # 1550
+        # sku_id 已自学：改名后仍按 sku_id 命中
+        renamed = afdian_service.ingest_order({
+            'out_trade_no': 'AFD-SKU3', 'plan_id': 'plan_shop', 'month': 1, 'status': 2,
+            'remark': f'码 {code}', 'total_amount': '3.00',
+            'sku_detail': [{'sku_id': 'sku-aaa', 'name': '新名字了', 'count': 1}],
+        })
+        self.assertEqual(renamed['status'], 'credited')
+        self.assertEqual(renamed['dew'], 800)
+        # 未配置的 SKU：安全挂起，不发
+        unknown = afdian_service.ingest_order({
+            'out_trade_no': 'AFD-SKU4', 'plan_id': 'plan_shop', 'month': 1, 'status': 2,
+            'remark': f'码 {code}', 'total_amount': '68.00',
+            'sku_detail': [{'sku_id': 'sku-zzz', 'name': 'Y68 档', 'count': 1}],
+        })
+        self.assertEqual(unknown['status'], 'unmapped')
+        total = db.get_user_thorn_dew(self.user['id'])['paid']
+        self.assertEqual(total, 1600 + 1550 + 800)
+
     def test_admin_credit_manual(self):
         code = afdian_service.bind_code_for(self.user['id'])
         afdian_service.ingest_order(self._order(out_trade_no='AFD-BAD', remark='忘了写码'))

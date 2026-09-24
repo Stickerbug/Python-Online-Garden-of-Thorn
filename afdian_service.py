@@ -55,6 +55,19 @@ CREATE TABLE IF NOT EXISTS afdian_plans (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS afdian_skus (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    plan_id TEXT NOT NULL DEFAULT '',
+    sku_id TEXT NOT NULL DEFAULT '',
+    name TEXT NOT NULL DEFAULT '',
+    name_norm TEXT NOT NULL DEFAULT '',
+    dew_amount INTEGER NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_afdian_skus_plan ON afdian_skus(plan_id);
+CREATE INDEX IF NOT EXISTS idx_afdian_skus_name ON afdian_skus(name_norm);
 CREATE TABLE IF NOT EXISTS afdian_orders (
     out_trade_no TEXT PRIMARY KEY,
     afdian_user_id TEXT NOT NULL DEFAULT '',
@@ -85,6 +98,13 @@ def _now_iso() -> str:
 
 def ensure_schema(conn) -> None:
     conn.executescript(SCHEMA_SQL)
+    # 增量列（生产库已建表后的迁移）：售卖订单的 SKU 明细存 JSON
+    for table, column, decl in (
+        ('afdian_orders', 'sku_json', "TEXT NOT NULL DEFAULT ''"),
+    ):
+        cols = [r[1] for r in conn.execute(f'PRAGMA table_info({table})')]
+        if column not in cols:
+            conn.execute(f'ALTER TABLE {table} ADD COLUMN {column} {decl}')
     conn.commit()
 
 
@@ -175,6 +195,28 @@ def _user_id_for_afdian_history(conn, afdian_user_id: str) -> Optional[int]:
     return int(row['game_user_id']) if row else None
 
 
+def _sku_norm(name: str) -> str:
+    return unicodedata.normalize('NFKC', str(name or '')).upper().strip()
+
+
+def _parse_skus(order: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """售卖订单的价格方案明细（webhook 与 query-order 都在 sku_detail 数组里）。
+    每项：{sku_id, name, count}；订阅订单通常没有这个字段。"""
+    skus: List[Dict[str, Any]] = []
+    for entry in (order.get('sku_detail') or []):
+        if not isinstance(entry, dict):
+            continue
+        sku_id = str(entry.get('sku_id') or '').strip()
+        name = str(entry.get('name') or '').strip()
+        try:
+            count = max(1, int(entry.get('count') or 1))
+        except (TypeError, ValueError):
+            count = 1
+        if sku_id or name:
+            skus.append({'sku_id': sku_id, 'name': name, 'count': count})
+    return skus
+
+
 def ingest_order(order: Dict[str, Any], *, via: str = 'webhook') -> Dict[str, Any]:
     """登记一条爱发电订单并尽量入账。返回 {status, out_trade_no, detail}。
     幂等：同一订单号只入账一次；unmapped/unmatched 的旧单在条件满足时补结。"""
@@ -189,6 +231,7 @@ def ingest_order(order: Dict[str, Any], *, via: str = 'webhook') -> Dict[str, An
     month = max(1, int(order.get('month') or 1))
     remark = str(order.get('remark') or '').strip()
     code = extract_bind_code(remark)
+    skus = _parse_skus(order)
     now = _now_iso()
     with db.get_db_connection() as conn:
         ensure_schema(conn)
@@ -200,19 +243,45 @@ def ingest_order(order: Dict[str, Any], *, via: str = 'webhook') -> Dict[str, An
                 '''INSERT INTO afdian_orders (
                     out_trade_no, afdian_user_id, user_private_id, plan_id, plan_name, month,
                     total_amount, show_amount, remark, bind_code, game_user_id, dew_amount,
-                    status, via, order_created_at, received_at
-                   ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                    status, via, order_created_at, received_at, sku_json
+                   ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                 (out_trade_no,
                  str(order.get('user_id') or ''), str(order.get('user_private_id') or ''),
                  plan_id, '', month,
                  str(order.get('total_amount') or '0.00'),
                  str(order.get('show_amount') or '0.00'),
                  remark, code, game_user_id, 0,
-                 'pending', via, str(order.get('created_at') or ''), now))
+                 'pending', via, str(order.get('created_at') or ''), now,
+                 json.dumps(skus, separators=(',', ':'), ensure_ascii=False)))
             conn.commit()
         elif str(existing['status']) == 'credited':
             return {'status': 'duplicate', 'out_trade_no': out_trade_no, 'detail': '已入账'}
     return _settle(out_trade_no, via=via)
+
+
+def _sku_dew(conn, plan_id: str, sku_id: str, name: str) -> Tuple[Optional[int], str]:
+    """SKU 级映射：先精确 sku_id，再按名称（NFKC+大写归一）。plan_id='' 为全局条目。
+    命中后顺带把 sku_id 记入该条（老客后续订单精确匹配）。返回 (荆露/份, 名称)。"""
+    candidates = []
+    if sku_id:
+        candidates.append({'sku_id': str(sku_id)})
+    if name:
+        candidates.append({'name_norm': _sku_norm(name)})
+    for cond in candidates:
+        clause = ' AND '.join([f'{k} = ?' for k in cond])
+        row = conn.execute(
+            f'SELECT id, dew_amount, name, sku_id FROM afdian_skus '
+            f'WHERE active = 1 AND ({clause}) AND (plan_id = ? OR plan_id = "") '
+            f'ORDER BY (plan_id = ?) DESC LIMIT 1',
+            (*cond.values(), str(plan_id or ''), str(plan_id or ''))).fetchone()
+        if row is not None:
+            learned = str(row['sku_id'] or '')
+            if sku_id and not learned:
+                conn.execute('UPDATE afdian_skus SET sku_id = ?, updated_at = ? WHERE id = ?',
+                             (str(sku_id), _now_iso(), int(row['id'])))
+                conn.commit()
+            return int(row['dew_amount'] or 0), str(row['name'] or '')
+    return None, ''
 
 
 def _settle(out_trade_no: str, *, via: str) -> Dict[str, Any]:
@@ -245,15 +314,47 @@ def _settle(out_trade_no: str, *, via: str) -> Dict[str, Any]:
             conn.commit()
             return {'status': 'unmatched', 'out_trade_no': out_trade_no,
                     'detail': f"留言里没有可识别的绑定码（remark={row['remark']!r}）"}
-        if not dew_per:
-            conn.execute(
-                "UPDATE afdian_orders SET status='unmapped', plan_name=?, game_user_id=? "
-                "WHERE out_trade_no=?",
-                (plan_name, int(game_user_id), out_trade_no))
-            conn.commit()
-            return {'status': 'unmapped', 'out_trade_no': out_trade_no,
-                    'detail': f"方案未配置荆露（plan_id={row['plan_id']}），配置后对账自动补"}
-        dew = int(dew_per) * month
+        # 售卖订单（带 sku_detail）只走 SKU 级映射：一个购买项多个价格方案，
+        # 各方案荆露数不同，整包映射会错发。未配置的 SKU 安全挂起等补结。
+        sku_entries = []
+        try:
+            sku_entries = json.loads(row['sku_json'] or '[]')
+        except Exception:
+            sku_entries = []
+        label = plan_name or str(row['plan_id'] or '')
+        if sku_entries:
+            dew = 0
+            missing = []
+            sku_labels = []
+            for entry in sku_entries:
+                amount, sku_label = _sku_dew(conn, str(row['plan_id'] or ''),
+                                             str(entry.get('sku_id') or ''),
+                                             str(entry.get('name') or ''))
+                count = max(1, int(entry.get('count') or 1))
+                if amount is None:
+                    missing.append(str(entry.get('name') or entry.get('sku_id') or '?'))
+                    continue
+                dew += amount * count
+                sku_labels.append(f'{sku_label}×{count}')
+            if missing:
+                conn.execute(
+                    "UPDATE afdian_orders SET status='unmapped', plan_name=?, game_user_id=? "
+                    "WHERE out_trade_no=?",
+                    (label, int(game_user_id), out_trade_no))
+                conn.commit()
+                return {'status': 'unmapped', 'out_trade_no': out_trade_no,
+                        'detail': f"价格方案未配置荆露（{','.join(missing)}），配置后对账自动补"}
+            label = '+'.join(sku_labels) or label
+        else:
+            if not dew_per:
+                conn.execute(
+                    "UPDATE afdian_orders SET status='unmapped', plan_name=?, game_user_id=? "
+                    "WHERE out_trade_no=?",
+                    (plan_name, int(game_user_id), out_trade_no))
+                conn.commit()
+                return {'status': 'unmapped', 'out_trade_no': out_trade_no,
+                        'detail': f"方案未配置荆露（plan_id={row['plan_id']}），配置后对账自动补"}
+            dew = int(dew_per) * month
         # 先占位再出账：占位提交后并发的 ingest 只会看到 credited（幂等），
         # 出账失败再回滚为 pending 等下次补。
         conn.execute(
@@ -263,7 +364,7 @@ def _settle(out_trade_no: str, *, via: str) -> Dict[str, Any]:
         conn.commit()
     payload, error = db.adjust_user_thorn_dew(
         int(game_user_id), free_delta=0, paid_delta=dew,
-        reason=f'爱发电赞助到账 {out_trade_no}（{plan_name or row["plan_id"]}×{month}）',
+        reason=f'爱发电赞助到账 {out_trade_no}（{label}）',
         source_type='afdian', source_id=out_trade_no)
     if error:
         with db.get_db_connection() as conn:
@@ -347,6 +448,51 @@ def public_plans() -> List[Dict[str, Any]]:
         rows = conn.execute(
             'SELECT plan_id, name, dew_amount FROM afdian_plans '
             'WHERE active = 1 ORDER BY dew_amount ASC').fetchall()
+        return [dict(row) for row in rows]
+
+
+def admin_set_sku(dew_amount: int, name: str, plan_id: str = '', sku_id: str = '') -> Dict[str, Any]:
+    """价格方案（SKU）级映射：按名称（归一）或 sku_id 命中；plan_id 空 = 全局。"""
+    dew = max(0, int(dew_amount or 0))
+    name = str(name or '').strip()
+    name_norm = _sku_norm(name)
+    sku_id = str(sku_id or '').strip()
+    plan_id = str(plan_id or '').strip()
+    if dew <= 0 or not (name_norm or sku_id):
+        return {'ok': False, 'error': '需要正数荆露与（名称或 sku_id）至少其一'}
+    now = _now_iso()
+    with db.get_db_connection() as conn:
+        ensure_schema(conn)
+        if sku_id:
+            existing = conn.execute(
+                'SELECT id FROM afdian_skus WHERE sku_id = ? AND (plan_id = ? OR plan_id = "")',
+                (sku_id, plan_id)).fetchone()
+        else:
+            existing = conn.execute(
+                'SELECT id FROM afdian_skus WHERE name_norm = ? AND (plan_id = ? OR plan_id = "")',
+                (name_norm, plan_id)).fetchone()
+        if existing is not None:
+            conn.execute(
+                'UPDATE afdian_skus SET dew_amount = ?, name = ?, name_norm = ?, '
+                'sku_id = CASE WHEN ? <> "" THEN ? ELSE sku_id END, updated_at = ? WHERE id = ?',
+                (dew, name, name_norm, sku_id, sku_id, now, int(existing['id'])))
+        else:
+            conn.execute(
+                '''INSERT INTO afdian_skus (plan_id, sku_id, name, name_norm, dew_amount,
+                                            active, created_at, updated_at)
+                   VALUES (?,?,?,?,?,1,?,?)''',
+                (plan_id, sku_id, name, name_norm, dew, now, now))
+        conn.commit()
+    requery_recent(pages=1)
+    return {'ok': True, 'name': name, 'dew_amount': dew}
+
+
+def admin_list_skus() -> List[Dict[str, Any]]:
+    with db.get_db_connection() as conn:
+        ensure_schema(conn)
+        rows = conn.execute(
+            'SELECT plan_id, sku_id, name, dew_amount, active FROM afdian_skus '
+            'ORDER BY dew_amount ASC').fetchall()
         return [dict(row) for row in rows]
 
 

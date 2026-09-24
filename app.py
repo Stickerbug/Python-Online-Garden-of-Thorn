@@ -11178,6 +11178,13 @@ ADMIN_COMMAND_TREE = {
                     'set': {'summary': '设置方案兑换', 'usage': 'afdian plan set <plan_id> <荆露/月> [名称]'},
                 },
             },
+            'sku': {
+                'summary': '配置价格方案（SKU）兑换——售卖项里每个价格一条',
+                'usage': 'afdian sku set <荆露/份> <价格方案名称...>',
+                'children': {
+                    'set': {'summary': '按名称设置 SKU 兑换', 'usage': 'afdian sku set <荆露/份> <价格方案名称...>'},
+                },
+            },
             'orders': {'summary': '查看最近订单账本', 'usage': 'afdian orders [数量]'},
             'credit': {'summary': '手动入账（兜底）', 'usage': 'afdian credit <订单号> <账号ID> <荆露> [原因]'},
             'reconcile': {'summary': '拉取爱发电订单对账补单', 'usage': 'afdian reconcile [页数]'},
@@ -11538,6 +11545,7 @@ ADMIN_COMMAND_DIRECT_TRANSLATIONS = {
     ('publicfeedback', 'votes', 'restore'): ('publicfeedback-votes', 'restore'),
     ('afdian', 'plans'): 'afdian-plans',
     ('afdian', 'plan', 'set'): 'afdian-plan-set',
+    ('afdian', 'sku', 'set'): 'afdian-sku-set',
     ('afdian', 'orders'): 'afdian-orders',
     ('afdian', 'credit'): 'afdian-credit',
     ('afdian', 'reconcile'): 'afdian-reconcile',
@@ -13585,6 +13593,7 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
         'publicfeedback-oldfeedback',
         'afdian-plans',
         'afdian-plan-set',
+        'afdian-sku-set',
         'afdian-orders',
         'afdian-credit',
         'afdian-reconcile',
@@ -13595,12 +13604,22 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
             try:
                 if cmd == 'afdian-plans':
                     plans = afdian_service.admin_list_plans()
-                    if not plans:
+                    skus = afdian_service.admin_list_skus()
+                    if not plans and not skus:
                         return {'success': True,
-                                'output': '还没有配置方案兑换。用法：afdian plan set <plan_id> <荆露/月> [名称]'}
-                    lines = [f"{p['plan_id']}  {p['dew_amount']} 荆露/月  {p['name']}  "
-                             f"{'启用' if p['active'] else '停用'}" for p in plans]
-                    return {'success': True, 'output': '方案兑换配置：\n' + '\n'.join(lines)}
+                                'output': '还没有配置兑换。售卖项用 afdian sku set <荆露/份> <价格方案名称>；'
+                                          '订阅方案用 afdian plan set <plan_id> <荆露/月> [名称]'}
+                    lines = []
+                    if skus:
+                        lines.append('价格方案（SKU，售卖项）：')
+                        lines += [f"  「{s['name']}」 = {s['dew_amount']} 荆露/份"
+                                  f"{'（plan ' + s['plan_id'][:8] + '…）' if s['plan_id'] else ''}"
+                                  f"{'（停用）' if not s['active'] else ''}" for s in skus]
+                    if plans:
+                        lines.append('订阅方案：')
+                        lines += [f"  {p['plan_id']}  {p['dew_amount']} 荆露/月  {p['name']}  "
+                                  f"{'启用' if p['active'] else '停用'}" for p in plans]
+                    return {'success': True, 'output': '兑换配置：\n' + '\n'.join(lines)}
                 if cmd == 'afdian-plan-set':
                     if len(parts) < 5 or parts[2] != 'set':
                         return {'success': False, 'output': '用法：afdian plan set <plan_id> <荆露/月> [名称]'}
@@ -13611,6 +13630,16 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
                     suffix = f"（{' '.join(parts[5:])[:60]}）" if len(parts) > 5 else ''
                     return {'success': True,
                             'output': f"已配置方案 {result['plan_id']} = {result['dew_amount']} 荆露/月{suffix}"}
+                if cmd == 'afdian-sku-set':
+                    # parts: afdian sku set <荆露/份> <价格方案名称...>
+                    if len(parts) < 5 or parts[2] != 'set':
+                        return {'success': False,
+                                'output': '用法：afdian sku set <荆露/份> <价格方案名称...>（名称要与爱发电购买项里填的一致）'}
+                    result = afdian_service.admin_set_sku(int(parts[3]), ' '.join(parts[4:])[:80])
+                    if not result.get('ok'):
+                        return {'success': False, 'output': str(result.get('error') or '配置失败')}
+                    return {'success': True,
+                            'output': f"已配置价格方案「{result['name']}」= {result['dew_amount']} 荆露/份"}
                 if cmd == 'afdian-orders':
                     try:
                         limit = int(parts[2]) if len(parts) >= 3 else 20
@@ -15974,8 +16003,10 @@ def admin_completions(line):
 
     if cmd == 'afdian':
         if position == 2:
-            return filtered(['plans', 'plan', 'orders', 'credit', 'reconcile'])
+            return filtered(['plans', 'plan', 'sku', 'orders', 'credit', 'reconcile'])
         if sub == 'plan' and position == 3:
+            return filtered(['set'])
+        if sub == 'sku' and position == 3:
             return filtered(['set'])
 
     if cmd == 'publicfeedback':
