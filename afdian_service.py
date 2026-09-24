@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS afdian_skus (
     name TEXT NOT NULL DEFAULT '',
     name_norm TEXT NOT NULL DEFAULT '',
     dew_amount INTEGER NOT NULL,
+    price TEXT NOT NULL DEFAULT '',      -- 归一化价格（'3.00'）：无 SKU 明细订单按总价兜底
     active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
@@ -101,6 +102,7 @@ def ensure_schema(conn) -> None:
     # 增量列（生产库已建表后的迁移）：售卖订单的 SKU 明细存 JSON
     for table, column, decl in (
         ('afdian_orders', 'sku_json', "TEXT NOT NULL DEFAULT ''"),
+        ('afdian_skus', 'price', "TEXT NOT NULL DEFAULT ''"),
     ):
         cols = [r[1] for r in conn.execute(f'PRAGMA table_info({table})')]
         if column not in cols:
@@ -346,15 +348,24 @@ def _settle(out_trade_no: str, *, via: str) -> Dict[str, Any]:
                         'detail': f"价格方案未配置荆露（{','.join(missing)}），配置后对账自动补"}
             label = '+'.join(sku_labels) or label
         else:
+            # 无 SKU 明细（部分订单/接口不回传 sku_detail）：先按订阅方案映射，
+            # 再按订单总价匹配 SKU 价格兜底（售卖项固定价：¥3→800 这类）。
             if not dew_per:
-                conn.execute(
-                    "UPDATE afdian_orders SET status='unmapped', plan_name=?, game_user_id=? "
-                    "WHERE out_trade_no=?",
-                    (plan_name, int(game_user_id), out_trade_no))
-                conn.commit()
-                return {'status': 'unmapped', 'out_trade_no': out_trade_no,
-                        'detail': f"方案未配置荆露（plan_id={row['plan_id']}），配置后对账自动补"}
-            dew = int(dew_per) * month
+                amount_dew, amount_name = _dew_for_amount(conn, row['total_amount'])
+                if amount_dew:
+                    dew = amount_dew
+                    label = plan_name or amount_name
+                    plan_name = amount_name
+                else:
+                    conn.execute(
+                        "UPDATE afdian_orders SET status='unmapped', plan_name=?, game_user_id=? "
+                        "WHERE out_trade_no=?",
+                        (plan_name, int(game_user_id), out_trade_no))
+                    conn.commit()
+                    return {'status': 'unmapped', 'out_trade_no': out_trade_no,
+                            'detail': f"方案未配置荆露（plan_id={row['plan_id']}，总价 {row['total_amount']} 无匹配档），配置后对账自动补"}
+            else:
+                dew = int(dew_per) * month
         # 先占位再出账：占位提交后并发的 ingest 只会看到 credited（幂等），
         # 出账失败再回滚为 pending 等下次补。
         conn.execute(
@@ -442,22 +453,64 @@ def ledger_for_user(user_id: int, limit: int = LEDGER_LIMIT) -> List[Dict[str, A
 
 
 def public_plans() -> List[Dict[str, Any]]:
-    """兑换页展示的档位（name+荆露数；价格写在 name 里，如「¥10 档」）。"""
+    """兑换页展示的档位：SKU（售卖项价格方案，按份）+ 订阅方案（按月）合并，
+    各带 kind 字段（'sku' / 'plan'）。此前只读 afdian_plans，六个真实档位
+    （配在 afdian_skus）在页面上看不到（反馈：可见档位只有 Y1）。"""
+    out: List[Dict[str, Any]] = []
     with db.get_db_connection() as conn:
         ensure_schema(conn)
-        rows = conn.execute(
-            'SELECT plan_id, name, dew_amount FROM afdian_plans '
-            'WHERE active = 1 ORDER BY dew_amount ASC').fetchall()
-        return [dict(row) for row in rows]
+        for row in conn.execute(
+                'SELECT name, sku_id, dew_amount, price FROM afdian_skus '
+                'WHERE active = 1 ORDER BY dew_amount ASC').fetchall():
+            out.append({'plan_id': str(row['sku_id'] or ''),
+                        'name': str(row['name'] or ''),
+                        'dew_amount': int(row['dew_amount'] or 0),
+                        'price': _price_key(row['price']),
+                        'kind': 'sku'})
+        for row in conn.execute(
+                'SELECT plan_id, name, dew_amount FROM afdian_plans '
+                'WHERE active = 1 ORDER BY dew_amount ASC').fetchall():
+            out.append({'plan_id': str(row['plan_id'] or ''),
+                        'name': str(row['name'] or row['plan_id'] or ''),
+                        'dew_amount': int(row['dew_amount'] or 0),
+                        'price': '',
+                        'kind': 'plan'})
+    return out
 
 
-def admin_set_sku(dew_amount: int, name: str, plan_id: str = '', sku_id: str = '') -> Dict[str, Any]:
-    """价格方案（SKU）级映射：按名称（归一）或 sku_id 命中；plan_id 空 = 全局。"""
+def _price_key(value: Any) -> str:
+    """价格归一成 '3.00' 形式，写库与匹配都用同一口径。"""
+    try:
+        return '%.2f' % float(str(value or '').strip().replace(',', '.'))
+    except (TypeError, ValueError):
+        return ''
+
+
+def _dew_for_amount(conn, amount: Any) -> Tuple[Optional[int], str]:
+    """无 SKU 明细订单的兜底：按订单总价精确匹配 SKU 档价格（¥3→800 这类
+    固定价售卖项）。匹配不上返回 (None, '')，单子安全挂起等人工。"""
+    key = _price_key(amount)
+    if not key:
+        return None, ''
+    row = conn.execute(
+        "SELECT dew_amount, name, price FROM afdian_skus "
+        "WHERE active = 1 AND price <> ''").fetchall()
+    for candidate in row:
+        if _price_key(candidate['price']) == key:
+            return int(candidate['dew_amount'] or 0), str(candidate['name'] or '')
+    return None, ''
+
+
+def admin_set_sku(dew_amount: int, name: str, plan_id: str = '', sku_id: str = '',
+                  price: str = '') -> Dict[str, Any]:
+    """价格方案（SKU）级映射：按名称（归一）或 sku_id 命中；plan_id 空 = 全局。
+    price 为该档售价（'3' 或 '3.00'），供无 SKU 明细订单按总价兜底；不传则保留原值。"""
     dew = max(0, int(dew_amount or 0))
     name = str(name or '').strip()
     name_norm = _sku_norm(name)
     sku_id = str(sku_id or '').strip()
     plan_id = str(plan_id or '').strip()
+    price_key = _price_key(price)
     if dew <= 0 or not (name_norm or sku_id):
         return {'ok': False, 'error': '需要正数荆露与（名称或 sku_id）至少其一'}
     now = _now_iso()
@@ -474,46 +527,52 @@ def admin_set_sku(dew_amount: int, name: str, plan_id: str = '', sku_id: str = '
         if existing is not None:
             conn.execute(
                 'UPDATE afdian_skus SET dew_amount = ?, name = ?, name_norm = ?, '
-                'sku_id = CASE WHEN ? <> "" THEN ? ELSE sku_id END, updated_at = ? WHERE id = ?',
-                (dew, name, name_norm, sku_id, sku_id, now, int(existing['id'])))
+                'sku_id = CASE WHEN ? <> "" THEN ? ELSE sku_id END, '
+                'price = CASE WHEN ? <> "" THEN ? ELSE price END, '
+                'updated_at = ? WHERE id = ?',
+                (dew, name, name_norm, sku_id, sku_id, price_key, price_key, now, int(existing['id'])))
         else:
             conn.execute(
                 '''INSERT INTO afdian_skus (plan_id, sku_id, name, name_norm, dew_amount,
-                                            active, created_at, updated_at)
-                   VALUES (?,?,?,?,?,1,?,?)''',
-                (plan_id, sku_id, name, name_norm, dew, now, now))
+                                            price, active, created_at, updated_at)
+                   VALUES (?,?,?,?,?,?,1,?,?)''',
+                (plan_id, sku_id, name, name_norm, dew, price_key, now, now))
         conn.commit()
     requery_recent(pages=1)
-    return {'ok': True, 'name': name, 'dew_amount': dew}
+    return {'ok': True, 'name': name, 'dew_amount': dew, 'price': price_key}
 
 
 def admin_list_skus() -> List[Dict[str, Any]]:
     with db.get_db_connection() as conn:
         ensure_schema(conn)
         rows = conn.execute(
-            'SELECT plan_id, sku_id, name, dew_amount, active FROM afdian_skus '
+            'SELECT plan_id, sku_id, name, dew_amount, price, active FROM afdian_skus '
             'ORDER BY dew_amount ASC').fetchall()
         return [dict(row) for row in rows]
 
 
 def admin_set_plan(plan_id: str, dew_amount: int, name: str = '') -> Dict[str, Any]:
+    """订阅方案映射；荆露数 0 = 停用该方案（active=0，订单走别的映射或挂起）。"""
     plan_id = str(plan_id or '').strip()
     dew = max(0, int(dew_amount or 0))
     if not plan_id:
         return {'ok': False, 'error': '缺少 plan_id'}
     now = _now_iso()
+    active = 1 if dew > 0 else 0
     with db.get_db_connection() as conn:
         ensure_schema(conn)
         conn.execute(
             '''INSERT INTO afdian_plans (plan_id, name, dew_amount, active, created_at, updated_at)
-               VALUES (?,?,?,1,?,?)
+               VALUES (?,?,?,?,?,?)
                ON CONFLICT(plan_id) DO UPDATE SET
-                 name=excluded.name, dew_amount=excluded.dew_amount, updated_at=excluded.updated_at''',
-            (plan_id, str(name or ''), dew, now, now))
+                 name=excluded.name, dew_amount=excluded.dew_amount,
+                 active=excluded.active, updated_at=excluded.updated_at''',
+            (plan_id, str(name or ''), dew, active, now, now))
         conn.commit()
     # 配置/修改映射后顺手把待补的 unmapped 单结掉（未配置 API 时只是拉不到，无副作用）
-    requery_recent(pages=2)
-    return {'ok': True, 'plan_id': plan_id, 'dew_amount': dew}
+    if active:
+        requery_recent(pages=2)
+    return {'ok': True, 'plan_id': plan_id, 'dew_amount': dew, 'active': active}
 
 
 def admin_list_plans() -> List[Dict[str, Any]]:

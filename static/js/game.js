@@ -19147,7 +19147,7 @@ async function loadTitleShopAfdian() {
         codeEl.textContent = data.bind_code || '——';
         const plans = data.plans || [];
         plansEl.innerHTML = plans.length
-            ? plans.map((p) => `<div class="title-shop-afdian-plan"><span>${escapeHtml(p.name || p.plan_id)}</span><b>${Number(p.dew_amount) || 0} 荆露</b></div>`).join('')
+            ? plans.map((p) => `<div class="title-shop-afdian-plan"><span>${escapeHtml(p.name || p.plan_id)}${p.price ? '（¥' + escapeHtml(p.price) + '）' : ''}</span><b>${Number(p.dew_amount) || 0} 荆露</b></div>`).join('')
             : '';
         noteEl.textContent = plans.length
             ? lt({ zh: '付款时在订单留言填上面的绑定码；稍等即自动到账。', en: 'Put the code in the order remark when sponsoring; dew arrives automatically.', fr: 'Mettez le code en remarque de la commande ; la rosée arrive automatiquement.', ja: '寄付時に注文メモへコードを記入すると、自動で反映されます。' })

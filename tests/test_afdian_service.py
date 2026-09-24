@@ -198,6 +198,44 @@ class AfdianServiceTests(unittest.TestCase):
         total = db.get_user_thorn_dew(self.user['id'])['paid']
         self.assertEqual(total, 1600 + 1550 + 800)
 
+    def test_public_plans_lists_sku_tiers_with_price(self):
+        """兑换页档位要包含 SKU 档（此前只读方案表，六个真实档位看不到）。"""
+        with mock.patch.object(afdian_service, 'requery_recent', lambda **kw: {'ok': False}):
+            afdian_service.admin_set_sku(250, '一滴荆露(250荆露)', price='1')
+            afdian_service.admin_set_sku(800, '小瓶荆露(800荆露)', price='3')
+            afdian_service.admin_set_plan('plan_monthly', 500, '月度订阅')
+        plans = afdian_service.public_plans()
+        names = [(p['name'], p['kind'], p['price']) for p in plans]
+        self.assertIn(('一滴荆露(250荆露)', 'sku', '1.00'), names)
+        self.assertIn(('小瓶荆露(800荆露)', 'sku', '3.00'), names)
+        self.assertTrue(any(kind == 'plan' for _, kind, _ in names))
+
+    def test_no_sku_order_settles_by_price_fallback(self):
+        """无 SKU 明细的订单按总价匹配档位兜底（替代危险的平底方案映射）。"""
+        code = afdian_service.bind_code_for(self.user['id'])
+        with mock.patch.object(afdian_service, 'requery_recent', lambda **kw: {'ok': False}):
+            afdian_service.admin_set_sku(800, '小瓶荆露(800荆露)', price='3')
+        result = afdian_service.ingest_order(self._order(
+            out_trade_no='AFD-NOSKU', remark=f'码 {code}',
+            total_amount='3.00', plan_id='plan_shop'))   # 无 sku_detail
+        self.assertEqual(result['status'], 'credited')
+        self.assertEqual(result['dew'], 800)
+        # 总价没有对应档位 → 安全挂起
+        other = afdian_service.ingest_order(self._order(
+            out_trade_no='AFD-NOSKU2', remark=f'码 {code}',
+            total_amount='68.00', plan_id='plan_shop'))
+        self.assertEqual(other['status'], 'unmapped')
+        self.assertEqual(db.get_user_thorn_dew(self.user['id'])['paid'], 800)
+
+    def test_plan_set_zero_disables_mapping(self):
+        with mock.patch.object(afdian_service, 'requery_recent', lambda **kw: {'ok': False}):
+            r1 = afdian_service.admin_set_plan('plan_x', 500, '测试')
+            self.assertEqual(r1.get('active'), 1)
+            r2 = afdian_service.admin_set_plan('plan_x', 0)
+            self.assertEqual(r2.get('active'), 0)
+        plans = [p for p in afdian_service.public_plans() if p['kind'] == 'plan']
+        self.assertFalse(any(p['plan_id'] == 'plan_x' for p in plans))
+
     def test_admin_credit_manual(self):
         code = afdian_service.bind_code_for(self.user['id'])
         afdian_service.ingest_order(self._order(out_trade_no='AFD-BAD', remark='忘了写码'))

@@ -13692,6 +13692,7 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
                     if skus:
                         lines.append('价格方案（SKU，售卖项）：')
                         lines += [f"  「{s['name']}」 = {s['dew_amount']} 荆露/份"
+                                  f"{'、¥' + s['price'] if s.get('price') else ''}"
                                   f"{'（plan ' + s['plan_id'][:8] + '…）' if s['plan_id'] else ''}"
                                   f"{'（停用）' if not s['active'] else ''}" for s in skus]
                     if plans:
@@ -13707,18 +13708,27 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
                     if not result.get('ok'):
                         return {'success': False, 'output': str(result.get('error') or '配置失败')}
                     suffix = f"（{' '.join(parts[5:])[:60]}）" if len(parts) > 5 else ''
+                    if not result.get('active', 1):
+                        return {'success': True, 'output': f"已停用方案 {result['plan_id']} 的兑换映射"}
                     return {'success': True,
-                            'output': f"已配置方案 {result['plan_id']} = {result['dew_amount']} 荆露/月{suffix}"}
+                            'output': f"已配置方案 {result['plan_id']} = {result['dew_amount']} 荆露/月{suffix}（配 0 = 停用）"}
                 if cmd == 'afdian-sku-set':
-                    # parts: afdian sku set <荆露/份> <价格方案名称...>
+                    # parts: afdian sku set <荆露/份> <价格方案名称...> [price=金额]
                     if len(parts) < 5 or parts[2] != 'set':
                         return {'success': False,
-                                'output': '用法：afdian sku set <荆露/份> <价格方案名称...>（名称要与爱发电购买项里填的一致）'}
-                    result = afdian_service.admin_set_sku(int(parts[3]), ' '.join(parts[4:])[:80])
+                                'output': '用法：afdian sku set <荆露/份> <价格方案名称...> [price=金额]'
+                                          '（名称要与爱发电购买项里填的一致；price 供无 SKU 明细订单按总价兜底）'}
+                    name_tokens = parts[4:]
+                    price = ''
+                    if name_tokens and name_tokens[-1].lower().startswith('price='):
+                        price = name_tokens[-1][6:]
+                        name_tokens = name_tokens[:-1]
+                    result = afdian_service.admin_set_sku(int(parts[3]), ' '.join(name_tokens)[:80], price=price)
                     if not result.get('ok'):
                         return {'success': False, 'output': str(result.get('error') or '配置失败')}
+                    suffix = f"、价格 ¥{result['price']}" if result.get('price') else ''
                     return {'success': True,
-                            'output': f"已配置价格方案「{result['name']}」= {result['dew_amount']} 荆露/份"}
+                            'output': f"已配置价格方案「{result['name']}」= {result['dew_amount']} 荆露/份{suffix}"}
                 if cmd == 'afdian-orders':
                     try:
                         limit = int(parts[2]) if len(parts) >= 3 else 20

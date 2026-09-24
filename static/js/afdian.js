@@ -9,11 +9,16 @@
     $('bind-body').hidden = false;
     $('bind-code').textContent = data.bind_code || '';
     const plans = data.plans || [];
-    $('plans').innerHTML = plans.length
-      ? '<table><tr><th>档位</th><th>兑换</th></tr>' +
-        plans.map((p) => `<tr><td>${esc(p.name || p.plan_id)}</td><td><b>${esc(p.dew_amount)}</b> 荆露${Number(p.month || 0) > 1 ? '' : ''}</td></tr>`).join('') +
-        '</table><p class="note">按月订阅一次买多个月的，按月数累计兑换。</p>'
-      : '';
+    if (plans.length) {
+      const hasMonthly = plans.some((p) => p.kind === 'plan');
+      $('plans').innerHTML = '<table><tr><th>档位</th><th>价格</th><th>兑换</th></tr>' +
+        plans.map((p) => `<tr><td>${esc(p.name || p.plan_id)}</td>` +
+          `<td>${p.price ? '¥' + esc(p.price) : '—'}</td>` +
+          `<td><b>${esc(p.dew_amount)}</b> 荆露${p.kind === 'plan' ? '/月' : ''}</td></tr>`).join('') +
+        '</table>' + (hasMonthly ? '<p class="note">按月订阅一次买多个月的，按月数累计兑换。</p>' : '');
+    } else {
+      $('plans').innerHTML = '';
+    }
     $('plans-note').hidden = plans.length > 0;
     renderOrders(data.orders || []);
   }
