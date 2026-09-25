@@ -209,6 +209,8 @@ function createChatActionButtons(entry = {}, viewer = {}, labels = {}, options =
 /* 以经典脚本暴露给页面：小游戏页（ES module）与故事模式（经典脚本）都能用。 */
 window.GtnChatActions = {
   chatActionLabels,
+  chatTitlesHtml,
+  namePaintHtml,
   chatEntryMessageId,
   canReportChatEntry,
   chatRecallAllowed,
@@ -340,5 +342,10 @@ function namePaintHtml(item, name) {
 function chatNameHtml(item, fallback) {
   return namePaintHtml(item, (item && item.nickname) || fallback || '?');
 }
+
+/* minigame_2048.js 是独立脚本：把排行榜渲染要用的帮手挂到全局。 */
+window.chatTitlesHtml = chatTitlesHtml;
+window.namePaintHtml = namePaintHtml;
+window.chatNameHtml = chatNameHtml;
 })();
 
