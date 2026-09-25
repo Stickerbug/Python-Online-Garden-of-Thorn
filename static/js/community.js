@@ -230,6 +230,17 @@
       } else {
         button.disabled = !item.can_vote || Boolean(state.votePromise);
       }
+      // GB-213：投票到达截止时间后按钮要立即失效，不等玩家手动刷新
+      if (item.effective_state === 'active' && item.ends_at) {
+        const endsMs = Date.parse(item.ends_at);
+        if (Number.isFinite(endsMs)) {
+          const timeout = setTimeout(() => {
+            clearTimeout(timeout);
+            if (state.epoch !== epoch) return;
+            renderFeed();
+          }, Math.max(0, endsMs - Date.now() + 500));
+        }
+      }
       options.appendChild(button);
     });
     article.appendChild(options);

@@ -5357,7 +5357,10 @@ const minigameInviteHandoff = (() => {
 })();
 /* 从多人大厅进休闲花园时带的是 `?from=lobby`，返回链接会带 `?enter_lobby=1` 回来：
    这里读到标记后 1) 立刻从地址栏抹掉；2) 自动帮玩家点一次"进入大厅"，
-   于是返回的落点是大厅本身，而不是停在主页登录界面。 */
+   于是返回的落点是大厅本身，而不是停在主页登录界面。
+   用户反馈（2026-09-25）：回到大厅后再点「返回主页」有时意外又回到大厅——
+   BFCache/刷新会重新触发本标记。用 sessionStorage 一次性消费：同一浏览器
+   会话只在第一次到达时自动进大厅，后续从大厅主动回主页不再被劫持。 */
 const enterLobbyHandoff = (() => {
     try {
         const params = new URLSearchParams(window.location.search || '');
@@ -5369,9 +5372,11 @@ const enterLobbyHandoff = (() => {
             '',
             `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash || ''}`,
         );
+        if (sessionStorage.getItem('gtn_enter_lobby_consumed') === '1') return false;
+        sessionStorage.setItem('gtn_enter_lobby_consumed', '1');
         return true;
     } catch (_) {
-        return false;
+        return true; // sessionStorage 不可用时保守行为：照旧自动进大厅
     }
 })();
 let transientLoginRetryTimer = null;
@@ -9245,8 +9250,12 @@ function renderCardGallery() {
         });
     });
     list.scrollTop = previousListScrollTop;
+    // 用户反馈（2026-09-25）：开关模组列表选项后滚动重置回顶部——
+    // innerHTML 重建后单次 rAF 恢复太早（新内容高度还没算完），改为双 rAF
     requestAnimationFrame(() => {
-        list.scrollTop = Math.min(previousListScrollTop, Math.max(0, list.scrollHeight - list.clientHeight));
+        requestAnimationFrame(() => {
+            list.scrollTop = Math.min(previousListScrollTop, Math.max(0, list.scrollHeight - list.clientHeight));
+        });
     });
     const defs = getGalleryCardDefs();
     const ids = Object.keys(defs)
@@ -39501,6 +39510,7 @@ async function init() {
     $('btn-lobby-back').addEventListener('click', () => {
         phase = 'login';
         manualDisconnect = true;
+        try { sessionStorage.removeItem('gtn_enter_lobby_consumed'); } catch (_) {}
         if (socket) {
             try { socket.removeAllListeners(); } catch (_) {}
             socket.disconnect();

@@ -1359,8 +1359,12 @@ html.fc-scroll-locked body {
   grid-template-columns: 320px minmax(0, 1fr);
   width: 100%;
   /* 固定视口高度：此前 min-height 会随右侧长内容把左列表一起撑长（GB-208），
-     两栏现在各自内部滚动 */
-  height: calc(100vh - 140px);
+     两栏各自内部滚动。GB-222：140px 偏差导致 tabs 与列表标题在部分视口高度碰撞，
+     改为自适应剩余空间（max-height 保底 + 最低高度），跳转按钮不再重叠 */
+  height: auto;
+  max-height: calc(100vh - 140px);
+  min-height: 420px;
+  overflow: hidden;
   align-items: stretch;
 }
 
