@@ -239,6 +239,14 @@ def drain(engine, player_id, notes):
                     return False
             continue
         if getattr(engine, "pending_response", None) is not None:
+            pending = engine.pending_response
+            if isinstance(pending, dict) and pending.get("forced_wait"):
+                # 2v2 强制反制窗口：没有可响应者，直接到点结算。
+                result = engine.resolve_forced_response()
+                if not isinstance(result, dict) or not result.get("success"):
+                    notes.append("forced-resolve-failed:%s" % (result,))
+                    return False
+                continue
             engine.handle_response(1 - int(player_id), None)
             continue
         return True

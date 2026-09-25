@@ -589,8 +589,13 @@ class OpeningEventsAndBloodKnifeTests(unittest.TestCase):
             {'target_player': 0, 'target_player_id': 0, 'target_id': 0},
         )
 
-        self.assertIsNone(result)
-        self.assertIsNone(engine.pending_response)
+        # 新规则：所有出牌（隐匿除外）都强制开 2s 反制等待窗口。自攻没有
+        # 可反制者，窗口里不带 counter_cards，到点由 resolve_forced_response
+        # 结算（原来直接不开窗会让「无窗口=无人可反制」泄露手牌信息）。
+        self.assertIsNotNone(result)
+        self.assertIsNotNone(engine.pending_response)
+        self.assertTrue(engine.pending_response.get('forced_wait'))
+        self.assertEqual([], engine.pending_response.get('counter_cards') or [])
 
     def test_foresight_does_not_disable_magic_block(self):
         for engine_type in (GameEngine, GameEngine2v2):

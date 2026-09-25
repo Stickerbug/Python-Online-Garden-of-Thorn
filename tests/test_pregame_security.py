@@ -80,6 +80,10 @@ class PregameSecurityTests(unittest.TestCase):
                 valid, reason, details = engine.validate_pregame_ready()
                 self.assertTrue(valid, (reason, details))
                 self.assertTrue(engine.start_game())
+                # 新开局规则：开局先进入调度阶段，全员提交后才是 action。
+                self.assertEqual(engine.phase, 'mulligan')
+                for pid in range(len(engine.players)):
+                    self.assertTrue(engine.submit_mulligan(pid, [])['success'])
                 self.assertEqual(engine.phase, 'action')
 
     def test_random_deck_can_use_explicit_pregame_bypass(self):
@@ -88,7 +92,8 @@ class PregameSecurityTests(unittest.TestCase):
         engine.player_ready = [True, True]
         engine.player_draft_started = [True, True]
 
-        self.assertTrue(engine.start_game(skip_pregame_validation=True))
+        # 随机卡组房间与线上随机开局一致：不做调度。
+        self.assertTrue(engine.start_game(skip_pregame_validation=True, mulligan=False))
         self.assertEqual(engine.phase, 'action')
 
 

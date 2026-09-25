@@ -11393,6 +11393,49 @@ html.blind-level-4 .card-prediction-part.magic {
   display: none !important;
 }
 
+.mulligan-panel {
+  border-color: var(--primary);
+  max-width: min(92vw, 680px);
+}
+
+.mulligan-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  max-width: 100%;
+  padding: 4px 0;
+}
+
+.mulligan-cards .card-chip {
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.mulligan-cards .card-chip.mulligan-selected {
+  transform: translateY(-6px);
+  box-shadow: 0 0 0 3px var(--primary), var(--shadow-lg);
+}
+
+.mulligan-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.mulligan-status-row .mulligan-ready {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.mulligan-countdown {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .response-label {
   font-size: 13px;
   font-weight: 700;

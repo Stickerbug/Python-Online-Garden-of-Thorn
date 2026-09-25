@@ -1,6 +1,7 @@
 import random
 import math
 import copy
+import time
 from typing import List, Dict, Optional, Tuple, Set
 from game_engine import GameEngine, PlayerState, EquipmentInstance
 from damage_types import (
@@ -20,6 +21,12 @@ from cards import (
 
 
 class GameEngine2v2(GameEngine):
+    # 2v2 保护（血盾）：开局 66，每个新回合开始 -33（66 → 33 → 0）。
+    BLOOD_SHIELD_INITIAL = 66
+    BLOOD_SHIELD_DECAY_PER_ROUND = 33
+    # 2s 强制反制窗口：无人可反制的出牌也等 2s，避免"窗口是否打开"泄露信息。
+    FORCED_RESPONSE_WINDOW_SECONDS = 2.0
+
     def __init__(self):
         self.num_players = 4
         self.teams: List[List[int]] = [[0, 1], [2, 3]]
@@ -71,6 +78,12 @@ class GameEngine2v2(GameEngine):
         self.opening_event_picks: List[Optional[int]] = [None] * 4
         self.opening_event_sub_choices: List[Optional[dict]] = [None] * 4
         self.opening_event_magic_options: List[List[List[str]]] = [[[], [], []] for _ in range(4)]
+        # 新开局规则（调度）：与 1v1 相同，全员提交后 _finish_game_start 继续。
+        self.mulligan_enabled: bool = True
+        self.mulligan_picks: List[Optional[List[int]]] = [None] * 4
+        # 2v2 保护（血盾）：开局 66，每个新回合开始 -33（第1回合 66、第2回合
+        # 33、第3回合起失效）；血量不会被伤害打到护盾值以下。
+        self.blood_shield_value: int = 0
         # Per-player ready state: True when draft done AND sub-choice done (if any)
         self.player_ready: List[bool] = [False] * 4
         self.player_draft_started: List[bool] = [False] * 4
@@ -87,6 +100,9 @@ class GameEngine2v2(GameEngine):
         self.timed_effects: List[dict] = []
         self._init_mod_variables()
         self._bind_player_callbacks()
+
+    def _blood_shield_health_floor(self, player_id: int) -> int:
+        return max(0, int(getattr(self, 'blood_shield_value', 0) or 0))
 
     def team_of(self, player_id: int) -> int:
         for ti, team in enumerate(self.teams):
@@ -257,6 +273,8 @@ class GameEngine2v2(GameEngine):
             'pending_v2_ui': self._public_v2_ui(for_player),
             'pending_ally_request': getattr(self, 'pending_ally_request', None),
             'opening_event_picks': self.opening_event_picks,
+            'mulligan': self._public_mulligan_state(for_player),
+            'blood_shield': self._blood_shield_health_floor(for_player),
             'antennae_reveal': self._antennae_reveal[for_player],
             'garden_initial_deck_reveal': copy.deepcopy(self._garden_initial_deck_reveal[for_player]),
             'mode': '2v2',
@@ -354,7 +372,8 @@ class GameEngine2v2(GameEngine):
             return set()
         return {random.choice(team_picks[winner_team])}
 
-    def start_game(self, *, skip_pregame_validation: bool = False):
+    def start_game(self, *, skip_pregame_validation: bool = False, mulligan: bool = True):
+        self.mulligan_enabled = bool(mulligan)
         if self._game_start_applied:
             return False
         if not skip_pregame_validation:
@@ -411,10 +430,21 @@ class GameEngine2v2(GameEngine):
                     hand_size = max(0, hand_size - 1)
                 ps.draw_cards(hand_size)
 
+        if self.mulligan_enabled:
+            # 新开局规则（调度）：与 1v1 相同，进入 mulligan 阶段等待全员提交。
+            self.mulligan_picks = [None] * 4
+            self.phase = 'mulligan'
+            self.log_msg("调度阶段：可将任意手牌塞入抽牌堆底部，洗牌后抽取等量")
+            return True
+        return self._finish_game_start()
+
+    def _finish_game_start(self) -> bool:
         self._save_all_match_start_snapshots()
         self.round_num = 1
+        self.blood_shield_value = self.BLOOD_SHIELD_INITIAL
         self.log_msg(f"2v2游戏开始！{self.pn(self.first_player)}先手。")
         self.log_msg(f"回合顺序：{' → '.join(self.pn(p) for p in self.turn_order)}")
+        self.log_msg(f"血盾生效：第1回合血量不会低于{self.BLOOD_SHIELD_INITIAL}")
         self.log_msg(f"=== 第{self.round_num}回合 ===")
         if getattr(self, 'v2_event_hooks', None):
             # Round 66 / 批次 BD：``on_game_start`` / ``on_match_start``（同义组）
@@ -624,6 +654,14 @@ class GameEngine2v2(GameEngine):
 
     def _end_round(self):
         self.round_num += 1
+        if self.blood_shield_value > 0:
+            self.blood_shield_value = max(
+                0, self.blood_shield_value - self.BLOOD_SHIELD_DECAY_PER_ROUND
+            )
+            if self.blood_shield_value > 0:
+                self.log_msg(f"血盾衰减：本回合血量不会低于{self.blood_shield_value}")
+            else:
+                self.log_msg("血盾已失效")
         if self.game_over:
             return
         self._start_draw_phase()
@@ -942,6 +980,26 @@ class GameEngine2v2(GameEngine):
                 self._advance_dead_current_player_if_ready()
         return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
 
+
+    def resolve_forced_response(self) -> dict:
+        """结算 2s 强制反制窗口：无人反制，到点直接执行被卡住的出牌效果。"""
+        pending = self.pending_response
+        if not isinstance(pending, dict) or not pending.get('forced_wait'):
+            return {'success': False, 'error': '没有待结算的强制反制窗口'}
+        self.pending_response = None
+        player_id = int(pending['player_id'])
+        card = CardInstance.from_dict(pending['card'])
+        card._paid_e_this_play = max(
+            0,
+            int(pending.get('paid_e', getattr(card, 'cost_e', 0)) or 0),
+        )
+        card._paid_m_this_play = max(
+            0,
+            int(pending.get('paid_m', getattr(card, 'cost_m', 0)) or 0),
+        )
+        choice = pending.get('original_choice')
+        result = self._execute_card_effect(player_id, card, choice)
+        return self._after_response_result(player_id, result)
 
     def _execute_trigger_effect(self, player_id: int, eq: EquipmentInstance, target_id: int):
         destroyed = self._destroy_equipment(player_id, eq)
@@ -1312,7 +1370,17 @@ class GameEngine2v2(GameEngine):
         if self._card_blocks_response(card):
             return None
         target_ids = self._response_target_ids_for_card(player_id, card, choice)
-        target_id = target_ids[0] if target_ids else self._selected_effect_target(player_id, choice)
+        # 广域打击的目标列表按座位序排列，第一个可能是行动者的队友；
+        # 反制面板与伤害预演都以 pending 的 target_player_id 为主目标，
+        # 因此优先取玩家实际选择的目标，其次取第一个敌方目标。
+        chosen_target_id = self._choice_target_from_choice(choice, -1)
+        if chosen_target_id in target_ids:
+            target_id = chosen_target_id
+        elif target_ids:
+            enemy_target_ids = [tid for tid in target_ids if self.is_enemy(player_id, tid)]
+            target_id = (enemy_target_ids or target_ids)[0]
+        else:
+            target_id = self._selected_effect_target(player_id, choice)
         prev_preview = getattr(self, '_pending_response_preview', None)
         self._pending_response_preview = {
             'player_id': player_id,
@@ -1370,7 +1438,21 @@ class GameEngine2v2(GameEngine):
         finally:
             self._pending_response_preview = prev_preview
         if not self._pending_response_has_payable_counter({'counter_cards': counter_cards}):
-            return None
+            # 2s 强制反制窗口：无人能反制时也开窗（隐匿在函数开头已返回 None），
+            # 到点由 app 层定时器调 resolve_forced_response 结算，不泄露手牌信息。
+            return {
+                'player_id': player_id,
+                'target_player_id': target_id,
+                'card': card.to_dict(),
+                'original_choice': choice,
+                'counter_cards': [],
+                'is_precision': 'precision' in flags,
+                'bio_pre_play_snapshot': getattr(card, '_bio_pre_play_snapshot', None),
+                'paid_e': self._actual_card_elixir_cost(card),
+                'paid_m': max(0, int(getattr(card, '_paid_m_this_play', getattr(card, 'cost_m', 0)) or 0)),
+                'forced_wait': True,
+                'forced_deadline': time.time() + self.FORCED_RESPONSE_WINDOW_SECONDS,
+            }
         return {
             'player_id': player_id,
             'target_player_id': target_id,
@@ -1381,6 +1463,7 @@ class GameEngine2v2(GameEngine):
             'bio_pre_play_snapshot': getattr(card, '_bio_pre_play_snapshot', None),
             'paid_e': self._actual_card_elixir_cost(card),
             'paid_m': max(0, int(getattr(card, '_paid_m_this_play', getattr(card, 'cost_m', 0)) or 0)),
+            'forced_wait': False,
         }
 
     def _equipment_destroy_response_player_ids(self, player_id: int, card: Optional[CardInstance], choice: Optional[dict] = None) -> List[int]:
@@ -1670,6 +1753,7 @@ class GameEngine2v2(GameEngine):
             return 0
         old_health = ps.health
         ps.health -= actual
+        self._apply_shield_clamp_to_health(ps, player_id, old_health)
         health_lost = max(0, int(old_health or 0) - max(0, int(ps.health or 0)))
         self._bio_stem_cell_after_health_loss(player_id, health_lost)
         self._note_achievement_health(player_id)
@@ -2009,6 +2093,14 @@ class GameEngine2v2(GameEngine):
                     ps.elixir -= deduct
                     self.log_msg(f"{self.pn(player_id)}的超载扣除{deduct}E")
                 ps.overload = 0
+            # 与 1v1 的 _apply_turn_start_effects 对齐：抽牌结算后跑
+            # ``after_turn_start_draw`` 计时（风等 target_turn_start_after_draw
+            # 卡）与同类装备事件，否则这类延迟效果在 2v2 永远不结算。
+            self._run_timed_effects_for_turn(player_id, 'after_turn_start_draw')
+            self._run_target_turn_start_after_draw_equipment(player_id)
+            if self.game_over or getattr(self, 'pending_v2_ui', None) or self.pending_choice is not None:
+                self._defer_turn_start_death_checks = False
+                return
         for owner_state in self.players:
             for eq in getattr(owner_state, 'equipment', []):
                 eq.uses_this_turn = 0
@@ -2385,6 +2477,7 @@ class GameEngine2v2(GameEngine):
                     continue
             old_health = ps.health
             ps.health -= dmg
+            self._apply_shield_clamp_to_health(ps, target_id, old_health)
             health_lost = max(0, int(old_health or 0) - max(0, int(ps.health or 0)))
             self._bio_stem_cell_after_health_loss(target_id, health_lost)
             self._note_achievement_health(target_id)

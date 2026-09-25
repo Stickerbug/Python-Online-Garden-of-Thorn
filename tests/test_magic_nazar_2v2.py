@@ -57,6 +57,10 @@ class MagicNazar2v2Tests(unittest.TestCase):
         result = engine.play_card(0, skill.instance_id, 0, target_choice(0))
 
         self.assertTrue(result.get('success'))
+        # 无人可反制时 2v2 会开 2s 强制反制窗口，效果到点才结算。
+        if engine.pending_response is not None and engine.pending_response.get('forced_wait'):
+            forced = engine.resolve_forced_response()
+            self.assertTrue(forced.get('success'), forced)
         self.assertEqual(engine.players[0].magic, magic_before)
         self.assertEqual(engine.players[2].custom_statuses.get('magic_nazar'), 1)
         self.assertTrue(any('被魔法邪眼反制，失效' in line for line in engine.log))

@@ -187,7 +187,10 @@ class GoldenNazarResponseOwnerTests(unittest.TestCase):
 
         pending = engine._build_pending_response_for_card(0, magic_sewage, choice)
 
-        self.assertIsNone(pending)
+        # 新规则：无人可反制也强制开 2s 等待窗口（forced_wait，无 counter_cards）。
+        self.assertIsNotNone(pending)
+        self.assertTrue(pending.get('forced_wait'))
+        self.assertEqual([], pending.get('counter_cards') or [])
         _equip(engine, 2)
         pending = engine._build_pending_response_for_card(0, magic_sewage, choice)
         self.assertIsNotNone(pending)

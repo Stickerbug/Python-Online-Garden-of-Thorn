@@ -986,7 +986,11 @@ const I18N = {
         mode_switch_confirm: 'Switching mode will leave your current team.\nContinue?',
         waiting_for_team: 'Waiting for another team...',
         all_players_draft_status: 'Draft Status',
-        urf_replace: 'Replace Card', urf_sell: 'Sell Equipment'
+        urf_replace: 'Replace Card', urf_sell: 'Sell Equipment',
+        mulligan_title: 'Opening Swap', mulligan_hint: 'Select any hand cards to shuffle back into your deck, then draw the same number (draw triggers do not fire).',
+        mulligan_confirm: 'Swap Selected ({0})', mulligan_pass: 'Keep Hand', mulligan_waiting: 'Swap submitted. Waiting for other players...',
+        mulligan_countdown: 'Auto-confirm in {0}s', mulligan_ready: 'Ready', mulligan_pending: 'Choosing...',
+        blood_shield_status: 'Shield {0}',
     }
 };
 I18N.zh = { ...I18N.en,
@@ -1101,6 +1105,9 @@ I18N.zh = { ...I18N.en,
     waiting_for_team: '等待另一支队伍...',
     all_players_draft_status: '选牌状态',
     urf_replace: '替换手牌', urf_sell: '售卖装备',
+    mulligan_title: '开局调度', mulligan_hint: '选择任意手牌塞回抽牌堆洗牌，再抽取等量（首次抽牌不触发「到手牌时」效果）',
+    mulligan_confirm: '调度所选（{0}张）', mulligan_pass: '保持手牌', mulligan_waiting: '已提交调度，等待其他玩家……',
+    mulligan_countdown: '{0}秒后自动确认', mulligan_ready: '已完成', mulligan_pending: '调度中…', blood_shield_status: '血盾{0}',
     fusion_layer: '聚变', fission_layer: '裂变',
     app_subtitle: '在线联机卡牌对战',
     nickname_placeholder: '输入昵称',
@@ -1122,6 +1129,9 @@ I18N.zh = { ...I18N.en,
     mod_selection_force_vanilla: '已强制启用原版卡牌模组：已选模组必须至少包含攻击、技能、装备、反制各1张。'
 };
 I18N.fr = { ...I18N.en,
+    mulligan_title: 'Échange d’ouverture', mulligan_hint: 'Choisissez des cartes à renvoyer dans votre deck, puis piochez-en autant (aucun déclencheur de pioche).',
+    mulligan_confirm: 'Échanger ({0})', mulligan_pass: 'Garder la main', mulligan_waiting: 'Échange envoyé. En attente des autres joueurs…',
+    mulligan_countdown: 'Confirmation auto dans {0}s', mulligan_ready: 'Prêt', mulligan_pending: 'En choix…',
     round: 'Tour', your_turn: 'Votre Tour', opponent_turn: "Tour de l'adversaire", you: 'Vous', opponent: 'Adversaire',
     draw_phase: 'Phase de Pioche', game_over: 'Fin de Partie', invite: 'Inviter', accept: 'Accepter', decline: 'Refuser', return_lobby: 'Retour au Salon',
     draft_phase: 'Phase de Draft', draft_reroll: 'Relancer', draft_selected: 'Sélectionné', select_event: "Choisir Événement", waiting_opponent: "En attente de l'adversaire",
@@ -1204,6 +1214,9 @@ I18N.fr = { ...I18N.en,
     mod_default_name: 'Mod {0}'
 };
 I18N.ja = { ...I18N.en,
+    mulligan_title: 'Opening Swap', mulligan_hint: '手札を選んでデッキに戻してシャッフルし、同じ枚数を引く（ドロー時効果は発動しない）',
+    mulligan_confirm: '選択を交換（{0}枚）', mulligan_pass: '手札を維持', mulligan_waiting: '交換済み、他のプレイヤーを待っています…',
+    mulligan_countdown: '{0}秒後に自動確定', mulligan_ready: '完了', mulligan_pending: '選択中…',
     round: 'ターン', your_turn: 'あなたのターン', opponent_turn: '相手のターン', you: 'あなた', opponent: '相手',
     draw_phase: 'ドローフェイズ', game_over: 'ゲーム終了', invite: '招待', accept: '承諾', decline: '拒否', return_lobby: 'ロビーに戻る',
     draft_phase: 'ドラフトフェイズ', draft_reroll: 'リロール', draft_selected: '選択済み', select_event: 'イベント選択', waiting_opponent: '相手を待っています',
@@ -5442,7 +5455,7 @@ function clearGameStateResyncTimer() {
 
 function hasMatchingLiveBattleState(payload = {}) {
     const statePhase = String((gameState && gameState.phase) || '');
-    if (!['action', 'draw', 'response', 'choice'].includes(statePhase)) return false;
+    if (!['mulligan', 'action', 'draw', 'response', 'choice'].includes(statePhase)) return false;
     if (!isCompleteBattleStatePayload(gameState)) return false;
     if (pendingResponseExpectsCurrentPlayer(gameState) && !responsePending) return false;
     const expectedKey = phaseContextMatchKey(payload);
@@ -5668,6 +5681,7 @@ function pendingResponseExpectsCurrentPlayer(state = {}) {
     const pending = state.pending_response;
     const ownId = Number(state.your_id);
     if (!pending || !Number.isFinite(ownId)) return false;
+    if (pending.forced_wait) return false;
     if (typeof pending.viewer_can_respond === 'boolean') {
         return pending.viewer_can_respond;
     }
@@ -7228,9 +7242,9 @@ function formatRoundStatus(gs, phaseText = '') {
     if (!Number.isFinite(roundNum) || roundNum <= 0) {
         if ((gs && gs.phase) === 'draft') return UI.draft_phase;
         if ((gs && gs.phase) === 'event_select') return UI.select_event;
-        return phaseName || UI.draft_phase;
+        return (phaseName || UI.draft_phase) + bloodShieldSuffix(gs);
     }
-    return UI.round_status.replace('{0}', roundNum).replace('{1}', phaseName);
+    return UI.round_status.replace('{0}', roundNum).replace('{1}', phaseName) + bloodShieldSuffix(gs);
 }
 
 function isReadOnlyBattleStatus(gs = gameState) {
@@ -7285,6 +7299,7 @@ function formatBattlePhaseText(gs) {
         }
         return UI.opponent_turn;
     }
+    if (gs.phase === 'mulligan') return UI.mulligan_title || 'Opening Swap';
     if (gs.phase === 'draw') return UI.draw_phase;
     if (gs.phase === 'response') return UI.waiting_response;
     if (gs.phase === 'choice') return UI.choose_target;
@@ -7294,14 +7309,20 @@ function formatBattlePhaseText(gs) {
     return gs.phase || '';
 }
 
+function bloodShieldSuffix(gs) {
+    const shield = Number(gs && gs.blood_shield);
+    if (!Number.isFinite(shield) || shield <= 0) return '';
+    return ` · ${UI.blood_shield_status ? UI.blood_shield_status.replace('{0}', String(shield)) : `盾${shield}`}`;
+}
+
 function formatCompactRoundStatus(gs, phaseText = '') {
     const roundNum = Number(gs && gs.round_num);
     if (!Number.isFinite(roundNum) || roundNum <= 0) {
         if ((gs && gs.phase) === 'draft') return UI.draft_phase;
         if ((gs && gs.phase) === 'event_select') return UI.select_event;
-        return phaseText || UI.draft_phase;
+        return (phaseText || UI.draft_phase) + bloodShieldSuffix(gs);
     }
-    return `R${roundNum} · ${phaseText}`;
+    return `R${roundNum} · ${phaseText}` + bloodShieldSuffix(gs);
 }
 
 function formatGameBottomStatus(gs) {
@@ -7504,7 +7525,7 @@ function showView(viewId) {
 
 function isNetworkMatchPhase(value = phase) {
     return !soloMode && !replayMode && [
-        'mod_draw', 'mod_draw_complete', 'draft', 'event_select', 'event_reveal', 'event_sub_choice', 'playing', 'action', 'draw', 'response', 'choice', 'game_over', 'reconnecting',
+        'mod_draw', 'mod_draw_complete', 'draft', 'event_select', 'event_reveal', 'event_sub_choice', 'mulligan', 'playing', 'action', 'draw', 'response', 'choice', 'game_over', 'reconnecting',
     ].includes(String(value || ''));
 }
 
@@ -11969,7 +11990,7 @@ function rerenderAfterCardDefsRefresh() {
         else renderEventSelect(eventSelectData);
         return;
     }
-    if (gameState && ['action', 'draw', 'response', 'choice', 'playing'].includes(phase)) {
+    if (gameState && ['mulligan', 'action', 'draw', 'response', 'choice', 'playing'].includes(phase)) {
         renderGame(gameState);
     }
 }
@@ -14969,7 +14990,7 @@ function getCardPlayEffectPredictionParts(cardDict, options = {}) {
 function shouldShowCardPlayEffectPrediction(cardDict, options = {}) {
     if (!gameState || !cardDict || !cardDict.def_id) return false;
     if (cardDict.instance_id == null && !options.allowDefinitionCard) return false;
-    const activePhases = new Set(['action', 'draw', 'response', 'choice']);
+    const activePhases = new Set(['mulligan', 'action', 'draw', 'response', 'choice']);
     if (!activePhases.has(gameState.phase)) return false;
     if (cardDict.instance_id != null) {
         const id = String(cardDict.instance_id);
@@ -17173,7 +17194,7 @@ function connectSocket(serverUrl) {
             clearNetworkMatchStateForLobby();
             showView('view-lobby');
             updateStatus(getViewStatusText('view-lobby'));
-        } else if (phase === 'action' || phase === 'draw' || phase === 'response' || phase === 'choice') {
+        } else if (phase === 'mulligan' || phase === 'action' || phase === 'draw' || phase === 'response' || phase === 'choice') {
             showView('view-game');
             scheduleBattleStartupResync(data || {}, `game_phase_${phase}`);
         }
@@ -17441,6 +17462,7 @@ function connectSocket(serverUrl) {
             if (responseTimerId) { clearInterval(responseTimerId); responseTimerId = null; }
         }
         schedulePendingResponseRecoveryFromState(data);
+        syncMulliganPanel(data);
         if (data.pending_choice == null && choicePending) {
             invalidateChoiceRequest();
         }
@@ -19848,7 +19870,7 @@ function shouldEmitSkinLook() {
     if (!socket || !socket.connected) return false;
     if (soloMode || isSpectating) return false;
     if (normalizePlayerId(playerId) == null || normalizePlayerId(playerId) < 0) return false;
-    if (!['draft', 'event_select', 'event_reveal', 'playing', 'action', 'draw', 'response', 'choice', 'game_over'].includes(phase)) return false;
+    if (!['draft', 'event_select', 'event_reveal', 'mulligan', 'playing', 'action', 'draw', 'response', 'choice', 'game_over'].includes(phase)) return false;
     return !!((gameState && gameState.room_id != null) || (draftState && draftState.room_id != null) || (eventSelectData && eventSelectData.room_id != null));
 }
 
@@ -23566,6 +23588,7 @@ function prepareReplayTimelineForVideoExport(sourceTimeline) {
         : [];
     if (!timeline.length) return { timeline: [], skipped: 0 };
     const gameplayActions = new Set([
+        'mulligan_submit',
         'play_card',
         'response',
         'resolve_choice',
@@ -28326,7 +28349,7 @@ function currentMatchActionContext(source = null) {
 }
 
 function isActiveBattlePhase(value = phase) {
-    return ['playing', 'action', 'draw', 'response', 'choice', 'game_over'].includes(String(value || ''));
+    return ['mulligan', 'playing', 'action', 'draw', 'response', 'choice', 'game_over'].includes(String(value || ''));
 }
 
 function shouldIgnoreLatePregamePayload(data, eventName = 'pregame') {
@@ -29217,7 +29240,7 @@ function isClassic2v2State(gs) {
 
 function shouldUseClassicBattle(gs) {
     if (!isClassicBattleUiStyle() || !gs) return false;
-    if (['action', 'draw', 'response', 'choice', 'game_over'].includes(gs.phase)) return true;
+    if (['mulligan', 'action', 'draw', 'response', 'choice', 'game_over'].includes(gs.phase)) return true;
     const readonlyBattle = !!(gs.spectating || gs.replay_mode || isSpectating || replayMode);
     if (!readonlyBattle) return false;
     return !!(gs.you || gs.opponent || (Array.isArray(gs.spectate_players) && gs.spectate_players.length));
@@ -35594,6 +35617,161 @@ function onRespond(cardInstanceId) {
     emitModeEvent('solo_response', 'response', { card_instance_id: cardInstanceId });
 }
 
+// —— 开局调度（新开局规则）——
+let mulliganTimerId = null;
+let mulliganSelectedIds = new Set();
+let mulliganSubmittedLocal = false;
+let mulliganCountdown = 30;
+
+function hideMulliganPanel() {
+    if (mulliganTimerId) { clearInterval(mulliganTimerId); mulliganTimerId = null; }
+    const panel = $('mulligan-panel');
+    if (panel) {
+        panel.innerHTML = '';
+        panel.classList.add('hidden');
+        panel.classList.remove('visible');
+    }
+}
+
+function submitMulligan(instanceIds) {
+    if (soloMode || replayMode || isSpectating || !socket) return;
+    if (mulliganTimerId) { clearInterval(mulliganTimerId); mulliganTimerId = null; }
+    mulliganSubmittedLocal = true;
+    socket.emit('mulligan_submit', {
+        instance_ids: Array.from(instanceIds || []),
+        ...currentMatchActionContext(),
+    });
+    renderMulliganWaiting();
+}
+
+function mulliganPlayerName(playerId) {
+    const info = getPlayerDataById(playerId);
+    return (info && info.name) || `P${Number(playerId) + 1}`;
+}
+
+function renderMulliganWaiting() {
+    const panel = $('mulligan-panel');
+    if (!panel || !gameState || !gameState.mulligan) return;
+    const data = gameState;
+    const m = data.mulligan;
+    const ownId = Number(data.your_id);
+    const submitted = Array.isArray(m.submitted) ? m.submitted : [];
+    panel.innerHTML = '';
+    panel.classList.remove('hidden');
+    panel.classList.add('visible');
+    const title = document.createElement('div');
+    title.className = 'response-label response-title';
+    title.textContent = UI.mulligan_title || 'Opening Swap';
+    panel.appendChild(title);
+    const waiting = document.createElement('div');
+    waiting.className = 'response-label';
+    waiting.textContent = UI.mulligan_waiting || 'Waiting for other players...';
+    panel.appendChild(waiting);
+    const statusRow = document.createElement('div');
+    statusRow.className = 'mulligan-status-row';
+    const playerCount = Array.isArray(data.teams) && data.mode === '2v2' ? 4 : 2;
+    for (let pid = 0; pid < playerCount; pid++) {
+        const cell = document.createElement('span');
+        const done = pid === ownId || submitted[pid] === true;
+        cell.className = done ? 'mulligan-ready' : '';
+        cell.textContent = `${mulliganPlayerName(pid)} ${done ? (UI.mulligan_ready || 'Ready') : (UI.mulligan_pending || '...')}`;
+        statusRow.appendChild(cell);
+    }
+    panel.appendChild(statusRow);
+}
+
+function syncMulliganPanel(data) {
+    const panel = $('mulligan-panel');
+    const m = data && data.mulligan;
+    if (!panel || !m || !m.active || data.spectating || soloMode || replayMode) {
+        if (!m || !m.active) mulliganSubmittedLocal = false;
+        hideMulliganPanel();
+        return;
+    }
+    const ownId = Number(data.your_id);
+    const submitted = Array.isArray(m.submitted) ? m.submitted : [];
+    if (submitted[ownId] === true || mulliganSubmittedLocal) {
+        renderMulliganWaiting();
+        return;
+    }
+    if (mulliganTimerId) { clearInterval(mulliganTimerId); mulliganTimerId = null; }
+    mulliganSelectedIds = new Set(
+        Array.isArray(m.your_pick) ? m.your_pick : Array.from(mulliganSelectedIds)
+    );
+    panel.innerHTML = '';
+    panel.classList.remove('hidden');
+    panel.classList.add('visible');
+
+    const title = document.createElement('div');
+    title.className = 'response-label response-title';
+    title.textContent = UI.mulligan_title || 'Opening Swap';
+    panel.appendChild(title);
+
+    const hint = document.createElement('div');
+    hint.className = 'response-label response-content';
+    hint.style.color = 'var(--text-muted)';
+    hint.style.fontWeight = '400';
+    hint.textContent = UI.mulligan_hint || '';
+    panel.appendChild(hint);
+
+    const cardsRow = document.createElement('div');
+    cardsRow.className = 'mulligan-cards';
+    const hand = (data.you && Array.isArray(data.you.hand)) ? data.you.hand : [];
+    hand.forEach((cardDict) => {
+        const chip = createCardChoiceChip(cardDict);
+        chip.classList.add('card-chip');
+        const iid = Number(cardDict && cardDict.instance_id);
+        if (mulliganSelectedIds.has(iid)) chip.classList.add('mulligan-selected');
+        chip.onclick = () => {
+            if (mulliganSelectedIds.has(iid)) mulliganSelectedIds.delete(iid);
+            else mulliganSelectedIds.add(iid);
+            chip.classList.toggle('mulligan-selected', mulliganSelectedIds.has(iid));
+            updateConfirmLabel();
+        };
+        cardsRow.appendChild(chip);
+    });
+    panel.appendChild(cardsRow);
+
+    const btnRow = document.createElement('div');
+    btnRow.className = 'response-btn-row';
+    const passBtn = document.createElement('button');
+    passBtn.className = 'btn btn-secondary';
+    passBtn.textContent = UI.mulligan_pass || 'Keep Hand';
+    passBtn.onclick = () => submitMulligan([]);
+    btnRow.appendChild(passBtn);
+    const confirmBtn = document.createElement('button');
+    confirmBtn.className = 'btn btn-primary';
+    confirmBtn.id = 'mulligan-confirm-btn';
+    confirmBtn.textContent = (UI.mulligan_confirm || 'Swap Selected ({0})').replace('{0}', String(mulliganSelectedIds.size));
+    confirmBtn.onclick = () => submitMulligan(Array.from(mulliganSelectedIds));
+    btnRow.appendChild(confirmBtn);
+    panel.appendChild(btnRow);
+
+    function updateConfirmLabel() {
+        if (confirmBtn) {
+            confirmBtn.textContent = (UI.mulligan_confirm || 'Swap Selected ({0})').replace('{0}', String(mulliganSelectedIds.size));
+        }
+    }
+
+    const countdownEl = document.createElement('div');
+    countdownEl.className = 'mulligan-countdown';
+    panel.appendChild(countdownEl);
+    mulliganCountdown = 30;
+    const tick = () => {
+        countdownEl.textContent = (UI.mulligan_countdown || 'Auto-confirm in {0}s').replace('{0}', String(mulliganCountdown));
+    };
+    tick();
+    mulliganTimerId = setInterval(() => {
+        mulliganCountdown -= 1;
+        if (mulliganCountdown <= 0) {
+            if (mulliganTimerId) { clearInterval(mulliganTimerId); mulliganTimerId = null; }
+            submitMulligan(Array.from(mulliganSelectedIds));
+            return;
+        }
+        tick();
+    }, 1000);
+}
+
 function showMagicSaltReflectResponseUI(data = {}, choiceParams = {}) {
     removeFloatingCardPreview();
     const container = $('response-panel');
@@ -37961,10 +38139,10 @@ function renderBundledModList(category) {
         // 反馈 #99：娱乐模组在娱乐模式下必须遵守已保存的启用偏好，不能只看
         // “是否已解锁”；否则重开设置会把取消掉的模组显示成勾选，后续保存
         // 又会把它们静默重新启用。
-        cb.checked = !errors.length && (
+        cb.checked = !errors.length && !mod.temporarily_disabled && (
             casualUnlockMode && !entertainment ? unlockedForMode : !disabled.includes(filename)
         );
-        cb.disabled = errors.length > 0 || locked || (casualUnlockMode && !entertainment);
+        cb.disabled = errors.length > 0 || locked || !!mod.temporarily_disabled || (casualUnlockMode && !entertainment);
         if (casualUnlockMode && (!entertainment || locked)) cb.dataset.locked = '1';
         cb.dataset.filename = filename;
         cb.addEventListener('change', () => {

@@ -395,6 +395,18 @@ RETIRED_OFFICIAL_MOD_FILENAMES = {
     'Hel Cards DLC.gtnmod',
     'Arctic Cards DLC.gtnmod',
 }
+# 设计组 2026-09 批量数值重做：生化 / 管道 / 虚空三个模组暂时停用（不可勾选）。
+DESIGN_LOCKED_MOD_FILENAMES = {
+    'Bio Cards Addition.gtnmod',
+    'Bio Cards DLC.gtnmod',
+    'Sewers Cards Addition.gtnmod',
+    'Sewers Cards DLC.gtnmod',
+    'Void Card Addition.gtnmod',
+    'Void Cards DLC.gtnmod',
+}
+DESIGN_LOCKED_MOD_REASON = '数值重做中，暂时停用'
+# 入口隐藏的模式（列表页移除，set_mode 拒绝；进行中的对局不受影响）。
+HIDDEN_MATCH_MODES = {'casual_urf', 'casual_random_deck'}
 DEFAULT_ENABLED_OFFICIAL_MOD_FILENAMES = {
     VANILLA_MOD_FILENAME,
 }
@@ -3734,6 +3746,25 @@ def _resolve_disconnect_blockers(room, player_index):
         changed = True
     if _resolve_pending_response_for_disconnect(room, player_index):
         changed = True
+    engine = getattr(room, 'engine', None)
+    if (
+        engine is not None
+        and getattr(engine, 'phase', None) == 'mulligan'
+        and callable(getattr(engine, 'submit_mulligan', None))
+    ):
+        # 调度阶段断线：视为不调度，别让整局卡在等待提交。
+        picks = getattr(engine, 'mulligan_picks', None) or []
+        try:
+            idx = int(player_index)
+        except (TypeError, ValueError):
+            idx = -1
+        if 0 <= idx < len(picks) and picks[idx] is None:
+            result = engine.submit_mulligan(idx, [])
+            if isinstance(result, dict) and result.get('success'):
+                if result.get('resolved'):
+                    room._mulligan_deadline = None
+                    record_room_replay_keyframe(room, 'mulligan_done')
+                changed = True
     return changed
 
 
@@ -5773,6 +5804,25 @@ def _pending_interaction_watchdog_worker():
                             pending_emits.append(('game_over_cleanup', room))
                         continue
                     _stamp_pending_interactions(room)
+                    if getattr(engine, 'phase', None) == 'mulligan':
+                        mulligan_deadline = getattr(room, '_mulligan_deadline', None)
+                        if mulligan_deadline and now >= float(mulligan_deadline):
+                            try:
+                                engine.force_finish_mulligan()
+                                room._mulligan_deadline = None
+                                record_room_replay_keyframe(room, 'mulligan_done')
+                                admin_event(
+                                    'warning',
+                                    f'force_finish_mulligan room={room.room_id}',
+                                    room_id=room.room_id,
+                                )
+                                pending_emits.append(('state', room))
+                            except Exception as exc:
+                                admin_event(
+                                    'error',
+                                    f'force_finish_mulligan failed room={room.room_id}: {exc}',
+                                    room_id=room.room_id,
+                                )
                     pending_response = getattr(engine, 'pending_response', None)
                     created = _pending_created_at(pending_response)
                     if pending_response and created:
@@ -5780,7 +5830,9 @@ def _pending_interaction_watchdog_worker():
                         last_notice = float(pending_response.get('_last_watchdog_notice', 0) or 0)
                         if age >= 120:
                             try:
-                                if room.mode == '2v2':
+                                if pending_response.get('forced_wait'):
+                                    engine.resolve_forced_response()
+                                elif room.mode == '2v2':
                                     while getattr(engine, 'pending_response', None) is pending_response:
                                         responders = _pending_response_responder_ids(room, pending_response)
                                         if not responders:
@@ -6741,14 +6793,17 @@ def validate_nickname(name):
 
 def normalize_disabled_mods(value):
     if value is None:
-        return []
+        return sorted(DESIGN_LOCKED_MOD_FILENAMES)
     if isinstance(value, str):
         normalized = [x.strip() for x in value.split(',') if x.strip()]
-        return [x for x in normalized if x not in RETIRED_OFFICIAL_MOD_FILENAMES]
-    if isinstance(value, (list, tuple, set)):
+        normalized = [x for x in normalized if x not in RETIRED_OFFICIAL_MOD_FILENAMES]
+    elif isinstance(value, (list, tuple, set)):
         normalized = [str(x).strip() for x in value if str(x).strip()]
-        return [x for x in normalized if x not in RETIRED_OFFICIAL_MOD_FILENAMES]
-    return []
+        normalized = [x for x in normalized if x not in RETIRED_OFFICIAL_MOD_FILENAMES]
+    else:
+        return sorted(DESIGN_LOCKED_MOD_FILENAMES)
+    # 设计锁定模组一律视为禁用（已勾选的存量偏好也会在这里被纠正）。
+    return sorted(set(normalized) | DESIGN_LOCKED_MOD_FILENAMES)
 
 
 def default_disabled_mods():
@@ -17884,6 +17939,9 @@ def start_game(room):
         if room.engine.start_game() is False:
             admin_event('warning', f'ignored duplicate game start room={room.room_id}', room_id=room.room_id)
             return
+        if getattr(room.engine, 'phase', None) == 'mulligan':
+            # 新开局调度阶段：客户端 30s 倒计时自动提交，这里兜底 60s 强制完成。
+            room._mulligan_deadline = time.time() + 60.0
         _apply_pregame_disconnect_timeout_deaths(room)
         room.started_at = time.time()
         admin_event('game', f'room {room.room_id} started mode={room.mode}')
@@ -17911,7 +17969,7 @@ def start_random_deck_room(room):
     room.engine.draft_picks = [list(deck_def_ids), list(deck_def_ids)]
     room.engine.player_ready = [True, True]
     room.engine.player_draft_started = [True, True]
-    if room.engine.start_game(skip_pregame_validation=True) is False:
+    if room.engine.start_game(skip_pregame_validation=True, mulligan=False) is False:
         raise RuntimeError('随机卡组引擎启动失败')
     room.started_at = time.time()
     admin_event('game', f'room {room.room_id} started mode={room.mode} random_deck={deck_def_ids}')
@@ -19941,6 +19999,15 @@ def _expire_pending_response_locked(room, now=None):
     age = now - created
     if age < RESPONSE_WINDOW_SECONDS:
         return False
+    if pending.get('forced_wait'):
+        # 强制窗口到点兜底（正常路径由 schedule_forced_response_resolution 结算）。
+        result = engine.resolve_forced_response()
+        admin_event(
+            'warning',
+            f'expire_forced_pending_response room={getattr(room, "room_id", "?")} age={age:.1f} result={bool(isinstance(result, dict) and result.get("success"))}',
+            room_id=getattr(room, 'room_id', None),
+        )
+        return True
     try:
         while getattr(engine, 'pending_response', None) is pending:
             responders = _pending_response_responder_ids(room, pending)
@@ -20018,8 +20085,69 @@ def _auto_resolve_unreachable_pending_response(room, reason='unreachable'):
     return True
 
 
+def schedule_forced_response_resolution(room):
+    """2v2 强制反制窗口到点结算：无人可反制的出牌也等 2s 再执行效果。"""
+    engine = getattr(room, 'engine', None)
+    pending = getattr(engine, 'pending_response', None) if engine is not None else None
+    if not isinstance(pending, dict) or not pending.get('forced_wait'):
+        return
+    try:
+        deadline = float(pending.get('forced_deadline', 0) or 0)
+    except (TypeError, ValueError):
+        deadline = 0.0
+    delay = max(0.05, deadline - time.time()) if deadline else 2.0
+
+    def _worker():
+        socketio.sleep(delay)
+        engine_now = getattr(room, 'engine', None)
+        if engine_now is None:
+            return
+        pending_now = getattr(engine_now, 'pending_response', None)
+        if pending_now is not pending:
+            return
+        busy = None
+        for _attempt in range(4):
+            busy = _try_acquire_room_action(room, None, 'forced_response', -1)
+            if busy is not None:
+                break
+            socketio.sleep(0.25)
+            if getattr(engine_now, 'pending_response', None) is not pending:
+                return
+        if busy is None:
+            admin_event(
+                'warning',
+                f'forced_response_lock_busy room={getattr(room, "room_id", "?")}',
+                room_id=getattr(room, 'room_id', None),
+            )
+            return
+        try:
+            if getattr(engine_now, 'pending_response', None) is not pending:
+                return
+            result = engine_now.resolve_forced_response()
+            if not isinstance(result, dict) or not result.get('success'):
+                admin_event(
+                    'warning',
+                    f'forced_response_resolve_failed room={getattr(room, "room_id", "?")} result={result}',
+                    room_id=getattr(room, 'room_id', None),
+                )
+        finally:
+            busy.release()
+        with _lock:
+            _sync_room_action_timer_after_state_change(room)
+        emit_turn_timer_update(room)
+        broadcast_game_state(room)
+        emit_pending_interaction_after_state_change(room, reason='forced_response')
+
+    _start_socket_background_task(_worker)
+
+
 def emit_or_resolve_pending_response(room, reason='emit'):
     _stamp_pending_interactions(room)
+    pending_now = getattr(getattr(room, 'engine', None), 'pending_response', None)
+    if isinstance(pending_now, dict) and pending_now.get('forced_wait'):
+        # 强制等待窗口：没有可交互的响应者，由定时器到点结算。
+        schedule_forced_response_resolution(room)
+        return 0
     sent = emit_pending_response_requests(room)
     if sent > 0 or not getattr(getattr(room, 'engine', None), 'pending_response', None):
         return sent
@@ -26656,8 +26784,13 @@ def api_mods():
         d['is_vanilla'] = mod.filename == VANILLA_MOD_FILENAME
         d['category'] = mod_category(mod)
         runtime_disable = runtime_mod_rows.get(mod.filename, [])
-        d['temporarily_disabled'] = bool(runtime_disable)
-        d['temporary_disable_reason'] = next((row.get('reason') for row in runtime_disable if row.get('reason')), '')
+        design_locked = mod.filename in DESIGN_LOCKED_MOD_FILENAMES
+        d['hard_locked'] = design_locked
+        d['temporarily_disabled'] = bool(runtime_disable) or design_locked
+        d['temporary_disable_reason'] = (
+            DESIGN_LOCKED_MOD_REASON if design_locked and not runtime_disable
+            else next((row.get('reason') for row in runtime_disable if row.get('reason')), '')
+        )
         d['temporary_disable_until'] = next((row.get('expires_at') for row in runtime_disable if row.get('expires_at')), None)
         d['temporary_disable_scopes'] = sorted({str(row.get('scope_mode') or 'all') for row in runtime_disable})
         cards = list(d.get('cards') or [])
@@ -28008,6 +28141,12 @@ def on_set_mode(data):
         if sid not in players:
             return
         mode, match_type, match_mode = pvp_match_mode_parts(requested)
+        if match_mode in HIDDEN_MATCH_MODES:
+            emit('server_error', {
+                'message': '该模式已下线维护。',
+                'reason': 'mode_hidden',
+            })
+            return
         if match_mode not in PVP_MATCH_MODES:
             return
         try:
@@ -28124,6 +28263,12 @@ def on_choose_mod_unlock(data):
                 'reason': 'mod_unlock_not_in_lobby',
             })
             return
+    if str(mod_filename or '') in DESIGN_LOCKED_MOD_FILENAMES:
+        emit('server_error', {
+            'message': '该模组正在数值重做，暂时无法选择。',
+            'reason': 'mod_design_locked',
+        })
+        return
     try:
         state = mod_unlocks.choose_unlock(int(user_id), mod_filename)
     except ValueError as exc:
@@ -29794,7 +29939,7 @@ def on_accept_invite(data):
                 _abort_casual_room_to_lobby_locked(room, str(exc), reason='mod_mismatch')
                 return
         elif room.mode == 'urf':
-            room.engine.start_game()
+            room.engine.start_game(mulligan=False)
             room.started_at = time.time()
             record_room_replay_keyframe(room, 'game_start')
             admin_event('game', f'room {room_id} started mode={room.mode}')
@@ -30832,6 +30977,78 @@ def on_select_opening_event(data):
                 record_room_replay_keyframe(room, 'event_reveal')
             for pi in range(len(room.player_sids)):
                 schedule_pregame_state(room, pi)
+
+
+@socketio.on('mulligan_submit')
+@measure_socket_action('mulligan_submit')
+def on_mulligan_submit(data):
+    sid = request.sid
+    data = socket_guard('mulligan_submit', data, require_player=True)
+    if data is None:
+        return
+    raw_ids = data.get('instance_ids')
+    if raw_ids is None:
+        raw_ids = []
+    if not isinstance(raw_ids, list) or len(raw_ids) > 30:
+        _security_illegal(sid, 'mulligan_submit', 'bad instance_ids payload')
+        return
+    instance_ids = []
+    for raw_id in raw_ids:
+        try:
+            instance_ids.append(int(raw_id))
+        except (TypeError, ValueError):
+            _security_illegal(sid, 'mulligan_submit', 'bad instance id')
+            return
+    with _lock:
+        if sid not in players:
+            return
+        player = players[sid]
+        room_id = player.get('room_id')
+        if room_id is None or room_id not in rooms:
+            return
+        room = rooms[room_id]
+        pidx = room.player_index(sid)
+        if pidx < 0:
+            return
+        engine = room.engine
+        if getattr(engine, 'phase', None) != 'mulligan':
+            soft_reject(sid, 'mulligan_submit', 'MULLIGAN_NOT_ACTIVE', room=room, pidx=pidx, send_state=True)
+            return
+    busy_lock = _try_acquire_room_action(room, sid, 'mulligan_submit', pidx)
+    if busy_lock is None:
+        return
+    try:
+        result = engine.submit_mulligan(pidx, instance_ids)
+        if not isinstance(result, dict) or not result.get('success'):
+            error = result.get('error') if isinstance(result, dict) else None
+            soft_reject(
+                sid,
+                'mulligan_submit',
+                normalize_soft_reject_code(error) or 'MULLIGAN_REJECTED',
+                error or '调度失败',
+                room=room,
+                pidx=pidx,
+                send_state=True,
+            )
+            return
+        record_room_replay_action(
+            room,
+            'mulligan_submit',
+            pidx,
+            {'instance_ids': instance_ids},
+        )
+        if result.get('resolved'):
+            room._mulligan_deadline = None
+            record_room_replay_keyframe(room, 'mulligan_done')
+            _stamp_pending_interactions(room)
+    finally:
+        busy_lock.release()
+    with _lock:
+        _sync_room_action_timer_after_state_change(room)
+    if result.get('resolved'):
+        emit_turn_timer_update(room)
+        emit_initial_pending_interaction(room)
+    broadcast_game_state(room)
 
 
 @socketio.on('confirm_opening_reveal')
@@ -31898,7 +32115,7 @@ def _ai_test_start_game_if_ready(engine, meta):
         engine.log = []
     if hasattr(engine, '_log_compaction_floor'):
         engine._log_compaction_floor = 0
-    if engine.start_game() is False:
+    if engine.start_game(mulligan=False) is False:
         return False, '引擎拒绝开始对局'
     human_player_id = int(meta.get('human_player_id', 0))
     meta['diagnostic_metadata'].update({
@@ -34955,7 +35172,7 @@ def on_rematch(data=None):
                         room.engine.log = []
                     if hasattr(room.engine, '_log_compaction_floor'):
                         room.engine._log_compaction_floor = 0
-                    room.engine.start_game()
+                    room.engine.start_game(mulligan=False)
                     room.started_at = time.time()
                     record_room_replay_keyframe(room, 'game_start')
                     for psid in room.player_sids:

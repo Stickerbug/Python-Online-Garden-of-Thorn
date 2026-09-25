@@ -3573,6 +3573,10 @@ class GameEngine:
         # Per-player ready state: True when draft done AND sub-choice done (if any)
         self.player_ready: List[bool] = [False, False]
         self.player_draft_started: List[bool] = [False, False]
+        # 新开局规则（调度）：初始手牌后可把任意手牌塞入抽牌堆底部、洗牌、
+        # 抽取等量；mulligan_picks[player] 为 None 表示尚未提交。
+        self.mulligan_enabled: bool = True
+        self.mulligan_picks: List[Optional[List[int]]] = [None, None]
         self.player_names: List[str] = ['玩家1', '玩家2']
         self.debug_selector_log: bool = False
         self._last_damage_value: List[int] = [0, 0]
@@ -4903,9 +4907,21 @@ class GameEngine:
             'pending_choice': self._public_pending_choice(for_player),
             'pending_v2_ui': self._public_v2_ui(for_player),
             'opening_event_picks': self.opening_event_picks,
+            'mulligan': self._public_mulligan_state(for_player),
             'antennae_reveal': self._antennae_reveal[for_player],
             'garden_initial_deck_reveal': copy.deepcopy(self._garden_initial_deck_reveal[for_player]),
             'forced_target_player_id': self._forced_target_for_player(for_player),
+        }
+
+    def _public_mulligan_state(self, for_player: int) -> Optional[dict]:
+        if not getattr(self, 'mulligan_enabled', False):
+            return None
+        picks = getattr(self, 'mulligan_picks', None) or []
+        your_pick = picks[for_player] if 0 <= for_player < len(picks) else None
+        return {
+            'active': self.phase == 'mulligan',
+            'submitted': [pick is not None for pick in picks],
+            'your_pick': list(your_pick) if your_pick is not None else None,
         }
 
     def start_event_select_first(self):
@@ -5341,7 +5357,8 @@ class GameEngine:
                 return False, f'player_not_ready:{player_id}', details
         return True, '', details
 
-    def start_game(self, *, skip_pregame_validation: bool = False):
+    def start_game(self, *, skip_pregame_validation: bool = False, mulligan: bool = True):
+        self.mulligan_enabled = bool(mulligan)
         if self._game_start_applied:
             return False
         if not skip_pregame_validation:
@@ -5402,6 +5419,18 @@ class GameEngine:
         # Keep v2/custom opening events deferred for now because some may
         # intentionally operate on the opening hand.
         self._apply_deferred_opening_events_after_initial_draw()
+        if self.mulligan_enabled:
+            # 新开局规则：初始手牌就绪后进入调度阶段——玩家可把任意手牌
+            # 塞入抽牌堆底部并洗牌、再抽取等量（首次抽牌不触发「到手牌时」
+            # 效果，详见 _resolve_mulligans）。全员提交后由 _finish_game_start
+            # 继续开局流程。
+            self.mulligan_picks = [None] * len(self.players)
+            self.phase = 'mulligan'
+            self.log_msg("调度阶段：可将任意手牌塞入抽牌堆底部，洗牌后抽取等量")
+            return True
+        return self._finish_game_start()
+
+    def _finish_game_start(self) -> bool:
         self._save_all_match_start_snapshots()
         self.round_num = 1
         self.log_msg(f"游戏开始！{self.pn(self.first_player)}先手。")
@@ -5430,6 +5459,96 @@ class GameEngine:
         self.phase = 'action'
         self._start_player_turn(self.first_player)
         return True
+
+    def submit_mulligan(self, player_id: int, instance_ids=None) -> dict:
+        """调度阶段的一名玩家提交（空列表 = 不调度）。全员提交后自动结算。"""
+        if self.phase != 'mulligan':
+            return {'success': False, 'error': '不在调度阶段'}
+        if not self._valid_player_id(player_id):
+            return {'success': False, 'error': '无效玩家'}
+        if self.mulligan_picks[player_id] is not None:
+            return {'success': False, 'error': '已完成调度'}
+        ps = self.players[player_id]
+        picked: List[int] = []
+        seen_ids = set()
+        for raw_id in instance_ids or []:
+            try:
+                iid = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            if iid in seen_ids:
+                continue
+            if ps.find_hand_card(iid) is None:
+                continue
+            seen_ids.add(iid)
+            picked.append(iid)
+        self.mulligan_picks[player_id] = picked
+        if all(pick is not None for pick in self.mulligan_picks):
+            self._resolve_mulligans()
+        return {
+            'success': True,
+            'picked': picked,
+            'resolved': self.phase != 'mulligan',
+        }
+
+    def force_finish_mulligan(self) -> bool:
+        """未提交的玩家一律视为不调度；已进入对局则无事可做。"""
+        if self.phase != 'mulligan':
+            return False
+        for player_id in range(len(self.players)):
+            if self.mulligan_picks[player_id] is None:
+                self.mulligan_picks[player_id] = []
+        self._resolve_mulligans()
+        return True
+
+    def _resolve_mulligans(self):
+        # 统一结算：塞底 → 洗牌 → 等量补抽。补抽刻意绕过「到手牌时」触发
+        # （萌芽连锁 / 玉米成长 / after_draw 钩子），防止调度被用来白赚抽牌收益。
+        for player_id, pick in enumerate(self.mulligan_picks):
+            ps = self.players[player_id]
+            stuffed = []
+            for iid in (pick or []):
+                card = ps.find_hand_card(iid)
+                if card is None:
+                    continue
+                ps.hand.remove(card)
+                ps.deck.append(card)
+                stuffed.append(card)
+            if not stuffed:
+                continue
+            random.shuffle(ps.deck)
+            drawn = self._draw_opening_swap_cards(player_id, len(stuffed))
+            self.log_msg(
+                f"{self.pn(player_id)}调度{len(stuffed)}张牌，重抽{len(drawn)}张"
+            )
+        self._finish_game_start()
+
+    def _draw_opening_swap_cards(self, player_id: int, count: int) -> List[CardInstance]:
+        """调度补抽：与 PlayerState.draw_cards 相同的牌堆循环，但不触发
+        「到手牌时」效果（萌芽 / 到手回调 / after_draw 钩子）。"""
+        if not self._valid_player_id(player_id):
+            return []
+        ps = self.players[player_id]
+        drawn: List[CardInstance] = []
+        for _ in range(max(0, int(count or 0))):
+            if not ps.deck:
+                if not ps.discard:
+                    break
+                ps.deck = ps.discard[:]
+                ps.discard = []
+                random.shuffle(ps.deck)
+            card = ps.deck.pop(0)
+            if card.def_id == ERROR_CARD_ID:
+                ps.add_to_hand(card, trigger_enter_hand=False)
+                drawn.append(card)
+                continue
+            if not ps.can_add_to_hand():
+                reset_card_for_discard(card)
+                ps.discard.append(card)
+                continue
+            ps.add_to_hand(card, trigger_enter_hand=False)
+            drawn.append(card)
+        return drawn
 
     def _opening_event_enemy_targets(self, player_id: int):
         target_id = 1 - player_id
@@ -6388,6 +6507,27 @@ class GameEngine:
                 },
             )
 
+    def _blood_shield_health_floor(self, player_id: int) -> int:
+        """伤害后血量下限（2v2 血盾）；1v1 恒为 0 即无保护。"""
+        return 0
+
+    def _apply_shield_clamp_to_health(self, ps, player_id: int, old_health) -> bool:
+        """血盾结算：血量不能低于护盾值；已经低于护盾值（如世界树复活到5）
+        则不再拦截。返回是否发生了抵挡。"""
+        floor = self._blood_shield_health_floor(player_id)
+        try:
+            floor = max(0, int(floor or 0))
+            old_health = int(old_health or 0)
+        except (TypeError, ValueError):
+            return False
+        if floor <= 0 or old_health < floor:
+            return False
+        if int(ps.health) < floor:
+            ps.health = floor
+            self.log_msg(f"{self.pn(player_id)}的血盾抵挡了后续伤害！（H={ps.health}）")
+            return True
+        return False
+
     def _deal_direct_damage(self, player_id: int, amount: int, source: str = '', source_id: int = None,
                             damage_type: Optional[str] = None, damage_tag: Optional[str] = None,
                             silent: bool = False):
@@ -6483,6 +6623,7 @@ class GameEngine:
             return 0
         old_health = ps.health
         ps.health -= actual
+        self._apply_shield_clamp_to_health(ps, player_id, old_health)
         health_lost = max(0, int(old_health or 0) - max(0, int(ps.health or 0)))
         self._bio_stem_cell_after_health_loss(player_id, health_lost)
         self._note_achievement_health(player_id)
@@ -13636,6 +13777,7 @@ class GameEngine:
                 physical_dmg = poison_layers * 2
                 old_health = target_state.health
                 target_state.health -= physical_dmg
+                self._apply_shield_clamp_to_health(target_state, effect_target_id, old_health)
                 health_lost = max(
                     0,
                     int(old_health or 0) - max(0, int(target_state.health or 0)),
@@ -18633,6 +18775,7 @@ class GameEngine:
                     continue
             old_health = ps.health
             ps.health -= dmg
+            self._apply_shield_clamp_to_health(ps, target_id, old_health)
             health_lost = max(0, int(old_health or 0) - max(0, int(ps.health or 0)))
             self._bio_stem_cell_after_health_loss(target_id, health_lost)
             self._note_achievement_health(target_id)
@@ -19479,6 +19622,12 @@ class GameEngine:
                 or 'choice'
             ).strip().lower()
             return self._equipment_op_destroy_payload(player_id, card, forwarded, log, choice, context)
+        if mode in ('exile', 'banish', '放逐'):
+            forwarded['mode'] = str(
+                params.get('pick', params.get('sub_mode', 'choice'))
+                or 'choice'
+            ).strip().lower()
+            return self._equipment_op_exile_payload(player_id, card, forwarded, log, choice, context)
         forwarded.pop('mode', None)
         if mode in ('', 'place', 'equip', 'self'):
             return self._equipment_op_place_payload(player_id, card, forwarded, log, choice, context)
@@ -21537,6 +21686,79 @@ class GameEngine:
             if isinstance(vars_obj, dict):
                 vars_obj['last_destroyed_equipment_count'] = destroyed_count
 
+    def _exile_equipment_instance(self, owner_id: int, eq, source_id=None) -> bool:
+        """强制放逐一件装备：不吃护甲/装备保护/不可摧毁（放逐的身份就是
+        无视这些），仍跑衍生清理与摧毁事件，卡牌一律进放逐区。"""
+        if eq is None or not self._valid_player_id(owner_id):
+            return False
+        ps = self.players[owner_id]
+        self._cleanup_equipment_derived_effects(owner_id, eq, run_destroy_event=True)
+        if eq in ps.equipment:
+            ps.equipment.remove(eq)
+        self._put_card_in_exile(owner_id, eq.card_instance)
+        self._refresh_equipment_derived_player_flags(owner_id)
+        self._refresh_hand_limit_bonuses()
+        self._note_achievement_equipment_count(owner_id)
+        self._dispatch_card_event(
+            'equipment_destroyed',
+            owner_id if source_id is None else source_id,
+            eq.card_instance,
+            target_id=owner_id,
+            equipment=eq,
+            equipment_owner_id=owner_id,
+        )
+        return True
+
+    def _equipment_op_exile_payload(self, player_id, card, params, log, choice, context):
+        """``equipment_op(mode:"exile")``：放逐装备族（新开局规则配套原子）。
+
+        与 ``destroy`` 同构的 ``mode``：``choice``（默认，点选 / ``equipment``
+        引用 / 第一件）、``random``、``all``、``self``（这张牌挂着的那件）。
+        放逐无视护甲、装备保护与不可摧毁标记。
+        """
+        mode = str(params.get('mode', 'choice') or 'choice').strip().lower()
+        mode = {
+            'one': 'random', 'single': 'random', 'pick': 'random',
+            'every': 'all',
+            'first': 'choice', 'chosen': 'choice', 'selected': 'choice', 'target': 'choice',
+            'self': 'self', 'current': 'self', 'this': 'self', 'attached': 'self',
+        }.get(mode, mode)
+        if mode not in ('choice', 'random', 'all', 'self'):
+            return
+        source_id = self._resolve_target(player_id, params.get('source')) if params.get('source') else None
+        exiled_count = 0
+        if mode == 'self':
+            owner_id, eq = self._find_equipment_owner_of_card(player_id, card)
+            if eq is not None and self._exile_equipment_instance(owner_id, eq, source_id=source_id):
+                self.log_msg(log or f"{self.pn(owner_id)}的{eq.card_def.name_cn}被放逐")
+                exiled_count += 1
+        else:
+            target_expr = params.get('target', params.get('owner', 'enemy'))
+            try:
+                player_ids = self._resolve_step_targets(player_id, card, target_expr, context)
+            except TypeError:
+                player_ids = [self._resolve_target(player_id, target_expr)]
+            for pid in player_ids:
+                if not self._valid_player_id(pid):
+                    continue
+                if mode == 'all':
+                    for eq in list(self.players[pid].equipment):
+                        if self._exile_equipment_instance(pid, eq, source_id=source_id):
+                            self.log_msg(log or f"{self.pn(pid)}的{eq.card_def.name_cn}被放逐")
+                            exiled_count += 1
+                    continue
+                eq = self._destroy_equipment_choice_target(pid, card, params, choice)
+                if eq is None and mode == 'random' and self.players[pid].equipment:
+                    eq = random.choice(list(self.players[pid].equipment))
+                if eq is not None and self._exile_equipment_instance(pid, eq, source_id=source_id):
+                    self.log_msg(log or f"{self.pn(pid)}的{eq.card_def.name_cn}被放逐")
+                    exiled_count += 1
+        if params.get('record_count') and isinstance(context, dict):
+            context['last_exiled_equipment_count'] = exiled_count
+            vars_obj = context.setdefault('vars', {})
+            if isinstance(vars_obj, dict):
+                vars_obj['last_exiled_equipment_count'] = exiled_count
+
     def _find_equipment_owner_of_card(self, player_id, card):
         """``mode:"self"`` 的选件：先按实例 id 全场找，再回落当前玩家。
 
@@ -21704,6 +21926,7 @@ class GameEngine:
                     continue
                 old_health = ps.health
                 ps.health -= amount
+                self._apply_shield_clamp_to_health(ps, tid, old_health)
                 health_lost = max(0, int(old_health or 0) - max(0, int(ps.health or 0)))
                 self._bio_stem_cell_after_health_loss(tid, health_lost)
                 self._note_achievement_health(tid)
