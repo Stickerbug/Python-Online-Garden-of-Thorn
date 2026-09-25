@@ -91,6 +91,28 @@ const canvas = document.getElementById('sk-canvas');
 const ctx = canvas ? canvas.getContext('2d') : null;
 const scoreEl = document.getElementById('sk-score');
 const bestEl = document.getElementById('sk-best');
+/* ---------- 多语言（2026-09-25）：跟随 gtn_lang（zh/en/fr/ja） ---------- */
+const currentLang = (() => {
+  try {
+    const v = localStorage.getItem('gtn_lang');
+    return ['zh', 'en', 'fr', 'ja'].includes(v) ? v : 'zh';
+  } catch (_) { return 'zh'; }
+})();
+function lt(texts, fallback = '') {
+  if (!texts || typeof texts !== 'object') return String(fallback || '');
+  return texts[currentLang] || texts.en || texts.zh || fallback || '';
+}
+
+(() => {
+  if (currentLang === 'zh') return;
+  const note = document.querySelector('.sk-guest-note');
+  if (note) note.innerHTML = {
+    en: 'Guest mode · <a class="sk-login-link" href="/?login=1" target="_blank" rel="noopener">Sign up / Log in</a> to rank',
+    fr: 'Mode visiteur · <a class="sk-login-link" href="/?login=1" target="_blank" rel="noopener">Inscription / Connexion</a> pour être classé',
+    ja: 'ゲストモード · <a class="sk-login-link" href="/?login=1" target="_blank" rel="noopener">ログイン / 登録</a>でランキングに載れます',
+  }[currentLang] || note.innerHTML;
+})();
+
 const statusEl = document.getElementById('sk-status');
 const verifiedEl = document.getElementById('sk-verified');
 const rankBodyEl = document.getElementById('sk-rank-body');
@@ -767,19 +789,19 @@ function showOverlay(mode) {
   overlayMode = mode;
   overlayEl.hidden = false;
   if (mode === 'gameover') {
-    if (overlayTitleEl) overlayTitleEl.textContent = '游戏结束';
-    if (overlayTextEl) overlayTextEl.textContent = '有花花在判负线上停满 1 秒了。';
+    if (overlayTitleEl) overlayTitleEl.textContent = lt({ zh: '游戏结束', en: 'Game Over', fr: 'Partie terminée', ja: 'ゲームオーバー' });
+    if (overlayTextEl) overlayTextEl.textContent = lt({ zh: '有花花在判负线上停满 1 秒了。', en: 'A flower sat on the lose line for a full second.', fr: 'Une fleur est restée sur la ligne de défaite pendant une seconde.', ja: '花が敗北ライン上に1秒間止まりました。' });
     if (overlayScoreEl) overlayScoreEl.textContent = String(game ? game.score : 0);
-    if (overlayPrimaryEl) overlayPrimaryEl.textContent = '再来一局';
+    if (overlayPrimaryEl) overlayPrimaryEl.textContent = lt({ zh: '再来一局', en: 'Play Again', fr: 'Rejouer', ja: 'もう一度プレイ' });
     if (overlaySecondaryEl) overlaySecondaryEl.hidden = true;
   } else if (mode === 'confirm') {
-    if (overlayTitleEl) overlayTitleEl.textContent = '重新开始？';
-    if (overlayTextEl) overlayTextEl.textContent = '当前这一局的进度会被丢弃。';
+    if (overlayTitleEl) overlayTitleEl.textContent = lt({ zh: '重新开始？', en: 'Restart?', fr: 'Recommencer ?', ja: 'リスタートしますか？' });
+    if (overlayTextEl) overlayTextEl.textContent = lt({ zh: '当前这一局的进度会被丢弃。', en: 'Progress of this run will be discarded.', fr: 'La progression de cette partie sera perdue.', ja: 'この局の進捗は破棄されます。' });
     if (overlayScoreEl) overlayScoreEl.textContent = String(game ? game.score : 0);
-    if (overlayPrimaryEl) overlayPrimaryEl.textContent = '重新开始';
+    if (overlayPrimaryEl) overlayPrimaryEl.textContent = lt({ zh: '重新开始', en: 'Restart', fr: 'Recommencer', ja: 'リスタート' });
     if (overlaySecondaryEl) {
       overlaySecondaryEl.hidden = false;
-      overlaySecondaryEl.textContent = '取消';
+      overlaySecondaryEl.textContent = lt({ zh: '取消', en: 'Cancel', fr: 'Annuler', ja: 'キャンセル' });
     }
   }
 }
@@ -805,8 +827,8 @@ function saveLocal({ gameOver = false } = {}) {
     savedAt: Date.now(),
   };
   const ok = writeStored(SAVE_KEY, JSON.stringify(payload));
-  if (ok) setStatus(overlayMode === 'gameover' ? '本局结束' : '已保存到本机');
-  else setStatus('无法写入本机存储：进度不会保留', { offline: true });
+  if (ok) setStatus(overlayMode === 'gameover' ? lt({ zh: '本局结束', en: 'Game over', fr: 'Partie terminée', ja: 'ゲーム終了' }) : lt({ zh: '已保存到本机', en: 'Saved locally', fr: 'Sauvegardé localement', ja: 'ローカルに保存しました' }));
+  else setStatus(lt({ zh: '无法写入本机存储：进度不会保留', en: 'Cannot write local storage: progress will not persist', fr: 'Impossible d’écrire le stockage local : progression non conservée', ja: 'ローカル保存に失敗：進捗は保持されません' }), { offline: true });
 }
 
 function loadLocal() {
@@ -854,15 +876,15 @@ function startGame({ seed = newSeed(), drops = [], uptoMs = 0, restored = false,
   updateScore();
   updateNextChip();
   if (restored) {
-    setStatus(`已恢复上一局（${drops.length} 次投放）`);
+    setStatus(lt({ zh: `已恢复上一局（${drops.length} 次投放）`, en: `Restored last run (${drops.length} drops)`, fr: `Dernière partie restaurée (${drops.length} lâchers)`, ja: `前の局を復元（${drops.length} 回投下）` }));
   } else if (carriedScore > 0) {
     // 不调 restartCloudGame：沿用旧云端局（uid 不变、acked 清零），同步时
     // from_index=0 重放新投放，服务端按旧分数做增量校验——分数无缝延续。
-    setStatus('规则已更新：已保留上一局的分数，盘面重新开始');
+    setStatus(lt({ zh: '规则已更新：已保留上一局的分数，盘面重新开始', en: 'Rules updated: previous score kept, board restarted', fr: 'Règles mises à jour : score conservé, plateau relancé', ja: 'ルール更新：前回のスコアを保持し、盤面を再開しました' }));
     saveLocal();
     scheduleSync(400);
   } else {
-    setStatus('新的一局，已保存到本机');
+    setStatus(lt({ zh: '新的一局，已保存到本机', en: 'New run, saved locally', fr: 'Nouvelle partie, sauvegardée localement', ja: '新しい局、ローカルに保存しました' }));
     saveLocal();
     // 云端也跟着开新局（页面里的「新游戏 / 再来一局」都走这里）：否则新局的同步
     // 会拿 0 分去对老局的云端分数，被判「分数回退」，这一局直到刷新页面都进不了榜。
@@ -898,7 +920,7 @@ function dropAtAim() {
   if (!game || game.gameOver) return;
   const result = game.drop(aimX);
   if (!result.ok) {
-    if (result.reason === 'cooldown') setStatus(`投放间隔 ${(DROP_COOLDOWN_MS / 1000).toFixed(1)} 秒`);
+    if (result.reason === 'cooldown') setStatus(lt({ zh: `投放间隔 ${(DROP_COOLDOWN_MS / 1000).toFixed(1)} 秒`, en: `Drop cooldown ${(DROP_COOLDOWN_MS / 1000).toFixed(1)}s`, fr: `Rechargement ${(DROP_COOLDOWN_MS / 1000).toFixed(1)} s`, ja: `投下クールダウン ${(DROP_COOLDOWN_MS / 1000).toFixed(1)} 秒` }));
     return;
   }
   game.takeEvents();
@@ -914,7 +936,7 @@ function dropAtAim() {
 
 function setVerifiedText() {
   if (!verifiedEl) return;
-  verifiedEl.textContent = `上榜最佳 ${syncState.verified}`;
+  verifiedEl.textContent = lt({ zh: `上榜最佳 ${syncState.verified}`, en: `Best ranked ${syncState.verified}`, fr: `Record classé ${syncState.verified}`, ja: `ランキング最高 ${syncState.verified}` });
 }
 
 function scheduleSync(delay = 1200) {
@@ -965,7 +987,7 @@ async function syncNow() {
       if (response.status === 401) {
         // 游客模式：本地玩，不上榜（2026-09-25 休闲花园对游客开放）
         guestMode = true;
-        setStatus('游客模式：本地游玩，登录后成绩上榜');
+        setStatus(lt({ zh: '游客模式：本地游玩，登录后成绩上榜', en: 'Guest mode: playing locally. Sign in to rank.', fr: 'Mode visiteur : jeu local. Connectez-vous pour le classement.', ja: 'ゲストモード：ローカルでプレイ。ログインするとランキングに載ります' }));
         return;
       }
       if (!response.ok) { syncState.lastError = 'state'; return; }
@@ -1008,14 +1030,14 @@ async function syncNow() {
       saveLocal();
     }
     if (data && data.verified === false) {
-      setStatus('本批成绩未通过校验，未计入排行榜（进度已保留）', { offline: true });
+      setStatus(lt({ zh: '本批成绩未通过校验，未计入排行榜（进度已保留）', en: 'Batch failed verification — not ranked (progress kept)', fr: 'Lot non validé — non classé (progression conservée)', ja: '検証に失敗したためランキングに反映されません（進捗は保持）' }), { offline: true });
     } else if (data && data.verified) {
-      setStatus('成绩已上榜');
+      setStatus(lt({ zh: '成绩已上榜', en: 'Score ranked', fr: 'Score classé', ja: 'スコアをランキングに反映しました' }));
       scheduleLeaderboardRefresh();
     }
   } catch (_) {
     syncState.lastError = 'sync';
-    setStatus('网络不可用：进度已存在本机，稍后自动重试', { offline: true });
+    setStatus(lt({ zh: '网络不可用：进度已存在本机，稍后自动重试', en: 'Network unavailable: progress saved locally, retrying soon', fr: 'Réseau indisponible : progression sauvegardée, nouvel essai bientôt', ja: 'ネットワーク不可：進捗はローカル保存済み、後で再試行します' }), { offline: true });
     scheduleSync(8000);
   } finally {
     syncState.inflight = false;
@@ -1051,7 +1073,7 @@ async function refreshLeaderboard() {
     const rows = (data && data.table && data.table.entries) || [];
     const me = data && data.me;
     if (!rows.length) {
-      rankBodyEl.textContent = '还没有已验证的成绩。';
+      rankBodyEl.textContent = lt({ zh: '还没有已验证的成绩。', en: 'No verified scores yet.', fr: 'Aucun score vérifié pour le moment.', ja: '認証済みのスコアはまだありません。' });
     } else {
       rankBodyEl.textContent = '';
       const meId = me ? String(me.user_id) : '';
@@ -1098,7 +1120,9 @@ async function refreshLeaderboard() {
       rankNoteEl.title = `每周一 00:00（UTC+8）结算；同分并列均分该名次奖金；至少 ${need} 个有效账号才发放。`;
     }
   } catch (_) {
-    rankBodyEl.textContent = '读取榜单失败（可能是离线）。';
+    rankBodyEl.textContent = guestMode
+      ? lt({ zh: '游客不上榜——登录后即可参与排行。', en: 'Guests do not rank — sign in to compete.', fr: 'Les visiteurs ne sont pas classés — connectez-vous pour figurer au classement.', ja: 'ゲストはランキングに載りません。ログインして参加しましょう。' })
+      : lt({ zh: '读取榜单失败（可能是离线）。', en: 'Failed to load the leaderboard (possibly offline).', fr: 'Échec du chargement du classement (peut-être hors ligne).', ja: 'ランキングの取得に失敗しました（オフラインの可能性）。' });
   }
 }
 

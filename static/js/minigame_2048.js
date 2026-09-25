@@ -12,6 +12,27 @@ import {
   isGameOver, maxTile, seedFromText, stepMove,
 } from './minigame_2048_core.js';
 const CONFIG = JSON.parse(document.getElementById('mg-config').textContent || '{}');
+
+/* ---------- 多语言（2026-09-25）：跟随 gtn_lang（zh/en/fr/ja），与主游戏一致 ---------- */
+(() => {
+  if (currentLang === 'zh') return;
+  const note = document.querySelector('.mg-guest-note');
+  if (note) note.innerHTML = {
+    en: 'Guest mode · <a class="mg-login-link" href="/?login=1" target="_blank" rel="noopener">Sign up / Log in</a> to rank',
+    fr: 'Mode visiteur · <a class="mg-login-link" href="/?login=1" target="_blank" rel="noopener">Inscription / Connexion</a> pour être classé',
+    ja: 'ゲストモード · <a class="mg-login-link" href="/?login=1" target="_blank" rel="noopener">ログイン / 登録</a>でランキングに載れます',
+  }[currentLang] || note.innerHTML;
+})();
+const currentLang = (() => {
+  try {
+    const v = localStorage.getItem('gtn_lang');
+    return ['zh', 'en', 'fr', 'ja'].includes(v) ? v : 'zh';
+  } catch (_) { return 'zh'; }
+})();
+function lt(texts, fallback = '') {
+  if (!texts || typeof texts !== 'object') return String(fallback || '');
+  return texts[currentLang] || texts.en || texts.zh || fallback || '';
+}
 const PALETTE = JSON.parse(document.getElementById('mg-palette').textContent || '[]');
 const RULES_VERSION = 2;      // v2 = 5×5 + 合并有 15% 概率失败（不翻倍）
 const SAVE_VERSION = 1;
@@ -344,10 +365,10 @@ function renderBoard(animate) {
 function updateSyncLabel() {
   const pending = state.ops.length - state.acked;
   if (pending > 0) {
-    setSyncText(`待同步 ${pending} 步${navigator.onLine ? '' : '（离线，本地已保存）'}`,
+    setSyncText(lt({ zh: `待同步 ${pending} 步${navigator.onLine ? '' : '（离线，本地已保存）'}`, en: `${pending} moves pending${navigator.onLine ? '' : ' (offline, saved locally)'}`, fr: `${pending} coups en attente${navigator.onLine ? '' : ' (hors ligne, sauvegardé)'}`, ja: `同待ち ${pending} 手${navigator.onLine ? '' : '（オフライン、ローカル保存済み）'}` }),
       navigator.onLine ? 'pending' : 'offline');
   } else if (state.acked === state.ops.length) {
-    setSyncText(state.lastSyncLabel || '已同步', 'ok');
+    setSyncText(state.lastSyncLabel || lt({ zh: '已同步', en: 'Synced', fr: 'Synchronisé', ja: '同期済み' }), 'ok');
   }
 }
 
@@ -510,7 +531,7 @@ async function syncNow() {
     if (response.status === 401 || response.status === 403) {
       identityRejected = true;
       const body = await response.json().catch(() => ({}));
-      setSyncText(body.error || '身份或权限失效，已停止同步（本地进度仍在）', 'denied');
+      setSyncText(body.error || lt({ zh: '身份或权限失效，已停止同步（本地进度仍在）', en: 'Session invalid — sync stopped (progress saved locally)', fr: 'Session invalide — sync arrêtée (progression sauvegardée)', ja: 'セッション無効——同期を停止しました（ローカル保存済み）' }), 'denied');
       return;
     }
     if (response.status === 409) {
@@ -521,8 +542,8 @@ async function syncNow() {
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
       setSyncText(response.status === 429
-        ? '同步繁忙，本地进度已保留，稍后自动重试'
-        : (body.error || '同步被拒绝，本地进度已保留'), 'error');
+        ? lt({ zh: '同步繁忙，本地进度已保留，稍后自动重试', en: 'Sync busy — saved locally, retrying soon', fr: 'Synchronisation occupée — sauvegardé, nouvel essai bientôt', ja: '同期が混み合っています。ローカル保存済み、後で再試行します' })
+        : (body.error || lt({ zh: '同步被拒绝，本地进度已保留', en: 'Sync rejected — progress saved locally', fr: 'Sync rejetée — progression sauvegardée', ja: '同期が拒否されました。ローカル保存済み' })), 'error');
       retryDelay = Math.min(retryDelay * 2, RETRY_MAX_MS);
       scheduleSync(retryDelay);
       return;
@@ -541,7 +562,7 @@ async function syncNow() {
     updateSyncLabel();
     if (state.ops.length > state.acked) scheduleSync();
   } catch (_) {
-    setSyncText('离线，本地已保存', 'offline');
+    setSyncText(lt({ zh: '离线，本地已保存', en: 'Offline — progress saved locally', fr: 'Hors ligne — progression sauvegardée', ja: 'オフライン、ローカルに保存済み' }), 'offline');
     retryDelay = Math.min(retryDelay * 2, RETRY_MAX_MS);
     scheduleSync(retryDelay);
   } finally {
@@ -626,7 +647,7 @@ function move(direction) {
       text: '可以继续合成 Fabled、Divine 等更高级方块，也可以开新局。',
       primary: { label: '继续游戏', run: () => { hideOverlay(); } },
       // 已经在这个界面内弹窗里点过"重新开始"了，不再问第二次
-      secondary: { label: '重新开始', run: () => { hideOverlay(); void restartGame({ confirm: false }); } },
+      secondary: { label: lt({ zh: '重新开始', en: 'Restart', fr: 'Recommencer', ja: 'リスタート' }), run: () => { hideOverlay(); void restartGame({ confirm: false }); } },
     });
   } else if (isGameOver(state.cells)) {
     showOverlay({
@@ -659,9 +680,9 @@ function mgConfirm({ title, text, confirmLabel = '确定', cancelLabel = '取消
 }
 
 const RESTART_ASK = {
-  title: '重新开始？',
-  text: '当前这局会关闭（已获得的成绩与待同步操作都会保留）。',
-  confirmLabel: '重新开始',
+  title: lt({ zh: '重新开始？', en: 'Restart?', fr: 'Recommencer ?', ja: 'リスタートしますか？' }),
+  text: lt({ zh: '当前这局会关闭（已获得的成绩与待同步操作都会保留）。', en: 'This run will close (earned score and pending moves are kept).', fr: 'Cette partie se terminera (score acquis et coups en attente conservés).', ja: 'この局は終了します（獲得スコアと同待ち操作は保持されます）。' }),
+  confirmLabel: lt({ zh: '重新开始', en: 'Restart', fr: 'Recommencer', ja: 'リスタート' }),
   cancelLabel: '继续这局',
 };
 
@@ -678,7 +699,7 @@ async function restartGame({ confirm = true } = {}) {
     });
     if (response.status === 401 || response.status === 403) {
       identityRejected = true;
-      setSyncText('身份或权限失效，无法开始新局（本地进度仍在）', 'denied');
+      setSyncText(lt({ zh: '身份或权限失效，无法开始新局（本地进度仍在）', en: 'Session invalid — cannot start a new run (progress saved locally)', fr: 'Session invalide — impossible de démarrer (progression sauvegardée)', ja: 'セッション無効——新しい局を開始できません（ローカル保存済み）' }), 'denied');
       return;
     }
     if (response.ok) {
@@ -872,7 +893,7 @@ function connectPresence() {
     }
     if (reason === 'minigame_denied' || reason === 'minigame_login_required') {
       identityRejected = true;
-      setSyncText((payload && payload.message) || '身份或权限失效（本地进度仍在）', 'denied');
+      setSyncText((payload && payload.message) || lt({ zh: '身份或权限失效（本地进度仍在）', en: 'Session invalid (progress saved locally)', fr: 'Session invalide (progression sauvegardée)', ja: 'セッション無効（ローカル保存済み）' }), 'denied');
       return;
     }
     if (reason === 'minigame_lower_priority') {
@@ -910,7 +931,7 @@ async function acceptInvite() {
   } catch (_) { /* 同步失败也继续 */ }
   if (!socket || !inviterSid) {
     // 少了 inviter_sid 服务端会直接拒绝（以前的写法就是这样，所以才"只回到主页"）
-    setSyncText('邀请已失效，请在多人大厅里重新邀请', 'error');
+    setSyncText(lt({ zh: '邀请已失效，请在多人大厅里重新邀请', en: 'Invite expired — ask for a new one in the lobby', fr: 'Invitation expirée — redemandez dans le hall', ja: '招待が無効になりました。ロビーで再度招待してください' }), 'error');
     return;
   }
   // 用当前会话接受：服务端会把这一局建在当前会话上；随后跳到主页面，
@@ -938,7 +959,9 @@ let leaderboardHideTitles = (() => {
 function updateHideTitlesButton() {
   const button = el('mg-hide-titles');
   if (!button) return;
-  button.textContent = leaderboardHideTitles ? '显示称号' : '隐藏称号';
+  button.textContent = leaderboardHideTitles
+    ? lt({ zh: '显示称号', en: 'Show titles', fr: 'Afficher les titres', ja: '称号を表示' })
+    : lt({ zh: '隐藏称号', en: 'Hide titles', fr: 'Masquer les titres', ja: '称号を隠す' });
   button.setAttribute('aria-pressed', leaderboardHideTitles ? 'true' : 'false');
 }
 
@@ -973,24 +996,24 @@ async function refreshLeaderboard(windowMode = rankWindowMode) {
   rankWindowMode = windowMode === 'all' ? 'all' : '14d';
   const body = el('mg-rank-body');
   if (!body) return;
-  if (!body.dataset.loaded) body.textContent = '正在读取…';
+  if (!body.dataset.loaded) body.textContent = lt({ zh: '正在读取…', en: 'Loading…', fr: 'Chargement…', ja: '読み込み中…' });
   try {
     const response = await fetch(`/api/minigame/2048/leaderboard?window=${rankWindowMode}&limit=100`,
       { credentials: 'same-origin' });
     if (response.status === 401) {
       guestMode = true;
-      body.textContent = '游客不上榜——登录后即可参与排行。';
+      body.textContent = lt({ zh: '游客不上榜——登录后即可参与排行。', en: 'Guests do not rank — sign in to compete.', fr: 'Les visiteurs ne sont pas classés — connectez-vous pour figurer au classement.', ja: 'ゲストはランキングに載りません。ログインして参加しましょう。' });
       return;
     }
     if (response.status === 403) {
-      body.textContent = '身份或权限失效，无法查看排行榜。';
+      body.textContent = lt({ zh: '身份或权限失效，无法查看排行榜。', en: 'Session expired — cannot load the leaderboard.', fr: 'Session expirée — classement indisponible.', ja: 'セッションが無効です。ランキングを表示できません。' });
       return;
     }
     const data = await response.json();
     const entries = data.leaderboard?.entries || [];
     body.dataset.loaded = '1';
     if (!entries.length) {
-      body.innerHTML = '<p class="mg-hint">还没有已验证成绩。</p>';
+      body.innerHTML = `<p class="mg-hint">${lt({ zh: '还没有已验证成绩。', en: 'No verified scores yet.', fr: 'Aucun score vérifié pour le moment.', ja: '認証済みのスコアはまだありません。' })}</p>`;
       return;
     }
     body.innerHTML = entries.map((item) => `
@@ -1005,17 +1028,17 @@ async function refreshLeaderboard(windowMode = rankWindowMode) {
           <span class="mg-rank-score">${item.score}</span>
         </span>
       </div>`).join('')
-      + (data.me ? '' : '<p class="mg-hint">你在这个榜还没有已验证成绩。</p>')
+      + (data.me ? '' : `<p class="mg-hint">${lt({ zh: '你在这个榜还没有已验证成绩。', en: 'You have no verified score on this board yet.', fr: 'Vous n’avez pas encore de score vérifié ici.', ja: 'このランキングにはまだ認証済みスコアがありません。' })}</p>`)
       + ((data.periods || []).length
-        ? '<p class="mg-hint">奖期：' + data.periods.map((p) =>
+        ? `<p class="mg-hint">${lt({ zh: '奖期：', en: 'Prize periods: ', fr: 'Périodes : ', ja: '賞期間：' })}${data.periods.map((p) =>
             escapeHtml(p.period_key) + ' ' + (p.status === 'paid'
-              ? '已发 ' + p.pool
-              : '未发（' + escapeHtml(p.reason || '') + '）')).join('；') + '</p>'
+              ? lt({ zh: '已发 ', en: 'paid ', fr: 'payé ', ja: '支給済み ' }) + p.pool
+              : lt({ zh: '未发（', en: 'pending (', fr: 'en attente (', ja: '未支給（' }) + escapeHtml(p.reason || '') + lt({ zh: '）', en: ')', fr: ')', ja: '）' }))).join(lt({ zh: '；', en: '; ', fr: ' ; ', ja: '；' }))}</p>`
         : '');
   } catch (_) {
     body.textContent = guestMode
-      ? '游客不上榜——登录后即可参与排行。'
-      : '离线，暂时读不到排行榜（棋盘不受影响）。';
+      ? lt({ zh: '游客不上榜——登录后即可参与排行。', en: 'Guests do not rank — sign in to compete.', fr: 'Les visiteurs ne sont pas classés — connectez-vous pour figurer au classement.', ja: 'ゲストはランキングに載りません。ログインして参加しましょう。' })
+      : lt({ zh: '离线，暂时读不到排行榜（棋盘不受影响）。', en: 'Offline — leaderboard unavailable (board unaffected).', fr: 'Hors ligne — classement indisponible (le plateau n’est pas affecté).', ja: 'オフラインのためランキングを取得できません（盤面には影響ありません）。' });
   }
 }
 
@@ -1083,13 +1106,13 @@ async function boot() {
     if (response.status === 401) {
       // 游客模式：本地开玩，不云同步、不上榜（2026-09-25 休闲花园对游客开放）
       guestMode = true;
-      setSyncText('游客模式：本地游玩，登录后成绩上榜', 'guest');
+      setSyncText(lt({ zh: '游客模式：本地游玩，登录后成绩上榜', en: 'Guest mode: playing locally. Sign in to rank.', fr: 'Mode visiteur : jeu local. Connectez-vous pour le classement.', ja: 'ゲストモード：ローカルでプレイ。ログインするとランキングに載ります' }), 'guest');
       if (!state) startLocalGame();
       return;
     }
     if (response.status === 403) {
       identityRejected = true;
-      setSyncText('身份或权限失效：请重新登录后再进入（本地进度仍在）', 'denied');
+      setSyncText(lt({ zh: '身份或权限失效：请重新登录后再进入（本地进度仍在）', en: 'Session invalid — sign in again to re-enter (progress saved locally)', fr: 'Session invalide — reconnectez-vous (progression sauvegardée)', ja: 'セッション無効——再ログインしてください（ローカル保存済み）' }), 'denied');
       if (!state) startLocalGame();
       return;
     }
@@ -1098,8 +1121,8 @@ async function boot() {
       // 本地进度照常保留，联网恢复后由同步重放校验。
       const body = await response.json().catch(() => ({}));
       setSyncText(response.status === 429
-        ? '服务器繁忙，本地进度已保留，稍后自动校验'
-        : (body.error || '在线校验失败，本地进度已保留'), 'error');
+        ? lt({ zh: '服务器繁忙，本地进度已保留，稍后自动校验', en: 'Server busy — saved locally, will verify later', fr: 'Serveur occupé — sauvegardé, vérification plus tard', ja: 'サーバーが混み合っています。ローカル保存済み、後で検証します' })
+        : (body.error || lt({ zh: '在线校验失败，本地进度已保留', en: 'Online verification failed — progress saved locally', fr: 'Vérification en ligne échouée — progression sauvegardée', ja: 'オンライン検証に失敗しました。ローカル保存済み' })), 'error');
       if (!state) startLocalGame();
     } else {
       const data = await response.json();
@@ -1141,7 +1164,7 @@ async function boot() {
       }
     }
   } catch (_) {
-    setSyncText('离线，本地已保存', 'offline');
+    setSyncText(lt({ zh: '离线，本地已保存', en: 'Offline — progress saved locally', fr: 'Hors ligne — progression sauvegardée', ja: 'オフライン、ローカルに保存済み' }), 'offline');
     if (!state) startLocalGame();
   }
   await loadPrefs();
