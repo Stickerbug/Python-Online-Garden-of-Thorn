@@ -63,6 +63,10 @@ class PregameDisconnectTimeoutTests(unittest.TestCase):
             gtn.start_game(room)
 
         self.assertTrue(engine._game_start_applied)
+        # 新开局规则：开局先进入调度阶段，全员提交后才是 action。
+        self.assertEqual(engine.phase, 'mulligan')
+        for pid in range(len(engine.players)):
+            self.assertTrue(engine.submit_mulligan(pid, [])['success'])
         self.assertEqual(engine.phase, 'action')
         self.assertFalse(engine.game_over)
         self.assertEqual(engine.players[0].health, 0)

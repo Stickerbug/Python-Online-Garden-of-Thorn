@@ -1542,7 +1542,7 @@ Object.assign(I18N.zh, {
     tag_desc_uncancellable: '此牌弹出选择窗口时不能取消，玩家必须完成选择。',
     tag_desc_infinite_exclude: '此牌不会进入无限火力的随机牌库。',
     tag_desc_copy: '此牌进入手中时，将对应层数张带有放逐的复制加入手中。',
-    tag_desc_unique: '同一玩家通常只能获得1张同名唯一牌；已拥有时不会再次出现在选牌中。强制复制仍会保留副本，但每个多余副本会向牌组加入1张虚空。',
+    tag_desc_unique: '同一玩家通常只能获得1张同名唯一牌；已拥有时不会再次出现在选牌中。拟态无法复制唯一牌；其他强制复制仍会保留副本，但每个多余副本会向牌组加入1张虚空。',
     tag_desc_swift: '此牌的E花费减少X，最低为0E。',
     tag_desc_rebound: '此牌打出并结算后立即回到使用者手中，并经历一次弃牌堆清理。若同时带有放逐，则放逐优先。',
     tag_desc_stealth: '此牌不会触发任何反制窗口。',
@@ -1611,7 +1611,7 @@ Object.assign(I18N.en, {
     tag_desc_uncancellable: 'Choice keyword. Selection windows from this card do not show a cancel button; the player must complete the choice. This prevents checking hidden information for 0 cost and canceling, such as with Magnet.',
     tag_desc_infinite_exclude: 'Mode keyword. This card is excluded from Infinite Fire random pools because it conflicts with that mode.',
     tag_desc_copy: 'Draw keyword. When this card enters your hand, add N exile copies to your hand.',
-    tag_desc_unique: 'Normally, you can obtain only one copy of a Unique card, and owned cards are removed from later draft choices. Forced copies remain, but each extra copy adds 1 Void to your deck.',
+    tag_desc_unique: 'Normally, you can obtain only one copy of a Unique card, and owned cards are removed from later draft choices. Mimic cannot copy Unique cards; other forced copies remain, but each extra copy adds 1 Void to your deck.',
     tag_desc_swift: 'Cost keyword. This card\'s E cost is reduced by X (minimum 0E).',
     tag_desc_rebound: 'Resolution keyword. After being played and resolved, this card immediately returns to its user’s hand. If it also has Exile, Exile takes priority.',
     tag_desc_default: 'Mod or extension tag. Its exact meaning is defined by the relevant mod or card effect.',
@@ -1741,7 +1741,7 @@ Object.assign(I18N.fr, {
     tag_desc_uncancellable: 'Mot-clé de choix. Les fenêtres de choix de cette carte n’affichent pas de bouton Annuler ; le joueur doit terminer le choix. Cela évite de consulter une information cachée gratuitement puis d’annuler, par exemple avec Aimant.',
     tag_desc_infinite_exclude: 'Mot-clé de mode. Cette carte est exclue de la réserve aléatoire d’Infinite Fire car elle entre en conflit avec ce mode.',
     tag_desc_copy: 'Mot-clé de pioche. Quand cette carte entre en main, ajoute N copies exilées.',
-    tag_desc_unique: 'Vous ne pouvez normalement obtenir qu’un exemplaire d’une carte Unique, qui disparaît ensuite des choix. Une copie forcée reste, mais ajoute 1 Vide à votre deck pour chaque exemplaire excédentaire.',
+    tag_desc_unique: 'Vous ne pouvez normalement obtenir qu’un exemplaire d’une carte Unique, qui disparaît ensuite des choix. Le Mimétisme ne peut pas copier les cartes Uniques ; les autres copies forcées restent, mais ajoutent 1 Vide à votre deck par exemplaire excédentaire.',
     tag_desc_swift: 'Mot-clé de coût. Le coût E de cette carte est réduit de X (minimum 0E).',
     tag_desc_rebound: 'Mot-clé de résolution. Après avoir été jouée et résolue, cette carte revient immédiatement dans la main de son utilisateur. Si elle a aussi Exil, l’Exil est prioritaire.',
     tag_desc_default: 'Tag de mod ou d\'extension. Son sens exact est défini par le mod ou l\'effet de carte correspondant.',
@@ -1781,7 +1781,7 @@ Object.assign(I18N.ja, {
     tag_desc_uncancellable: '選択制限キーワード。このカードの選択画面にはキャンセルボタンが表示されず、必ず選択を完了します。Magnet のように0コストで非公開情報を見てからキャンセルすることを防ぎます。',
     tag_desc_infinite_exclude: 'モード制限キーワード。このカードは Infinite Fire のランダムカードプールに入りません。',
     tag_desc_copy: 'ドローキーワード。このカードが手札に入った時、追放コピーをN枚手札に加える。',
-    tag_desc_unique: '通常、同名の唯一カードは1枚だけ獲得でき、所持後は選択肢に出ません。強制複製は残りますが、余分な1枚ごとにデッキへ虚空を1枚加えます。',
+    tag_desc_unique: '通常、同名の唯一カードは1枚だけ獲得でき、所持後は選択肢に出ません。擬態は唯一カードを複製できません。その他の強制複製は残りますが、余分な1枚ごとにデッキへ虚空を1枚加えます。',
     tag_desc_swift: 'コストキーワード。このカードのE消費がX減少（最低0E）。',
     tag_desc_rebound: '解決先キーワード。打ち出して解決した後、ただちに使用者の手札へ戻ります。放逐も持つ場合、放逐が優先されます。',
     tag_desc_default: 'Mod または拡張タグです。具体的な意味は対応する Mod またはカード効果で定義されます。',
@@ -35575,7 +35575,8 @@ function showResponseUI(data) {
         btnRow.appendChild(btn);
     });
     container.appendChild(btnRow);
-    responseCountdown = tutorialMode ? 10 : (hasAffordable ? 5 : 2);
+    // 设计 9.22：反制窗口硬上限 2s（教程模式仍 10s）。
+    responseCountdown = tutorialMode ? 10 : 2;
     const passBtn = document.createElement('button');
     passBtn.className = 'btn btn-danger';
     passBtn.id = 'pass-btn';

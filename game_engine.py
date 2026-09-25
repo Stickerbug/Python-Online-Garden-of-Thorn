@@ -1268,6 +1268,13 @@ class GameEngine:
                 self._game_over_defer_depth -= 1
         self._check_game_over()
 
+    def _set_invincible_until_next_own_turn_start(self, player_id: int):
+        """无敌到该玩家下个回合开始（ygg 9.22 调整：不再覆盖复活后的自己回合）。"""
+        if not (0 <= player_id < len(self.players)):
+            return
+        self._set_invincible_until_next_own_turn_end(player_id)
+        self.players[player_id].invincible_expire_on_turn_start = True
+
     def _set_invincible_until_next_own_turn_end(self, player_id: int):
         if not (0 <= player_id < len(self.players)):
             return
@@ -1573,6 +1580,14 @@ class GameEngine:
         ps.invincible_until_player = None
         ps.invincible_granted_round = -1
         ps.invincible_granted_turn_marker = -1
+
+    def _should_expire_invincible_on_turn_start(self, player_id: int) -> bool:
+        ps = self.players[player_id] if 0 <= player_id < len(self.players) else None
+        if ps is None or not ps.invincible:
+            return False
+        if not getattr(ps, 'invincible_expire_on_turn_start', False):
+            return False
+        return self._should_expire_invincible_on_turn_end(player_id)
 
     def _should_expire_invincible_on_turn_end(self, player_id: int) -> bool:
         if not (0 <= player_id < len(self.players)):
@@ -2406,7 +2421,8 @@ class GameEngine:
         if 0 <= attacker_id < len(self.players):
             attacker = self.players[attacker_id]
             if attacker.weakness > 0 and not self._is_status_immune(attacker_id) and damage > 0:
-                reduction = min(0.6, 0.2 * attacker.weakness)
+                # 设计 9.22：虚弱改为无论层数固定 -20%。
+                reduction = 0.2
                 damage = max(1, int(damage * (1.0 - reduction)))
         return max(0, int(damage or 0))
 
@@ -5410,12 +5426,16 @@ class GameEngine:
                     ps.elixir = 7
                 if self.opening_event_picks[i] == 5:
                     hand_size = max(0, hand_size - 1)
-                ps.draw_cards(hand_size)
+                # 对局开始时不触发任何抽取效果（萌芽/玉米等），
+                # 与调度补抽同口径（_draw_opening_swap_cards 绕过到手回调）。
+                self._draw_opening_swap_cards(i, hand_size)
             else:
                 hand_size = INITIAL_HAND_SIZE
                 if self.opening_event_picks[i] == 5:
                     hand_size = max(0, hand_size - 1)
-                ps.draw_cards(hand_size)
+                # 对局开始时不触发任何抽取效果（萌芽/玉米等），
+                # 与调度补抽同口径（_draw_opening_swap_cards 绕过到手回调）。
+                self._draw_opening_swap_cards(i, hand_size)
         # Keep v2/custom opening events deferred for now because some may
         # intentionally operate on the opening hand.
         self._apply_deferred_opening_events_after_initial_draw()
@@ -7206,7 +7226,7 @@ class GameEngine:
         ps.health = 5
         self._note_achievement_health(target_id)
         self._clear_yggdrasil_effects(target_id)
-        self._set_invincible_until_next_own_turn_end(target_id)
+        self._set_invincible_until_next_own_turn_start(target_id)
         drawn = self._draw_cards_with_v2_hooks(target_id, 3, 'yggdrasil')
         if card is not None:
             if exile_from_hand and card in ps.hand:
@@ -9510,7 +9530,8 @@ class GameEngine:
             return False
         opp = self.players[1 - player_id]
         for c in opp.hand:
-            if self._can_pay_counter_card(1 - player_id, c) and c.card_def.response_trigger == 'thorn':
+            # 设计 9.22：精准牌也能被 targeted 反制（氮气修复）。
+            if self._can_pay_counter_card(1 - player_id, c) and c.card_def.response_trigger in ('thorn', 'targeted'):
                 return True
         return False
 
@@ -9767,16 +9788,30 @@ class GameEngine:
                 self._execute_counter_effect(responder_id, counter_removed, card, player_id, pending_damage_prediction)
                 is_precision = pending.get('is_precision', False)
                 if resolution.get('halve_precision'):
+                    # 黄瓜修复（设计 9.22）：减半/无效分支补跑 after_resolution。
                     if self._is_status_immune(responder_id):
-                        return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
+                        result = self._execute_card_effect(player_id, card, choice)
+                        run_response_after_resolution(
+                            self, responder_id, counter_removed, card,
+                            resolution.get('after_resolution'),
+                        )
+                        return self._after_response_result(player_id, result)
                     if is_precision:
                         self._execute_card_effect_half_damage(
                             player_id, card, choice, dodge_target_id=responder_id
                         )
                         self._clamp_response_props(responder_id, responder_prop_snapshot)
+                        run_response_after_resolution(
+                            self, responder_id, counter_removed, card,
+                            resolution.get('after_resolution'),
+                        )
                         return self._after_response_result(player_id, {'success': True, 'countered': True, 'precision_halved': True, 'card': card.to_dict()})
                     self._execute_card_effect(player_id, card, choice)
                     self._clamp_response_props(responder_id, responder_prop_snapshot)
+                    run_response_after_resolution(
+                        self, responder_id, counter_removed, card,
+                        resolution.get('after_resolution'),
+                    )
                     return self._after_response_result(player_id, {'success': True, 'countered': True, 'card': card.to_dict()})
                 if resolution.get('negate_bloom'):
                     self.negated_card = True
@@ -11015,6 +11050,10 @@ class GameEngine:
         if choice and 'target_instance_id' in choice:
             target = ps.find_hand_card(choice['target_instance_id']) or self._find_card_by_instance_id(choice['target_instance_id'])
         if target and self._card_selectable_by_action(target) and ps.can_add_to_hand():
+            if card is not None and 'mimic_special_cost' in self._effective_card_flags(card) and 'unique' in self._effective_card_flags(target):
+                # 设计 9.22：拟态无法复制唯一牌。
+                self.log_msg(f"{self.pn(player_id)}的{card.name_cn}无法复制唯一牌{target.name_cn}")
+                return
             if card is not None and 'mimic_special_cost' in self._effective_card_flags(card) and not self._pay_mimic_special_cost(player_id, target, card):
                 return
             if card is not None and 'mimic_special_cost' in self._effective_card_flags(card):
@@ -13002,6 +13041,10 @@ class GameEngine:
         if choice and 'target_instance_id' in choice:
             target = ps.find_hand_card(choice['target_instance_id'])
             if target:
+                # 设计 9.22：拟态无法复制带唯一 tag 的牌（不再复制后补虚空）。
+                if 'unique' in self._effective_card_flags(target):
+                    self.log_msg(f"{self.pn(player_id)}的{card.name_cn}无法复制唯一牌{target.name_cn}")
+                    return
                 if not self._pay_mimic_special_cost(player_id, target, card):
                     return
                 copy_card = self._make_mimic_copy_card(target)
@@ -13680,7 +13723,13 @@ class GameEngine:
         if enemy_id < 0:
             return amount
         _, eq = tooth
-        damage = amount * 3
+        # 设计 9.22：每回合因此造成的伤害至多 20D，超出部分照常回魔。
+        tooth_key = 'jurassic_magic_tooth_damage_this_turn'
+        tooth_ps = self.players[player_id]
+        tooth_dealt = max(0, int((getattr(tooth_ps, 'custom_vars', {}) or {}).get(tooth_key, 0) or 0))
+        if tooth_dealt >= 20:
+            return amount
+        damage = min(amount * 3, 20 - tooth_dealt)
         dealt = self.deal_attack_damage(
             enemy_id,
             damage,
@@ -13688,9 +13737,26 @@ class GameEngine:
             attacker_id=player_id,
             source_card=eq.card_instance,
         )
+        try:
+            tooth_ps.custom_vars[tooth_key] = tooth_dealt + int(dealt or 0)
+        except Exception:
+            pass
         self.log_msg(
             f"{self.pn(player_id)}的{self._equipment_card_label(eq)}将{amount}M转为对{self.pn(enemy_id)}的{dealt}D")
         return 0
+
+    def _hel_rebound_discard_after_crit(self, player_id: int, source_card=None):
+        """设计 9.22（筹码）：回转牌在其他卡牌暴击时进入弃牌堆。"""
+        if not (0 <= player_id < len(self.players)):
+            return
+        ps = self.players[player_id]
+        for rebound_card in list(ps.hand):
+            if rebound_card is source_card or 'rebound' not in rebound_card.flags:
+                continue
+            if rebound_card in ps.hand:
+                ps.hand.remove(rebound_card)
+                self._discard_card(ps, rebound_card)
+                self.log_msg(f"{self.pn(player_id)}的{rebound_card.name_cn}因其他卡牌暴击进入弃牌堆")
 
     def _clear_status_immune_aliases(self, player_id: int):
         if not (0 <= player_id < len(self.players)):
@@ -16037,8 +16103,10 @@ class GameEngine:
             return
         if mode == 'blind':
             amount = self._eval_int(player_id, params.get('amount', 1), card, 1)
+            # 墨水修复（设计 9.22）：``status_add_named`` 已在原子收敛中移除，
+            # 这里换用规范写法 ``status_op``，失明层数才能真正加上。
             effects = [
-                {'type': 'status_add_named', 'params': {'target': 'target', 'status': 'blind', 'amount': amount}},
+                {'op': 'status_op', 'action': 'add', 'status': 'blind', 'target': 'target', 'amount': amount},
                 {'type': 'shuffle', 'params': {'zone': 'hand', 'target': 'target'}},
             ]
             trigger = 'target_turn_start_after_status_clear'
@@ -18286,6 +18354,18 @@ class GameEngine:
         return handled
 
     def _apply_turn_start_effects(self, player_id: int):
+        # 魔法牙每回合 20D 上限的计数器随回合清零。
+        try:
+            self.players[player_id].custom_vars.pop('jurassic_magic_tooth_damage_this_turn', None)
+        except Exception:
+            pass
+        # 设计 9.22：ygg 无敌改为「触发玩家下个回合开始时」消失。
+        if (
+            0 <= player_id < len(self.players)
+            and self._should_expire_invincible_on_turn_start(player_id)
+        ):
+            self._clear_invincible_state(player_id)
+            self.log_msg(f"{self.pn(player_id)}的无敌效果结束")
         ps = self.players[player_id]
         self._decay_sealed_equipment_for_owner_turn(player_id)
         self._activate_pending_corruption()
@@ -18374,6 +18454,10 @@ class GameEngine:
             elixir_recovery = ELIXIR_RECOVERY
             from engine_runtime_support import declared_elixir_recovery_aura
             for eq in list(opp.equipment):
+                # 设计 9.22（pincer 修复）：超载只施加给装备选中的目标
+                # （effect_target），不再无条件打给敌方。
+                if getattr(eq, 'effect_target', opp_id) != player_id:
+                    continue
                 elixir_recovery += self._declared_aura_elixir_bonus(eq, opp_id)
                 aura = declared_elixir_recovery_aura(self, eq, opp_id)
                 elixir_recovery += aura.elixir
@@ -18504,6 +18588,10 @@ class GameEngine:
             elixir_recovery = ELIXIR_RECOVERY
             from engine_runtime_support import declared_elixir_recovery_aura
             for eq in list(opp.equipment):
+                # 设计 9.22（pincer 修复）：超载只施加给装备选中的目标
+                # （effect_target），不再无条件打给敌方。
+                if getattr(eq, 'effect_target', opp_id) != player_id:
+                    continue
                 elixir_recovery += self._declared_aura_elixir_bonus(eq, opp_id)
                 aura = declared_elixir_recovery_aura(self, eq, opp_id)
                 elixir_recovery += aura.elixir
@@ -18718,7 +18806,8 @@ class GameEngine:
             attacker_state = self.players[attacker_id] if 0 <= attacker_id < len(self.players) else None
             attacker_immune = self._is_status_immune(attacker_id) if attacker_state is not None else False
             if dmg > 0 and attacker_state is not None and attacker_state.weakness > 0 and not attacker_immune:
-                reduction = min(0.6, 0.2 * attacker_state.weakness)
+                # 设计 9.22：虚弱改为无论层数固定 -20%。
+                reduction = 0.2
                 dmg = max(1, int(dmg * (1.0 - reduction)))
             dmg, _hel_crit = self._hel_apply_lucky_crit_to_damage(
                 attacker_id, dmg, source_card, crit_bonus_damage
@@ -18787,6 +18876,8 @@ class GameEngine:
                 damage_type=DAMAGE_TYPE_PHYSICAL, damage_tag=DAMAGE_TAG_PHYSICAL,
             )
             self.log_msg(f"{self.pn(target_id)}受到{dmg}点伤害（H={ps.health}）")
+            if _hel_crit and dmg > 0:
+                self._hel_rebound_discard_after_crit(attacker_id, source_card)
             if dmg > 0:
                 self._sewers_grow_toilet_paper_power(target_id)
                 self._garden_magic_cutter_after_hit(attacker_id, target_id, dmg)

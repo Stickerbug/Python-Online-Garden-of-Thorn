@@ -20086,13 +20086,20 @@ def _auto_resolve_unreachable_pending_response(room, reason='unreachable'):
 
 
 def schedule_forced_response_resolution(room):
-    """2v2 强制反制窗口到点结算：无人可反制的出牌也等 2s 再执行效果。"""
+    """2v2 反制窗口 2s 硬上限：到点替所有未响应者「不反制」并结算；
+    无人可反制的强制窗口则直接执行被打出的牌。"""
     engine = getattr(room, 'engine', None)
     pending = getattr(engine, 'pending_response', None) if engine is not None else None
-    if not isinstance(pending, dict) or not pending.get('forced_wait'):
+    if not isinstance(pending, dict):
+        return
+    if not (pending.get('forced_wait') or pending.get('window_deadline')):
         return
     try:
-        deadline = float(pending.get('forced_deadline', 0) or 0)
+        deadline = float(
+            pending.get('window_deadline')
+            or pending.get('forced_deadline')
+            or 0
+        )
     except (TypeError, ValueError):
         deadline = 0.0
     delay = max(0.05, deadline - time.time()) if deadline else 2.0
@@ -20123,13 +20130,35 @@ def schedule_forced_response_resolution(room):
         try:
             if getattr(engine_now, 'pending_response', None) is not pending:
                 return
-            result = engine_now.resolve_forced_response()
-            if not isinstance(result, dict) or not result.get('success'):
-                admin_event(
-                    'warning',
-                    f'forced_response_resolve_failed room={getattr(room, "room_id", "?")} result={result}',
-                    room_id=getattr(room, 'room_id', None),
-                )
+            for _pass_guard in range(8):
+                if getattr(engine_now, 'pending_response', None) is not pending:
+                    break
+                responders = _pending_response_responder_ids(room, pending)
+                if not responders:
+                    break
+                before_count = len(pending.get('counter_cards') or [])
+                engine_now.handle_response(int(responders[0]), None)
+                after_count = len(pending.get('counter_cards') or [])
+                if (
+                    getattr(engine_now, 'pending_response', None) is pending
+                    and after_count >= before_count
+                ):
+                    break
+            if getattr(engine_now, 'pending_response', None) is pending:
+                if pending.get('forced_wait'):
+                    result = engine_now.resolve_forced_response()
+                    if not isinstance(result, dict) or not result.get('success'):
+                        admin_event(
+                            'warning',
+                            f'forced_response_resolve_failed room={getattr(room, "room_id", "?")} result={result}',
+                            room_id=getattr(room, 'room_id', None),
+                        )
+                else:
+                    admin_event(
+                        'warning',
+                        f'response_window_deadline_stuck room={getattr(room, "room_id", "?")}',
+                        room_id=getattr(room, 'room_id', None),
+                    )
         finally:
             busy.release()
         with _lock:
@@ -20144,10 +20173,12 @@ def schedule_forced_response_resolution(room):
 def emit_or_resolve_pending_response(room, reason='emit'):
     _stamp_pending_interactions(room)
     pending_now = getattr(getattr(room, 'engine', None), 'pending_response', None)
-    if isinstance(pending_now, dict) and pending_now.get('forced_wait'):
-        # 强制等待窗口：没有可交互的响应者，由定时器到点结算。
+    if getattr(room, 'mode', None) == '2v2' and isinstance(pending_now, dict):
+        # 2s 硬上限（设计 9.22 #零-5）：所有 2v2 窗口到点自动替未响应者
+        # 「不反制」；强制等待窗口直接结算被打出的牌。
         schedule_forced_response_resolution(room)
-        return 0
+        if pending_now.get('forced_wait'):
+            return 0
     sent = emit_pending_response_requests(room)
     if sent > 0 or not getattr(getattr(room, 'engine', None), 'pending_response', None):
         return sent
@@ -20165,11 +20196,59 @@ def emit_or_resolve_pending_response(room, reason='emit'):
     return sent
 
 
+def _auto_fire_stand_ready_counters(room):
+    """蓄势待发（导弹词条）：符合条件的反制牌立即自动使用，不等玩家点击。"""
+    engine = getattr(room, 'engine', None)
+    pending = getattr(engine, 'pending_response', None) if engine is not None else None
+    if not isinstance(pending, dict) or getattr(engine, 'game_over', False):
+        return False
+    try:
+        if room.mode == '2v2':
+            for entry in list(pending.get('counter_cards') or []):
+                responder_id = int(entry.get('responder_id', -1))
+                card_def = CARD_DEFS.get(str(entry.get('def_id', '') or ''))
+                if card_def is None or 'stand_ready' not in (getattr(card_def, 'flags', set()) or set()):
+                    continue
+                responder = engine.players[responder_id] if 0 <= responder_id < len(engine.players) else None
+                if responder is None:
+                    continue
+                instance_id = int(entry.get('instance_id', -1))
+                hand_card = responder.find_hand_card(instance_id)
+                if hand_card is None or not engine._can_pay_counter_card(responder_id, hand_card):
+                    continue
+                result = engine.handle_response(responder_id, instance_id)
+                if isinstance(result, dict) and result.get('success'):
+                    return True
+                return False
+        else:
+            try:
+                responder_id = 1 - int(pending.get('player_id', 0))
+            except Exception:
+                return False
+            played_card = CardInstance.from_dict(pending.get('card') or {})
+            for trigger_type in _response_trigger_types_for_card(engine, played_card):
+                for counter_card in engine.get_counter_cards(responder_id, trigger_type):
+                    card_def = counter_card.card_def
+                    if 'stand_ready' not in (getattr(card_def, 'flags', set()) or set()):
+                        continue
+                    result = engine.handle_response(responder_id, counter_card.instance_id)
+                    if isinstance(result, dict) and result.get('success'):
+                        return True
+                    return False
+    except Exception as exc:
+        admin_event('error', f'stand_ready_autofire_failed room={getattr(room, "room_id", "?")}: {exc}', room_id=getattr(room, 'room_id', None))
+    return False
+
+
 def emit_pending_interaction_after_state_change(room, reason='state_change'):
     engine = getattr(room, 'engine', None)
     if engine is None or getattr(engine, 'game_over', False):
         return
     if getattr(engine, 'pending_response', None):
+        if _auto_fire_stand_ready_counters(room):
+            broadcast_game_state(room)
+            emit_pending_interaction_after_state_change(room, reason=f'{reason}:stand_ready')
+            return
         emit_or_resolve_pending_response(room, reason=reason)
         return
     if getattr(engine, 'pending_choice', None):

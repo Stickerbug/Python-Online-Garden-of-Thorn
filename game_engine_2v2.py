@@ -150,6 +150,26 @@ class GameEngine2v2(GameEngine):
 
 
 
+    def _public_ally_request(self, for_player: int) -> Optional[dict]:
+        req = getattr(self, 'pending_ally_request', None)
+        if not isinstance(req, dict):
+            return req
+        caster_id = req.get('player_id')
+        try:
+            caster_id = int(caster_id)
+        except (TypeError, ValueError):
+            return req
+        from engine_runtime_support import effective_blind
+        caster_blind = 0
+        if 0 <= caster_id < len(self.players) and not self._is_status_immune(caster_id):
+            caster_blind = effective_blind(self, caster_id)
+        if caster_blind <= 0 or caster_id == for_player:
+            return req
+        # 设计 9.22：失明的玩家对队友出牌时，队友看不到这张牌（含牌型）。
+        masked = dict(req)
+        masked['card'] = {'def_id': '', '__blind_hidden': True}
+        return masked
+
     def get_public_state(self, for_player: int) -> dict:
         from engine_runtime_support import effective_blind, project_effective_mask_statuses, refresh_dynamic_costs
         refresh_dynamic_costs(self)
@@ -198,9 +218,10 @@ class GameEngine2v2(GameEngine):
             if not self._is_status_immune(teammate_id):
                 teammate_blind = effective_blind(self, teammate_id)
             if teammate_blind > 0:
+                # 设计 9.22：失明任意层下队友都只能看到问号（连牌型也不可见）。
                 teammate_data['hand'] = [
                     {
-                        'card_type': getattr(card, 'card_type', '') if teammate_blind == 1 else '',
+                        'card_type': '',
                         '__blind_for_teammate': True,
                         '__blind_level': teammate_blind,
                     }
@@ -271,7 +292,7 @@ class GameEngine2v2(GameEngine):
             'pending_response': self._public_pending_response(for_player),
             'pending_choice': self._public_pending_choice(for_player),
             'pending_v2_ui': self._public_v2_ui(for_player),
-            'pending_ally_request': getattr(self, 'pending_ally_request', None),
+            'pending_ally_request': self._public_ally_request(for_player),
             'opening_event_picks': self.opening_event_picks,
             'mulligan': self._public_mulligan_state(for_player),
             'blood_shield': self._blood_shield_health_floor(for_player),
@@ -423,12 +444,16 @@ class GameEngine2v2(GameEngine):
                     ps.elixir = 7
                 if self.opening_event_picks[i] == 5:
                     hand_size = max(0, hand_size - 1)
-                ps.draw_cards(hand_size)
+                # 对局开始时不触发任何抽取效果（萌芽/玉米等），
+                # 与调度补抽同口径（_draw_opening_swap_cards 绕过到手回调）。
+                self._draw_opening_swap_cards(i, hand_size)
             else:
                 hand_size = INITIAL_HAND_SIZE
                 if self.opening_event_picks[i] == 5:
                     hand_size = max(0, hand_size - 1)
-                ps.draw_cards(hand_size)
+                # 对局开始时不触发任何抽取效果（萌芽/玉米等），
+                # 与调度补抽同口径（_draw_opening_swap_cards 绕过到手回调）。
+                self._draw_opening_swap_cards(i, hand_size)
 
         if self.mulligan_enabled:
             # 新开局规则（调度）：与 1v1 相同，进入 mulligan 阶段等待全员提交。
@@ -936,17 +961,41 @@ class GameEngine2v2(GameEngine):
                     if was_alive and self.players[candidate].health <= 0
                 ]
                 is_precision = pending.get('is_precision', False)
+                reopened_result = self._reopen_response_for_others(pending, responder_id)
+                if reopened_result is not None:
+                    # 其他被打击目标还有反制机会：先结算这张反制牌的后续，
+                    # 被打出的牌等窗口内所有人行动完再结算。
+                    run_response_after_resolution(
+                        self, responder_id, counter_removed, card,
+                        resolution.get('after_resolution'),
+                    )
+                    return self._after_response_result(player_id, reopened_result)
                 if resolution.get('halve_precision'):
+                    # 黄瓜修复（设计 9.22）：减半/无效分支此前漏跑 after_resolution，
+                    # 导致「反制结算后获得无法选中」有时不生效。
                     if self._is_status_immune(responder_id):
-                        return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
+                        result = self._execute_card_effect(player_id, card, choice)
+                        run_response_after_resolution(
+                            self, responder_id, counter_removed, card,
+                            resolution.get('after_resolution'),
+                        )
+                        return self._after_response_result(player_id, result)
                     if is_precision:
                         self._execute_card_effect_half_damage(
                             player_id, card, choice, dodge_target_id=responder_id
                         )
                         self._clamp_response_props(responder_id, responder_prop_snapshot)
+                        run_response_after_resolution(
+                            self, responder_id, counter_removed, card,
+                            resolution.get('after_resolution'),
+                        )
                         return self._after_response_result(player_id, {'success': True, 'countered': True, 'precision_halved': True, 'card': card.to_dict()})
                     self._execute_card_effect(player_id, card, choice)
                     self._clamp_response_props(responder_id, responder_prop_snapshot)
+                    run_response_after_resolution(
+                        self, responder_id, counter_removed, card,
+                        resolution.get('after_resolution'),
+                    )
                     return self._after_response_result(player_id, {'success': True, 'countered': True, 'card': card.to_dict()})
                 if resolution.get('negate_bloom'):
                     self.negated_card = True
@@ -980,6 +1029,32 @@ class GameEngine2v2(GameEngine):
                 self._advance_dead_current_player_if_ready()
         return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
 
+
+    def _reopen_response_for_others(self, pending: dict, responder_id: int) -> Optional[dict]:
+        """一名反制者行动后，若其他响应者仍有可支付的反制牌，窗口保持打开
+        （修复 2v2 广域打击只能有一人反制的 bug：每个被打击的目标都有
+        各自的一次反制机会，全部行动完才结算被打出的牌）。"""
+        remaining = [
+            entry for entry in (pending.get('counter_cards') or [])
+            if self._pending_counter_responder_id(entry) not in (-1, int(responder_id))
+        ]
+        remaining = [
+            entry for entry in remaining
+            if self._pending_response_has_payable_counter({'counter_cards': [entry]})
+        ]
+        if not remaining:
+            return None
+        reopened = dict(pending)
+        reopened['counter_cards'] = remaining
+        reopened['forced_wait'] = False
+        reopened['window_deadline'] = time.time() + self.FORCED_RESPONSE_WINDOW_SECONDS
+        self.pending_response = reopened
+        return {
+            'success': True,
+            'countered': True,
+            'needs_response': True,
+            'card': pending.get('card') or {},
+        }
 
     def resolve_forced_response(self) -> dict:
         """结算 2s 强制反制窗口：无人反制，到点直接执行被卡住的出牌效果。"""
@@ -1423,7 +1498,7 @@ class GameEngine2v2(GameEngine):
                 if not self._is_valid_player_id(responder_id) or self.players[responder_id].health <= 0:
                     continue
                 for c in self.players[responder_id].hand:
-                    if 'precision' in flags and getattr(c.card_def, 'response_trigger', '') != 'thorn':
+                    if 'precision' in flags and getattr(c.card_def, 'response_trigger', '') not in ('thorn', 'targeted'):
                         continue
                     target_match = any(
                         self._card_can_counter(c, card, responder_id=responder_id, target_player_id=tid)
@@ -1464,6 +1539,8 @@ class GameEngine2v2(GameEngine):
             'paid_e': self._actual_card_elixir_cost(card),
             'paid_m': max(0, int(getattr(card, '_paid_m_this_play', getattr(card, 'cost_m', 0)) or 0)),
             'forced_wait': False,
+            # 2s 硬上限：有人可反制的窗口也最多停 2s（设计 9.22 #零-5）。
+            'window_deadline': time.time() + self.FORCED_RESPONSE_WINDOW_SECONDS,
         }
 
     def _equipment_destroy_response_player_ids(self, player_id: int, card: Optional[CardInstance], choice: Optional[dict] = None) -> List[int]:
@@ -1974,12 +2051,29 @@ class GameEngine2v2(GameEngine):
         target_id = self._selected_effect_target(player_id, getattr(self, '_active_choice', None))
         if not self._is_valid_player_id(target_id) or not self.is_enemy(player_id, target_id):
             return False
-        return any(self._can_pay_counter_card(target_id, c) and c.card_def.response_trigger == 'thorn' for c in self.players[target_id].hand)
+        # 设计 9.22：精准牌也能被 targeted 反制（氮气修复）。
+        return any(
+            self._can_pay_counter_card(target_id, c)
+            and c.card_def.response_trigger in ('thorn', 'targeted')
+            for c in self.players[target_id].hand
+        )
 
     def both_events_selected(self) -> bool:
         return all(p is not None for p in self.opening_event_picks)
 
     def _apply_turn_start_effects_2v2(self, player_id: int):
+        # 魔法牙每回合 20D 上限的计数器随回合清零。
+        try:
+            self.players[player_id].custom_vars.pop('jurassic_magic_tooth_damage_this_turn', None)
+        except Exception:
+            pass
+        # 设计 9.22：ygg 无敌改为「触发玩家下个回合开始时」消失。
+        if (
+            0 <= player_id < len(self.players)
+            and self._should_expire_invincible_on_turn_start(player_id)
+        ):
+            self._clear_invincible_state(player_id)
+            self.log_msg(f"{self.pn(player_id)}的无敌效果结束")
         ps = self.players[player_id]
         self._decay_sealed_equipment_for_owner_turn(player_id)
         self._activate_pending_corruption()
@@ -2431,7 +2525,8 @@ class GameEngine2v2(GameEngine):
             attacker_state = self.players[attacker_id] if 0 <= attacker_id < len(self.players) else None
             attacker_immune = self._is_status_immune(attacker_id) if attacker_state is not None else False
             if dmg > 0 and attacker_state is not None and attacker_state.weakness > 0 and not attacker_immune:
-                reduction = min(0.6, 0.2 * attacker_state.weakness)
+                # 设计 9.22：虚弱改为无论层数固定 -20%。
+                reduction = 0.2
                 dmg = max(1, int(dmg * (1.0 - reduction)))
             dmg, _hel_crit = self._hel_apply_lucky_crit_to_damage(
                 attacker_id, dmg, source_card, crit_bonus_damage
@@ -2489,6 +2584,8 @@ class GameEngine2v2(GameEngine):
                 damage_type=DAMAGE_TYPE_PHYSICAL, damage_tag=DAMAGE_TAG_PHYSICAL,
             )
             self.log_msg(f"{self.pn(target_id)}受到{dmg}点伤害（H={ps.health}）")
+            if _hel_crit and dmg > 0:
+                self._hel_rebound_discard_after_crit(attacker_id, source_card)
             if dmg > 0:
                 self._sewers_grow_toilet_paper_power(target_id)
                 self._garden_magic_cutter_after_hit(attacker_id, target_id, dmg)
