@@ -25,6 +25,13 @@
 
   <h1 class="mh-title">休闲花园</h1>
   <p class="mh-sub">这里放轻松向的小游戏，成绩会照常自动同步。</p>
+  {% if user_id %}
+  {% else %}
+  <div class="mh-guest-bar">
+    <span>游客模式：可以玩，但成绩不会上榜。</span>
+    <a class="mh-login-link" href="/?login=1" target="_blank" rel="noopener">登录 / 注册</a>
+  </div>
+  {% endif %}
 
   <section class="mh-grid" aria-label="小游戏列表">
     <article class="mh-card">

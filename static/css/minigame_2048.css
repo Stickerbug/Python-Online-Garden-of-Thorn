@@ -923,3 +923,21 @@
 
 .mg-chat-close:hover,
 .mg-chat-close:focus-visible { color: var(--text-primary); }
+
+
+/* 游客提示（头部行内） */
+.mg-guest-note {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-secondary, #626f86);
+}
+
+a.mg-login-link {
+  color: #7a4cc0;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+a.mg-login-link:hover {
+  text-decoration: underline;
+}

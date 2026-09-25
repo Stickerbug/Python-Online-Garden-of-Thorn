@@ -41,6 +41,7 @@ let syncTimer = null;
 let retryDelay = RETRY_BASE_MS;
 let syncing = false;
 let identityRejected = false;
+let guestMode = false;
 let showNumbers = false;
 let animations = true;
 
@@ -478,7 +479,7 @@ function scheduleSync(delay = SYNC_DEBOUNCE_MS) {
 }
 
 async function syncNow() {
-  if (syncing || identityRejected) return;
+  if (syncing || identityRejected || guestMode) return;
   const pendingOps = state.ops.slice(state.acked);
   if (!pendingOps.length) return;
   syncing = true;
@@ -976,7 +977,12 @@ async function refreshLeaderboard(windowMode = rankWindowMode) {
   try {
     const response = await fetch(`/api/minigame/2048/leaderboard?window=${rankWindowMode}&limit=100`,
       { credentials: 'same-origin' });
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
+      guestMode = true;
+      body.textContent = '游客不上榜——登录后即可参与排行。';
+      return;
+    }
+    if (response.status === 403) {
       body.textContent = '身份或权限失效，无法查看排行榜。';
       return;
     }
@@ -1007,7 +1013,9 @@ async function refreshLeaderboard(windowMode = rankWindowMode) {
               : '未发（' + escapeHtml(p.reason || '') + '）')).join('；') + '</p>'
         : '');
   } catch (_) {
-    body.textContent = '离线，暂时读不到排行榜（棋盘不受影响）。';
+    body.textContent = guestMode
+      ? '游客不上榜——登录后即可参与排行。'
+      : '离线，暂时读不到排行榜（棋盘不受影响）。';
   }
 }
 
@@ -1072,7 +1080,14 @@ async function boot() {
   }
   try {
     const response = await fetch('/api/minigame/2048/state', { credentials: 'same-origin' });
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
+      // 游客模式：本地开玩，不云同步、不上榜（2026-09-25 休闲花园对游客开放）
+      guestMode = true;
+      setSyncText('游客模式：本地游玩，登录后成绩上榜', 'guest');
+      if (!state) startLocalGame();
+      return;
+    }
+    if (response.status === 403) {
       identityRejected = true;
       setSyncText('身份或权限失效：请重新登录后再进入（本地进度仍在）', 'denied');
       if (!state) startLocalGame();

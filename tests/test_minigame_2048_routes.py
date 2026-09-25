@@ -26,9 +26,10 @@ class RouteAccessTests(unittest.TestCase):
     def tearDown(self):
         svc.db_module = self.original_db
 
-    def test_anonymous_is_rejected(self):
-        self.assertEqual(self.client.get("/minigame").status_code, 401)
-        self.assertEqual(self.client.get("/minigame/2048").status_code, 401)
+    def test_anonymous_page_ok_apis_rejected(self):
+        """游客可直接进页面（2026-09-25）；数据接口仍要登录。"""
+        self.assertEqual(self.client.get("/minigame/2048").status_code, 200)
+        self.assertEqual(self.client.get("/minigame").status_code, 200)
         self.assertEqual(self.client.get("/api/minigame/2048/state").status_code, 401)
         self.assertEqual(self.client.get("/api/minigame/2048/leaderboard").status_code, 401)
         post = self.client.post("/api/minigame/2048/sync", json={"ops": "lurd"})

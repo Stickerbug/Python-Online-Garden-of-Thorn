@@ -126,6 +126,7 @@ let overlayMode = '';
 let pendingAction = null;
 
 /* 云同步状态：每颗球落定/每次分数增加都上传（失败进重试，离线不阻塞游玩）。 */
+let guestMode = false;
 const syncState = {
   gameUid: '',
   acked: 0,          // 服务端已确认的投放数
@@ -953,7 +954,7 @@ async function restartCloudGame() {
 /** 把"新增投放 + 新总分"立刻上传；服务端落库后再启发式校验能否入榜。 */
 async function syncNow() {
   if (syncState.timer) { window.clearTimeout(syncState.timer); syncState.timer = null; }
-  if (!game || syncState.inflight) return;
+  if (!game || syncState.inflight || guestMode) return;
   if (cloudRestartPromise) {
     try { await cloudRestartPromise; } catch (_) { /* 上面已兜住 */ }
   }
@@ -961,6 +962,12 @@ async function syncNow() {
     // 还没拿到云端局 ID：先开一局（服务端会返回 seed，与本地一致时才接管）
     try {
       const response = await fetch('/api/minigame/suika/state', { credentials: 'same-origin' });
+      if (response.status === 401) {
+        // 游客模式：本地玩，不上榜（2026-09-25 休闲花园对游客开放）
+        guestMode = true;
+        setStatus('游客模式：本地游玩，登录后成绩上榜');
+        return;
+      }
       if (!response.ok) { syncState.lastError = 'state'; return; }
       const data = await response.json();
       const remote = data && data.game;
@@ -1034,6 +1041,11 @@ async function refreshLeaderboard() {
   try {
     const response = await fetch(`/api/minigame/suika/leaderboard?window=${encodeURIComponent(rankWindowMode)}&limit=50`,
       { credentials: 'same-origin' });
+    if (response.status === 401) {
+      guestMode = true;
+      rankBodyEl.textContent = '游客不上榜——登录后即可参与排行。';
+      return;
+    }
     if (!response.ok) throw new Error(`http ${response.status}`);
     const data = await response.json();
     const rows = (data && data.table && data.table.entries) || [];

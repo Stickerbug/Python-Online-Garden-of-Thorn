@@ -35490,6 +35490,23 @@ def _minigame_2048_guard():
         return None, _json_error('小游戏暂时不可用，请稍后再试', 403)
     return identity, None
 
+def _minigame_guest_guard():
+    """游客可进版守卫：页面用这个，未登录返回 (None, None) 而不是 401。
+    API 仍用 _minigame_2048_guard / _minigame_suika_guard（游客 401）。"""
+
+    if not MINIGAME_2048_ENABLED:
+        return None, _json_error('小游戏暂不可用', 503)
+    identity = _minigame_2048_identity()
+    if identity is None:
+        return None, None  # 游客：页面允许进
+    try:
+        allowed = minigame_2048_service.can_access_minigame(identity[0], identity[1])
+    except Exception:
+        allowed = False
+    if not allowed:
+        return None, None
+    return identity, None
+
 
 def _minigame_2048_rate_limited(identity_key, key, limit, window=300):
     """限流键按**账号**分桶。
@@ -35557,19 +35574,21 @@ def ensure_minigame_2048_settlement_worker():
 def minigame_hub_page():
     """休闲花园首页：小游戏列表。
 
-    权限跟小游戏本体一致（登录账号即可），直达 URL 也走同一套判定。
+    游客也能直接进（2026-09-25）：页面渲染不需要登录，卡片照常显示。
     ``?from=lobby`` 表示是从多人大厅进来的：返回按钮要回到大厅（并让大厅记住原位置），
     卡片链接也把来源带上，这样一路返回都能回到来处。
     """
 
-    identity, denied = _minigame_2048_guard()
+    identity, denied = _minigame_guest_guard()
     if denied is not None:
         return denied
+    username = identity[1] if identity else ''
+    user_id = identity[0] if identity else None
     from_key = minigame_registry.normalize_from(request.args.get('from'))
     return render_template(
         'minigame_hub.html',
-        username=identity[1],
-        user_id=identity[0],
+        username=username,
+        user_id=user_id,
         static_version=GTN_STATIC_VERSION,
         from_key=from_key,
         hub_back_href=minigame_registry.minigame_hub_back_href(from_key),
@@ -35582,21 +35601,24 @@ def minigame_hub_page():
 
 @app.route('/minigame/2048')
 def minigame_2048_page():
-    identity, denied = _minigame_2048_guard()
+    identity, denied = _minigame_guest_guard()
     if denied is not None:
         return denied
+    username = identity[1] if identity else ''
+    user_id = identity[0] if identity else None
     from_key = minigame_registry.normalize_from(request.args.get('from'))
     # 聊天身份（admin / staff / player）：客户端据此决定要不要显示"撤回"按钮；
     # 真正的权限判定仍由服务端在做撤回时再判一次。
     viewer_chat_role = 'player'
-    try:
-        viewer_chat_role = _chat_role_for_account(identity[0])
-    except Exception as exc:
-        admin_event('error', f'2048 page chat role lookup failed: {exc}')
+    if identity:
+        try:
+            viewer_chat_role = _chat_role_for_account(identity[0])
+        except Exception as exc:
+            admin_event('error', f'2048 page chat role lookup failed: {exc}')
     return render_template(
         'minigame_2048.html',
-        username=identity[1],
-        user_id=identity[0],
+        username=username,
+        user_id=user_id,
         chat_role=viewer_chat_role,
         static_version=GTN_STATIC_VERSION,
         rarity_table=minigame_2048.rarity_table_payload(),
@@ -35616,20 +35638,23 @@ def minigame_suika_page():
     服务端只渲染页面外壳；成绩同步 / 排行榜走 minigame 那套表。
     """
 
-    identity, denied = _minigame_suika_guard()
+    identity, denied = _minigame_guest_guard()
     if denied is not None:
         return denied
+    username = identity[1] if identity else ''
+    user_id = identity[0] if identity else None
     from_key = minigame_registry.normalize_from(request.args.get('from'))
     # 聊天身份（admin / staff / player）：客户端据此显示"撤回"按钮，服务端撤回时还会再判一次
     viewer_chat_role = 'player'
-    try:
-        viewer_chat_role = _chat_role_for_account(identity[0])
-    except Exception as exc:
-        admin_event('error', f'suika page chat role lookup failed: {exc}')
+    if identity:
+        try:
+            viewer_chat_role = _chat_role_for_account(identity[0])
+        except Exception as exc:
+            admin_event('error', f'suika page chat role lookup failed: {exc}')
     return render_template(
         'minigame_suika.html',
-        username=identity[1],
-        user_id=identity[0],
+        username=username,
+        user_id=user_id,
         chat_role=viewer_chat_role,
         static_version=GTN_STATIC_VERSION,
         from_key=from_key,

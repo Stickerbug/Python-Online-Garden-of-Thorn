@@ -40,6 +40,9 @@
   <header class="sk-topbar">
     <div class="sk-topbar-row">
       <a class="sk-back" href="{{ back_href|default('/minigame') }}" title="返回休闲花园">← 休闲花园</a>
+      {% if not user_id %}
+      <span class="sk-guest-note">游客模式 · <a class="sk-login-link" href="/?login=1" target="_blank" rel="noopener">登录 / 注册</a> 后上榜</span>
+      {% endif %}
     </div>
     <div class="sk-topbar-row">
       <div class="sk-brand">

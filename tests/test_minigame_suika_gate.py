@@ -30,8 +30,9 @@ class SuikaGateTests(unittest.TestCase):
     def tearDown(self):
         svc.db_module = self.original_db
 
-    def test_anonymous_is_rejected(self):
-        self.assertEqual(self.client.get("/minigame/suika").status_code, 401)
+    def test_anonymous_page_ok_apis_rejected(self):
+        """游客可直接进页面（2026-09-25）；数据接口仍要登录。"""
+        self.assertEqual(self.client.get("/minigame/suika").status_code, 200)
         self.assertEqual(self.client.get("/api/minigame/suika/state").status_code, 401)
         self.assertEqual(self.client.get("/api/minigame/suika/leaderboard").status_code, 401)
         self.assertEqual(

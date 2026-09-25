@@ -204,3 +204,28 @@
   .mh-title { font-size: 28px; }
   .mh-grid { grid-template-columns: 1fr; }
 }
+
+
+/* 游客横条：未登录时提示可玩但不上榜，给登录/注册入口 */
+.mh-guest-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border: 1px solid rgba(148, 102, 210, 0.45);
+  border-radius: 8px;
+  background: rgba(148, 102, 210, 0.08);
+  font-size: 13px;
+  margin: 0 0 16px;
+}
+
+a.mh-login-link {
+  color: #7a4cc0;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+a.mh-login-link:hover {
+  text-decoration: underline;
+}
