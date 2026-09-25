@@ -343,9 +343,30 @@ function chatNameHtml(item, fallback) {
   return namePaintHtml(item, (item && item.nickname) || fallback || '?');
 }
 
-/* minigame_2048.js 是独立脚本：把排行榜渲染要用的帮手挂到全局。 */
-window.chatTitlesHtml = chatTitlesHtml;
-window.namePaintHtml = namePaintHtml;
+/* minigame_2048.js 是独立脚本：把排行榜渲染要用的帮手挂到全局。
+   escapeHtml 也是当年内联聊天的一员（模块作用域里有同名函数但这里拿不到），
+   这里自带一份局部实现，避免再漏依赖。 */
+function _lbEscapeHtml(text) {
+  return String(text == null ? '' : text).replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[char]));
+}
+
+window.chatTitlesHtml = function (item) {
+  const titles = Array.isArray(item && item.equipped_titles) ? item.equipped_titles : [];
+  return titles.slice(0, 3).map((title) => {
+    const name = String((title && title.name) || '').trim();
+    if (!name) return '';
+    const color = titleColorCss(title.color);
+    return `<span class="player-title-inline"${color ? ` style="color:${color}"` : ''}>[${_lbEscapeHtml(name)}]</span>`;
+  }).join('');
+};
+window.namePaintHtml = function (item, name) {
+  const text = String(name || '?');
+  const paint = chatNamePaint(item);
+  return `<span class="player-name-value${paint ? ` ${paint.className}` : ''}" `
+    + `${paint ? `style="${paint.style}" ` : ''}>${_lbEscapeHtml(text)}</span>`;
+};
 window.chatNameHtml = chatNameHtml;
 })();
 
