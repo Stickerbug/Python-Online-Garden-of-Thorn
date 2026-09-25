@@ -2102,6 +2102,19 @@ a.title-shop-afdian-go:hover {
   gap: 12px;
 }
 
+/* 荆露页头部「赞助」按钮（与商店头部同款紫） */
+.thorn-dew-afdian-btn {
+  flex: 0 0 auto;
+  border-color: #9466d2;
+  background: #9466d2;
+  color: #fff;
+}
+
+.thorn-dew-afdian-btn:hover {
+  background: #7a4cc0;
+  border-color: #7a4cc0;
+}
+
 .thorn-dew-title {
   font-size: 13px;
   color: var(--text-secondary);

@@ -18147,6 +18147,17 @@ function thornDewTransactionReason(tx = {}) {
             ? lt({ zh: `每日签到 第${streak}天`, en: `Daily check-in, day ${streak}`, fr: `Connexion quotidienne, jour ${streak}`, ja: `ログインボーナス ${streak}日目` })
             : lt({ zh: '每日签到', en: 'Daily check-in', fr: 'Connexion quotidienne', ja: 'ログインボーナス' });
     }
+    if (sourceType === 'afdian') {
+        // 爱发电到账：单号 26 位太长，流水里只显示尾部 6 位便于对照
+        const tail = String(tx.source_id || '').slice(-6);
+        const label = raw.replace(/\s*\d{10,}\s*/, ' ').trim();
+        return tail
+            ? lt({ zh: `爱发电赞助（单号尾 ${tail}）${label ? ' ' + label : ''}`,
+                   en: `Afdian sponsor (order …${tail})${label ? ' ' + label : ''}`,
+                   fr: `Soutien Afdian (commande …${tail})${label ? ' ' + label : ''}`,
+                   ja: `愛発電支援（注文末 ${tail}）${label ? ' ' + label : ''}` })
+            : lt({ zh: '爱发电赞助', en: 'Afdian sponsor', fr: 'Soutien Afdian', ja: '愛発電支援' });
+    }
     if (sourceType === 'match_reward') {
         const mode = (raw.match(/有效对局奖励\s+(\S+)/) || [])[1] || '';
         const result = raw.includes('平局')
@@ -18193,6 +18204,7 @@ function thornDewCenterHtml(user) {
                     <div class="thorn-dew-balance">${thornDewAmountHtml(total)}</div>
                     <div class="thorn-dew-sub">${escapeHtml(lt({ zh: '可用于未来兑换内容', en: 'Available for future rewards', fr: 'Utilisable pour de futures récompenses', ja: '今後の報酬交換に使用できます' }))}</div>
                 </div>
+                <button id="btn-dew-afdian" class="mini-btn thorn-dew-afdian-btn" type="button">${escapeHtml(lt({ zh: '赞助', en: 'Support', fr: 'Soutien', ja: '支援' }))}</button>
             </div>
             <div class="thorn-dew-tx-list">${txHtml}</div>
         </div>
@@ -18748,6 +18760,9 @@ function renderAchievementCenter() {
     renderTitleCenter(titlesPanel, data.titles || { items: [], equipped: [], max_equipped: 3 });
     const dailyCheckinBtn = dailyPanel.querySelector('#btn-thorn-dew-checkin-daily');
     if (dailyCheckinBtn) dailyCheckinBtn.onclick = onThornDewCheckin;
+    // 荆露页「赞助」按钮：打开完整兑换页（绑定码/档位/补单都在那）
+    const dewAfdianBtn = dewPanel.querySelector('#btn-dew-afdian');
+    if (dewAfdianBtn) dewAfdianBtn.onclick = () => window.open('/afdian', '_blank', 'noopener');
     if (achievementLoadError) {
         list.innerHTML = `<div class="account-replay-sub">${escapeHtml(achievementLoadError)}</div>`;
         return;

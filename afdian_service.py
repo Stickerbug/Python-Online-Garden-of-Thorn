@@ -380,7 +380,7 @@ def _settle(out_trade_no: str, *, via: str) -> Dict[str, Any]:
         conn.commit()
     payload, error = db.adjust_user_thorn_dew(
         int(game_user_id), free_delta=0, paid_delta=dew,
-        reason=f'爱发电赞助到账 {out_trade_no}（{label}）',
+        reason=f'爱发电赞助到账 …{str(out_trade_no)[-6:]}（{label}）',
         source_type='afdian', source_id=out_trade_no)
     if error:
         with db.get_db_connection() as conn:
@@ -635,7 +635,7 @@ def admin_credit(out_trade_no: str, dew: int, user_id: int, reason: str = '') ->
         return {'ok': False, 'error': '需要订单号与正数荆露'}
     payload, error = db.adjust_user_thorn_dew(
         int(user_id), free_delta=0, paid_delta=dew,
-        reason=reason or f'爱发电赞助手动入账 {out_trade_no}',
+        reason=reason or f'爱发电赞助手动入账 …{str(out_trade_no)[-6:]}',
         source_type='afdian', source_id=out_trade_no)
     if error:
         return {'ok': False, 'error': str(error)}
