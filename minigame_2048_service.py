@@ -34,6 +34,10 @@ except Exception:  # pragma: no cover - 极端环境下只影响默认连接
 
 GAME_KEY = "2048"
 GAME_TITLE = "2048"
+# 管理控制台（minigame record add）按 svc.RULES_VERSION 读规则版本；
+# 与 minigame_suika_service 的模块级常量布局对齐，避免 AttributeError。
+RULES_VERSION = g.RULES_VERSION
+SAVE_VERSION = g.SAVE_VERSION
 # 周榜奖励（2026-09-23 起）：前三名固定名次奖金，取代旧的「300 奖池由并列冠军均分」。
 # 同分并列同名次（竞赛排名 1,1,3 式）：并列者均分该名次的奖金。
 PRIZE_BY_RANK = {1: 1000, 2: 500, 3: 200}
