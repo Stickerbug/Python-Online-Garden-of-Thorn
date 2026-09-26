@@ -11858,7 +11858,9 @@ def list_average_round_stats(scope='total', mode='', recent_days=7):
     }
 
 
-def list_admin_users(query='', sort='last_login_at', order='desc', limit=30, offset=0):
+def list_admin_users(query='', sort='last_login_at', order='desc', limit=30, offset=0, deleted=None):
+    """管理台账号列表/搜索。deleted=None 不过滤（含注销号，输出里带标记）；
+    True 只列注销号（account restore 补全用）；False 只列正常号。"""
     sort_key = str(sort or 'last_login_at')
     sort_expr = ADMIN_USER_SORTS.get(sort_key, ADMIN_USER_SORTS['last_login_at'])
     direction = 'ASC' if str(order or '').lower() == 'asc' else 'DESC'
@@ -11872,11 +11874,16 @@ def list_admin_users(query='', sort='last_login_at', order='desc', limit=30, off
         safe_offset = 0
 
     name = sanitize_username(query)
-    where = ''
+    conditions = []
     params = []
     if name:
-        where = 'WHERE username_lower LIKE ? OR player_id LIKE ?'
+        conditions.append('(username_lower LIKE ? OR player_id LIKE ?)')
         params.extend([f'%{name.lower()}%', f'%{str(query or "").strip().upper()}%'])
+    if deleted is True:
+        conditions.append('deleted_at IS NOT NULL')
+    elif deleted is False:
+        conditions.append('deleted_at IS NULL')
+    where = ('WHERE ' + ' AND '.join(conditions)) if conditions else ''
 
     null_rank = 'CASE WHEN last_login_at IS NULL THEN 1 ELSE 0 END'
     if sort_key == 'last_login_at' and direction == 'DESC':

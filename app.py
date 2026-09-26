@@ -12828,6 +12828,13 @@ def _format_online_player_detail(sid, player):
     return '\n'.join(lines)
 
 
+def admin_user_deleted_suffix(user):
+    """账号输出里的注销角标（未注销返回空串）。"""
+    if not isinstance(user, dict) or not user.get('deleted'):
+        return ''
+    return f"（已注销 {admin_display_time(user.get('deleted_at'))}）"
+
+
 def admin_player_get_output(identifier):
     sid, player = _find_online_player_for_admin(identifier)
     blocks = []
@@ -12838,8 +12845,9 @@ def admin_player_get_output(identifier):
         if user:
             blocks.append(
                 '\n'.join([
-                    f"注册账号：{user.get('username')}",
+                    f"注册账号：{user.get('username')}{admin_user_deleted_suffix(user)}",
                     f"注册顺序={user.get('id')} 玩家ID={user.get('player_id') or '-'}",
+                    f"状态={'已注销（' + admin_display_time(user.get('deleted_at')) + '），可用 account restore 恢复；原密码可登录' if user.get('deleted') else '正常'}",
                     f"有效对局={user.get('games_played', 0)} 胜/负/平={user.get('wins', 0)}/{user.get('losses', 0)}/{user.get('draws', 0)}",
                     f"花阶分：赛季 {format_rating_value(user.get('season_gr'))}（{int(user.get('season_ranked_games') or 0)}局）/ 总榜 {format_rating_value(user.get('total_gr'))}（{int(user.get('total_ranked_games') or 0)}局）",
                     f"总对局时长={format_duration_zh(user.get('play_seconds') or 0)}",
@@ -14593,11 +14601,16 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
         rows = data.get('users') or []
         if not rows:
             return {'success': True, 'output': '没有匹配的注册账号。'}
-        lines = [f"注册账号：{len(rows)}/{data.get('total', len(rows))}", '用户名  ID  对局  胜/败/平  荆露  上次登录']
+        deleted_count = sum(1 for user in rows if user.get('deleted'))
+        header = f"注册账号：{len(rows)}/{data.get('total', len(rows))}"
+        if deleted_count:
+            header += f"（其中 {deleted_count} 个已注销，可用 account restore 恢复）"
+        lines = [header, '用户名  ID  对局  胜/败/平  荆露  上次登录']
         for user in rows:
             thorn_dew = int(user.get('thorn_dew_total') or 0)
+            username = f"{user.get('username') or '-'}[已注销]" if user.get('deleted') else (user.get('username') or '-')
             lines.append(
-                f"{user.get('username') or '-'}  {user.get('player_id') or '-'}  "
+                f"{username}  {user.get('player_id') or '-'}  "
                 f"{int(user.get('games_played') or 0)}  "
                 f"{int(user.get('wins') or 0)}/{int(user.get('losses') or 0)}/{int(user.get('draws') or 0)}  "
                 f"{thorn_dew}  {admin_display_time(user.get('last_login_at'))}"
@@ -15943,7 +15956,10 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
             return {'success': False, 'output': error}
         clear_leaderboard_cache()
         admin_event('admin', f"unbanned account {user['username']}#{user['id']}")
-        return {'success': True, 'output': f"已解除账号 {user['username']} (ID:{user.get('player_id') or '-'} 注册顺序：{user['id']}) 的封禁。"}
+        output = f"已解除账号 {user['username']} (ID:{user.get('player_id') or '-'} 注册顺序：{user['id']}) 的封禁。"
+        if user.get('deleted'):
+            output += '\n' + f"注意：该账号已注销（{admin_display_time(user.get('deleted_at'))}），解封后仍无法登录；如需找回请用 account restore {user['username']}。"
+        return {'success': True, 'output': output}
     if cmd in ('restoreuser', 'restoreaccount'):
         if len(parts) < 2:
             return {'success': False, 'output': command_error(raw, len(raw), '<ID|注册顺序|用户名>')}
@@ -16189,6 +16205,19 @@ def admin_completions(line):
             values.extend((user.get('player_id'), user.get('id'), user.get('username')))
         return values
 
+    def deleted_account_values():
+        """只补全已注销账号（account restore 专用），别的账号命令仍补全全部。"""
+        if not DB_AVAILABLE:
+            return []
+        try:
+            rows = list_admin_users(query=token, sort='username', order='asc', limit=30, deleted=True).get('users', [])
+        except Exception:
+            return []
+        values = []
+        for user in rows:
+            values.extend((user.get('player_id'), user.get('id'), user.get('username')))
+        return values
+
     def title_values(account_token):
         if not DB_AVAILABLE:
             return []
@@ -16424,6 +16453,8 @@ def admin_completions(line):
         return filtered(values)
 
     if cmd == 'account':
+        if sub == 'restore' and position == 2:
+            return filtered(deleted_account_values())
         if sub == 'list' and position == 2:
             return filtered(account_values())
         if sub == 'achievement':
@@ -16779,8 +16810,31 @@ def admin_completions(line):
     return []
 
 
+def _deleted_account_tokens(values):
+    """返回补全值里属于已注销账号的令牌集合（一次查询，供下拉详情标记）。"""
+    if not DB_AVAILABLE or not values:
+        return set()
+    tokens = {str(value or '') for value in values if str(value or '').strip()}
+    if not tokens:
+        return set()
+    try:
+        with get_db_connection() as conn:
+            rows = conn.execute(
+                'SELECT id, player_id, username FROM users WHERE deleted_at IS NOT NULL LIMIT 500',
+            ).fetchall()
+    except Exception:
+        return set()
+    deleted = set()
+    for row in rows or []:
+        for raw in (str(row['id']), str(row['player_id'] or ''), str(row['username'] or '')):
+            if raw and raw in tokens:
+                deleted.add(raw)
+    return deleted
+
+
 def admin_console_completion_items(line):
     values = admin_completions(line)
+    deleted_tokens = _deleted_account_tokens(values)
     raw = str(line or '')
     if raw.lstrip().startswith('/'):
         leading = len(raw) - len(raw.lstrip())
@@ -16819,7 +16873,7 @@ def admin_console_completion_items(line):
             detail = '可选参数'
             kind = 'option'
         else:
-            detail = ''
+            detail = '已注销账号' if text_value in deleted_tokens else ''
             kind = 'value'
         items.append({'value': text_value, 'detail': detail, 'kind': kind})
     return items

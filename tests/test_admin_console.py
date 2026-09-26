@@ -480,6 +480,61 @@ class AccountRestoreCommandTests(unittest.TestCase):
         _, error = db.admin_restore_deleted_user('NoSuchUser')
         self.assertEqual(error, '账号不存在')
 
+    def test_deleted_accounts_visible_and_marked(self):
+        """注销号要在列表/详情里可见且带标记：列表含注销号，过滤参数各司其职。"""
+        active, _ = db.create_user('StillHere', 'Passw0rd!xyz')
+
+        all_users = db.list_admin_users(query='', limit=50).get('users', [])
+        names = {user['username'] for user in all_users}
+        self.assertIn('RestoreMe', names)
+        self.assertIn('StillHere', names)
+
+        deleted_only = db.list_admin_users(query='', limit=50, deleted=True).get('users', [])
+        self.assertEqual({user['username'] for user in deleted_only}, {'RestoreMe'})
+        active_only = db.list_admin_users(query='', limit=50, deleted=False).get('users', [])
+        self.assertNotIn('RestoreMe', {user['username'] for user in active_only})
+        self.assertIn('StillHere', {user['username'] for user in active_only})
+
+        result = app.execute_admin_command('account list')
+        self.assertTrue(result.get('success'))
+        self.assertIn('RestoreMe[已注销]', result.get('output', ''))
+        self.assertIn('StillHere', result.get('output', ''))
+        self.assertNotIn('StillHere[已注销]', result.get('output', ''))
+
+        detail = app.admin_player_get_output('RestoreMe')
+        self.assertIn('已注销', detail)
+        self.assertIn('account restore', detail)
+        self.assertIn('状态=正常', app.admin_player_get_output('StillHere'))
+
+    def test_restore_completion_only_lists_deleted_accounts(self):
+        """account restore 的补全只出注销号；其他账号命令补全全部并给注销号打标。"""
+        db.create_user('StillHere', 'Passw0rd!xyz')
+
+        restore_items = app.admin_console_completion_items('account restore ')
+        restore_values = [item['value'] for item in restore_items]
+        self.assertIn('RestoreMe', restore_values)
+        self.assertNotIn('StillHere', restore_values)
+        self.assertTrue(all(
+            item.get('detail') == '已注销账号' for item in restore_items
+            if item['value'] == 'RestoreMe'
+        ))
+
+        get_items = app.admin_console_completion_items('account get ')
+        get_values = [item['value'] for item in get_items]
+        self.assertIn('RestoreMe', get_values)
+        self.assertIn('StillHere', get_values)
+        restore_detail = {
+            item['value']: item.get('detail')
+            for item in get_items
+        }
+        self.assertEqual(restore_detail.get('RestoreMe'), '已注销账号')
+        self.assertNotEqual(restore_detail.get('StillHere'), '已注销账号')
+
+    def test_unban_on_deleted_account_hints_restore(self):
+        result = app.execute_admin_command('account unban RestoreMe')
+        self.assertTrue(result.get('success'))
+        self.assertIn('account restore RestoreMe', result.get('output', ''))
+
 
 if __name__ == '__main__':
     unittest.main()
