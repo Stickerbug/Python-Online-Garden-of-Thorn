@@ -7484,6 +7484,8 @@ function updateTopActionButtons(viewId = activeViewId) {
     if (leaderboardTop) leaderboardTop.classList.toggle('hidden', !onHome);
     const communityTop = $('btn-community-top');
     if (communityTop) communityTop.classList.toggle('hidden', !onHome);
+    const qqTop = $('btn-qq-top');
+    if (qqTop) qqTop.classList.toggle('hidden', !onHome);
 }
 
 function showView(viewId) {
@@ -39296,6 +39298,9 @@ async function init() {
     if ($('btn-friends-top')) $('btn-friends-top').addEventListener('click', () => openSocialCenter('friends'));
     if ($('btn-skin-top')) $('btn-skin-top').addEventListener('click', openSkinEditor);
     if ($('btn-changelog-top')) $('btn-changelog-top').addEventListener('click', openChangelog);
+    if ($('btn-qq-top')) $('btn-qq-top').addEventListener('click', () => {
+        window.open('https://qm.qq.com/q/KngslbBBmM', '_blank', 'noopener');
+    });
     if ($('btn-changelog-popover-close')) $('btn-changelog-popover-close').addEventListener('click', () => toggleChangelogPopover(false));
     if ($('btn-replays-top')) $('btn-replays-top').addEventListener('click', () => toggleStatsPopover());
     if ($('btn-achievements-top')) $('btn-achievements-top').addEventListener('click', () => toggleAchievementsPopover());
