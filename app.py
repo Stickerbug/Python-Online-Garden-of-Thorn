@@ -22441,9 +22441,22 @@ def api_story_run_reset_map():
 
 def beta_entry_response():
     if is_beta_authenticated():
+        # 与正式服 index() 同口径：登录账号才显示休闲花园入口（此前漏传
+        # minigame_available，导致内测服永远看不到入口按钮）。
+        minigame_available = False
+        try:
+            user_id = session.get('user_id')
+            username = str(session.get('username') or '')
+            if MINIGAME_2048_ENABLED and user_id and username:
+                minigame_available = minigame_2048_service.can_access_minigame(user_id, username)
+        except Exception as exc:
+            admin_event('error', f'beta minigame entry check failed: {exc}')
+            minigame_available = False
         return render_template(
             'index.html',
             beta_mode=True,
+            minigame_available=minigame_available,
+            minigame_2048_available=minigame_available,
             static_version=GTN_STATIC_VERSION,
             instance_id=GTN_INSTANCE_ID,
             instance_port=GTN_PORT,
