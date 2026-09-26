@@ -51,17 +51,169 @@ function canReportChatEntry(entry = {}) {
   return !entry.system && chatEntryMessageId(entry) > 0;
 }
 
-/* 撤回权限（与服务端一致）：本人的消息谁都能撤回；admin 任意；staff 只能撤回普通玩家的 */
-function chatRecallAllowed(entry = {}, viewer = {}) {
-  if (entry.system || chatEntryMessageId(entry) <= 0) return false;
+/* ===== 撤回核心（各聊天窗口共用：大厅 / 对局 / 故事模式 / 休闲花园）===== */
+
+/* 玩家（含 staff）只能在发送后 2 分钟内撤回；管理员不受限制。 */
+const CHAT_RECALL_WINDOW_MS = 120 * 1000;
+
+function chatEntryTsSeconds(entry = {}) {
+  const rawTs = Number(entry.ts || 0);
+  if (rawTs > 0) return rawTs;
+  const rawTime = String(entry.time || entry.created_at || '').trim();
+  if (!rawTime) return 0;
+  const parsed = Date.parse(rawTime.includes('T') ? rawTime : rawTime.replace(' ', 'T') + 'Z');
+  return Number.isFinite(parsed) ? parsed / 1000 : 0;
+}
+
+function chatRecallWithinWindow(entry = {}, nowMs = Date.now()) {
+  const ts = chatEntryTsSeconds(entry);
+  if (!ts) return false;
+  return nowMs - ts * 1000 <= CHAT_RECALL_WINDOW_MS;
+}
+
+/* 撤回按钮的过期时刻（毫秒）；管理员返回 0 表示永不过期。 */
+function chatRecallDeadlineMs(entry = {}, viewer = {}) {
+  if (String((viewer && viewer.role) || '').toLowerCase() === 'admin') return 0;
+  const ts = chatEntryTsSeconds(entry);
+  return ts ? ts * 1000 + CHAT_RECALL_WINDOW_MS : 0;
+}
+
+/* 撤回权限（与服务端一致）：本人 / staff 对普通玩家限 2 分钟；admin 任意且不限时。 */
+function chatRecallAllowed(entry = {}, viewer = {}, nowMs = Date.now()) {
+  if (entry.system || entry.recalled || chatEntryMessageId(entry) <= 0) return false;
   const role = String((viewer && viewer.role) || 'player').toLowerCase();
   const viewerId = viewer && viewer.user_id != null ? String(viewer.user_id) : '';
   const senderId = entry.sender_user_id != null ? String(entry.sender_user_id)
     : (entry.user_id != null ? String(entry.user_id) : '');
-  if (viewerId && senderId && viewerId === senderId) return true;
   if (role === 'admin') return true;
-  if (role === 'staff') return String(entry.sender_role || 'player').toLowerCase() === 'player';
+  const own = !!(viewerId && senderId && viewerId === senderId);
+  if (own) return chatRecallWithinWindow(entry, nowMs);
+  if (role === 'staff') {
+    if (!senderId) return false;
+    return String(entry.sender_role || 'player').toLowerCase() === 'player'
+      && chatRecallWithinWindow(entry, nowMs);
+  }
   return false;
+}
+
+const DEFAULT_RECALL_LABELS = {
+  recall: '撤回',
+  recallConfirm: (name) => `撤回 ${name} 的这条消息？撤回后所有玩家都看不到它。`,
+  recallSelf: (actor) => `${actor}撤回了一条消息`,
+  recallEntry: (actor, target) => `${actor}撤回了${target}的一条消息`,
+  adminLabel: '管理员',
+  playerLabel: '玩家',
+};
+
+function recallLabels(custom = {}) {
+  return { ...DEFAULT_RECALL_LABELS, ...(custom || {}) };
+}
+
+/* 原位占位文本：被撤回的消息在原位置显示这一句，而不是在底部新增一条。 */
+function chatRecallPlaceholderText(entry = {}, custom = {}) {
+  const text = recallLabels(custom);
+  const target = String(entry.nickname || entry.sender_name || entry.senderName || entry.nick || '?');
+  const actorName = String(entry.recalled_by || entry.recalledBy || '').trim();
+  const roleLabel = (key) => {
+    const normalized = String(key || '').toLowerCase();
+    if (normalized === 'admin' || normalized === 'staff') return text.adminLabel;
+    if (normalized === 'player') return text.playerLabel;
+    return '';
+  };
+  const actorRole = roleLabel(entry.recalled_role || entry.recalledRole);
+  const targetRole = roleLabel(entry.sender_role || entry.senderRole);
+  const self = entry.self_recall != null
+    ? !!entry.self_recall
+    : (!actorName || actorName === target);
+  const actor = `${actorRole}${actorName || target}`;
+  const targetText = `${targetRole}${target}`;
+  return self ? text.recallSelf(actor) : text.recallEntry(actor, targetText);
+}
+
+/* 收到撤回广播 / 历史里的占位条目都长这样：文本清空，原位保留。 */
+function markChatEntryRecalled(entry = {}, notice = {}) {
+  if (!entry || typeof entry !== 'object') return false;
+  entry.recalled = 1;
+  entry.recalled_by = String(notice.actor_name || notice.recalled_by || notice.recalledBy || entry.nickname || '');
+  if (notice.actor_role != null) entry.recalled_role = String(notice.actor_role);
+  if (notice.self_recall != null) entry.self_recall = !!notice.self_recall;
+  entry.text = '';
+  entry.mentions = undefined;
+  entry.repeat_count = 1;
+  entry.repeatCount = 1;
+  return true;
+}
+
+/* 撤回广播落到一组聊天条目上：条目全部命中 → 原位变占位；
+   折叠条目只命中一部分 → 从折叠里剔除被撤回的，剩下的照常显示。
+   与服务端缓存标记逻辑保持一致（app.py 的 _mark_*_chat_*_recalled）。 */
+function applyRecallToEntryList(entries, notice = {}) {
+  if (!Array.isArray(entries)) return;
+  const ids = new Set(
+    (Array.isArray(notice.message_ids) ? notice.message_ids : [])
+      .map((value) => String(value || ''))
+      .filter(Boolean),
+  );
+  if (!ids.size) return;
+  entries.forEach((entry) => {
+    if (!entry || typeof entry !== 'object' || entry.type === 'time') return;
+    const entryIds = [...new Set(
+      [entry.message_id, entry.messageId, ...(Array.isArray(entry.message_ids) ? entry.message_ids : [])]
+        .filter((value) => value !== undefined && value !== null && value !== '')
+        .map(String),
+    )];
+    if (!entryIds.length) return;
+    const matched = entryIds.filter((id) => ids.has(id));
+    if (!matched.length) return;
+    const remaining = entryIds.filter((id) => !ids.has(id));
+    if (remaining.length) {
+      entry.message_id = remaining[remaining.length - 1];
+      entry.messageId = entry.message_id;
+      entry.message_ids = remaining.slice(-20);
+      const count = Math.max(1, Math.min(Number(entry.repeat_count || entry.repeatCount || 1), remaining.length));
+      entry.repeat_count = count;
+      entry.repeatCount = count;
+      return;
+    }
+    markChatEntryRecalled(entry, notice);
+  });
+}
+
+/* 2 分钟一到自动把过期撤回按钮从界面上拿掉（管理员按钮没有 deadline，不受影响）。 */
+let chatRecallExpiryTimer = null;
+function startChatRecallExpiryWatcher() {
+  if (chatRecallExpiryTimer != null) return;
+  chatRecallExpiryTimer = setInterval(() => {
+    const now = Date.now();
+    document.querySelectorAll('.chat-recall-btn[data-recall-deadline]').forEach((button) => {
+      const deadline = Number(button.getAttribute('data-recall-deadline') || 0);
+      if (deadline && now >= deadline) button.remove();
+    });
+  }, 15000);
+}
+
+/* DOM 版撤回按钮（大厅 / 对局 / 故事模式）；确认流程可由调用方注入。 */
+function createChatRecallButton(entry = {}, viewer = {}, options = {}) {
+  const messageId = chatEntryMessageId(entry);
+  if (!messageId || !chatRecallAllowed(entry, viewer)) return null;
+  const text = recallLabels(options.labels || {});
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'chat-recall-btn';
+  button.textContent = text.recall;
+  button.title = text.recall;
+  button.setAttribute('aria-label', text.recall);
+  const deadline = chatRecallDeadlineMs(entry, viewer);
+  if (deadline) {
+    button.setAttribute('data-recall-deadline', String(deadline));
+    if (Date.now() >= deadline) return null;
+  }
+  button.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    confirmChatRecall(entry, options);
+  });
+  return button;
 }
 
 function reportTargetName(entry = {}) {
@@ -164,7 +316,10 @@ function chatActionButtonsHtml(entry = {}, viewer = {}, labels = {}) {
     buttons.push(`<button type="button" class="report-inline-btn chat-report-btn" data-chat-report="${messageId}" title="${text.report}">${text.report}</button>`);
   }
   if (chatRecallAllowed(entry, viewer)) {
-    buttons.push(`<button type="button" class="chat-recall-btn" data-chat-recall="${messageId}" title="${text.recall}">${text.recall}</button>`);
+    const deadline = chatRecallDeadlineMs(entry, viewer);
+    if (!deadline || Date.now() < deadline) {
+      buttons.push(`<button type="button" class="chat-recall-btn" data-chat-recall="${messageId}"${deadline ? ` data-recall-deadline="${deadline}"` : ''} title="${text.recall}">${text.recall}</button>`);
+    }
   }
   return buttons.join('');
 }
@@ -196,6 +351,11 @@ function createChatActionButtons(entry = {}, viewer = {}, labels = {}, options =
     button.textContent = text.recall;
     button.title = text.recall;
     button.setAttribute('aria-label', text.recall);
+    const deadline = chatRecallDeadlineMs(entry, viewer);
+    if (deadline) {
+      button.setAttribute('data-recall-deadline', String(deadline));
+      if (Date.now() >= deadline) return fragment;
+    }
     button.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -218,7 +378,25 @@ window.GtnChatActions = {
   confirmChatRecall,
   chatActionButtonsHtml,
   createChatReportButton,
+  createChatRecallButton,
 };
+
+/* 撤回统一机制的独立入口：窗口判定、原位占位、过期按钮清理。
+   大厅 / 对局 / 故事 / 休闲花园全部走这一份，别再各自复制。 */
+window.GtnChatRecall = {
+  WINDOW_MS: CHAT_RECALL_WINDOW_MS,
+  entryTsSeconds: chatEntryTsSeconds,
+  withinWindow: chatRecallWithinWindow,
+  deadlineMs: chatRecallDeadlineMs,
+  allowed: chatRecallAllowed,
+  labels: recallLabels,
+  placeholderText: chatRecallPlaceholderText,
+  markEntryRecalled: markChatEntryRecalled,
+  applyRecallToEntryList,
+  startExpiryWatcher: startChatRecallExpiryWatcher,
+};
+
+if (typeof document !== 'undefined') startChatRecallExpiryWatcher();
 
 /* 只给"已经有自己撤回按钮"的页面（故事模式）用的举报按钮 */
 function createChatReportButton(entry = {}, labels = {}) {

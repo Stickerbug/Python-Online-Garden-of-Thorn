@@ -57,9 +57,6 @@
     let storyChatEntries = [];
     let storyChatHistorySignature = '';
     let storyChatUnreadCount = 0;
-    // 管理员撤回：被撤回的消息 id（渲染时过滤）与占位提示（会话内保留）。
-    const storyRecalledChatIds = new Set();
-    const storyChatRecallNotices = [];
     let storyMentionDirectory = [];
     let storyMentionCandidates = [];
     let storyMentionMenu = null;
@@ -4866,29 +4863,37 @@
             <= STORY_CHAT_AUTO_SCROLL_THRESHOLD;
     }
 
-    function isStoryRecalledChatEntry(entry) {
-        if (!entry || typeof entry !== 'object') return false;
-        const id = String(entry.message_id || entry.messageId || entry.id || '');
-        return !!id && storyRecalledChatIds.has(id);
+    /* 撤回统一走 shared-chat-actions（GtnChatRecall / GtnChatActions）：
+       2 分钟窗口、原位占位、过期按钮清理都只有那一份实现，这里只提供页面上下文。 */
+    function storyChatRecallLabels() {
+        return {
+            recall: t.chatRecall || '撤回',
+            recallConfirm: typeof t.chatRecallConfirm === 'function' ? t.chatRecallConfirm : undefined,
+            recallSelf: typeof t.chatRecallSelf === 'function' ? t.chatRecallSelf : undefined,
+            recallEntry: typeof t.chatRecallEntry === 'function' ? t.chatRecallEntry : undefined,
+            adminLabel: t.chatRoleAdmin || '管理员',
+            playerLabel: t.chatRolePlayer || '玩家',
+        };
     }
 
-    function storyChatRecallNoticeText(notice = {}) {
-        const actor = `${storyChatRecallRoleLabel(notice.actor_role)}${String(notice.actor_name || '?')}`;
-        const target = `${storyChatRecallRoleLabel(notice.target_role)}${String(notice.target_name || '?')}`;
-        const text = notice.self_recall
-            ? (typeof t.chatRecallSelf === 'function' ? t.chatRecallSelf(actor) : actor)
-            : (typeof t.chatRecallEntry === 'function'
-                ? t.chatRecallEntry(actor, target)
-                : `${actor} ${target}`);
-        const count = Math.max(1, Number(notice.count) || 1);
-        return count > 1 ? `${text} ×${count}` : text;
+    function storyChatPlaceholderText(entry = {}) {
+        const recall = globalThis.GtnChatRecall;
+        if (recall && typeof recall.placeholderText === 'function') {
+            return recall.placeholderText(entry, storyChatRecallLabels());
+        }
+        return `${String(entry.nickname || '?')}撤回了一条消息`;
     }
 
-    function storyChatRecallRoleLabel(role) {
-        const key = String(role || '').toLowerCase();
-        if (key === 'admin' || key === 'staff') return t.chatRoleAdmin || '管理员';
-        if (key === 'player') return t.chatRolePlayer || '玩家';
-        return '';
+    function createStoryChatRecallButton(entry = {}) {
+        const actions = globalThis.GtnChatActions;
+        if (!actions || typeof actions.createChatRecallButton !== 'function') return null;
+        return actions.createChatRecallButton(entry, {
+            role: currentStoryChatRole(),
+            user_id: (globalThis.__STORY_ACCOUNT__ || {}).id,
+        }, {
+            socket: storyChatSocket,
+            labels: storyChatRecallLabels(),
+        });
     }
 
     function currentStoryChatRole() {
@@ -4897,59 +4902,6 @@
         if (role === 'admin' || role === 'staff') return role;
         if (account.is_admin_player || account.isAdminPlayer) return 'admin';
         return 'player';
-    }
-
-    function currentStoryAccountId() {
-        const account = window.__STORY_ACCOUNT__ || {};
-        return account.id != null ? String(account.id) : '';
-    }
-
-    function isOwnStoryChatEntry(entry = {}) {
-        const owner = entry.sender_user_id ?? entry.user_id ?? entry.senderUserId ?? '';
-        const self = currentStoryAccountId();
-        if (!self || owner === '' || owner == null) return false;
-        return String(owner) === self;
-    }
-
-    function storyChatEntrySenderRole(entry = {}) {
-        const role = String(entry.sender_role || entry.senderRole || '').toLowerCase();
-        if (role === 'admin' || role === 'staff' || role === 'player') return role;
-        if (entry.console_player || entry.is_admin_player || entry.special_role) return 'admin';
-        return 'player';
-    }
-
-    function canRecallStoryChat(entry = {}) {
-        if (!(entry.message_id || entry.messageId)) return false;
-        if (isOwnStoryChatEntry(entry)) return true;
-        const role = currentStoryChatRole();
-        if (role === 'admin') return true;
-        if (role === 'staff') return storyChatEntrySenderRole(entry) === 'player';
-        return false;
-    }
-
-    function mergeStoryChatRecallNotices(entries, notices) {
-        if (!Array.isArray(notices) || !notices.length) return entries;
-        const ordered = notices
-            .slice()
-            .sort((left, right) => Number(left.ts || 0) - Number(right.ts || 0));
-        const merged = [];
-        let index = 0;
-        ordered.forEach((notice) => {
-            const noticeTs = Number(notice.ts || 0);
-            while (index < entries.length) {
-                const entry = entries[index];
-                const entryTs = Number((entry && entry.ts) || 0);
-                if (entryTs && noticeTs && entryTs > noticeTs) break;
-                merged.push(entry);
-                index += 1;
-            }
-            merged.push(notice);
-        });
-        while (index < entries.length) {
-            merged.push(entries[index]);
-            index += 1;
-        }
-        return merged;
     }
 
     function dropDanglingStoryChatTimeSeparators(entries) {
@@ -4966,50 +4918,16 @@
         return out;
     }
 
-    function createStoryChatRecallButton(entry = {}) {
-        const messageId = Math.trunc(Number(entry.message_id || entry.messageId || 0));
-        if (!messageId) return null;
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'chat-recall-btn';
-        btn.textContent = t.chatRecall || '撤回';
-        btn.title = btn.textContent;
-        btn.setAttribute('aria-label', btn.title);
-        btn.addEventListener('click', (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            const name = String(entry.nickname || entry.sender_name || '?');
-            const confirmText = typeof t.chatRecallConfirm === 'function'
-                ? t.chatRecallConfirm(name)
-                : `${name}?`;
-            if (!window.confirm(confirmText)) return;
-            if (!storyChatSocket) return;
-            storyChatSocket.emit('admin_chat_recall', { message_ids: [messageId] });
-        });
-        return btn;
-    }
-
     function applyStoryChatRecall(data = {}) {
-        const ids = Array.isArray(data.message_ids) ? data.message_ids : [];
-        ids.forEach((id) => {
-            const text = String(id || '');
-            if (text) storyRecalledChatIds.add(text);
-        });
-        storyChatRecallNotices.push({
-            type: 'chat_recall',
-            scope: String(data.scope || 'lobby'),
-            room_id: String(data.room_id || ''),
+        // 收到撤回广播：消息原位变占位（占位由服务端缓存的 recalled 标记带回，刷新不消失）。
+        const recall = globalThis.GtnChatRecall;
+        if (!recall || typeof recall.applyRecallToEntryList !== 'function') return;
+        recall.applyRecallToEntryList(storyChatEntries, {
+            message_ids: Array.isArray(data.message_ids) ? data.message_ids : [],
             actor_name: String(data.actor_name || ''),
-            actor_role: String(data.actor_role || 'admin'),
-            target_name: String(data.target_name || ''),
-            target_role: String(data.target_role || 'player'),
+            actor_role: String(data.actor_role || ''),
             self_recall: Boolean(data.self_recall),
-            count: Math.max(1, Number(data.count) || ids.length || 1),
-            ts: Number(data.ts) || Date.now() / 1000,
-            system: true,
         });
-        while (storyChatRecallNotices.length > 50) storyChatRecallNotices.shift();
-        storyChatEntries = storyChatEntries.filter((entry) => !isStoryRecalledChatEntry(entry));
         storyChatHistorySignature = '';
         renderStoryChatHistory({
             items: storyChatEntries,
@@ -5026,10 +4944,11 @@
             container.appendChild(separator);
             return;
         }
-        if (entry.type === 'chat_recall') {
+        if (entry.recalled) {
+            // 撤回占位：显示在消息原位（服务端历史带回 recalled 标记，刷新不消失）。
             const recallRow = document.createElement('div');
             recallRow.className = 'story-chat-message chat-msg chat-recall-entry';
-            recallRow.textContent = storyChatRecallNoticeText(entry);
+            recallRow.textContent = storyChatPlaceholderText(entry);
             container.appendChild(recallRow);
             return;
         }
@@ -5065,10 +4984,8 @@
             repeat.textContent = ` ×${repeatCount}`;
             row.appendChild(repeat);
         }
-        if (canRecallStoryChat(entry)) {
-            const recallBtn = createStoryChatRecallButton(entry);
-            if (recallBtn) row.appendChild(recallBtn);
-        }
+        const recallBtn = createStoryChatRecallButton(entry);
+        if (recallBtn) row.appendChild(recallBtn);
         // 举报（与休闲花园/大厅共用同一套实现与样式）
         if (window.GtnChatActions && typeof window.GtnChatActions.createChatReportButton === 'function') {
             const reportBtn = window.GtnChatActions.createChatReportButton(entry);
@@ -5251,8 +5168,7 @@
             ? data.mention_candidates.map((item) => ({ ...item }))
             : [];
         const incoming = Array.isArray(data.items) ? data.items : [];
-        const entries = mergeStoryChatEntries(incoming, storyChatEntries)
-            .filter((entry) => !isStoryRecalledChatEntry(entry));
+        const entries = mergeStoryChatEntries(incoming, storyChatEntries);
         if (storyChatInitialized && !storyChatOpen && !options.skipUnread) {
             storyChatUnreadCount += countNewStoryChatMessages(entries, storyChatEntries);
             updateStoryChatUnreadBadge();
@@ -5273,6 +5189,7 @@
             entry?.special_role,
             entry?.special_role_color,
             entry?.console_player,
+            entry?.recalled,
             entry && JSON.stringify(entry.mentions || []),
         ])]);
         storyChatInitialized = true;
@@ -5284,10 +5201,8 @@
         const previousScrollTop = log.scrollTop;
         storyChatEntries = entries;
         log.replaceChildren();
-        dropDanglingStoryChatTimeSeparators(mergeStoryChatRecallNotices(
-            entries,
-            storyChatRecallNotices.filter((notice) => notice.scope !== 'room'),
-        )).forEach((entry) => appendStoryChatEntry(log, entry));
+        dropDanglingStoryChatTimeSeparators(entries)
+            .forEach((entry) => appendStoryChatEntry(log, entry));
         if (storyChatOpen && stayAtBottom) {
             log.scrollTop = log.scrollHeight;
         } else {

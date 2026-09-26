@@ -3226,47 +3226,42 @@ function currentChatRole() {
     return 'player';
 }
 
-function chatEntrySenderRole(entry = {}) {
-    const role = String(entry.sender_role || entry.senderRole || '').toLowerCase();
-    if (role === 'admin' || role === 'staff' || role === 'player') return role;
-    if (entry.console_player || entry.is_admin_player || entry.special_role) return 'admin';
-    return 'player';
+/* 撤回统一走 shared-chat-actions（GtnChatRecall / GtnChatActions）：
+   2 分钟窗口、原位占位、过期按钮清理都只有那一份实现，这里只提供页面上下文。 */
+function chatRecallViewer() {
+    return {
+        role: currentChatRole(),
+        user_id: currentAccount && currentAccount.id,
+    };
 }
 
-function isOwnChatEntry(entry = {}) {
-    if (!currentAccount || currentAccount.id == null) return false;
-    const owner = entry.sender_user_id ?? entry.user_id ?? entry.senderUserId ?? '';
-    if (owner === '' || owner == null) return false;
-    return String(owner) === String(currentAccount.id);
+function chatRecallUiLabels() {
+    return {
+        recall: UI.chat_recall || '撤回',
+        recallConfirm: (name) => tf('chat_recall_confirm', name),
+        recallSelf: (actor) => tf('chat_recall_self', actor),
+        recallEntry: (actor, target) => tf('chat_recall_entry', actor, target),
+        adminLabel: UI.chat_role_admin || '管理员',
+        playerLabel: UI.chat_role_player || '玩家',
+    };
 }
 
-function canRecallChatEntry(entry = {}) {
-    if (!(entry.message_id || entry.messageId)) return false;
-    if (isOwnChatEntry(entry)) return true;
-    const role = currentChatRole();
-    if (role === 'admin') return true;
-    if (role === 'staff') return chatEntrySenderRole(entry) === 'player';
-    return false;
+function chatRecallPlaceholderText(entry = {}) {
+    const recall = window.GtnChatRecall;
+    if (recall && typeof recall.placeholderText === 'function') {
+        return recall.placeholderText(entry, chatRecallUiLabels());
+    }
+    return `${String(entry.nickname || '?')}撤回了一条消息`;
 }
 
 function createRecallChatButton(entry = {}) {
-    const messageId = Number(entry.message_id || entry.messageId || 0);
-    if (!Number.isFinite(messageId) || messageId <= 0) return null;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'chat-recall-btn';
-    btn.textContent = UI.chat_recall || '撤回';
-    btn.title = btn.textContent;
-    btn.setAttribute('aria-label', btn.title);
-    btn.onclick = async (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const target = String(entry.nickname || entry.sender_name || entry.senderName || entry.nick || '?');
-        const ok = await gameConfirm(UI.chat_recall || '撤回', tf('chat_recall_confirm', target));
-        if (!ok || !socket) return;
-        socket.emit('admin_chat_recall', { message_ids: [messageId] });
-    };
-    return btn;
+    const actions = window.GtnChatActions;
+    if (!actions || typeof actions.createChatRecallButton !== 'function') return null;
+    return actions.createChatRecallButton(entry, chatRecallViewer(), {
+        socket,
+        labels: chatRecallUiLabels(),
+        confirm: (message) => gameConfirm(UI.chat_recall || '撤回', message),
+    });
 }
 
 function getReportMatchObjectId(gs = gameState) {
@@ -5512,59 +5507,7 @@ let pregameChatEntries = [];
 let pregameChatMatchKey = '';
 let lobbyChatHistorySignature = '';
 let lobbyChatEntries = [];
-// 管理员撤回：被撤回的消息 id（渲染时过滤掉）与占位提示（会话内保留）。
-const recalledChatMessageIds = new Set();
-const chatRecallNotices = [];
-
-function isRecalledChatEntry(entry) {
-    if (!entry || typeof entry !== 'object') return false;
-    const id = String(entry.message_id || entry.messageId || entry.id || '');
-    return !!id && recalledChatMessageIds.has(id);
-}
-
-function chatRecallNoticeText(notice) {
-    const source = notice || {};
-    const actor = `${chatRecallRoleLabel(source.actor_role)}${String(source.actor_name || '?')}`;
-    const target = `${chatRecallRoleLabel(source.target_role)}${String(source.target_name || '?')}`;
-    const text = source.self_recall
-        ? tf('chat_recall_self', actor)
-        : tf('chat_recall_entry', actor, target);
-    const count = Math.max(1, Number(source.count || 1));
-    return count > 1 ? `${text} ×${count}` : text;
-}
-
-function chatRecallRoleLabel(role) {
-    const key = String(role || '').toLowerCase();
-    if (key === 'admin' || key === 'staff') return UI.chat_role_admin || '管理员';
-    if (key === 'player') return UI.chat_role_player || '玩家';
-    return '';
-}
-
-function mergeChatRecallNotices(entries, notices) {
-    if (!Array.isArray(notices) || !notices.length) return entries;
-    const ordered = notices
-        .slice()
-        .sort((left, right) => Number(left.ts || 0) - Number(right.ts || 0));
-    const merged = [];
-    let index = 0;
-    ordered.forEach((notice) => {
-        const noticeTs = Number(notice.ts || 0);
-        while (index < entries.length) {
-            const entry = entries[index];
-            const entryTs = Number((entry && entry.ts) || 0);
-            if (entryTs && noticeTs && entryTs > noticeTs) break;
-            merged.push(entry);
-            index += 1;
-        }
-        merged.push(notice);
-    });
-    while (index < entries.length) {
-        merged.push(entries[index]);
-        index += 1;
-    }
-    return merged;
-}
-
+// 管理员撤回：被撤回的消息原位变成占位提示（不再从列表里删除、不在底部新增）。
 function dropDanglingChatTimeSeparators(entries) {
     // 反馈 #175：撤回把消息删掉后，它前面的时间分隔符会留在原地，刷新后
     // 撤回提示也消失，就只剩一个"空气时间"。渲染时丢掉后面没有内容的孤立分隔符。
@@ -5581,37 +5524,20 @@ function dropDanglingChatTimeSeparators(entries) {
 }
 
 function applyChatRecall(data = {}) {
-    const ids = Array.isArray(data.message_ids) ? data.message_ids : [];
-    ids.forEach((id) => {
-        const text = String(id || '');
-        if (text) recalledChatMessageIds.add(text);
-    });
-    chatRecallNotices.push({
-        type: 'chat_recall',
-        scope: String(data.scope || 'lobby'),
-        room_id: String(data.room_id || ''),
+    // 收到撤回广播：四份聊天列表里的对应消息原位变占位（占位跨刷新保留，
+    // 由服务端缓存的 recalled 标记在历史推送里带回）。
+    const recall = window.GtnChatRecall;
+    if (!recall || typeof recall.applyRecallToEntryList !== 'function') return;
+    const notice = {
+        message_ids: Array.isArray(data.message_ids) ? data.message_ids : [],
         actor_name: String(data.actor_name || ''),
-        actor_role: String(data.actor_role || 'admin'),
-        target_name: String(data.target_name || ''),
-        target_role: String(data.target_role || 'player'),
+        actor_role: String(data.actor_role || ''),
         self_recall: Boolean(data.self_recall),
-        count: Math.max(1, Number(data.count) || ids.length || 1),
-        ts: Number(data.ts) || Date.now() / 1000,
-        system: true,
-    });
-    while (chatRecallNotices.length > 50) chatRecallNotices.shift();
-    const pruneRecalled = (list) => (Array.isArray(list) ? list.filter(entry => !isRecalledChatEntry(entry)) : list);
-    battleChatEntries = pruneRecalled(battleChatEntries);
-    pregameChatEntries = pruneRecalled(pregameChatEntries);
-    phaseChatEntries = pruneRecalled(phaseChatEntries);
-    lobbyChatEntries = pruneRecalled(lobbyChatEntries);
-    if (String(data.scope || '') === 'room') {
-        const notice = chatRecallNotices[chatRecallNotices.length - 1];
-        const noticeEntry = makeChatTimelineEntry('', chatRecallNoticeText(notice), { system: true, recall: true }, {});
-        noticeEntry.recall = true;
-        noticeEntry.matchKey = phaseContextMatchKey(gameState);
-        battleChatEntries = [...battleChatEntries, noticeEntry].slice(-500);
-    }
+    };
+    recall.applyRecallToEntryList(battleChatEntries, notice);
+    recall.applyRecallToEntryList(pregameChatEntries, notice);
+    recall.applyRecallToEntryList(phaseChatEntries, notice);
+    recall.applyRecallToEntryList(lobbyChatEntries, notice);
     lobbyChatHistorySignature = '';
     roomChatHistorySignature = '';
     refreshBattleLogViews();
@@ -28565,6 +28491,13 @@ function makeChatTimelineEntry(nick, text, meta = {}, channelMeta = {}) {
         repeatCount: Number(meta.repeat_count || meta.repeatCount || 1),
         pregame: !!meta.pregame,
         logAnchor: Number(meta.log_anchor ?? meta.logAnchor ?? 0),
+        ts: (window.GtnChatRecall && typeof window.GtnChatRecall.entryTsSeconds === 'function')
+            ? window.GtnChatRecall.entryTsSeconds(meta)
+            : Number(meta.ts || 0),
+        recalled: meta.recalled || 0,
+        recalled_by: meta.recalled_by || meta.recalledBy || '',
+        recalled_role: meta.recalled_role || meta.recalledRole || '',
+        self_recall: meta.self_recall,
     };
 }
 
@@ -28596,6 +28529,7 @@ function chatTimelineSignature(entry = {}) {
         entry.targetName || '',
         !!entry.pregame,
         Number(entry.logAnchor || 0),
+        !!entry.recalled,
     ]);
 }
 
@@ -28663,6 +28597,7 @@ function syncRoomChatHistory(data = {}) {
             item && item.chat_target_name,
             item && item.pregame,
             item && item.log_anchor,
+            item && item.recalled,
             item && chatIdentitySignature(item),
         ]),
     ]);
@@ -33319,6 +33254,12 @@ function createBattleLogElement(entry) {
     }
     const el = document.createElement('div');
     if (entry.type === 'chat') {
+        if (entry.recalled) {
+            // 撤回占位：显示在消息原位（房间历史由服务端带回 recalled 标记，刷新不消失）。
+            el.className = 'log-entry log-chat chat-msg chat-recall-entry';
+            el.textContent = chatRecallPlaceholderText(entry);
+            return el;
+        }
         // chat-msg：和多人游戏大厅 / 故事模式 / 休闲花园的聊天行同名同类，
         // 样式统一由 shared-lobby-chat.css 提供（见 .log-entry.log-chat 那一组）。
         el.className = 'log-entry log-chat chat-msg';
@@ -33352,6 +33293,8 @@ function createBattleLogElement(entry) {
                 title: UI.report_chat,
             }));
         }
+        const recallBtn = createRecallChatButton(entry);
+        if (recallBtn) el.appendChild(recallBtn);
         return el;
     }
     if (!entry.kind) {
@@ -34372,10 +34315,11 @@ function appendLobbyChatEntry(entry = {}, options = {}) {
         if (shouldAutoScroll) container.scrollTop = container.scrollHeight;
         return;
     }
-    if (entry.type === 'chat_recall') {
+    if (entry.recalled) {
+        // 撤回占位：显示在消息原来的位置上（服务端历史会带回 recalled 标记，刷新不消失）。
         const recallEl = document.createElement('div');
         recallEl.className = 'chat-msg chat-recall-entry';
-        recallEl.textContent = chatRecallNoticeText(entry);
+        recallEl.textContent = chatRecallPlaceholderText(entry);
         container.appendChild(recallEl);
         if (shouldAutoScroll) container.scrollTop = container.scrollHeight;
         return;
@@ -34412,10 +34356,8 @@ function appendLobbyChatEntry(entry = {}, options = {}) {
             title: UI.report_chat,
         }));
     }
-    if (canRecallChatEntry(entry)) {
-        const recallBtn = createRecallChatButton(entry);
-        if (recallBtn) el.appendChild(recallBtn);
-    }
+    const recallBtn = createRecallChatButton(entry);
+    if (recallBtn) el.appendChild(recallBtn);
     container.appendChild(el);
     if (shouldAutoScroll) container.scrollTop = container.scrollHeight;
 }
@@ -34430,7 +34372,7 @@ function renderLobbyChatHistory(data = {}) {
         Array.isArray(data.items) ? data.items : [],
         lobbyChatEntries,
         lobbyChatRepeatKey,
-    ).filter(entry => !isRecalledChatEntry(entry));
+    );
     const signature = JSON.stringify([currentLang, items.map(entry => [
         entry && entry.type,
         entry && entry.id,
@@ -34442,6 +34384,7 @@ function renderLobbyChatHistory(data = {}) {
         entry && entry.chat_channel,
         entry && entry.chat_origin,
         entry && entry.system,
+        entry && entry.recalled,
         entry && JSON.stringify(entry.mentions || []),
     ])]);
     if (signature === lobbyChatHistorySignature) return;
@@ -34450,10 +34393,8 @@ function renderLobbyChatHistory(data = {}) {
     const shouldAutoScroll = isLobbyChatNearBottom(container);
     const previousScrollTop = container.scrollTop;
     container.innerHTML = '';
-    dropDanglingChatTimeSeparators(mergeChatRecallNotices(
-        items,
-        chatRecallNotices.filter(notice => notice.scope !== 'room'),
-    )).forEach(entry => appendLobbyChatEntry(entry, { autoScroll: false }));
+    dropDanglingChatTimeSeparators(items)
+        .forEach(entry => appendLobbyChatEntry(entry, { autoScroll: false }));
     if (shouldAutoScroll) {
         container.scrollTop = container.scrollHeight;
     } else {

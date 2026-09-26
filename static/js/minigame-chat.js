@@ -165,11 +165,26 @@
       return actions.chatActionButtonsHtml(item, { role: String(options.chatRole || 'player').toLowerCase(), user_id: options.userId }, labels());
     }
 
+    /* 撤回占位文本：统一走 shared-chat-actions 的 GtnChatRecall。 */
+    function recallText(item) {
+      const recallApi = window.GtnChatRecall;
+      if (recallApi && typeof recallApi.placeholderText === 'function') {
+        return recallApi.placeholderText(item || {}, recallApi.labels());
+      }
+      return `${String((item && item.nickname) || '?')}撤回了一条消息`;
+    }
+
     function lineHtml(item) {
       if (!item) return '';
       if (item.type === 'time') {
         const label = escapeHtml(String(item.display_time || '').trim());
         return label ? `<div class="chat-time-separator">${label}</div>` : '';
+      }
+      if (item.recalled) {
+        // 撤回占位：显示在消息原位（服务端历史带回 recalled 标记，刷新不消失）。
+        const recalledId = Number(item.message_id || item.messageId || 0);
+        return `<div class="chat-msg chat-recall-entry"${recalledId > 0 ? ` data-chat-message-id="${recalledId}"` : ''}>`
+          + `${escapeHtml(recallText(item))}</div>`;
       }
       const names = labels();
       const system = !!item.system;
@@ -298,25 +313,31 @@
       updateUnreadBadge();
     }
 
-    /* 有人撤回消息：把对应行从日志里拿掉，补一条转义过的提示。 */
+    /* 有人撤回消息：对应行原位变成占位提示（不再删行、不在底部新增）。 */
     function recall(payload) {
       const log = els(options.logId);
       if (!log) return;
       const ids = (((payload || {}).message_ids) || [])
         .map((value) => Number(value) || 0)
         .filter((value) => value > 0);
-      ids.forEach((id) => {
-        entriesById.delete(id);
-        const row = log.querySelector(`.chat-msg[data-chat-message-id="${id}"]`);
-        if (row) row.remove();
-      });
-      const actor = escapeHtml(String((payload || {}).actor_name || '管理员'));
-      const target = escapeHtml(String((payload || {}).target_name || ''));
-      const text = (payload || {}).self_recall
-        ? `${actor} 撤回了一条消息`
-        : `${actor} 撤回了 ${target || '某个玩家'} 的一条消息`;
       const pin = chatPanelOpen() && chatNearBottom(log);
-      log.insertAdjacentHTML('beforeend', `<div class="chat-msg chat-recall-entry">${text}</div>`);
+      ids.forEach((id) => {
+        const item = entriesById.get(id);
+        const fallback = {
+          nickname: String((payload || {}).target_name || ''),
+          recalled_by: String((payload || {}).actor_name || ''),
+          self_recall: (payload || {}).self_recall,
+        };
+        if (item && window.GtnChatRecall
+            && typeof window.GtnChatRecall.markEntryRecalled === 'function') {
+          window.GtnChatRecall.markEntryRecalled(item, payload || {});
+        }
+        const row = log.querySelector(`.chat-msg[data-chat-message-id="${id}"]`);
+        if (row) {
+          row.classList.add('chat-recall-entry');
+          row.textContent = recallText(item || fallback);
+        }
+      });
       if (pin) log.scrollTop = log.scrollHeight;
     }
 

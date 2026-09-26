@@ -4511,6 +4511,7 @@ def _chat_entry_signature(entry):
         entry.get('chat_channel', ''),
         entry.get('chat_target_name', ''),
         entry.get('chat_origin', ''),
+        int(bool(entry.get('recalled'))),
     )
 
 
@@ -4593,6 +4594,14 @@ def restore_lobby_chat_item_locked(item, beta_mode=False):
         return
     cache = _lobby_chat_cache_locked(beta_mode)
     chat_payload = copy.deepcopy(item)
+    if chat_payload.get('recalled'):
+        # 已撤回的占位条目：不需要身份刷新/折叠合并，直接回填缓存。
+        chat_payload['beta_mode'] = bool(beta_mode)
+        item_ts = _chat_item_ts(chat_payload)
+        chat_payload['ts'] = item_ts
+        chat_payload['time'] = datetime.fromtimestamp(item_ts, timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')
+        cache.append(chat_payload)
+        return
     # Restored history shows the sender snapshot that was persisted when the
     # message was sent. Only pre-snapshot legacy rows (no persisted identity
     # payload) fall back to the current account profile so they still render.
@@ -4875,6 +4884,11 @@ def append_room_chat_locked(room, payload, now=None, recipients=None, spectator_
 
 
 def update_room_chat_message_id_locked(room, local_chat_id, message_id):
+    """把落库后的消息 id 补进房间聊天缓存（举报、撤回都依赖它）。
+
+    折叠在一起的连续重复消息要累积 message_ids（与大厅一致），否则撤回
+    只找得到最后一条，前面的 id 被覆盖丢失。
+    """
     if room is None or local_chat_id is None or not message_id:
         return False
     for entry in reversed(list(getattr(room, 'chat_history', []) or [])):
@@ -4883,6 +4897,11 @@ def update_room_chat_message_id_locked(room, local_chat_id, message_id):
         if entry.get('id') == local_chat_id:
             entry['message_id'] = message_id
             entry['messageId'] = message_id
+            message_ids = entry.get('message_ids')
+            message_ids = list(message_ids) if isinstance(message_ids, list) else []
+            if message_id not in message_ids:
+                message_ids.append(message_id)
+            entry['message_ids'] = message_ids[-20:]
             return True
     return False
 
@@ -30324,6 +30343,8 @@ def on_story_chat_send(data=None):
 
 
 CHAT_RECALL_MAX_IDS = 50
+# 玩家（含 staff）只能在发送后 2 分钟内撤回自己的（或普通玩家的）消息；管理员不限时。
+CHAT_RECALL_WINDOW_SECONDS = 120
 
 
 def _chat_role_for_account(user_id=None, fallback=None):
@@ -30371,21 +30392,37 @@ def _chat_recall_actor(sid):
 
 
 def _chat_recall_message_allowed(actor, info):
-    """Staff 只能撤回玩家（含自己）的消息，Admin 可以撤回所有人。"""
+    """Staff 只能撤回玩家（含自己）的消息，Admin 可以撤回所有人。
+
+    非管理员还受 CHAT_RECALL_WINDOW_SECONDS 时间窗限制：超过 2 分钟不能撤回。
+    """
     if not actor or not info:
         return False
     actor_user_id = int(actor.get('user_id') or 0)
     target_user_id = int(info.get('sender_user_id') or 0)
-    if actor_user_id and target_user_id and actor_user_id == target_user_id:
-        return True
     role = str(actor.get('role') or '')
+    if actor_user_id and target_user_id and actor_user_id == target_user_id:
+        base_allowed = True
+    elif role == 'admin':
+        base_allowed = True
+    elif role == 'staff':
+        if not target_user_id:
+            base_allowed = False
+        else:
+            base_allowed = _chat_role_for_account(target_user_id) == 'player'
+    else:
+        base_allowed = False
+    if not base_allowed:
+        return False
     if role == 'admin':
         return True
-    if role == 'staff':
-        if not target_user_id:
-            return False
-        return _chat_role_for_account(target_user_id) == 'player'
-    return False
+    try:
+        created_ts = float(info.get('created_ts') or 0)
+    except (TypeError, ValueError):
+        created_ts = 0.0
+    if created_ts <= 0:
+        return False
+    return (time.time() - created_ts) <= CHAT_RECALL_WINDOW_SECONDS
 
 
 def _room_from_chat_scope(room_id):
@@ -30398,7 +30435,11 @@ def _room_from_chat_scope(room_id):
         return None
 
 
-def _prune_room_chat_history(room, message_ids):
+def _mark_room_chat_history_recalled(room, message_ids, actor_name=''):
+    """撤回后把房间内存历史里的对应条目原位标记为撤回（占位跨刷新保留）。
+
+    折叠条目只命中一部分消息 id 时，从折叠里剔除被撤回的，其余照常显示。
+    """
     if room is None or not message_ids:
         return
     ids = {str(item) for item in message_ids}
@@ -30406,48 +30447,76 @@ def _prune_room_chat_history(room, message_ids):
     if history is None:
         return
     with _lock:
-        kept = [item for item in list(history) if str((item or {}).get('message_id') or '') not in ids]
-        history.clear()
-        history.extend(kept)
+        for item in list(history):
+            if not isinstance(item, dict) or item.get('type') != 'chat':
+                continue
+            entry_ids = []
+            for raw in (item.get('message_id'), item.get('messageId')):
+                if raw is not None:
+                    entry_ids.append(str(raw))
+            for raw in list(item.get('message_ids') or []):
+                entry_ids.append(str(raw))
+            entry_ids = list(dict.fromkeys(entry_ids))
+            if not entry_ids:
+                continue
+            matched = [value for value in entry_ids if value in ids]
+            if not matched:
+                continue
+            remaining = [value for value in entry_ids if value not in ids]
+            if remaining:
+                item['message_id'] = remaining[-1]
+                item['messageId'] = remaining[-1]
+                item['message_ids'] = remaining[-20:]
+                item['repeat_count'] = max(1, min(int(item.get('repeat_count') or 1), len(remaining)))
+                continue
+            item['recalled'] = 1
+            item['recalled_by'] = str(actor_name or '')
+            item.pop('recalled_by_name', None)
+            item['text'] = ''
+            item.pop('mentions', None)
+            item.pop('normalized_message', None)
+            item['repeat_count'] = 1
 
 
-def _prune_lobby_chat_history_locked(beta_mode, message_ids):
-    """撤回后清掉大厅内存缓存里的对应条目（含折叠在一起的重复消息）。"""
+def _mark_lobby_chat_history_recalled_locked(beta_mode, message_ids, actor_name=''):
+    """撤回后把大厅内存缓存里的对应条目原位标记（占位跨刷新/重启保留，
+    重启后由 list_lobby_chat_entries 的 recalled 占位从数据库恢复）。
+
+    折叠条目只命中一部分消息 id 时，从折叠里剔除被撤回的，其余照常显示。
+    """
     ids = {str(item) for item in (message_ids or [])}
     ids.discard('')
     if not ids:
         return 0
     cache = _lobby_chat_cache_locked(beta_mode)
-    kept = []
-    removed = 0
+    changed = 0
     for entry in list(cache):
         if not isinstance(entry, dict) or entry.get('type') != 'chat':
-            kept.append(entry)
             continue
         entry_ids = []
         for raw in (entry.get('message_id'), entry.get('messageId')):
             if raw is not None:
-                entry_ids.append(raw)
+                entry_ids.append(str(raw))
         for raw in list(entry.get('message_ids') or []):
-            entry_ids.append(raw)
+            entry_ids.append(str(raw))
         entry_ids = list(dict.fromkeys(entry_ids))
-        matched = [item for item in entry_ids if str(item) in ids]
+        matched = [item for item in entry_ids if item in ids]
         if not matched:
-            kept.append(entry)
             continue
-        removed += len(matched)
-        remaining = [item for item in entry_ids if str(item) not in ids]
-        if not remaining:
+        changed += len(matched)
+        remaining = [item for item in entry_ids if item not in ids]
+        if remaining:
+            entry['message_id'] = remaining[-1]
+            entry['messageId'] = remaining[-1]
+            entry['message_ids'] = remaining[-20:]
+            entry['repeat_count'] = max(1, min(int(entry.get('repeat_count') or 1), len(remaining)))
             continue
-        entry['message_id'] = remaining[-1]
-        entry['messageId'] = remaining[-1]
-        entry['message_ids'] = remaining[-20:]
-        entry['repeat_count'] = max(1, min(int(entry.get('repeat_count') or 1), len(remaining)))
-        kept.append(entry)
-    if removed:
-        cache.clear()
-        cache.extend(kept)
-    return removed
+        entry['recalled'] = 1
+        entry['recalled_by'] = str(actor_name or '')
+        entry['text'] = ''
+        entry.pop('mentions', None)
+        entry['repeat_count'] = 1
+    return changed
 
 
 def _normalize_chat_recall_actor(actor):
@@ -30489,7 +30558,7 @@ def broadcast_chat_recall(actor, groups):
         }
         if scope == 'room':
             room = _room_from_chat_scope(room_id)
-            _prune_room_chat_history(room, message_ids)
+            _mark_room_chat_history_recalled(room, message_ids, actor['name'])
             recipients = []
             if room is not None:
                 recipients = (
@@ -30501,7 +30570,7 @@ def broadcast_chat_recall(actor, groups):
         else:
             beta_only = 'beta' in room_id
             with _lock:
-                _prune_lobby_chat_history_locked(beta_only, message_ids)
+                _mark_lobby_chat_history_recalled_locked(beta_only, message_ids, actor['name'])
             for target_sid, player in list(players.items()):
                 if bool(player.get('beta_mode', False)) != beta_only:
                     continue

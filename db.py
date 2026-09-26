@@ -7920,6 +7920,11 @@ def get_chat_message_info(message_id):
         row = conn.execute('SELECT * FROM chat_messages WHERE id = ?', (mid,)).fetchone()
     if row is None:
         return None
+    try:
+        created_dt = datetime.fromisoformat(str(row['created_at'] or '').replace('Z', '+00:00'))
+        created_ts = created_dt.timestamp()
+    except Exception:
+        created_ts = 0.0
     return {
         'message_id': mid,
         'room_id': row['room_id'],
@@ -7927,6 +7932,9 @@ def get_chat_message_info(message_id):
         'sender_user_id': row['sender_user_id'],
         'sender_name': row['sender_name'],
         'hidden': int(row['hidden'] or 0),
+        'recalled_at': row['recalled_at'],
+        'recalled_by': row['recalled_by'],
+        'created_ts': created_ts,
     }
 
 
@@ -7950,6 +7958,7 @@ def recall_chat_messages_from_sender(sender_name, limit=20):
 
 
 def list_lobby_chat_entries(beta_mode=False, limit=500):
+    """大厅聊天历史：未撤回的消息照常返回；已撤回的返回原位占位（不带原文）。"""
     scope = 'beta' if beta_mode else 'release'
     safe_limit = max(1, min(int(limit or 500), 500))
     room_id = f'lobby:{scope}'
@@ -7958,7 +7967,7 @@ def list_lobby_chat_entries(beta_mode=False, limit=500):
             '''
             SELECT *
             FROM chat_messages
-            WHERE room_id = ? AND hidden = 0
+            WHERE room_id = ? AND (hidden = 0 OR recalled_at IS NOT NULL)
             ORDER BY id DESC
             LIMIT ?
             ''',
@@ -7972,6 +7981,25 @@ def list_lobby_chat_entries(beta_mode=False, limit=500):
             ts = datetime.fromisoformat(str(created_at).replace('Z', '+00:00')).timestamp()
         except Exception:
             ts = time.time()
+        if int(row['hidden'] or 0) and row['recalled_at'] is not None:
+            entries.append({
+                'type': 'chat',
+                'id': row['id'],
+                'message_id': row['id'],
+                'user_id': row['sender_user_id'],
+                'nickname': row['sender_name'] or '',
+                'text': '',
+                'chat_channel': row['channel'] or 'public',
+                'risk_level': 0,
+                'time': created_at,
+                'ts': ts,
+                'repeat_count': 1,
+                'beta_mode': bool(beta_mode),
+                'recalled': 1,
+                'recalled_by': row['recalled_by'] or '',
+                'recalled_at': row['recalled_at'],
+            })
+            continue
         entry = {
             'type': 'chat',
             'id': row['id'],

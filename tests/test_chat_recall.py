@@ -1,4 +1,4 @@
-"""管理员撤回聊天：软删除 + 广播占位（反馈：要能撤回所有人的消息）。"""
+"""聊天撤回：软删除 + 原位占位 + 2 分钟撤回窗口（管理员不限时）。"""
 
 import gc
 import os
@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 GAME_JS = (ROOT / 'static' / 'js' / 'game.js').read_text(encoding='utf-8')
 STORY_JS = (ROOT / 'static' / 'js' / 'story.js').read_text(encoding='utf-8')
 SHARED_CHAT_CSS = (ROOT / 'static' / 'css' / 'shared-lobby-chat.css').read_text(encoding='utf-8')
+SHARED_CHAT_JS = (ROOT / 'static' / 'js' / 'shared-chat-actions.js').read_text(encoding='utf-8')
 
 
 class _AutoRegisterPlayers(dict):
@@ -68,7 +69,11 @@ class ChatRecallTests(unittest.TestCase):
         self.assertEqual(info['sender_name'], 'TestUser')
 
         entries = db.list_lobby_chat_entries(beta_mode=False, limit=10)
-        self.assertFalse(any(int(entry['id']) == self.message_id for entry in entries))
+        placeholders = [entry for entry in entries if int(entry['id']) == self.message_id]
+        self.assertEqual(len(placeholders), 1)
+        self.assertEqual(int(placeholders[0]['recalled']), 1)
+        self.assertEqual(placeholders[0]['text'], '')
+        self.assertEqual(placeholders[0]['nickname'], 'TestUser')
         self.assertIsNone(db.recall_chat_message(999999))
 
     def test_batch_recall_by_sender(self):
@@ -79,6 +84,9 @@ class ChatRecallTests(unittest.TestCase):
         for message_id in ids:
             self.assertIsNotNone(db.recall_chat_message(message_id, actor_name='Eric'))
         self.assertEqual(db.recall_chat_messages_from_sender('Spammer', limit=10), [])
+        # 已撤回的消息不再出现在可撤回名单里，但历史里保留占位。
+        entries = db.list_lobby_chat_entries(beta_mode=False, limit=50)
+        self.assertTrue(all(entry['text'] == '' for entry in entries if entry.get('recalled')))
 
     def test_broadcast_chat_recall_reports_count(self):
         import app
@@ -90,8 +98,8 @@ class ChatRecallTests(unittest.TestCase):
         }])
         self.assertEqual(total, 1)
 
-    def test_lobby_cache_carries_message_ids_and_prunes_on_recall(self):
-        """撤回要从大厅内存缓存里真的删掉，否则刷新/重连又会冒出来。"""
+    def test_lobby_cache_marks_recalled_in_place(self):
+        """撤回要把大厅内存缓存里的条目原位标记（占位跨刷新保留，而不是删掉）。"""
         import copy
 
         import app
@@ -121,7 +129,10 @@ class ChatRecallTests(unittest.TestCase):
             self.assertEqual(total, 1)
             with app._lock:
                 remaining = app._lobby_chat_recent_locked(beta_mode=False)
-            self.assertEqual(remaining, [])
+            marked = [item for item in remaining if int(item.get('message_id') or 0) == self.message_id]
+            self.assertEqual(len(marked), 1)
+            self.assertEqual(int(marked[0]['recalled']), 1)
+            self.assertEqual(marked[0]['text'], '')
             notified_rooms = [call.kwargs.get('room') for call in emit_mock.call_args_list]
             self.assertIn(app._story_lobby_chat_room(False), notified_rooms)
         finally:
@@ -216,10 +227,15 @@ class ChatRecallTests(unittest.TestCase):
             self.assertTrue(recalled['self_recall'])
             self.assertIn('ts', recalled)
             entries = db.list_lobby_chat_entries(beta_mode=False, limit=20)
-            self.assertFalse(any(int(entry['id']) == message_id for entry in entries))
+            placeholders = [entry for entry in entries if int(entry['id']) == message_id]
+            self.assertEqual(len(placeholders), 1)
+            self.assertEqual(int(placeholders[0]['recalled']), 1)
+            self.assertEqual(placeholders[0]['text'], '')
             with gtn._lock:
                 cached = gtn._lobby_chat_recent_locked(beta_mode=False)
-            self.assertFalse(any(item.get('message_id') == message_id for item in cached))
+            marked = [item for item in cached if int(item.get('message_id') or 0) == message_id]
+            self.assertEqual(len(marked), 1)
+            self.assertEqual(int(marked[0]['recalled']), 1)
         finally:
             with gtn._lock:
                 gtn.LOBBY_CHAT_CACHE.clear()
@@ -276,7 +292,10 @@ class ChatRecallTests(unittest.TestCase):
         self.assertTrue(results[-1]['success'])
         self.assertEqual(results[-1]['recalled'], 1)
         entries = db.list_lobby_chat_entries(beta_mode=False, limit=10)
-        self.assertFalse(any(int(entry['id']) == self.message_id for entry in entries))
+        placeholders = [entry for entry in entries if int(entry['id']) == self.message_id]
+        self.assertEqual(len(placeholders), 1)
+        self.assertEqual(int(placeholders[0]['recalled']), 1)
+        self.assertEqual(placeholders[0]['text'], '')
 
     def test_folded_lobby_messages_keep_every_message_id(self):
         """连续重复消息会折叠成一条，但每条落库 id 都要留档，撤回才找得到。"""
@@ -316,8 +335,18 @@ class ChatRecallTests(unittest.TestCase):
 
 
 class ChatRecallPermissionTests(unittest.TestCase):
+    def _fresh(self, info=None, age_seconds=10):
+        import time as time_module
+
+        payload = dict(info or {})
+        payload.setdefault('created_ts', time_module.time() - age_seconds)
+        return payload
+
     def test_recall_permissions_follow_actor_and_target_roles(self):
-        """Staff 只能撤回玩家和自己的消息；Admin 谁都行；玩家只能撤回自己的。"""
+        """Staff 只能撤回玩家和自己的消息；Admin 谁都行；玩家只能撤回自己的。
+
+        非管理员的消息必须在 2 分钟撤回窗口内（夹具统一给 created_ts）。
+        """
         import app as gtn
 
         roles = {1: 'admin', 2: 'staff', 3: 'staff', 4: 'player', 5: 'player'}
@@ -325,10 +354,10 @@ class ChatRecallPermissionTests(unittest.TestCase):
             admin = {'user_id': 1, 'name': 'Admin1', 'role': 'admin'}
             staff = {'user_id': 2, 'name': 'Staff1', 'role': 'staff'}
             player = {'user_id': 4, 'name': 'Player1', 'role': 'player'}
-            player_message = {'sender_user_id': 5, 'sender_name': 'Player2'}
-            own_message = {'sender_user_id': 4, 'sender_name': 'Player1'}
-            other_staff_message = {'sender_user_id': 3, 'sender_name': 'Staff2'}
-            admin_message = {'sender_user_id': 1, 'sender_name': 'Admin1'}
+            player_message = self._fresh({'sender_user_id': 5, 'sender_name': 'Player2'})
+            own_message = self._fresh({'sender_user_id': 4, 'sender_name': 'Player1'})
+            other_staff_message = self._fresh({'sender_user_id': 3, 'sender_name': 'Staff2'})
+            admin_message = self._fresh({'sender_user_id': 1, 'sender_name': 'Admin1'})
 
             self.assertTrue(gtn._chat_recall_message_allowed(admin, other_staff_message))
             self.assertTrue(gtn._chat_recall_message_allowed(admin, player_message))
@@ -340,6 +369,100 @@ class ChatRecallPermissionTests(unittest.TestCase):
             self.assertFalse(gtn._chat_recall_message_allowed(player, player_message))
             self.assertFalse(gtn._chat_recall_message_allowed(player, admin_message))
 
+    def test_recall_window_blocks_late_recall_except_admin(self):
+        """超过 2 分钟：玩家/_staff 都不能再撤回（包括自己的），管理员不受限制。"""
+        import app as gtn
+
+        roles = {1: 'admin', 2: 'staff', 4: 'player'}
+        with mock.patch.object(gtn, 'user_role_type', side_effect=lambda uid: roles.get(int(uid), 'none')):
+            admin = {'user_id': 1, 'name': 'Admin1', 'role': 'admin'}
+            staff = {'user_id': 2, 'name': 'Staff1', 'role': 'staff'}
+            player = {'user_id': 4, 'name': 'Player1', 'role': 'player'}
+            old_own = self._fresh({'sender_user_id': 4, 'sender_name': 'Player1'}, age_seconds=300)
+            old_other = self._fresh({'sender_user_id': 4, 'sender_name': 'Player1'}, age_seconds=300)
+
+            self.assertFalse(gtn._chat_recall_message_allowed(player, old_own))
+            self.assertFalse(gtn._chat_recall_message_allowed(staff, old_other))
+            self.assertTrue(gtn._chat_recall_message_allowed(admin, old_own))
+            self.assertTrue(gtn._chat_recall_message_allowed(admin, old_other))
+
+    def test_recall_window_boundary_is_inclusive(self):
+        """窗口边界：2 分钟内仍可撤回；缺少时间信息的按不可撤回处理。"""
+        import app as gtn
+
+        with mock.patch.object(gtn, 'user_role_type', return_value='player'):
+            player = {'user_id': 4, 'name': 'Player1', 'role': 'player'}
+            edge = self._fresh({'sender_user_id': 4, 'sender_name': 'Player1'},
+                               age_seconds=gtn.CHAT_RECALL_WINDOW_SECONDS - 1)
+            no_time = {'sender_user_id': 4, 'sender_name': 'Player1'}
+            self.assertTrue(gtn._chat_recall_message_allowed(player, edge))
+            self.assertFalse(gtn._chat_recall_message_allowed(player, no_time))
+
+    def test_recall_window_enforced_end_to_end_for_player(self):
+        """数据库端到端：把消息时间改到 3 分钟前，玩家身份撤回被拒，管理员成功。"""
+        from datetime import timedelta
+
+        import app as gtn
+
+        old_id = db.record_chat_message(
+            'lobby:release', 'public', 4, 'OldPlayer', 'late message', '{}', 0,
+        )
+        with db.get_db_connection() as conn:
+            row = conn.execute(
+                'SELECT created_at FROM chat_messages WHERE id = ?', (old_id,),
+            ).fetchone()
+            created = db.datetime.fromisoformat(str(row['created_at']).replace('Z', '+00:00'))
+            conn.execute(
+                'UPDATE chat_messages SET created_at = ? WHERE id = ?',
+                ((created - timedelta(seconds=180)).isoformat().replace('+00:00', 'Z'), old_id),
+            )
+            conn.commit()
+        result = gtn.recall_chat_messages_for_actor(
+            {'user_id': 4, 'name': 'OldPlayer', 'role': 'player'}, [old_id],
+        )
+        self.assertEqual(result, {'recalled': 0, 'denied': 1})
+        result = gtn.recall_chat_messages_for_actor(
+            {'user_id': 1, 'name': 'Admin1', 'role': 'admin'}, [old_id],
+        )
+        self.assertEqual(result['recalled'], 1)
+
+    def test_room_chat_history_marks_recalled_in_place(self):
+        """房间内存历史：撤回后条目原位变占位（不删除），折叠部分命中保留剩余。"""
+        import collections
+
+        import app as gtn
+
+        room = type('RoomStub', (), {})()
+        room.chat_history = collections.deque(maxlen=50)
+        room.chat_history.append({
+            'type': 'chat',
+            'id': 1,
+            'nickname': 'Player1',
+            'text': 'hello',
+            'message_id': 101,
+            'message_ids': [101],
+            'ts': 100.0,
+        })
+        room.chat_history.append({
+            'type': 'chat',
+            'id': 2,
+            'nickname': 'Player1',
+            'text': 'spam',
+            'message_id': 103,
+            'message_ids': [102, 103],
+            'repeat_count': 2,
+            'ts': 101.0,
+        })
+        gtn._mark_room_chat_history_recalled(room, [101, 102], 'Admin1')
+        first, second = list(room.chat_history)
+        self.assertEqual(int(first['recalled']), 1)
+        self.assertEqual(first['text'], '')
+        self.assertEqual(first['recalled_by'], 'Admin1')
+        # 折叠两条只撤回一条：剩下一条照常显示，不再带被撤回的 id。
+        self.assertNotIn('recalled', second)
+        self.assertEqual(second['message_ids'], ['103'])
+        self.assertEqual(second['repeat_count'], 1)
+
     def test_chat_role_labels_default_to_player_for_plain_accounts(self):
         import app as gtn
 
@@ -350,28 +473,60 @@ class ChatRecallPermissionTests(unittest.TestCase):
 
 
 class ChatRecallUiTests(unittest.TestCase):
-    def test_lobby_chat_has_admin_recall_button(self):
-        self.assertIn('function canRecallChatEntry(entry = {})', GAME_JS)
-        self.assertIn('function createRecallChatButton(entry = {})', GAME_JS)
-        self.assertEqual(GAME_JS.count('createRecallChatButton(entry)'), 1)
-        self.assertIn("socket.emit('admin_chat_recall', { message_ids: [messageId] });", GAME_JS)
-        self.assertIn("bindSocketEvent('admin_chat_recall_result'", GAME_JS)
-        self.assertIn('function mergeChatRecallNotices(', GAME_JS)
-        self.assertIn('function dropDanglingChatTimeSeparators(', GAME_JS)
-        self.assertIn('chatRecallRoleLabel', GAME_JS)
+    """统一撤回机制：shared-chat-actions 是唯一实现，各聊天窗口只做接入。"""
 
-    def test_story_chat_has_admin_recall_button_and_notice(self):
-        self.assertIn("storyChatSocket.on('chat_recall'", STORY_JS)
-        self.assertIn("storyChatSocket.on('admin_chat_recall_result'", STORY_JS)
-        self.assertIn("storyChatSocket.emit('admin_chat_recall', { message_ids: [messageId] });", STORY_JS)
-        self.assertIn('function createStoryChatRecallButton(entry = {})', STORY_JS)
-        self.assertIn('function applyStoryChatRecall(data = {})', STORY_JS)
-        self.assertIn("recallRow.className = 'story-chat-message chat-msg chat-recall-entry';", STORY_JS)
-        self.assertIn('function canRecallStoryChat(entry = {})', STORY_JS)
-        self.assertIn('function mergeStoryChatRecallNotices(', STORY_JS)
-        self.assertIn('function dropDanglingStoryChatTimeSeparators(', STORY_JS)
+    def test_shared_module_is_the_single_recall_implementation(self):
+        self.assertIn('window.GtnChatRecall = {', SHARED_CHAT_JS)
+        self.assertIn('CHAT_RECALL_WINDOW_MS = 120 * 1000', SHARED_CHAT_JS)
+        self.assertIn('function chatRecallAllowed(entry = {}, viewer = {}, nowMs = Date.now())', SHARED_CHAT_JS)
+        self.assertIn('function chatRecallDeadlineMs(entry = {}, viewer = {})', SHARED_CHAT_JS)
+        self.assertIn('data-recall-deadline', SHARED_CHAT_JS)
+        self.assertIn('function applyRecallToEntryList(entries, notice = {})', SHARED_CHAT_JS)
+        self.assertIn('function chatRecallPlaceholderText(entry = {}, custom = {})', SHARED_CHAT_JS)
+        self.assertIn('function startChatRecallExpiryWatcher()', SHARED_CHAT_JS)
+        # 非管理员的按钮要带过期时刻，过期后由 watcher 移除；管理员不限时。
+        self.assertIn("String((viewer && viewer.role) || '').toLowerCase() === 'admin'", SHARED_CHAT_JS)
         self.assertIn('.chat-recall-btn', SHARED_CHAT_CSS)
         self.assertIn('.chat-recall-entry', SHARED_CHAT_CSS)
+
+    def test_index_loads_shared_module_before_game_js(self):
+        index_html = (ROOT / 'templates' / 'index.html').read_text(encoding='utf-8')
+        shared_pos = index_html.find('shared-chat-actions.js')
+        game_pos = index_html.find('game.js')
+        self.assertGreater(shared_pos, 0)
+        self.assertGreater(game_pos, 0)
+        self.assertLess(shared_pos, game_pos)
+
+    def test_lobby_and_battle_chat_use_shared_recall(self):
+        self.assertIn('function createRecallChatButton(entry = {})', GAME_JS)
+        self.assertIn('actions.createChatRecallButton(entry, chatRecallViewer(), {', GAME_JS)
+        self.assertGreaterEqual(GAME_JS.count('const recallBtn = createRecallChatButton(entry);'), 2)
+        self.assertIn('function applyChatRecall(data = {})', GAME_JS)
+        self.assertIn('applyRecallToEntryList', GAME_JS)
+        self.assertIn('function chatRecallPlaceholderText(entry = {})', GAME_JS)
+        self.assertIn("bindSocketEvent('chat_recall'", GAME_JS)
+        self.assertIn("bindSocketEvent('admin_chat_recall_result'", GAME_JS)
+        self.assertIn('function dropDanglingChatTimeSeparators(', GAME_JS)
+        # 大厅与对局渲染都识别 recalled 占位（原位显示，不再过滤删除）。
+        self.assertIn('if (entry.recalled) {', GAME_JS)
+        self.assertIn('entry && entry.recalled,', GAME_JS)
+
+    def test_story_chat_uses_shared_recall(self):
+        self.assertIn("storyChatSocket.on('chat_recall'", STORY_JS)
+        self.assertIn("storyChatSocket.on('admin_chat_recall_result'", STORY_JS)
+        self.assertIn('function createStoryChatRecallButton(entry = {})', STORY_JS)
+        self.assertIn('actions.createChatRecallButton(entry, {', STORY_JS)
+        self.assertIn('function applyStoryChatRecall(data = {})', STORY_JS)
+        self.assertIn('applyRecallToEntryList(storyChatEntries, {', STORY_JS)
+        self.assertIn("recallRow.className = 'story-chat-message chat-msg chat-recall-entry';", STORY_JS)
+        self.assertIn('function dropDanglingStoryChatTimeSeparators(', STORY_JS)
+
+    def test_minigame_chat_marks_rows_in_place(self):
+        minigame_js = (ROOT / 'static' / 'js' / 'minigame-chat.js').read_text(encoding='utf-8')
+        self.assertIn('GtnChatRecall.markEntryRecalled', minigame_js)
+        self.assertIn('recallApi.placeholderText', minigame_js)
+        self.assertIn('row.classList.add(\'chat-recall-entry\')', minigame_js)
+        self.assertIn('if (item.recalled) {', minigame_js)
 
 
 if __name__ == '__main__':
