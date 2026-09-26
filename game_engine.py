@@ -18453,22 +18453,26 @@ class GameEngine:
         if self.round_num > 1 and not skip_draw_recovery:
             elixir_recovery = ELIXIR_RECOVERY
             from engine_runtime_support import declared_elixir_recovery_aura
-            for eq in list(opp.equipment):
-                # 设计 9.22（pincer 修复）：超载只施加给装备选中的目标
-                # （effect_target），不再无条件打给敌方。
-                if getattr(eq, 'effect_target', opp_id) != player_id:
-                    continue
-                elixir_recovery += self._declared_aura_elixir_bonus(eq, opp_id)
-                aura = declared_elixir_recovery_aura(self, eq, opp_id)
-                elixir_recovery += aura.elixir
-                if aura.overload > 0:
-                    ps.overload += aura.overload
-                    self.log_msg(self._format_step_log(
-                        aura.log or "{target}获得{amount}层超载",
-                        target=self.pn(player_id),
-                        amount=aura.overload,
-                        player=self.pn(player_id),
-                    ))
+            # 设计 9.22（pincer 修复）：超载只施加给装备选中的目标（effect_target）。
+            # 追加修复：扫所有玩家的装备区（与 2v2 一致）——只看对手会漏掉
+            # 自己装在自己身上的螫针，导致无法对自己施加超载。
+            for aura_owner_id, aura_owner in enumerate(self.players):
+                for eq in list(aura_owner.equipment):
+                    if not self._equipment_runtime_active(eq):
+                        continue
+                    if getattr(eq, 'effect_target', aura_owner_id) != player_id:
+                        continue
+                    elixir_recovery += self._declared_aura_elixir_bonus(eq, aura_owner_id)
+                    aura = declared_elixir_recovery_aura(self, eq, aura_owner_id)
+                    elixir_recovery += aura.elixir
+                    if aura.overload > 0:
+                        ps.overload += aura.overload
+                        self.log_msg(self._format_step_log(
+                            aura.log or "{target}获得{amount}层超载",
+                            target=self.pn(player_id),
+                            amount=aura.overload,
+                            player=self.pn(player_id),
+                        ))
             elixir_recovery += self._opening_event_elixir_recovery_bonus(player_id)
             ps.gain_elixir(elixir_recovery)
             self.log_msg(f"{self.pn(player_id)}回复{elixir_recovery}E")
@@ -18587,22 +18591,26 @@ class GameEngine:
         if self.round_num > 1:
             elixir_recovery = ELIXIR_RECOVERY
             from engine_runtime_support import declared_elixir_recovery_aura
-            for eq in list(opp.equipment):
-                # 设计 9.22（pincer 修复）：超载只施加给装备选中的目标
-                # （effect_target），不再无条件打给敌方。
-                if getattr(eq, 'effect_target', opp_id) != player_id:
-                    continue
-                elixir_recovery += self._declared_aura_elixir_bonus(eq, opp_id)
-                aura = declared_elixir_recovery_aura(self, eq, opp_id)
-                elixir_recovery += aura.elixir
-                if aura.overload > 0:
-                    ps.overload += aura.overload
-                    self.log_msg(self._format_step_log(
-                        aura.log or "{target}获得{amount}层超载",
-                        target=self.pn(player_id),
-                        amount=aura.overload,
-                        player=self.pn(player_id),
-                    ))
+            # 设计 9.22（pincer 修复）：超载只施加给装备选中的目标（effect_target）。
+            # 追加修复：扫所有玩家的装备区（与 2v2 一致）——只看对手会漏掉
+            # 自己装在自己身上的螫针，导致无法对自己施加超载。
+            for aura_owner_id, aura_owner in enumerate(self.players):
+                for eq in list(aura_owner.equipment):
+                    if not self._equipment_runtime_active(eq):
+                        continue
+                    if getattr(eq, 'effect_target', aura_owner_id) != player_id:
+                        continue
+                    elixir_recovery += self._declared_aura_elixir_bonus(eq, aura_owner_id)
+                    aura = declared_elixir_recovery_aura(self, eq, aura_owner_id)
+                    elixir_recovery += aura.elixir
+                    if aura.overload > 0:
+                        ps.overload += aura.overload
+                        self.log_msg(self._format_step_log(
+                            aura.log or "{target}获得{amount}层超载",
+                            target=self.pn(player_id),
+                            amount=aura.overload,
+                            player=self.pn(player_id),
+                        ))
             elixir_recovery += self._opening_event_elixir_recovery_bonus(player_id)
             ps.gain_elixir(elixir_recovery)
             self.log_msg(f"{self.pn(player_id)}回复{elixir_recovery}E")
