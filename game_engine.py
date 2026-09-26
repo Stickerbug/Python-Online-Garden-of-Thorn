@@ -3728,6 +3728,65 @@ class GameEngine:
         except Exception:
             return log
 
+    def _format_data_step_log(self, log, player_id, card, params, context):
+        """把数据步骤的自定义 ``log`` 模板格式化成战报文本。
+
+        占位符：``{target}``/``{source}``（玩家名，target 取步骤的 ``target``
+        参数或当前上下文目标）、``{player}``（步骤执行者）、``{amount}``/``{count}``
+        （步骤的数值参数）、``{card}``（当前牌名）。占位符缺料时保留原样，
+        由 ``log_msg`` 的未解析占位符守卫兜底。
+        """
+        if not isinstance(log, str) or '{' not in log:
+            return log
+        fields = {}
+        try:
+            if isinstance(params, dict) and params.get('target') is not None:
+                resolved = self._resolve_target(player_id, params.get('target'))
+                if self._valid_player_id(resolved):
+                    fields['target'] = self.pn(resolved)
+        except Exception:
+            pass
+        if 'target' not in fields:
+            active = context if isinstance(context, dict) else {}
+            for key in ('target_id', 'target_player'):
+                value = active.get(key)
+                try:
+                    value = int(value)
+                except (TypeError, ValueError):
+                    continue
+                if self._valid_player_id(value):
+                    fields['target'] = self.pn(value)
+                    break
+        if self._valid_player_id(player_id):
+            fields.setdefault('source', self.pn(player_id))
+            fields.setdefault('player', self.pn(player_id))
+        try:
+            target_id = None
+            active = context if isinstance(context, dict) else {}
+            raw_target = active.get('target_id', active.get('target_player'))
+            target_id = int(raw_target) if raw_target is not None else None
+        except (TypeError, ValueError):
+            target_id = None
+        if isinstance(params, dict):
+            for key in ('amount', 'count'):
+                value = params.get(key)
+                if isinstance(value, (int, float)) and key not in fields:
+                    fields[key] = value
+        if card is not None:
+            name = getattr(card, 'name_cn', '') or getattr(card, 'name_en', '')
+            if name:
+                fields.setdefault('card', name)
+        rendered = self._format_step_log(log, **fields)
+        # 客户端的卡名 chip 靠日志行里的 CARD marker 解析悬浮数据；
+        # 数据步骤的自定义 log 原来不带 marker，卡名渲染成死文本。
+        # 模板渲染后含当前牌名时，在牌名首次出现处注入 marker。
+        if card is not None and rendered and '{' not in rendered:
+            name = getattr(card, 'name_cn', '') or getattr(card, 'name_en', '') or ''
+            marker = self._card_log_marker(card)
+            if name and marker and name in rendered and '⁣CARD:' not in rendered:
+                rendered = rendered.replace(name, f'{name}{marker}', 1)
+        return rendered
+
     def log_msg(self, msg: str):
         text = self._normalize_log_text(str(msg))
         if not text:
@@ -15791,9 +15850,9 @@ class GameEngine:
                 try:
                     before_stats = self._snapshot_player_stats()
                     if callable(fn):
-                        fn(player_id, card, pm, lg, choice, context_dict)
+                        fn(player_id, card, pm, self._format_data_step_log(lg, player_id, card, pm, context_dict) if lg else lg, choice, context_dict)
                     elif lg:
-                        self.log_msg(lg)
+                        self.log_msg(self._format_data_step_log(lg, player_id, card, pm, context_dict))
                     else:
                         self._log_mod_runtime_error(et, RuntimeError(f'Unknown effect: {et}'), player_id, card)
                     if rt not in ('if', 'if_else', 'repeat', 'repeat_until', 'for_each',
