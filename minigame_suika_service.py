@@ -225,7 +225,7 @@ def _check_time_anchor(row, kept: List[Dict[str, float]],
 
 def sync_progress(conn, user_id: int, game_uid: str, from_index: int, drops,
                   *, claimed_score=None, claimed_max_tier=None, source: str = "online",
-                  now=None) -> Dict[str, object]:
+                  now=None, play_mode: str = "normal") -> Dict[str, object]:
     """把"这一批新增投放 + 新的总分"立刻落库，并按启发式判断能不能计入榜单。"""
 
     ensure_schema(conn)
@@ -286,7 +286,8 @@ def sync_progress(conn, user_id: int, game_uid: str, from_index: int, drops,
                    (user_id, game_id, score, max_tile, op_index, rules_version, verified_at, source, created_at, game_key)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (int(user_id), int(state["game_id"]), int(score), max_tier, len(merged),
-                 RULES_VERSION, stamp, source if source in base.SYNC_SOURCES else "online", stamp, GAME_KEY),
+                 RULES_VERSION, stamp, source if source in base.SYNC_SOURCES else "online", stamp, GAME_KEY,
+                 play_mode if play_mode in base.PLAY_MODES else "normal"),
             )
             verified_score = int(score)
     conn.commit()

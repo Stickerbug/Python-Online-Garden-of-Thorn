@@ -233,3 +233,68 @@ class StorySettlementTests(_TempDbCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class LeaderboardPlayModeTests(_TempDbCase):
+    """排行榜三类：14d 仅 normal、timed 仅 ticket、all 全计。"""
+
+    _record_seq = 0
+
+    def _insert_record(self, conn, score, play_mode, verified_at=None):
+        LeaderboardPlayModeTests._record_seq += 1
+        conn.execute(
+            '''
+            INSERT INTO minigame_2048_records
+                (user_id, game_id, score, max_tile, op_index, rules_version,
+                 verified_at, source, created_at, game_key, play_mode)
+            VALUES (?, 1, ?, 2048, ?, 2, COALESCE(?, datetime('now')), 'online', datetime('now'), '2048', ?)
+            ''',
+            (self.user['id'], score, LeaderboardPlayModeTests._record_seq, verified_at, play_mode),
+        )
+
+    def test_windows_filter_by_play_mode(self):
+        import minigame_2048_service as svc
+        with db.get_db_connection() as conn:
+            svc.ensure_schema(conn)
+            self._insert_record(conn, 3000, 'normal')
+            self._insert_record(conn, 5000, 'ticket')
+            normal_table = svc.leaderboard(conn, window='14d', limit=0)
+            timed_table = svc.leaderboard(conn, window='timed', limit=0)
+            all_table = svc.leaderboard(conn, window='all', limit=0)
+        self.assertEqual([e['score'] for e in normal_table['entries']], [3000])
+        self.assertEqual([e['score'] for e in timed_table['entries']], [5000])
+        # 总榜全计：每账号一行取最高分（5000）
+        self.assertEqual([e['score'] for e in all_table['entries']], [5000])
+
+    def test_two_players_across_modes(self):
+        import minigame_2048_service as svc
+        other, _ = db.create_user('OtherPlayer', 'Passw0rd!xyz')
+        with db.get_db_connection() as conn:
+            svc.ensure_schema(conn)
+            self._insert_record(conn, 3000, 'normal')
+            conn.execute(
+                '''
+                INSERT INTO minigame_2048_records
+                    (user_id, game_id, score, max_tile, op_index, rules_version,
+                     verified_at, source, created_at, game_key, play_mode)
+                VALUES (?, 2, 9000, 4096, 1, 2, datetime('now'), 'online', datetime('now'), '2048', 'ticket')
+                ''',
+                (other['id'],),
+            )
+            normal_table = svc.leaderboard(conn, window='14d', limit=0)
+            timed_table = svc.leaderboard(conn, window='timed', limit=0)
+            all_table = svc.leaderboard(conn, window='all', limit=0)
+        self.assertEqual([e['score'] for e in normal_table['entries']], [3000])
+        self.assertEqual([e['score'] for e in timed_table['entries']], [9000])
+        self.assertEqual([e['score'] for e in all_table['entries']], [9000, 3000])
+
+    def test_legacy_records_count_as_normal(self):
+        import minigame_2048_service as svc
+        with db.get_db_connection() as conn:
+            svc.ensure_schema(conn)
+            # 老记录（补列前的行）play_mode 默认 'normal'
+            columns = {row[1] for row in conn.execute('PRAGMA table_info(minigame_2048_records)').fetchall()}
+            self.assertIn('play_mode', columns)
+            self._insert_record(conn, 2500, 'normal')
+            table = svc.leaderboard(conn, window='14d', limit=0)
+            self.assertEqual(len(table['entries']), 1)

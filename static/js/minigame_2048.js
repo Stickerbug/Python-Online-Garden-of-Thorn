@@ -1013,7 +1013,7 @@ function scheduleLeaderboardRefresh(delay = 15000) {
 }
 
 async function refreshLeaderboard(windowMode = rankWindowMode) {
-  rankWindowMode = windowMode === 'all' ? 'all' : '14d';
+  rankWindowMode = windowMode === 'all' ? 'all' : (windowMode === 'timed' ? 'timed' : '14d');
   const body = el('mg-rank-body');
   if (!body) return;
   if (!body.dataset.loaded) body.textContent = lt({ zh: '正在读取…', en: 'Loading…', fr: 'Chargement…', ja: '読み込み中…' });

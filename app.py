@@ -14005,7 +14005,7 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
                     return {'success': True,
                             'output': '已关闭 ' + account['username'] + ' 的 ' + game_key + ' 活动局，下次进入开新局'}
                 if cmd == 'minigame-top':
-                    window = parts[2] if len(parts) >= 3 and parts[2] in ('14d', 'all') else '14d'
+                    window = parts[2] if len(parts) >= 3 and parts[2] in ('14d', 'timed', 'all') else '14d'
                     try:
                         limit = int(parts[3]) if len(parts) >= 4 else 10
                     except ValueError:
@@ -16404,7 +16404,7 @@ def admin_completions(line):
         if cmd_parts_len_ok(position, 4) and parts[2] in ('record',):
             return filtered(['add', 'clear'])
         if position == 4 and parts[2] == 'top':
-            return filtered(['14d', 'all'])
+            return filtered(['14d', 'timed', 'all'])
         if position == 4 and parts[2] in ('state', 'score', 'reset', 'periods', 'settle', 'record'):
             return filtered(account_values())
 
@@ -36184,6 +36184,7 @@ def api_minigame_suika_sync():
                 claimed_score=None if claimed_score is None else int(claimed_score),
                 claimed_max_tier=None if claimed_max_tier is None else int(claimed_max_tier),
                 source=source,
+                play_mode=_leisure_play_mode_for(identity[0]),
             )
     except Exception as exc:
         admin_event('error', f'suika sync failed: {exc}')
@@ -36223,8 +36224,8 @@ def api_minigame_suika_leaderboard():
     if _minigame_2048_rate_limited(f'u{identity[0]}', 'minigame_suika_leaderboard', limit=300):
         return _json_error('操作太频繁，请稍后再试', 429)
     window = str(request.args.get('window') or '14d')
-    if window not in ('14d', 'all'):
-        return _json_error('window 只能是 14d 或 all', 400)
+    if window not in ('14d', 'timed', 'all'):
+        return _json_error('window 只能是 14d、timed 或 all', 400)
     try:
         limit = int(request.args.get('limit') or minigame_2048_service.DEFAULT_LEADERBOARD_LIMIT)
     except (TypeError, ValueError):
@@ -36397,6 +36398,9 @@ def api_leisure_ticket_result():
     except (TypeError, ValueError):
         best_tier = 0
     try:
+        # 设计确认：免费时段的成绩不发门票奖励（奖励只来自门票 10 分钟游玩期）。
+        if leisure_ticket.is_free_entry_now():
+            return jsonify({'success': True, 'granted': [], 'free_period': True})
         reward = leisure_ticket_settlement.record_result_and_grant(
             user.get('id'), game_key, score, best_tier,
         )
@@ -36453,6 +36457,7 @@ def api_minigame_2048_sync():
                 new_game=bool(payload.get('new_game')),
                 replace_active=bool(payload.get('replace_active')),
                 seed=payload.get('seed'),
+                play_mode=_leisure_play_mode_for(identity[0]),
             )
     except sqlite3.OperationalError as exc:
         # 写锁竞争高峰（故事模式/结算 worker 并发写）会偶发 database is locked，
@@ -36472,6 +36477,7 @@ def api_minigame_2048_sync():
                         new_game=bool(payload.get('new_game')),
                         replace_active=bool(payload.get('replace_active')),
                         seed=payload.get('seed'),
+                        play_mode=_leisure_play_mode_for(identity[0]),
                     )
             except Exception as retry_exc:
                 admin_event('error', f'2048 sync failed (retry): {retry_exc}')
@@ -36577,8 +36583,8 @@ def api_minigame_2048_leaderboard():
     except ValueError:
         limit = minigame_2048_service.DEFAULT_LEADERBOARD_LIMIT
     limit = max(1, min(100, limit))
-    if window not in ('14d', 'all'):
-        return _json_error('window 只能是 14d 或 all', 400)
+    if window not in ('14d', 'timed', 'all'):
+        return _json_error('window 只能是 14d、timed 或 all', 400)
     # 与 suika 端点同口径：此前这里没有兜底，DB 一忙就是裸 500，
     # 客户端把一切失败都显示成「离线，暂时读不到排行榜」。
     try:

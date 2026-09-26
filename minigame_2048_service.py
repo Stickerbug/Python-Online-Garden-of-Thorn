@@ -45,9 +45,17 @@ CHAMPION_MIN_ACCOUNTS = 3
 RULES_WINDOW_DAYS = 14
 DEFAULT_LEADERBOARD_LIMIT = 100
 MAX_SYNC_OPS = 4096
+
+# 2048 操作限速（设计 2026-09-26）：全程累计「每经过 1 秒最多 2 次操作」。
+# 以本局第一次操作的时间为起点，操作数 op_index 超过 2×经过秒数 + 突发余量则拒绝该批。
+OPS_RATE_LIMIT_PER_SECOND = 2
+OPS_RATE_BURST_ALLOWANCE = 4
 CHECKPOINT_EVERY = 64
 CZ_TZ = timezone(timedelta(hours=8))
 SYNC_SOURCES = ("online", "offline")
+# 排行榜三类（设计 2026-09-26）：ticket=门票限时模式；normal=其他（含免费时段、老记录）。
+# 限时榜只看 ticket，14 天普通榜只看 normal，总榜全计。
+PLAY_MODES = ("normal", "ticket")
 FEATURE_EPOCH_CZ = datetime(2026, 9, 20, 0, 0, tzinfo=CZ_TZ)
 
 SCHEMA_SQL = """
@@ -72,6 +80,7 @@ CREATE TABLE IF NOT EXISTS minigame_2048_games (
     source TEXT NOT NULL DEFAULT 'online',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
+    first_op_at TEXT,
     closed_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_mg2048_games_user ON minigame_2048_games(user_id, status);
@@ -85,7 +94,8 @@ CREATE TABLE IF NOT EXISTS minigame_2048_records (
     rules_version INTEGER NOT NULL,
     verified_at TEXT NOT NULL,
     source TEXT NOT NULL DEFAULT 'online',
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    play_mode TEXT NOT NULL DEFAULT 'normal'
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_mg2048_records_game_op
     ON minigame_2048_records(game_id, op_index);
@@ -136,6 +146,13 @@ def ensure_schema(conn) -> None:
     columns = {row[1] for row in conn.execute("PRAGMA table_info(minigame_2048_records)").fetchall()}
     if "game_key" not in columns:
         conn.execute("ALTER TABLE minigame_2048_records ADD COLUMN game_key TEXT NOT NULL DEFAULT '2048'")
+    game_columns = {row[1] for row in conn.execute("PRAGMA table_info(minigame_2048_games)").fetchall()}
+    if "first_op_at" not in game_columns:
+        conn.execute("ALTER TABLE minigame_2048_games ADD COLUMN first_op_at TEXT")
+    record_columns = {row[1] for row in conn.execute("PRAGMA table_info(minigame_2048_records)").fetchall()}
+    if "play_mode" not in record_columns:
+        conn.execute("ALTER TABLE minigame_2048_records ADD COLUMN play_mode TEXT NOT NULL DEFAULT 'normal'")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_mg_records_play_mode ON minigame_2048_records(rules_version, verified_at, play_mode)")
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_mg_records_game_window"
         " ON minigame_2048_records(game_key, rules_version, verified_at, score DESC, max_tile DESC)"
@@ -387,7 +404,8 @@ def _record_progress(conn, state: Dict[str, object], board: Dict[str, object],
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (int(state["user_id"]), int(state["game_id"]), score, int(board["max_tile"]),
          int(state["op_index"]), int(state["rules_version"]), stamp,
-         source if source in SYNC_SOURCES else "online", stamp, str(game_key or "2048")),
+         source if source in SYNC_SOURCES else "online", stamp, str(game_key or "2048"),
+         play_mode if play_mode in PLAY_MODES else "normal"),
     )
     if not cursor.rowcount:
         return None
@@ -399,7 +417,7 @@ def sync_progress(conn, user_id: int, game_uid: str, from_index: int, ops,
                   *, claimed_score=None, claimed_cells=None, source: str = "online",
                   reached_2048: bool = False, continued=None, now=None,
                   new_game: bool = False, replace_active: bool = False,
-                  seed=None) -> Dict[str, object]:
+                  seed=None, play_mode: str = "normal") -> Dict[str, object]:
     """增量同步：从 ``from_index`` 起补操作，服务端重放验证后再落库。
 
     返回 ``{"status": "ok"|"conflict"|"gap"|"rejected"|"stale_game", ...}``。
@@ -469,6 +487,28 @@ def sync_progress(conn, user_id: int, game_uid: str, from_index: int, ops,
         text = text[overlap:]
     baseline = _replay_state(state)
     if text:
+        # 操作限速：累计操作数不得超过 2 × 本局经过秒数 + 余量（全程硬限速，
+        # 断网补传大批操作会因时间不够而被拒——客户端按同样规则本地限速，正常玩不受影响）。
+        first_op_raw = row["first_op_at"] if "first_op_at" in row.keys() else None
+        if first_op_raw is None:
+            conn.execute(
+                "UPDATE minigame_2048_games SET first_op_at = ? WHERE id = ?",
+                (now_iso(now), int(state["game_id"])),
+            )
+            first_op_raw = now_iso(now)
+        first_op = parse_iso(first_op_raw)
+        if first_op is not None:
+            reference = parse_iso(now_iso(now)) or first_op
+            elapsed_seconds = max(0.0, (reference - first_op).total_seconds())
+            allowed_ops = int(state["op_index"]) + len(text)
+            budget = elapsed_seconds * OPS_RATE_LIMIT_PER_SECOND + OPS_RATE_BURST_ALLOWANCE
+            if allowed_ops > budget:
+                _audit(conn, user_id, state["game_id"], "ops_rate_limited",
+                       {"op_index": int(state["op_index"]), "batch": len(text),
+                        "elapsed": round(elapsed_seconds, 2), "budget": round(budget, 2)})
+                conn.commit()
+                return {"status": "rejected",
+                        "reason": "操作过快：请按正常节奏游玩（每秒最多 2 次操作）"}
         check = g.verify_submission(
             state["seed"], text,
             start_state={"seed": state["seed"], "rng_state": baseline["rng_state"],
@@ -571,8 +611,8 @@ def prefs_decline_invites(conn, user_id: int) -> bool:
 
 
 def _window_bounds(window: str, now=None) -> Tuple[Optional[datetime], Optional[datetime]]:
-    if str(window) not in ("14d", "all"):
-        raise ValueError("window 只能是 14d 或 all")
+    if str(window) not in ("14d", "timed", "all"):
+        raise ValueError("window 只能是 14d、timed 或 all")
     now_dt = parse_iso(now_iso(now))
     if str(window) == "all":
         return None, None
@@ -600,6 +640,10 @@ def leaderboard(conn, *, window: str = "14d", limit: int = DEFAULT_LEADERBOARD_L
         " WHERE r.rules_version = ? AND r.score > 0 AND r.game_key = ?"
     )
     params: List[object] = [int(rules_version), str(game_key or "2048")]
+    if str(window) == "timed":
+        sql += " AND r.play_mode = 'ticket'"
+    elif str(window) == "14d":
+        sql += " AND r.play_mode != 'ticket'"
     if start is not None and end is not None:
         sql += " AND r.verified_at >= ? AND r.verified_at < ?"
         params.extend([now_iso(start), now_iso(end)])

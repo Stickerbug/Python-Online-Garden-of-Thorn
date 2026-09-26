@@ -1331,7 +1331,7 @@ function bindUi() {
   });
   document.querySelectorAll('[data-sk-window]').forEach((button) => {
     button.addEventListener('click', () => {
-      rankWindowMode = button.dataset.skWindow === 'all' ? 'all' : '14d';
+      rankWindowMode = button.dataset.skWindow === 'all' ? 'all' : (button.dataset.skWindow === 'timed' ? 'timed' : '14d');
       document.querySelectorAll('[data-sk-window]').forEach((other) => {
         const active = other === button;
         other.setAttribute('aria-pressed', active ? 'true' : 'false');
