@@ -19785,6 +19785,15 @@ def build_response_request_payload(engine, responder_id, played_card, player_id,
         'target_player_id': target_player_id,
         'counter_cards': serialized_cards,
     }
+    # forced_wait（无人可反制）窗现在也发响应请求（响应者点「不反制」计入
+    # 表态，全员表态提前结算）；counter_cards 为空时客户端据此显示倒计时
+    # 按钮而不是自动 pass。deadline 供客户端显示与服务端 5s 上限对齐。
+    if pending.get('forced_wait'):
+        payload['forced_wait'] = True
+        try:
+            payload['window_deadline'] = float(pending.get('window_deadline') or 0)
+        except (TypeError, ValueError):
+            payload['window_deadline'] = 0
     destroy_target_equipments = _response_destroy_target_equipments(
         engine,
         played_card,
@@ -20259,11 +20268,11 @@ def emit_or_resolve_pending_response(room, reason='emit'):
     _stamp_pending_interactions(room)
     pending_now = getattr(getattr(room, 'engine', None), 'pending_response', None)
     if getattr(room, 'mode', None) == '2v2' and isinstance(pending_now, dict):
-        # 2s 硬上限（设计 9.22 #零-5）：所有 2v2 窗口到点自动替未响应者
-        # 「不反制」；强制等待窗口直接结算被打出的牌。
+        # 反制窗口最长 5s（设计 9.22 #零-5 修订）：到点自动替未响应者
+        # 「不反制」；全员提前表态则立即结算。forced_wait（无人可反制）
+        # 窗也发响应请求——响应者点「不反制」计入表态，界面与有人可反制
+        # 的窗口一致，不泄露是否可反制。
         schedule_forced_response_resolution(room)
-        if pending_now.get('forced_wait'):
-            return 0
     sent = emit_pending_response_requests(room)
     if sent > 0 or not getattr(getattr(room, 'engine', None), 'pending_response', None):
         return sent
@@ -34483,7 +34492,10 @@ def on_response(data):
             soft_reject(sid, 'response', 'RESPONSE_NOT_EXPECTED', room=room, pidx=pidx, send_state=True)
             return
         if room.mode == '2v2':
-            allowed = pidx in _pending_response_responder_ids(room, pending_response)
+            allowed = pidx in _pending_response_responder_ids(room, pending_response) or (
+                pending_response.get('forced_wait')
+                and pidx in [int(item) for item in (pending_response.get('responder_ids') or [])]
+            )
         else:
             try:
                 allowed = pidx == 1 - int(pending_response.get('player_id', -1))
@@ -34504,7 +34516,11 @@ def on_response(data):
             'response',
             {'card_instance_id': card_instance_id},
         )
-        result = engine.handle_response(pidx, card_instance_id)
+        if pending_response.get('forced_wait') and card_instance_id is None:
+            # forced_wait（无人可反制）窗口里响应者点「不反制」：全员表态即提前结算。
+            result = engine.pass_forced_wait_response(pidx)
+        else:
+            result = engine.handle_response(pidx, card_instance_id)
         if not isinstance(result, dict) or not result.get('success'):
             error = result.get('error') if isinstance(result, dict) else None
             soft_reject(
