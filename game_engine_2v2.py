@@ -24,9 +24,11 @@ class GameEngine2v2(GameEngine):
     # 2v2 保护（血盾）：开局 66，每个新回合开始 -33（66 → 33 → 0）。
     BLOOD_SHIELD_INITIAL = 66
     BLOOD_SHIELD_DECAY_PER_ROUND = 33
-    # 反制窗口：最长 5s（到点自动替未响应者「不反制」）；所有响应者提前
-    # 完成决定则立即结算（response_window_complete）。
+    # 有人可反制的反制窗口：最长 5s（到点自动替未响应者「不反制」）；
+    # 所有响应者提前表态则立即结算（passed_responder_ids 全员命中）。
     FORCED_RESPONSE_WINDOW_SECONDS = 5.0
+    # 无人可反制的纯等待窗：固定 2s 后直接结算，不出响应面板。
+    FORCED_WAIT_SECONDS = 2.0
 
     def __init__(self):
         self.num_players = 4
@@ -836,28 +838,6 @@ class GameEngine2v2(GameEngine):
                 return True
         return False
 
-    def pass_forced_wait_response(self, responder_id: int) -> dict:
-        """forced_wait（无人可反制）窗口里响应者点「不反制」。
-
-        全部响应者表态后立即结算被打出的牌（窗口提前结束；表态按钮与
-        有人可反制的窗口长得一模一样，不泄露是否可反制）。
-        """
-        pending = self.pending_response
-        if not isinstance(pending, dict) or not pending.get('forced_wait'):
-            return {'success': False, 'error': '没有待响应的操作'}
-        if not self._is_valid_player_id(responder_id):
-            return {'success': False, 'error': '无效玩家'}
-        responder_ids = [int(item) for item in (pending.get('responder_ids') or [])]
-        if responder_ids and responder_id not in responder_ids:
-            return {'success': False, 'error': '该玩家不在本次反制范围内'}
-        passed = pending.setdefault('passed_responder_ids', [])
-        if responder_id not in passed:
-            passed.append(responder_id)
-        if all(item in passed for item in responder_ids):
-            # 全员表态：立即结算被打出的牌。
-            return self.resolve_forced_response()
-        return {'success': True, 'response_passed': True, 'needs_response': False}
-
     def _pass_pending_response(self, responder_id: int, pending: dict) -> Optional[dict]:
         responder_entries = self._pending_counter_entries_for_responder(pending, responder_id)
         if not responder_entries:
@@ -1549,9 +1529,7 @@ class GameEngine2v2(GameEngine):
                 'paid_e': self._actual_card_elixir_cost(card),
                 'paid_m': max(0, int(getattr(card, '_paid_m_this_play', getattr(card, 'cost_m', 0)) or 0)),
                 'forced_wait': True,
-                'responder_ids': list(responder_ids),
-                'passed_responder_ids': [],
-                'window_deadline': time.time() + self.FORCED_RESPONSE_WINDOW_SECONDS,
+                'forced_deadline': time.time() + self.FORCED_WAIT_SECONDS,
             }
         return {
             'player_id': player_id,

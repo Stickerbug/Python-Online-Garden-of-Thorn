@@ -29,6 +29,8 @@ class CounterWindowTimingTests(unittest.TestCase):
         self.assertEqual(engine.FORCED_RESPONSE_WINDOW_SECONDS, 5.0)
         skill = CardInstance('ManaOrb')
         engine.players[0].hand = [skill]
+        # 玩家2持有可反制技能的魔导护符 → 有人可反制的 5s 窗口
+        engine.players[2].hand = [CardInstance('MagicNazar')]
         engine.play_card(0, skill.instance_id, 0, target_choice(0))
         pending = engine.pending_response
         self.assertIsNotNone(pending)
@@ -43,66 +45,41 @@ class CounterWindowTimingTests(unittest.TestCase):
         engine = self.build_engine()
         skill = CardInstance('ManaOrb')
         engine.players[0].hand = [skill]
+        engine.players[2].hand = [CardInstance('MagicNazar')]
         engine.play_card(0, skill.instance_id, 0, target_choice(0))
         pending = engine.pending_response
+        self.assertFalse(pending.get('forced_wait'))
         self.assertIn(2, pending.get('responder_ids') or [])
         self.assertIn(3, pending.get('responder_ids') or [])
         self.assertEqual(pending.get('passed_responder_ids'), [])
 
-    def test_forced_wait_window_responders_tracked(self):
-        # 精准牌（对手无反制牌）→ forced_wait 窗，responder_ids 仍要存全集
+    def test_forced_wait_is_silent_two_second_wait(self):
+        """无人可反制：纯等待窗（forced_deadline≈2s），不发响应面板。"""
         engine = self.build_engine()
         thorn = CardInstance('Stinger')
         engine.players[0].hand = [thorn]
-        result = engine.play_card(0, thorn.instance_id, 2, target_choice(2))
+        engine.play_card(0, thorn.instance_id, 2, target_choice(2))
         pending = engine.pending_response
         self.assertIsNotNone(pending)
         self.assertTrue(pending.get('forced_wait'))
-        self.assertIn(2, pending.get('responder_ids') or [])
+        self.assertIsNone(pending.get('window_deadline'))
+        import time
+        remaining = pending['forced_deadline'] - time.time()
+        self.assertGreater(remaining, 1.0)
+        self.assertLessEqual(remaining, 2.0)
 
-    def test_forced_wait_all_pass_resolves_immediately(self):
+    def test_forced_wait_resolves_via_resolve_forced_response(self):
+        """纯等待窗到点由 app 层 worker 调 resolve_forced_response 结算。"""
         engine = self.build_engine()
         thorn = CardInstance('Stinger')
         target = engine.players[2]
         health_before = target.health
         engine.players[0].hand = [thorn]
-        result = engine.play_card(0, thorn.instance_id, 2, target_choice(2))
-        pending = engine.pending_response
-        self.assertTrue(pending.get('forced_wait'))
-        response = engine.pass_forced_wait_response(2)
-        # 全部响应者（只有玩家2）表态 → 立即结算：无 pending、伤害已生效
-        self.assertTrue(response.get('success'))
+        engine.play_card(0, thorn.instance_id, 2, target_choice(2))
+        result = engine.resolve_forced_response()
+        self.assertTrue(result.get('success'))
         self.assertIsNone(engine.pending_response)
         self.assertLess(target.health, health_before)
-
-    def test_forced_wait_partial_pass_keeps_window(self):
-        # 广域技能牌（非攻击）→ 敌方全体（玩家2、3）都是响应者。
-        engine = self.build_engine()
-        skill = CardInstance('ManaOrb')
-        engine.players[0].hand = [skill]
-        engine.play_card(0, skill.instance_id, 0, target_choice(0))
-        pending = engine.pending_response
-        self.assertTrue(pending.get('forced_wait'))
-        self.assertEqual(set(pending.get('responder_ids') or []), {2, 3})
-        response = engine.pass_forced_wait_response(3)
-        # 玩家3表态，玩家2未表态：窗口保持
-        self.assertTrue(response.get('success'))
-        self.assertTrue(response.get('response_passed'))
-        self.assertIsNotNone(engine.pending_response)
-        self.assertIn(3, engine.pending_response.get('passed_responder_ids') or [])
-        # 玩家2再表态 → 立即结算
-        response = engine.pass_forced_wait_response(2)
-        self.assertTrue(response.get('success'))
-        self.assertIsNone(engine.pending_response)
-
-    def test_pass_forced_wait_rejects_non_responder(self):
-        engine = self.build_engine()
-        thorn = CardInstance('Stinger')
-        engine.players[0].hand = [thorn]
-        engine.play_card(0, thorn.instance_id, 2, target_choice(2))
-        response = engine.pass_forced_wait_response(1)  # 队友，不是响应者
-        self.assertFalse(response.get('success'))
-        self.assertIsNotNone(engine.pending_response)
 
 
 if __name__ == '__main__':

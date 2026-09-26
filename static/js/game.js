@@ -918,7 +918,7 @@ const I18N = {
         convert_label: 'Convert', convert_per_type: 'Max {0} per type', selected_count: 'Selected {0}/{1}', max_selection_warning: 'Cannot exceed {0}', deck_total: 'Deck: {0} cards', view_deck_title: 'View Deck',
         foresight_replace_title: 'Foresight', foresight_replace_desc: 'Discard up to {0} cards from your hand, then draw that many cards', foresight_replace_confirm: 'Replace',
         hand_deck_info_opp: 'Hand: {0} Deck: {1}', hand_deck_discard_info: 'Hand: {0} Deck: {1} Discard: {2}', round_status: 'Round {0} - {1}', server_broadcast: 'Server: {0}', error_msg: 'Error: {0}',
-        lobby_status: 'Lobby - {0}', no_counter_countdown: 'No Counter ({0})', response_waiting_card: 'Opponent played a card:', select_event_desc: 'Select an opening event', start_draft: 'Start Draft', opponent_selected: 'Opponent selected', opponent_selecting: 'Opponent selecting...',
+        lobby_status: 'Lobby - {0}', no_counter_countdown: 'No Counter ({0})', select_event_desc: 'Select an opening event', start_draft: 'Start Draft', opponent_selected: 'Opponent selected', opponent_selecting: 'Opponent selecting...',
         card_type_thorn: 'Thorn', card_type_bloom: 'Bloom', card_type_root: 'Root', card_type_guard: 'Guard', fusion_layer: 'Fusion', fission_layer: 'Fission',
         settings_title: 'Settings', settings_appearance: 'Appearance', settings_theme: 'Theme', settings_lang: 'Language', settings_mods: 'Mods', settings_audio: 'Audio', settings_theme_light: 'Light', settings_theme_dark: 'Dark',
         settings_audio_enabled: 'Enable audio', settings_volume_master: 'Master volume', settings_volume_music: 'Music', settings_volume_menu_music: 'Home/Lobby music', settings_volume_battle_music: 'Battle music', settings_volume_ui: 'Buttons', settings_volume_sfx: 'Effects', settings_audio_test: 'Test sound', settings_audio_hint: 'Music starts after your first click or key press.',
@@ -1053,7 +1053,7 @@ I18N.zh = { ...I18N.en,
     convert_label: '转化', convert_per_type: '每种最多 {0} 张', selected_count: '已选择 {0}/{1}', max_selection_warning: '不能超过 {0}',
     foresight_replace_title: '预知', foresight_replace_desc: '选择最多{0}张手牌丢弃，然后抽对应张牌', foresight_replace_confirm: '替换',
     deck_total: '牌堆：{0} 张', view_deck_title: '查看牌堆', hand_deck_info_opp: '手牌：{0} 牌堆：{1}', hand_deck_discard_info: '手牌：{0} 牌堆：{1} 弃牌：{2}',
-    round_status: '第 {0} 回合 - {1}', server_broadcast: '系统：{0}', error_msg: '错误：{0}', lobby_status: '大厅 - {0}', no_counter_countdown: '不反制（{0}）', response_waiting_card: '对方打出了牌：',
+    round_status: '第 {0} 回合 - {1}', server_broadcast: '系统：{0}', error_msg: '错误：{0}', lobby_status: '大厅 - {0}', no_counter_countdown: '不反制（{0}）',
     select_event_desc: '选择一个配装倾向', start_draft: '开始选牌', opponent_selected: '对方已选择', opponent_selecting: '对方选择中...',
     settings_title: '设置', settings_appearance: '外观', settings_theme: '主题', settings_lang: '语言', settings_mods: '模组', settings_audio: '音频', settings_theme_light: '明亮', settings_theme_dark: '黑暗',
     settings_audio_enabled: '启用音频', settings_volume_master: '主音量', settings_volume_music: '背景音乐', settings_volume_menu_music: '主页/大厅音乐', settings_volume_battle_music: '对局音乐', settings_volume_ui: '按钮', settings_volume_sfx: '效果', settings_audio_test: '测试音效', settings_audio_hint: '音乐会在首次点击或按键后开始播放。',
@@ -1185,7 +1185,7 @@ I18N.fr = { ...I18N.en,
     mode_select: 'Mode', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: 'Feu infini', mode_random_deck: 'Deck aléatoire',
     ai_1v1_test: 'Affronter Phelren V1', ai_1v1_test_title: 'Affronter Phelren V1', ai_1v1_test_pending: 'Confirmer un duel 1v1 contre Phelren ? Cette partie ne modifie pas le Garden Rating et utilise uniquement le jeu de base Vanilla.', ai_1v1_test_loading: 'Chargement de Phelren V1…',
     hand_deck_info_opp: 'Main:{0} Deck:{1}', hand_deck_discard_info: 'Main:{0} Deck:{1} Défausse:{2}', round_status: 'Tour {0} - {1}',
-    server_broadcast: 'Serveur : {0}', error_msg: 'Erreur : {0}', lobby_status: 'Salon - {0}', no_counter_countdown: 'Pas de contre({0})', response_waiting_card: 'L’adversaire a joué une carte :',
+    server_broadcast: 'Serveur : {0}', error_msg: 'Erreur : {0}', lobby_status: 'Salon - {0}', no_counter_countdown: 'Pas de contre({0})',
     select_event_desc: "Choisir un événement de départ", opponent_selected: 'Adversaire a choisi', opponent_selecting: 'Adversaire choisit...',
     card_type_thorn: 'Thorn', card_type_bloom: 'Bloom', card_type_root: 'Root', card_type_guard: 'Guard',
     settings_title: 'Paramètres', settings_appearance: 'Apparence', settings_theme: 'Thème', settings_lang: 'Langue', settings_mods: 'Mods', settings_audio: 'Audio', settings_theme_light: 'Clair', settings_theme_dark: 'Sombre',
@@ -1273,7 +1273,7 @@ I18N.ja = { ...I18N.en,
     mode_select: 'モード', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '無限火力', mode_random_deck: 'ランダムデッキ',
     ai_1v1_test: 'Phelren V1 と対戦', ai_1v1_test_title: 'Phelren V1 と対戦', ai_1v1_test_pending: 'Phelren との1v1対戦を開始しますか？この対戦では Garden Rating は変動せず、Vanilla カードのみを使用します。', ai_1v1_test_loading: 'Phelren V1 を読み込んでいます…',
     hand_deck_info_opp: '手札:{0} デッキ:{1}', hand_deck_discard_info: '手札:{0} デッキ:{1} 捨て札:{2}', round_status: '第{0}ターン - {1}',
-    server_broadcast: 'サーバー: {0}', error_msg: 'エラー: {0}', lobby_status: 'ロビー - {0}', no_counter_countdown: 'カウンターなし({0})', response_waiting_card: '相手がカードを使用しました：',
+    server_broadcast: 'サーバー: {0}', error_msg: 'エラー: {0}', lobby_status: 'ロビー - {0}', no_counter_countdown: 'カウンターなし({0})',
     select_event_desc: 'オープニングイベントを選択', opponent_selected: '相手が選択済み', opponent_selecting: '相手が選択中...',
     card_type_thorn: 'Thorn', card_type_bloom: 'Bloom', card_type_root: 'Root', card_type_guard: 'Guard',
     settings_title: '設定', settings_appearance: '外観', settings_theme: 'テーマ', settings_lang: '言語', settings_mods: 'Mod', settings_audio: '音声', settings_theme_light: 'ライト', settings_theme_dark: 'ダーク',
@@ -5619,14 +5619,7 @@ function pendingResponseExpectsCurrentPlayer(state = {}) {
     const pending = state.pending_response;
     const ownId = Number(state.your_id);
     if (!pending || !Number.isFinite(ownId)) return false;
-    if (pending.forced_wait) {
-        // forced_wait（无人可反制）窗也发响应请求：你的 id 在响应者集合里
-        // 就要表态（点「不反制」计入，全员表态提前结算）。
-        const forcedResponders = (Array.isArray(pending.responder_ids) ? pending.responder_ids : [])
-            .map((value) => Number(value))
-            .filter(Number.isFinite);
-        return forcedResponders.includes(ownId);
-    }
+    if (pending.forced_wait) return false;
     if (typeof pending.viewer_can_respond === 'boolean') {
         return pending.viewer_can_respond;
     }
@@ -35415,13 +35408,6 @@ function showResponseUI(data) {
     const myMagic = you.magic || 0;
     debugLog('[RESPONSE] showResponseUI: counterCards=', counterCards.length, 'myElixir=', myElixir, 'myMagic=', myMagic);
     if (!counterCards.length) {
-        if (data.forced_wait) {
-            // 2v2 反制窗口修订：无人可反制的窗也显示同样的「不反制」倒计时
-            // （5s 上限）；响应者点击即计入表态，全员表态提前结算。
-            debugLog('[RESPONSE] forced wait window, show pass countdown');
-            showForcedWaitPassPanel(data);
-            return;
-        }
         debugLog('[RESPONSE] no counter cards, auto pass');
         onRespond(null);
         return;
@@ -35573,35 +35559,6 @@ function showResponseUI(data) {
     container.appendChild(btnRow);
     // 反制窗口：5s 上限（到点服务端替未响应者「不反制」）；提前全部表态
     // 则立即结算（对局双方同步看到结果）。
-    responseCountdown = tutorialMode ? 10 : 5;
-    const passBtn = document.createElement('button');
-    passBtn.className = 'btn btn-danger';
-    passBtn.id = 'pass-btn';
-    passBtn.textContent = UI.no_counter_countdown.replace('{0}', responseCountdown);
-    passBtn.onclick = () => onRespond(null);
-    container.appendChild(passBtn);
-    if (responseTimerId) clearInterval(responseTimerId);
-    responseTimerId = setInterval(() => {
-        responseCountdown--;
-        if (responseCountdown <= 0) {
-            onRespond(null);
-            return;
-        }
-        const pb = $('pass-btn');
-        if (pb) pb.textContent = UI.no_counter_countdown.replace('{0}', responseCountdown);
-    }, 1000);
-}
-
-function showForcedWaitPassPanel(data = {}) {
-    const container = $('response-panel');
-    if (!container) { onRespond(null); return; }
-    container.innerHTML = '';
-    container.classList.remove('hidden');
-    container.classList.add('visible');
-    const infoRow = document.createElement('div');
-    infoRow.className = 'response-info';
-    infoRow.textContent = data.card ? (UI.response_waiting_card || '对方打出了牌：') : '';
-    container.appendChild(infoRow);
     responseCountdown = tutorialMode ? 10 : 5;
     const passBtn = document.createElement('button');
     passBtn.className = 'btn btn-danger';
