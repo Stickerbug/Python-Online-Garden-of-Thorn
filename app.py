@@ -20761,19 +20761,10 @@ def both_disconnected_cleanup(room_id):
 def index():
     if is_beta_instance():
         return beta_entry_response()
-    # 休闲花园（小游戏）已对全部登录账号开放：入口按钮只要登录了就渲染，
-    # 直达小游戏页面依旧走同一套会话判定（未登录仍会被拦下）。
-    # minigame_available = "休闲花园里有任意一个可用小游戏"（总开关暂用 2048 的那个）；
-    # minigame_2048_available 保留给首页旧按钮模板变量。
-    minigame_available = False
-    try:
-        user_id = session.get('user_id')
-        username = str(session.get('username') or '')
-        if MINIGAME_2048_ENABLED and user_id and username:
-            minigame_available = minigame_2048_service.can_access_minigame(user_id, username)
-    except Exception as exc:
-        admin_event('error', f'minigame entry check failed: {exc}')
-        minigame_available = False
+    # 休闲花园（小游戏）已对游客开放：入口按钮不再按登录会话渲染（部分设备
+    # 自动登录在首屏渲染后才建立会话，导致「第一次看不到、刷新才有」），
+    # 只保留功能总开关；具体访问控制由 /minigame 各路由自理。
+    minigame_available = MINIGAME_2048_ENABLED
     minigame_2048_available = minigame_available
     return render_template(
         'index.html',
@@ -22441,17 +22432,8 @@ def api_story_run_reset_map():
 
 def beta_entry_response():
     if is_beta_authenticated():
-        # 与正式服 index() 同口径：登录账号才显示休闲花园入口（此前漏传
-        # minigame_available，导致内测服永远看不到入口按钮）。
-        minigame_available = False
-        try:
-            user_id = session.get('user_id')
-            username = str(session.get('username') or '')
-            if MINIGAME_2048_ENABLED and user_id and username:
-                minigame_available = minigame_2048_service.can_access_minigame(user_id, username)
-        except Exception as exc:
-            admin_event('error', f'beta minigame entry check failed: {exc}')
-            minigame_available = False
+        # 与正式服同口径：入口只看功能总开关，不再依赖登录会话。
+        minigame_available = MINIGAME_2048_ENABLED
         return render_template(
             'index.html',
             beta_mode=True,
