@@ -88,7 +88,8 @@ class RouteAccessTests(unittest.TestCase):
         self.assertEqual(sync.get_json()["status"], "ok")
 
     def test_lobby_entry_button_renders_for_any_logged_in_account(self):
-        """大厅里的「休闲花园」入口：登录账号都渲染，未登录不渲染。"""
+        """大厅里的「休闲花园」入口：只看功能开关渲染（2026-09-26 起含未登录，
+        修复部分设备自动登录建立会话晚于首屏渲染导致「刷新才有入口」）。"""
 
         class _Roles:
             @staticmethod
@@ -97,7 +98,7 @@ class RouteAccessTests(unittest.TestCase):
 
         svc.db_module = _Roles()
         html = self.client.get("/").data.decode("utf-8", "replace")
-        self.assertNotIn("btn-minigame-2048", html)          # 未登录
+        self.assertIn("btn-minigame-2048", html)             # 未登录也渲染（游客可进休闲花园）
         with self.client.session_transaction() as session:
             session["user_id"] = 9001
             session["username"] = "entry_player"
