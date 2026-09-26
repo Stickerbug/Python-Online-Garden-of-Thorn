@@ -13,7 +13,16 @@ import {
 } from './minigame_2048_core.js';
 const CONFIG = JSON.parse(document.getElementById('mg-config').textContent || '{}');
 
-/* ---------- 多语言（2026-09-25）：跟随 gtn_lang（zh/en/fr/ja），与主游戏一致 ---------- */
+/* ---------- 多语言（2026-09-25）：跟随 gtn_lang（zh/en/fr/ja），与主游戏一致 ----------
+   修复：访客提示的 IIFE 原来放在 currentLang 定义之前，模块顶层 TDZ
+   （Cannot access 'currentLang' before initialization）直接炸掉整个模块——
+   棋盘一格都不渲染。现移到 currentLang 之后。 */
+const currentLang = (() => {
+  try {
+    const v = localStorage.getItem('gtn_lang');
+    return ['zh', 'en', 'fr', 'ja'].includes(v) ? v : 'zh';
+  } catch (_) { return 'zh'; }
+})();
 (() => {
   if (currentLang === 'zh') return;
   const note = document.querySelector('.mg-guest-note');
@@ -22,12 +31,6 @@ const CONFIG = JSON.parse(document.getElementById('mg-config').textContent || '{
     fr: 'Mode visiteur · <a class="mg-login-link" href="/?login=1" target="_blank" rel="noopener">Inscription / Connexion</a> pour être classé',
     ja: 'ゲストモード · <a class="mg-login-link" href="/?login=1" target="_blank" rel="noopener">ログイン / 登録</a>でランキングに載れます',
   }[currentLang] || note.innerHTML;
-})();
-const currentLang = (() => {
-  try {
-    const v = localStorage.getItem('gtn_lang');
-    return ['zh', 'en', 'fr', 'ja'].includes(v) ? v : 'zh';
-  } catch (_) { return 'zh'; }
 })();
 function lt(texts, fallback = '') {
   if (!texts || typeof texts !== 'object') return String(fallback || '');
