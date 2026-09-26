@@ -1184,6 +1184,9 @@ function handleEvents(events) {
     } else if (event.type === 'game_over') {
       saveLocal({ gameOver: true });
       showOverlay('gameover');
+      if (window.GtnLeisureTicket && CONFIG.userId) {
+        void window.GtnLeisureTicket.recordResult('suika', game.score || 0, game.maxTierSeen || 0);
+      }
     }
   }
 }
@@ -1349,6 +1352,17 @@ async function boot() {
   if (!Matter) {
     setStatus('物理引擎没有加载出来，刷新试试', { offline: true });
     return;
+  }
+  // 休闲花园门票（设计 2026-09-26）：登录玩家进入前过门票门（免费时段直通）。
+  if (window.GtnLeisureTicket && CONFIG.userId) {
+    const gate = await window.GtnLeisureTicket.enterGate();
+    if (!gate) return;
+    window.GtnLeisureTicket.startTimer();
+    window.addEventListener('leisure:expired', () => {
+      if (typeof game !== 'undefined' && game) {
+        void window.GtnLeisureTicket.recordResult('suika', game.score || 0, game.maxTierSeen || 0);
+      }
+    });
   }
   loadPrefs();
   resizeCanvas();

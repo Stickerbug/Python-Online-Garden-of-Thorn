@@ -37,6 +37,20 @@ const PALETTE = JSON.parse(document.getElementById('mg-palette').textContent || 
 const RULES_VERSION = 2;      // v2 = 5×5 + 合并有 15% 概率失败（不翻倍）
 const SAVE_VERSION = 1;
 const MAX_PENDING_OPS = 20000;
+/* 操作限速（与服务端同源，设计 2026-09-26）：累计操作数 ≤ 2×本局经过秒数 + 4。
+   服务端 sync 会拒绝超速批次，这里本地先拦避免被拒后的补传复杂度。 */
+const OPS_RATE_LIMIT_PER_SECOND = 2;
+const OPS_RATE_BURST_ALLOWANCE = 4;
+let opsRateStartAt = 0;      // 本局第一次操作的 Date.now()
+
+function opsRateAllows() {
+  if (!state) return true;
+  const now = Date.now();
+  if (!opsRateStartAt) opsRateStartAt = now;
+  const elapsedSeconds = (now - opsRateStartAt) / 1000;
+  const budget = state.ops.length + OPS_RATE_BURST_ALLOWANCE + OPS_RATE_LIMIT_PER_SECOND * elapsedSeconds;
+  return budget >= 1;
+}
 /* 同步防抖：原来 400ms 太快，快速连按时会持续打满服务端限流；
    本地仍然是每一步即时保存，联网同步稍微合并一下不影响进度。 */
 const SYNC_DEBOUNCE_MS = 1000;
@@ -596,6 +610,7 @@ function adoptServerState(serverState) {
   state.replaceActive = false;
   state.seed = Number(game.seed);
   state.ops = String(game.ops || '').split('');
+  opsRateStartAt = state.ops.length ? Date.now() - (state.ops.length / OPS_RATE_LIMIT_PER_SECOND) * 1000 : 0;
   state.acked = Number(serverState.verified?.op_index || 0);
   state.cells = (board.cells || []).slice();
   state.score = Number(board.score || 0);
@@ -613,6 +628,7 @@ function move(direction) {
   const previousCells = state.cells.slice();   // 合并幽灵块要用"合并前的数值"
   const result = stepMove(state.cells, state.rngState, state.score, direction);
   if (!result.changed) return;                       // 无效操作：不加分、不生成、不入队
+  if (!opsRateAllows()) return;                      // 操作限速：与服务器规则一致
   state.cells = result.cells;
   state.rngState = result.rngState;
   state.score = result.score;
@@ -656,6 +672,9 @@ function move(direction) {
       primary: { label: '再来一局', run: () => { hideOverlay(); void restartGame(); } },
       secondary: { label: '看看棋盘', run: () => hideOverlay() },
     });
+    if (window.GtnLeisureTicket && CONFIG.userId) {
+      void window.GtnLeisureTicket.recordResult('2048', state.score || 0, maxTile(state.cells));
+    }
   }
 }
 
@@ -732,6 +751,7 @@ function startLocalGame(seed, { replaceActive = false } = {}) {
     replaceActive: replaceActive === true,
     lastSyncLabel: '本地新局：联网后自动验证',
   };
+  opsRateStartAt = 0;   // 新局重新起算操作限速
   saveLocal();
   renderBoard(false);
   scheduleSync();
@@ -1080,6 +1100,15 @@ async function savePrefs() {
 async function boot() {
   window.__mgBooted = true;      // 供页面里的兜底提示判断"脚本起来了"
   buildLegend();
+  // 休闲花园门票（设计 2026-09-26）：登录玩家进入前先过门票门（免费时段直通；
+  // 否则消耗 1 张票开 10 分钟游玩期）。游客不受影响（服务端本来也不记账）。
+  if (window.GtnLeisureTicket) {
+    if (CONFIG.userId) {
+      const gate = await window.GtnLeisureTicket.enterGate();
+      if (!gate) return;   // 门未过：boot 中止，页面显示提示
+      window.GtnLeisureTicket.startTimer();
+    }
+  }
   const local = loadLocal();
   if (local) {
     state = {

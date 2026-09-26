@@ -51,6 +51,8 @@ except Exception:
 from flask import Flask, render_template, jsonify, request, send_from_directory, send_file, session, g, redirect
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from werkzeug.security import check_password_hash, generate_password_hash
+import leisure_ticket
+import leisure_ticket_settlement
 import minigame_2048
 import minigame_2048_service
 import minigame_registry
@@ -27629,6 +27631,21 @@ def on_minigame_presence(data=None):
             'reason': blocked_reason,
         })
         return
+    # 休闲花园门票（设计 2026-09-26）：免费时段直通；否则必须有 10 分钟活动会话。
+    if user_id and not leisure_ticket.is_free_entry_now():
+        try:
+            leisure_ticket.resume_play_session(user_id)
+            with get_db_connection() as conn:
+                remaining = leisure_ticket.session_remaining_seconds(conn, user_id)
+        except Exception as exc:
+            admin_event('error', f'leisure session check failed: {exc}')
+            remaining = None
+        if remaining is None or remaining <= 0:
+            emit('server_error', {
+                'message': '休闲花园需要门票：请先使用门票进入（或等待免费时段）',
+                'reason': 'leisure_ticket_required',
+            })
+            return
     emit('minigame_status', {'ok': True, 'game': game_key, 'status': 'minigame'})
     # 小游戏和大厅共用同一条聊天：进入时补推一次历史，否则打开时聊天是空的
     # （大厅玩家的历史随 lobby_update 下发，小游戏玩家不在那份名单里）。
@@ -27646,6 +27663,7 @@ def on_minigame_leave(data=None):
     """离开小游戏（页面内返回大厅时）：状态回到大厅并按需要广播。"""
 
     sid = request.sid
+    user_id = session.get('user_id')
     changed = False
     with _lock:
         player = players.get(sid)
@@ -27656,6 +27674,12 @@ def on_minigame_leave(data=None):
             changed = True
     if changed:
         broadcast_lobby()
+    # 休闲花园门票：离开页面暂停 10 分钟会话倒计时（重连恢复）。
+    if user_id:
+        try:
+            leisure_ticket.pause_play_session(user_id)
+        except Exception as exc:
+            admin_event('error', f'leisure session pause failed: {exc}')
 
 
 @socketio.on('latency_ping')
@@ -29192,12 +29216,21 @@ def on_disconnect():
     global _next_room_id
     sid = request.sid
     pending_emits = []  # Collect emits to perform outside the lock
+    _disconnected_minigame_user = None
     try:
         with _lock:
             if sid not in players:
                 return
             player = players[sid]
             mark_player_session_last_seen_locked(player, exclude_sid=sid)
+            # 休闲花园门票：断线玩家暂停 10 分钟会话并退回大厅状态（重连恢复倒计时）。
+            if player.get('status') == 'minigame':
+                player['status'] = 'lobby'
+                player.pop('minigame', None)
+                player.pop('minigame_since', None)
+                _disconnected_minigame_user = session.get('user_id')
+            else:
+                _disconnected_minigame_user = None
             preserved_ai = _preserve_ai_test_session_for_reconnect_locked(sid)
             if not preserved_ai:
                 _drop_solo_session_locked(sid)
@@ -29294,6 +29327,12 @@ def on_disconnect():
                 del players[sid]
     except Exception as exc:
         admin_event('error', f'on_disconnect error: {exc}')
+    # 休闲花园门票：断线暂停倒计时（锁外做 DB 操作）。
+    if _disconnected_minigame_user:
+        try:
+            leisure_ticket.pause_play_session(_disconnected_minigame_user)
+        except Exception as exc:
+            admin_event('error', f'leisure session pause on disconnect failed: {exc}')
     # Perform all emits outside the lock
     for emit_item in pending_emits:
         try:
@@ -36251,6 +36290,120 @@ def minigame_2048_service_worker():
     response.headers['Service-Worker-Allowed'] = '/minigame/2048'
     response.headers['Cache-Control'] = 'no-cache'
     return response
+
+
+@app.route('/api/leisure/ticket', methods=['GET'])
+def api_leisure_ticket_status():
+    """门票状态：余额、上限、当前是否免费时段、活动会话剩余时间。"""
+    if not DB_AVAILABLE:
+        return jsonify({'success': False, 'error': DB_INIT_ERROR}), 503
+    user = _current_account_user()
+    if not user:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    try:
+        with get_db_connection() as conn:
+            payload = leisure_ticket.ticket_payload(conn, user.get('id'))
+            remaining = leisure_ticket.session_remaining_seconds(conn, user.get('id'))
+            payload['session'] = (
+                {'remaining': round(remaining, 1)} if remaining is not None else None
+            )
+        return jsonify({'success': True, **payload})
+    except Exception as exc:
+        admin_event('error', f'leisure ticket status failed: {exc}')
+        return _json_error('门票状态读取失败', 500)
+
+
+@app.route('/api/leisure/ticket/enter', methods=['POST'])
+def api_leisure_ticket_enter():
+    """进入休闲花园：免费时段直接放行；否则消耗 1 张门票开 10 分钟游玩期。"""
+    if not DB_AVAILABLE:
+        return jsonify({'success': False, 'error': DB_INIT_ERROR}), 503
+    user = _current_account_user()
+    if not user:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    try:
+        with get_db_connection() as conn:
+            payload = leisure_ticket.ticket_payload(conn, user.get('id'))
+        if payload.get('free_entry'):
+            # 免费时段：无会话也放行（不限时；不发奖励流程外的额外东西）
+            return jsonify({'success': True, 'mode': 'free', **payload})
+        session_info = leisure_ticket.start_play_session(user.get('id'))
+        with get_db_connection() as conn:
+            payload = leisure_ticket.ticket_payload(conn, user.get('id'))
+        return jsonify({'success': True, 'mode': 'ticket', 'session': session_info, **payload})
+    except leisure_ticket.TicketError as exc:
+        return jsonify({'success': False, 'error': str(exc), 'code': exc.code}), 402
+    except Exception as exc:
+        admin_event('error', f'leisure ticket enter failed: {exc}')
+        return _json_error('进入失败', 500)
+
+
+@app.route('/api/leisure/ticket/leave', methods=['POST'])
+def api_leisure_ticket_leave():
+    """离开小游戏页面：暂停会话倒计时（重连恢复），返回结算摘要。"""
+    if not DB_AVAILABLE:
+        return jsonify({'success': False, 'error': DB_INIT_ERROR}), 503
+    user = _current_account_user()
+    if not user:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    try:
+        info = leisure_ticket.pause_play_session(user.get('id'))
+        return jsonify({'success': True, 'session': info})
+    except Exception as exc:
+        admin_event('error', f'leisure ticket leave failed: {exc}')
+        return _json_error('暂停失败', 500)
+
+
+@app.route('/api/leisure/ticket/session', methods=['GET'])
+def api_leisure_ticket_session():
+    """客户端轮询：剩余时间；到点返回 expired=true（客户端立即结算退出）。"""
+    if not DB_AVAILABLE:
+        return jsonify({'success': False, 'error': DB_INIT_ERROR}), 503
+    user = _current_account_user()
+    if not user:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    try:
+        with get_db_connection() as conn:
+            remaining = leisure_ticket.session_remaining_seconds(conn, user.get('id'))
+        if remaining is None:
+            return jsonify({'success': True, 'session': None})
+        if remaining <= 0:
+            info = leisure_ticket.finish_play_session(user.get('id'))
+            return jsonify({'success': True, 'session': info, 'expired': True})
+        return jsonify({'success': True, 'session': {'remaining': round(remaining, 1)}})
+    except Exception as exc:
+        admin_event('error', f'leisure ticket session failed: {exc}')
+        return _json_error('会话查询失败', 500)
+
+
+@app.route('/api/leisure/ticket/result', methods=['POST'])
+def api_leisure_ticket_result():
+    """小游戏提交成绩：更新本游玩期最高分/最高档，并按档位发荆露（每期每档一次）。"""
+    if not DB_AVAILABLE:
+        return jsonify({'success': False, 'error': DB_INIT_ERROR}), 503
+    user = _current_account_user()
+    if not user:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    data = request.get_json(silent=True) or {}
+    game_key = str(data.get('game') or '').strip().lower()
+    if game_key not in ('2048', 'suika'):
+        return _json_error('未知小游戏', 400)
+    try:
+        score = max(0, int(data.get('score') or 0))
+    except (TypeError, ValueError):
+        return _json_error('分数无效', 400)
+    try:
+        best_tier = max(0, int(data.get('best_tier') or 0))
+    except (TypeError, ValueError):
+        best_tier = 0
+    try:
+        reward = leisure_ticket_settlement.record_result_and_grant(
+            user.get('id'), game_key, score, best_tier,
+        )
+        return jsonify({'success': True, **(reward or {})})
+    except Exception as exc:
+        admin_event('error', f'leisure ticket result failed: {exc}')
+        return _json_error('成绩记录失败', 500)
 
 
 @app.route('/api/minigame/2048/state')

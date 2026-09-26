@@ -4294,6 +4294,13 @@ def _record_story_completion_conn(
     )
     if cursor.rowcount != 1:
         return False
+    # 休闲花园门票（设计 2026-09-26）：故事通关渠道——非 EZ 难度通关 1 张/天。
+    if str(difficulty or '').lower() != 'easy':
+        try:
+            import leisure_ticket as _lt
+            _lt.claim_daily_channel_ticket(conn, user_id, _lt.CHANNEL_STORY)
+        except Exception:
+            pass
     standard_delta = 1 if journey_mode == 'standard' else 0
     boss_rush_delta = 1 if journey_mode == 'boss_rush' else 0
     conn.execute(
@@ -4842,6 +4849,17 @@ def commit_story_run_action(
                 journey_mode=(next_state or {}).get('journey_mode') or 'standard',
                 completed_at=now,
             )
+            # 通关奖励（设计 2026-09-26）：按旅程分数发荆露；银行存款清零。
+            try:
+                from story_score import settle_story_clear_conn
+                settle_story_clear_conn(
+                    conn,
+                    user_id=user_id,
+                    run_id=run_id,
+                    state=next_state or {},
+                )
+            except Exception as exc:
+                print(f'[story] reward settle failed: {type(exc).__name__}: {exc}', flush=True)
         conn.commit()
         updated = conn.execute(
             'SELECT * FROM story_runs WHERE id = ?', (run_id,),
@@ -5625,6 +5643,17 @@ def claim_user_daily_checkin(user_id):
             (uid, today, streak, reward, now),
         )
         conn.execute('UPDATE users SET thorn_dew_free = ? WHERE id = ?', (free_after, uid))
+        # 休闲花园门票（设计 2026-09-26）：签到 +1，每 7 天连续签到额外 +1（库存满 5 不发不补）
+        try:
+            import leisure_ticket
+            leisure_ticket.ensure_ticket_columns(conn)
+            leisure_ticket.grant_checkin_tickets(conn, uid, streak)
+        except Exception as exc:
+            try:
+                admin_event_log = f'leisure ticket signin grant failed: {exc}'
+                print(f'[startup] WARNING: {admin_event_log}', flush=True)
+            except Exception:
+                pass
         conn.execute(
             '''
             INSERT INTO user_currency_transactions (

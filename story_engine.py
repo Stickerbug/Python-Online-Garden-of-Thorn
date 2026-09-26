@@ -158,6 +158,17 @@ class _StoryEventList(list):
             self.append({'type': 'state_sync'})
 
 
+def _mysterious_person_damage(state):
+    """神秘人物事件伤害 = 本次旅程得分（与通关奖励同一套分数公式）。"""
+    try:
+        from story_score import compute_score
+        total, _ = compute_score(state, str(state.get('difficulty') or 'normal'),
+                                 int(state.get('_load_count') or 0))
+        return max(1, total)
+    except Exception:
+        return 9961
+
+
 def _difficulty(state):
     value = str(state.get('difficulty') or 'normal').lower()
     return value if value in ('easy', 'normal', 'hard', 'lunatic') else 'normal'
@@ -8688,8 +8699,8 @@ def _complete_current_node(state, events, seed=None):
                         'mysterious_battle',
                         '战斗！',
                         'Fight!',
-                        '你对这朵腐化的花花造成了9961伤害，它依旧屹立不倒，你被杀死了。',
-                        'You deal 9961 damage to the corrupted flower. It remains standing and kills you.',
+                        '你倾尽全力对这朵腐化的花花造成了等同于本次旅程战果的伤害，它依旧屹立不倒，你被杀死了。',
+                        'You deal damage equal to the fruits of this entire journey to the corrupted flower. It remains standing and kills you.',
                     ),
                 ],
                 ending_event=True,
@@ -10915,10 +10926,12 @@ def _resolve_room(state, payload, seed, events):
             state['completed'] = True
             state['room'] = None
             state['reward'] = None
+            # 设计 2026-09-26：伤害改为本次旅程得分（与通关奖励同一公式）。
+            damage = _mysterious_person_damage(state)
             events.append({
                 'type': 'journey_completed',
                 'ending': 'mysterious_person',
-                'damage': 9961,
+                'damage': damage,
             })
             complete = False
         elif option in ('fight_help_spider', 'fight_help_yoba', 'fight_both'):

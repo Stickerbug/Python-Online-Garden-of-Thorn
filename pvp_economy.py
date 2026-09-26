@@ -197,6 +197,19 @@ def settle_conn(conn,match_id,summary,award_time=None):
         if not early:
             awards.append({'user_id':uid,'amount':amount,'multiplier':multiplier,'reason':reason,
                            'base':base,'streak_bonus':streak_bonus,'newcomer_multiplier':profile['reward_multiplier']})
+    # 休闲花园门票（设计 2026-09-26）：天梯胜场渠道——本局赢家各领 1 张/天（上限见
+    # leisure_ticket），前提是本局无人被扣信誉分（reputation_ledger 关联本局）。
+    try:
+        if winners and not is_draw:
+            penalty_rows = conn.execute(
+                "SELECT 1 FROM reputation_ledger WHERE match_id=? LIMIT 1", (mid,),
+            ).fetchone()
+            if not penalty_rows:
+                import leisure_ticket as _lt
+                for uid in winners:
+                    _lt.claim_daily_channel_ticket(conn, uid, _lt.CHANNEL_LADDER)
+    except Exception:
+        pass
     result={'awarded':awards,'skipped':'early_surrender' if early else None}
     conn.execute('UPDATE pvp_reward_settlements SET result_json=? WHERE settlement_key=?',(integrity._json(result),key))
     return result
