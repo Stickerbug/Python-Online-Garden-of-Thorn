@@ -369,10 +369,43 @@ function createChatActionButtons(entry = {}, viewer = {}, labels = {}, options =
 
 /* ===== 聊天链接化（各聊天窗口共用）===== */
 
-/* 只认 http/https；域名后禁止紧跟非 ASCII 字母（中文句号等不算 URL 一部分）。
-   站内域：任意 *.stickerbug.top 子域（含 gtn）。 */
+/* 两类识别：
+   1) 带协议：http(s)://… （原样信任）
+   2) 裸域名：domain.tld[/path]，tld 必须在白名单里（b.c、v1.2、setup.exe 这类不算）。
+   域名段禁止全角字符；站内域 = 任意 *.stickerbug.top 子域。 */
 const CHAT_URL_PATTERN = /https?:\/\/[^\s<>"'\u3000-\u9fff\uff00-\uffef]+/gi;
+
+/* 常用顶级域白名单（小写）。覆盖主流 gTLD/ccTLD 与游戏社区常见域；
+   不在名单里的裸域名不会被识别（带 http(s):// 的不受限）。 */
+const CHAT_KNOWN_TLDS = new Set((
+  'com net org edu gov mil int info biz xyz top club online site website space fun store shop '
+  + 'tech cloud app dev io ai cc tv me co us uk ca de fr es it nl se no fi dk pl pt cz ru ua '
+  + 'cn jp kr hk tw sg in au nz br mx ar cl th vn my ph id tr il za eu gg fm am gs '
+  + 'moe king red link pro one vip live life world games game video chat social media network '
+  + 'wiki zone icu ink lol moe fanbox page page dev app gay'
+).split(/\s+/).filter(Boolean));
+
+/* 裸域名：host.tld（tld 纯字母且在白名单）+ 可选路径/查询。
+   (?<![\w@.]) 防止匹配文件名尾巴（v1.2 / setup.exe）与邮箱域名部分。 */
+const CHAT_BARE_DOMAIN_PATTERN = new RegExp(
+  '(?<![\\w@.])'
+  + '((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.)+'
+  + '([a-z]{2,24}))'
+  + '(?::\\d{1,5})?'
+  + '(/[^\\s<>"\'\\u3000-\\u9fff\\uff00-\\uffef]*)?',
+  'gi',
+);
+
 const CHAT_INTERNAL_URL = /^https?:\/\/([a-z0-9-]+\.)*stickerbug\.top(?::\d+)?(?:[/?#]|$)/i;
+const CHAT_INTERNAL_BARE = /^([a-z0-9-]+\.)*stickerbug\.top(?::\d+)?(?:[/?#]|$)/i;
+
+function chatUrlLooksLikeHost(url) {
+  // 裸域名补协议前先做一次整段校验：host 部分每段 ≤63 字符且非空。
+  const withoutScheme = String(url || '').replace(/^https?:\/\//i, '');
+  const hostPart = withoutScheme.split(/[/?#:]/, 1)[0] || '';
+  if (!hostPart || hostPart.length > 253) return false;
+  return hostPart.split('.').every((label) => /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/i.test(label));
+}
 
 function chatUrlFromMatch(raw) {
   let url = String(raw || '');
@@ -392,81 +425,146 @@ function chatUrlFromMatch(raw) {
 }
 
 function chatLinkTargetAllowed(url) {
-  return CHAT_INTERNAL_URL.test(String(url || ''));
+  const text = String(url || '');
+  return CHAT_INTERNAL_URL.test(text) || CHAT_INTERNAL_BARE.test(text);
+}
+
+/* 把一段纯文本切成片段：{text} 纯文本 / {url, display, external} 链接。
+   display 是用户看到的内容（裸域名不带补的协议）；matchedLength 是链接消费掉的
+   原文长度（剥掉的尾部标点留在纯文本里）。 */
+function chatSplitLinkSegments(text) {
+  const raw = String(text || '');
+  const segments = [];
+
+  const pushPlain = (slice) => {
+    if (!slice) return;
+    const last = segments[segments.length - 1];
+    if (last && last.text !== undefined) last.text += slice;
+    else segments.push({ text: slice });
+  };
+
+  pushPlain(raw);
+
+  const scanWith = (pattern, toPiece) => {
+    // 只在「纯文本段」里扫描；已识别的 URL 不再二次处理。
+    for (let si = 0; si < segments.length; si += 1) {
+      const segment = segments[si];
+      if (segment.url !== undefined) continue;
+      const source = segment.text;
+      pattern.lastIndex = 0;
+      let match;
+      let cursor = 0;
+      const pieces = [];
+      let changed = false;
+      while ((match = pattern.exec(source)) !== null) {
+        const piece = toPiece(match);
+        const start = match.index;
+        if (piece && piece.url) {
+          changed = true;
+          if (start > cursor) pieces.push({ text: source.slice(cursor, start) });
+          pieces.push(piece);
+          cursor = start + piece.matchedLength;
+          if (piece.matchedLength <= 0) pattern.lastIndex = start + 1;
+        } else {
+          const end = start + match[0].length;
+          if (end > cursor) {
+            pieces.push({ text: source.slice(cursor, end) });
+            cursor = end;
+          }
+        }
+      }
+      if (!changed) continue;
+      if (cursor < source.length) pieces.push({ text: source.slice(cursor) });
+      if (!pieces.length) pieces.push({ text: source });
+      segments.splice(si, 1, ...pieces);
+      si += pieces.length - 1;
+    }
+  };
+
+  scanWith(CHAT_URL_PATTERN, (match) => {
+    const url = chatUrlFromMatch(match[0]);
+    if (!url || !chatUrlLooksLikeHost(url)) return null;
+    return {
+      url,
+      display: url,
+      matchedLength: url.length,
+      external: !chatLinkTargetAllowed(url),
+    };
+  });
+  scanWith(CHAT_BARE_DOMAIN_PATTERN, (match) => {
+    const tld = String(match[2] || '').toLowerCase();
+    if (!CHAT_KNOWN_TLDS.has(tld)) return null;
+    const url = chatUrlFromMatch(match[0]);
+    if (!url) return null;
+    const hostPart = url.split(/[/?#:]/, 1)[0] || '';
+    if (!/^[a-z]/i.test(hostPart)) return null;
+    const full = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+    return {
+      url: full,
+      display: url.replace(/^https?:\/\//i, ''),
+      matchedLength: url.length,
+      external: !chatLinkTargetAllowed(full),
+    };
+  });
+
+  // 相邻同型段合并；空段丢弃
+  const out = [];
+  segments.forEach((segment) => {
+    if (segment.text !== undefined && !segment.text) return;
+    const prev = out[out.length - 1];
+    if (prev && prev.url === undefined && segment.url === undefined) prev.text += segment.text;
+    else out.push(segment);
+  });
+  return out;
+}
+
+function chatAppendSegment(parent, segment, confirmExternal) {
+  if (segment.url === undefined) {
+    parent.appendChild(document.createTextNode(segment.text));
+    return;
+  }
+  const url = segment.url;
+  const anchor = document.createElement('a');
+  anchor.className = 'chat-link';
+  anchor.textContent = segment.display || url;
+  anchor.href = url;
+  anchor.target = '_blank';
+  anchor.rel = 'noopener noreferrer';
+  anchor.addEventListener('click', (event) => {
+    if (chatLinkTargetAllowed(url)) return;
+    event.preventDefault();
+    if (!confirmExternal) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    Promise.resolve(confirmExternal(url)).then((ok) => {
+      if (ok) window.open(url, '_blank', 'noopener,noreferrer');
+    });
+  });
+  parent.appendChild(anchor);
 }
 
 /* DOM 版：把文本按提及+URL 分段渲染进 parent（转义在前、协议白名单在后）。
-   options.confirm(url) 返回 Promise<boolean>，站外链接先确认。 */
+   options.appendPlain(parent, slice) 可接管纯文本渲染（提及管线用）。 */
 function appendChatTextWithLinks(parent, text, options = {}) {
-  const raw = String(text || '');
-  if (!raw) return;
   const confirmExternal = typeof options.confirmExternal === 'function' ? options.confirmExternal : null;
-  let lastIndex = 0;
-  const appendPlain = (slice) => {
-    if (!slice) return;
-    if (typeof options.appendPlain === 'function') options.appendPlain(parent, slice);
-    else parent.appendChild(document.createTextNode(slice));
-  };
-  CHAT_URL_PATTERN.lastIndex = 0;
-  let match;
-  while ((match = CHAT_URL_PATTERN.exec(raw)) !== null) {
-    const url = chatUrlFromMatch(match[0]);
-    const start = match.index;
-    const end = start + url.length;
-    if (end <= start) {
-      appendPlain(raw.slice(lastIndex, start + match[0].length));
-      lastIndex = start + match[0].length;
-      continue;
+  chatSplitLinkSegments(text).forEach((segment) => {
+    if (segment.url === undefined && typeof options.appendPlain === 'function') {
+      options.appendPlain(parent, segment.text);
+    } else {
+      chatAppendSegment(parent, segment, confirmExternal);
     }
-    appendPlain(raw.slice(lastIndex, start));
-    const anchor = document.createElement('a');
-    anchor.className = 'chat-link';
-    anchor.textContent = url;
-    anchor.href = url;
-    anchor.target = '_blank';
-    anchor.rel = 'noopener noreferrer';
-    anchor.addEventListener('click', (event) => {
-      if (chatLinkTargetAllowed(url)) return;
-      event.preventDefault();
-      if (!confirmExternal) {
-        window.open(url, '_blank', 'noopener,noreferrer');
-        return;
-      }
-      Promise.resolve(confirmExternal(url)).then((ok) => {
-        if (ok) window.open(url, '_blank', 'noopener,noreferrer');
-      });
-    });
-    parent.appendChild(anchor);
-    lastIndex = end;
-  }
-  appendPlain(raw.slice(lastIndex));
+  });
 }
 
-/* HTML 版（小游戏页）：返回 HTML 字符串；输入必须已是 escapeHtml 后的文本。
-   站外链接返回 false 由调用方决定拦截行为（这里统一带 data-chat-link 属性）。 */
+/* HTML 版（小游戏页）：返回 HTML 字符串；输入必须已是 escapeHtml 后的文本。 */
 function chatLinkHtml(escapedText) {
-  const raw = String(escapedText || '');
-  let out = '';
-  let lastIndex = 0;
-  CHAT_URL_PATTERN.lastIndex = 0;
-  let match;
-  while ((match = CHAT_URL_PATTERN.exec(raw)) !== null) {
-    const url = chatUrlFromMatch(match[0]);
-    const start = match.index;
-    const end = start + url.length;
-    if (end <= start) {
-      out += raw.slice(lastIndex, start + match[0].length);
-      lastIndex = start + match[0].length;
-      continue;
-    }
-    out += raw.slice(lastIndex, start);
-    const external = !chatLinkTargetAllowed(url);
-    out += `<a href="${url}" target="_blank" rel="noopener noreferrer" class="chat-link"`
-      + `${external ? ' data-chat-external="1"' : ''}>${url}</a>`;
-    lastIndex = end;
-  }
-  out += raw.slice(lastIndex);
-  return out;
+  return chatSplitLinkSegments(escapedText).map((segment) => {
+    if (segment.url === undefined) return segment.text;
+    const external = segment.external || !chatLinkTargetAllowed(segment.url);
+    return `<a href="${segment.url}" target="_blank" rel="noopener noreferrer" class="chat-link"`
+      + `${external ? ' data-chat-external="1"' : ''}>${segment.display || segment.url}</a>`;
+  }).join('');
 }
 
 /* 以经典脚本暴露给页面：小游戏页（ES module）与故事模式（经典脚本）都能用。 */

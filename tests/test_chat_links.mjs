@@ -137,6 +137,53 @@ expect('escaped angle brackets stay inert', links.html('https://a.example.com/&l
 // 8. 多链接
 expect('multiple links', collect('a https://x.example.com b https://y.example.com c').filter(x => x.tag === 'A').length, 2);
 
+// 9. 裸域名（无协议）识别：白名单 TLD 才认，自动补 https
+function urls(text, options) {
+  return collect(text, options).filter(x => x.tag === 'A').map(x => ({ tag: x.tag, text: x.text, href: x.href, cls: x.cls }));
+}
+check('bare domain linked', urls('去 example.com 看看'), [
+  { tag: 'A', text: 'example.com', href: 'https://example.com', cls: 'chat-link' },
+]);
+check('bare domain with path', urls('打开 example.com/play?a=1 哦'), [
+  { tag: 'A', text: 'example.com/play?a=1', href: 'https://example.com/play?a=1', cls: 'chat-link' },
+]);
+check('www always linked', urls('看 www.wikipedia.org 谢谢'), [
+  { tag: 'A', text: 'www.wikipedia.org', href: 'https://www.wikipedia.org', cls: 'chat-link' },
+]);
+
+// 10. 裸域名误报防护
+check('short tld rejected', urls('b.c 和 a.b 不算'), []);
+check('version numbers rejected', urls('版本 v1.2 和 3.5寸 屏'), []);
+check('filename rejected', urls('下载 setup.exe 文件'), []);
+check('email not linked', urls('邮件发我 a@example.com 即可'), []);
+check('chinese sentence safe', urls('今天天气不错。_multiple.random'), []);
+check('unknown tld rejected', urls('去 example.xyzzy 看看'), []);
+check('known tld accepted', urls('去 example.games 吧'), [
+  { tag: 'A', text: 'example.games', href: 'https://example.games', cls: 'chat-link' },
+]);
+
+// 11. 带协议仍优先，且不再二次匹配裸域名正则
+check('schematic url unchanged', urls('https://example.com 好的'), [
+  { tag: 'A', text: 'https://example.com', href: 'https://example.com', cls: 'chat-link' },
+]);
+check('protocol url keeps original text', urls('http://example.com'), [
+  { tag: 'A', text: 'http://example.com', href: 'http://example.com', cls: 'chat-link' },
+]);
+
+// 12. 混合：带协议 + 纯文本里的裸域名
+check('mixed schematic and bare', urls('a https://a.com b example.org c'), [
+  { tag: 'A', text: 'https://a.com', href: 'https://a.com', cls: 'chat-link' },
+  { tag: 'A', text: 'example.org', href: 'https://example.org', cls: 'chat-link' },
+]);
+
+// 13. 站内裸域名不需要确认（internalAllowed 认裸域）
+expect('bare internal allowed', links.internalAllowed('gtn.stickerbug.top'), true);
+expect('bare external blocked', links.internalAllowed('evil.com'), false);
+expect('bare lookalike blocked', links.internalAllowed('stickerbug.top.evil.com'), false);
+
+// 14. 纯文本段不误伤：数字.数字.数字.数字（IP 形态不在 TLD 白名单，不识别）
+check('ipv4 not linked by bare rule', urls('服务器 192.168.1.1:5000 联机'), []);
+
 if (failures > 0) {
   console.error(`${failures} FAILURES`);
   process.exit(1);
