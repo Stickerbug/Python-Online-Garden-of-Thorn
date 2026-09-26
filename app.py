@@ -172,6 +172,7 @@ from db import (
     admin_set_user_gr,
     admin_set_user_ban,
     admin_set_user_role,
+    admin_restore_deleted_user,
     admin_snapshot_user_gr,
     adjust_user_thorn_dew,
     award_match_thorn_dew,
@@ -11035,6 +11036,7 @@ ADMIN_COMMAND_TREE = {
             },
             'ban': {'summary': '封禁账号并踢下线', 'usage': 'account ban <账号> [时长] [原因]'},
             'unban': {'summary': '解除账号封禁', 'usage': 'account unban <账号>'},
+            'restore': {'summary': '恢复已注销账号（数据保留，原密码可登录）', 'usage': 'account restore <账号>'},
         },
     },
     'story': {
@@ -11619,6 +11621,7 @@ ADMIN_COMMAND_DIRECT_TRANSLATIONS = {
     ('account', 'password'): 'userpass',
     ('account', 'ban'): 'banuser',
     ('account', 'unban'): 'unbanuser',
+    ('account', 'restore'): 'restoreuser',
     ('account', 'achievement', 'list'): 'achievementlist',
     ('account', 'achievement', 'grant'): 'achievementgrant',
     ('account', 'dew', 'get'): ('dew', 'get'),
@@ -15941,6 +15944,15 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
         clear_leaderboard_cache()
         admin_event('admin', f"unbanned account {user['username']}#{user['id']}")
         return {'success': True, 'output': f"已解除账号 {user['username']} (ID:{user.get('player_id') or '-'} 注册顺序：{user['id']}) 的封禁。"}
+    if cmd in ('restoreuser', 'restoreaccount'):
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(raw, len(raw), '<ID|注册顺序|用户名>')}
+        user, error = admin_restore_deleted_user(parts[1])
+        if error:
+            return {'success': False, 'output': error}
+        clear_leaderboard_cache()
+        admin_event('admin', f"restored deleted account {user['username']}#{user['id']}")
+        return {'success': True, 'output': f"已恢复注销账号 {user['username']} (ID:{user.get('player_id') or '-'} 注册顺序：{user['id']})。数据完整保留，原密码可直接登录。"}
     if cmd == 'kick':
         if len(parts) < 2:
             return {'success': False, 'output': command_error(raw, len(raw), '<sid|昵称>')}

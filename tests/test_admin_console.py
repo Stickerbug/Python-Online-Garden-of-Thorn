@@ -435,5 +435,51 @@ class ConsoleBroadcastCommandTests(unittest.TestCase):
         self.assertEqual(send.call_args[0][0], 'notice(test)!')
 
 
+class AccountRestoreCommandTests(unittest.TestCase):
+    """account restore：恢复玩家自行注销的账号（软删除，数据全保留）。"""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.old_db_path = db.DB_PATH
+        db.DB_PATH = os.path.join(self.temp_dir.name, 'restore.sqlite3')
+        db.init_db()
+        self.user, _ = db.create_user('RestoreMe', 'Passw0rd!xyz')
+        db.soft_delete_user(self.user['id'], 'Passw0rd!xyz')
+
+    def tearDown(self):
+        db.release_wal_keeper()
+        db.DB_PATH = self.old_db_path
+        gc.collect()
+        self.temp_dir.cleanup()
+
+    def test_structured_translation_maps_restore(self):
+        translated, help_text = app._translate_structured_admin_command(
+            shlex.split('account restore RestoreMe'),
+        )
+        self.assertEqual(translated, 'restoreuser RestoreMe')
+        self.assertIsNone(help_text)
+
+    def test_restore_clears_deleted_marker_and_ban(self):
+        user, error = db.admin_restore_deleted_user('RestoreMe')
+        self.assertIsNone(error)
+        self.assertIsNotNone(user)
+        self.assertFalse(user.get('deleted'))
+        self.assertIsNone(user.get('deleted_at'))
+        self.assertFalse(user.get('banned'))
+        with db.get_db_connection() as conn:
+            row = conn.execute(
+                'SELECT * FROM users WHERE id = ?', (self.user['id'],),
+            ).fetchone()
+            self.assertIsNone(row['deleted_at'])
+            self.assertEqual(int(row['banned'] or 0), 0)
+
+    def test_restore_rejects_active_and_missing_accounts(self):
+        db.admin_restore_deleted_user('RestoreMe')
+        _, error = db.admin_restore_deleted_user('RestoreMe')
+        self.assertEqual(error, '该账号未注销，无需恢复')
+        _, error = db.admin_restore_deleted_user('NoSuchUser')
+        self.assertEqual(error, '账号不存在')
+
+
 if __name__ == '__main__':
     unittest.main()

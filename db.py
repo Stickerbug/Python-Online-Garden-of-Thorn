@@ -7621,6 +7621,35 @@ def admin_set_user_ban(identifier, banned=True, reason='', duration_seconds=None
         return row_to_user(row), None
 
 
+def admin_restore_deleted_user(identifier):
+    """恢复玩家自行注销的账号：注销是软删除（数据全保留），清掉标记即可。
+
+    只动注销/封禁标记，不改密码——恢复后用原密码登录。
+    """
+    user = find_user_for_admin(identifier)
+    if not user:
+        return None, '账号不存在'
+    if not user.get('deleted_at') and not user.get('deleted'):
+        return None, '该账号未注销，无需恢复'
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (user['id'],)).fetchone()
+        if row is None:
+            return None, '账号不存在'
+        if 'deleted_at' not in row.keys() or not row['deleted_at']:
+            return None, '该账号未注销，无需恢复'
+        conn.execute(
+            '''
+            UPDATE users
+            SET deleted_at = NULL, banned = 0, ban_reason = NULL, banned_at = NULL, ban_until = NULL
+            WHERE id = ?
+            ''',
+            (user['id'],),
+        )
+        conn.commit()
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (user['id'],)).fetchone()
+        return row_to_user(row), None
+
+
 def update_active_user_ban(identifier, reason='', duration_seconds=None):
     user = find_user_for_admin(identifier)
     if not user:
