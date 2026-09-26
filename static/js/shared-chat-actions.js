@@ -22,6 +22,7 @@ const DEFAULT_LABELS = {
   recallDone: (count) => `已撤回 ${count} 条消息`,
   recallFailed: '撤回失败：消息可能已被撤回，或你没有权限',
   recallConfirm: (name) => `撤回 ${name} 的这条消息？撤回后所有玩家都看不到它。`,
+  linkExternal: '这不是本站链接（非 *.stickerbug.top），确定要打开吗？',
   categories: {
     abusive_language: '辱骂 / 攻击性语言',
     sexual_content: '色情内容',
@@ -366,6 +367,108 @@ function createChatActionButtons(entry = {}, viewer = {}, labels = {}, options =
   return fragment;
 }
 
+/* ===== 聊天链接化（各聊天窗口共用）===== */
+
+/* 只认 http/https；域名后禁止紧跟非 ASCII 字母（中文句号等不算 URL 一部分）。
+   站内域：任意 *.stickerbug.top 子域（含 gtn）。 */
+const CHAT_URL_PATTERN = /https?:\/\/[^\s<>"'\u3000-\u9fff\uff00-\uffef]+/gi;
+const CHAT_INTERNAL_URL = /^https?:\/\/([a-z0-9-]+\.)*stickerbug\.top(?::\d+)?(?:[/?#]|$)/i;
+
+function chatUrlFromMatch(raw) {
+  let url = String(raw || '');
+  // 剥掉黏在链接尾部的标点（右括号只在左侧有配对时保留）。
+  url = url.replace(/[),.;:!?'"\]]+$/, (punct) => {
+    if (/[\])]/.test(punct)) {
+      const opens = (url.match(/[(\[]/g) || []).length;
+      const closes = (url.match(/[)\]]/g) || []).length;
+      if (opens >= closes) return punct;
+    }
+    return '';
+  });
+  if (/[\])],?$/.test(url) && (url.match(/[(\[]/g) || []).length < (url.match(/[)\]]/g) || []).length) {
+    url = url.replace(/[)\]]+$/, '');
+  }
+  return url;
+}
+
+function chatLinkTargetAllowed(url) {
+  return CHAT_INTERNAL_URL.test(String(url || ''));
+}
+
+/* DOM 版：把文本按提及+URL 分段渲染进 parent（转义在前、协议白名单在后）。
+   options.confirm(url) 返回 Promise<boolean>，站外链接先确认。 */
+function appendChatTextWithLinks(parent, text, options = {}) {
+  const raw = String(text || '');
+  if (!raw) return;
+  const confirmExternal = typeof options.confirmExternal === 'function' ? options.confirmExternal : null;
+  let lastIndex = 0;
+  const appendPlain = (slice) => {
+    if (!slice) return;
+    if (typeof options.appendPlain === 'function') options.appendPlain(parent, slice);
+    else parent.appendChild(document.createTextNode(slice));
+  };
+  CHAT_URL_PATTERN.lastIndex = 0;
+  let match;
+  while ((match = CHAT_URL_PATTERN.exec(raw)) !== null) {
+    const url = chatUrlFromMatch(match[0]);
+    const start = match.index;
+    const end = start + url.length;
+    if (end <= start) {
+      appendPlain(raw.slice(lastIndex, start + match[0].length));
+      lastIndex = start + match[0].length;
+      continue;
+    }
+    appendPlain(raw.slice(lastIndex, start));
+    const anchor = document.createElement('a');
+    anchor.className = 'chat-link';
+    anchor.textContent = url;
+    anchor.href = url;
+    anchor.target = '_blank';
+    anchor.rel = 'noopener noreferrer';
+    anchor.addEventListener('click', (event) => {
+      if (chatLinkTargetAllowed(url)) return;
+      event.preventDefault();
+      if (!confirmExternal) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      Promise.resolve(confirmExternal(url)).then((ok) => {
+        if (ok) window.open(url, '_blank', 'noopener,noreferrer');
+      });
+    });
+    parent.appendChild(anchor);
+    lastIndex = end;
+  }
+  appendPlain(raw.slice(lastIndex));
+}
+
+/* HTML 版（小游戏页）：返回 HTML 字符串；输入必须已是 escapeHtml 后的文本。
+   站外链接返回 false 由调用方决定拦截行为（这里统一带 data-chat-link 属性）。 */
+function chatLinkHtml(escapedText) {
+  const raw = String(escapedText || '');
+  let out = '';
+  let lastIndex = 0;
+  CHAT_URL_PATTERN.lastIndex = 0;
+  let match;
+  while ((match = CHAT_URL_PATTERN.exec(raw)) !== null) {
+    const url = chatUrlFromMatch(match[0]);
+    const start = match.index;
+    const end = start + url.length;
+    if (end <= start) {
+      out += raw.slice(lastIndex, start + match[0].length);
+      lastIndex = start + match[0].length;
+      continue;
+    }
+    out += raw.slice(lastIndex, start);
+    const external = !chatLinkTargetAllowed(url);
+    out += `<a href="${url}" target="_blank" rel="noopener noreferrer" class="chat-link"`
+      + `${external ? ' data-chat-external="1"' : ''}>${url}</a>`;
+    lastIndex = end;
+  }
+  out += raw.slice(lastIndex);
+  return out;
+}
+
 /* 以经典脚本暴露给页面：小游戏页（ES module）与故事模式（经典脚本）都能用。 */
 window.GtnChatActions = {
   chatActionLabels,
@@ -379,6 +482,7 @@ window.GtnChatActions = {
   chatActionButtonsHtml,
   createChatReportButton,
   createChatRecallButton,
+  chatLinkHtml,
 };
 
 /* 撤回统一机制的独立入口：窗口判定、原位占位、过期按钮清理。
@@ -394,6 +498,15 @@ window.GtnChatRecall = {
   markEntryRecalled: markChatEntryRecalled,
   applyRecallToEntryList,
   startExpiryWatcher: startChatRecallExpiryWatcher,
+};
+
+/* 聊天链接化入口（同上：一份实现，四处接入）。 */
+window.GtnChatLinks = {
+  pattern: CHAT_URL_PATTERN,
+  urlFromMatch: chatUrlFromMatch,
+  internalAllowed: chatLinkTargetAllowed,
+  appendTextWithLinks: appendChatTextWithLinks,
+  html: chatLinkHtml,
 };
 
 if (typeof document !== 'undefined') startChatRecallExpiryWatcher();

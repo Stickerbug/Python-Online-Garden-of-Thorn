@@ -433,6 +433,36 @@
   background: rgba(116, 185, 255, .1);
 }
 
+/* 聊天链接（统一由 shared-chat-actions 识别）：变蓝可点，长链不断行撑破聊天框 */
+.chat-msg a.chat-link,
+.story-chat-message a.chat-link {
+  color: #2e86de;
+  text-decoration: underline;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.chat-msg a.chat-link:hover,
+.chat-msg a.chat-link:focus-visible,
+.story-chat-message a.chat-link:hover,
+.story-chat-message a.chat-link:focus-visible {
+  color: #1a5fa8;
+  text-decoration: none;
+}
+
+:root[data-theme='dark'] .chat-msg a.chat-link,
+:root[data-theme='dark'] .story-chat-message a.chat-link {
+  color: #74b9ff;
+}
+
+:root[data-theme='dark'] .chat-msg a.chat-link:hover,
+:root[data-theme='dark'] .story-chat-message a.chat-link:hover,
+:root[data-theme='dark'] .chat-msg a.chat-link:focus-visible,
+:root[data-theme='dark'] .story-chat-message a.chat-link:focus-visible {
+  color: #a9ceff;
+}
+
 .chat-mention-token.mention-flash {
   animation: mentionFlash 1.05s ease-in-out infinite;
 }

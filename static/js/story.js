@@ -497,6 +497,7 @@
             chatConsole: 'Console',
             chatUnread: (count) => `${count} unread message(s)`,
             chatRecall: 'Recall',
+            chatLinkExternal: 'This is not an on-site link (not *.stickerbug.top). Open it anyway?',
             chatRecallEntry: (actor, target) => `${actor} recalled a message from ${target}`,
             chatRecallSelf: (actor) => `${actor} recalled a message`,
             chatRoleAdmin: 'Admin ',
@@ -609,6 +610,7 @@
             chatSpectator: '观战', chatYesterday: '昨天', chatBeforeYesterday: '前天', chatConsole: '控制台',
             chatUnread: (count) => `${count} 条未读消息`,
             chatRecall: '撤回',
+            chatLinkExternal: '这不是本站链接（非 *.stickerbug.top），确定要打开吗？',
             chatRecallEntry: (actor, target) => `${actor}撤回了${target}的一条消息`,
             chatRecallSelf: (actor) => `${actor}撤回了一条消息`,
             chatRoleAdmin: '管理员',
@@ -720,6 +722,7 @@
             chatConsole: 'Console',
             chatUnread: (count) => `${count} message(s) non lu(s)`,
             chatRecall: 'Retirer',
+            chatLinkExternal: "Ce lien n'est pas du site (pas *.stickerbug.top). L'ouvrir quand même ?",
             chatRecallEntry: (actor, target) => `${actor} a retiré un message de ${target}`,
             chatRecallSelf: (actor) => `${actor} a retiré un message`,
             chatRoleAdmin: 'Admin ',
@@ -849,6 +852,7 @@
             chatSpectator: '観戦', chatYesterday: '昨日', chatBeforeYesterday: '一昨日', chatConsole: 'コンソール',
             chatUnread: (count) => `未読メッセージ ${count}件`,
             chatRecall: '取り消し',
+            chatLinkExternal: 'これは当サイトのリンクではありません（*.stickerbug.top 以外）。開きますか？',
             chatRecallEntry: (actor, target) => `${actor}が${target}のメッセージを取り消しました`,
             chatRecallSelf: (actor) => `${actor}がメッセージを取り消しました`,
             chatRoleAdmin: '管理者',
@@ -4777,7 +4781,7 @@
         const pattern = new RegExp(`(@(?:${escaped.join('|')}))(?![\\w\\u4e00-\\u9fff\\u3040-\\u30ff\\uac00-\\ud7af-])`, 'gi');
         let last = 0;
         raw.replace(pattern, (match, token, offset) => {
-            if (offset > last) parent.appendChild(document.createTextNode(raw.slice(last, offset)));
+            if (offset > last) appendStoryChatLinkSegment(parent, raw.slice(last, offset));
             const span = document.createElement('span');
             span.className = 'chat-mention-token';
             const tokenName = String(match || '').replace(/^@/, '');
@@ -4790,7 +4794,21 @@
             last = offset + match.length;
             return match;
         });
-        if (last < raw.length) parent.appendChild(document.createTextNode(raw.slice(last)));
+        if (last < raw.length) appendStoryChatLinkSegment(parent, raw.slice(last));
+    }
+
+    /* 聊天链接化（统一走 shared-chat-actions 的 GtnChatLinks）；站外链接先确认。 */
+    function appendStoryChatLinkSegment(parent, slice) {
+        const links = globalThis.GtnChatLinks;
+        if (links && typeof links.appendTextWithLinks === 'function') {
+            links.appendTextWithLinks(parent, slice, {
+                confirmExternal: (url) => globalThis.confirm(
+                    `${t.chatLinkExternal || '这不是本站链接（非 *.stickerbug.top），确定要打开吗？'}\n${url}`,
+                ),
+            });
+            return;
+        }
+        parent.appendChild(document.createTextNode(slice));
     }
 
     function appendStoryChatIdentity(parent, entry = {}) {

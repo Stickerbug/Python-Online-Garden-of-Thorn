@@ -874,6 +874,9 @@ const I18N = {
         chat_recall_confirm: 'Recall this message from {0}? Everyone will stop seeing it.',
         chat_recall_done: 'Recalled {0} message(s)',
         chat_recall_failed: 'Recall failed: the message may already be recalled, or you lack permission.',
+        chat_link_title: 'Open external link',
+        chat_link_external: 'This is not an on-site link (not *.stickerbug.top). Open it anyway?',
+        chat_link_open: 'Open',
         drag_to_play_full: 'Drag here to play', tap_play_hint: 'Tap a card, then confirm to play', confirm_play: 'Play {0}', cancel_play: 'Cancel',
         classic_select_card: 'Choose a card',
         prediction_target: 'Target',
@@ -1009,6 +1012,9 @@ I18N.zh = { ...I18N.en,
     chat_role_player: '玩家',
     chat_recall: '撤回',
     chat_recall_confirm: '撤回 {0} 的这条消息？撤回后所有玩家都看不到它。',
+    chat_link_title: '打开外部链接',
+    chat_link_external: '这不是本站链接（非 *.stickerbug.top），确定要打开吗？',
+    chat_link_open: '打开',
     chat_recall_done: '已撤回 {0} 条消息',
     chat_recall_failed: '撤回失败：消息可能已被撤回，或你没有权限',
     drag_to_play: '拖动打出', cannot_play: '无法打出', enemy_attack: '攻击牌', enemy_skill: '技能牌', enemy_destroy_equip: '，摧毁装备',
@@ -1147,6 +1153,9 @@ I18N.fr = { ...I18N.en,
     chat_role_player: 'Joueur ',
     chat_recall: 'Retirer',
     chat_recall_confirm: 'Retirer ce message de {0} ? Il disparaitra pour tout le monde.',
+    chat_link_title: 'Ouvrir un lien externe',
+    chat_link_external: "Ce lien n'est pas du site (pas *.stickerbug.top). L'ouvrir quand même ?",
+    chat_link_open: 'Ouvrir',
     chat_recall_done: '{0} message(s) retire(s)',
     chat_recall_failed: 'Echec du retrait : message deja retire ou permission manquante.',
     drag_to_play: 'Glisser pour jouer', cannot_play: 'Impossible de jouer',
@@ -1232,6 +1241,9 @@ I18N.ja = { ...I18N.en,
     chat_role_player: 'プレイヤー',
     chat_recall: '取り消し',
     chat_recall_confirm: '{0} のこのメッセージを取り消しますか？全員に見えなくなります。',
+    chat_link_title: '外部リンクを開く',
+    chat_link_external: 'これは当サイトのリンクではありません（*.stickerbug.top 以外）。開きますか？',
+    chat_link_open: '開く',
     chat_recall_done: '{0} 件のメッセージを取り消しました',
     chat_recall_failed: '取り消しに失敗しました。すでに取り消し済みか、権限がありません。',
     drag_to_play: 'ドラッグしてプレイ', cannot_play: 'プレイ不可',
@@ -33278,7 +33290,7 @@ function createBattleLogElement(entry) {
             suffix: entry.system ? ' ' : ': ',
         });
         el.appendChild(nameSpan);
-        el.appendChild(document.createTextNode(entry.text));
+        appendChatLinkSegment(el, entry.text || '');
         const repeatCount = Number(entry.repeatCount || entry.repeat_count || 1);
         if (repeatCount > 1) {
             const repeatSpan = document.createElement('span');
@@ -34226,13 +34238,13 @@ function appendChatTextWithMentions(parent, text, mentions = [], ownMentionToken
     });
     const unique = [...new Set(mentionNames.filter(Boolean))].sort((a, b) => b.length - a.length);
     if (!unique.length) {
-        parent.appendChild(document.createTextNode(raw));
+        appendChatLinkSegment(parent, raw);
         return;
     }
     const pattern = new RegExp('(@(?:' + unique.map(name => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + '))(?![\\w\\u4e00-\\u9fff\\u3040-\\u30ff\\uac00-\\ud7af-])', 'gi');
     let last = 0;
     raw.replace(pattern, (match, token, offset) => {
-        if (offset > last) parent.appendChild(document.createTextNode(raw.slice(last, offset)));
+        if (offset > last) appendChatLinkSegment(parent, raw.slice(last, offset));
         const span = document.createElement('span');
         span.className = 'chat-mention-token';
         const tokenName = String(match || '').replace(/^@/, '');
@@ -34247,7 +34259,32 @@ function appendChatTextWithMentions(parent, text, mentions = [], ownMentionToken
         last = offset + match.length;
         return match;
     });
-    if (last < raw.length) parent.appendChild(document.createTextNode(raw.slice(last)));
+    if (last < raw.length) appendChatLinkSegment(parent, raw.slice(last));
+}
+
+/* 聊天链接化（统一走 shared-chat-actions 的 GtnChatLinks）：识别 http(s) URL 变蓝可点，
+   站外链接（非 *.stickerbug.top）先弹确认框。 */
+function chatExternalLinkConfirm(url) {
+    const title = UI.chat_link_title || '打开外部链接';
+    const message = `${UI.chat_link_external || '这不是本站链接（非 *.stickerbug.top），确定要打开吗？'}\n${url}`;
+    return gameConfirm(title, message).then((ok) => {
+        if (!ok) return false;
+        try {
+            window.open(url, '_blank', 'noopener,noreferrer');
+        } catch (_) {
+            return false;
+        }
+        return true;
+    });
+}
+
+function appendChatLinkSegment(parent, slice) {
+    const links = window.GtnChatLinks;
+    if (links && typeof links.appendTextWithLinks === 'function') {
+        links.appendTextWithLinks(parent, slice, { confirmExternal: chatExternalLinkConfirm });
+        return;
+    }
+    parent.appendChild(document.createTextNode(slice));
 }
 
 function parseChatTimeValue(value) {

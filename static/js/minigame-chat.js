@@ -157,6 +157,10 @@
           && String(mention.user_id) === ownUserId;
         out = out.split(token).join(`<span class="chat-mention-token${isSelf ? ' mention-self' : ''}">${token}</span>`);
       });
+      /* 链接化：先转义再包装（chatLinkHtml 只对未进入 span 的 http(s) 片段生效）。 */
+      if (typeof actions.chatLinkHtml === 'function') {
+        out = actions.chatLinkHtml(out);
+      }
       return out;
     }
 
@@ -386,6 +390,19 @@
       const log = els(options.logId);
       if (!log || typeof actions.chatActionButtonsHtml !== 'function') return;
       log.addEventListener('click', (event) => {
+        const link = event.target.closest('a.chat-link[data-chat-external="1"]');
+        if (link) {
+          // 站外链接：拦截默认跳转，先确认（与大厅/故事一致的提示语义）。
+          event.preventDefault();
+          const url = link.getAttribute('href') || '';
+          const message = `${(labels().linkExternal) || '这不是本站链接（非 *.stickerbug.top），确定要打开吗？'}\n${url}`;
+          if (options.confirmExternalLink) {
+            options.confirmExternalLink(url, message);
+          } else if (window.confirm(message)) {
+            window.open(url, '_blank', 'noopener,noreferrer');
+          }
+          return;
+        }
         const reportBtn = event.target.closest('.report-inline-btn[data-chat-report]');
         if (reportBtn) {
           event.preventDefault();
