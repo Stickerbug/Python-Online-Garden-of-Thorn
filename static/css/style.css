@@ -669,6 +669,7 @@ body {
 .top-settings-btn::before { --ui-icon-url: url("/static/assets/ui-icons/settings.svg"); }
 .account-top-btn::before { --ui-icon-url: url("/static/assets/ui-icons/account.svg"); }
 .community-top-btn::before { --ui-icon-url: url("/static/assets/ui-icons/announcement.svg"); }
+.qq-top-btn::before { --ui-icon-url: url("/static/assets/ui-icons/qq.svg"); }
 .friends-top-btn::before { --ui-icon-url: url("/static/assets/ui-icons/friends.svg"); }
 .skin-top-btn::before { --ui-icon-url: url("/static/assets/ui-icons/skins.svg"); }
 .changelog-top-btn::before { --ui-icon-url: url("/static/assets/ui-icons/log.svg"); }
