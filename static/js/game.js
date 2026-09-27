@@ -19249,7 +19249,7 @@ function renderCardSkinShop() {
               }))}</div>`
             : '';
         const action = owned
-            ? `<button class="btn btn-secondary btn-sm" disabled>${escapeHtml(lt({ zh: '已拥有', en: 'Owned', fr: 'Possédé', ja: '所持済み' }))}</button>`
+            ? `<button class="btn btn-secondary btn-sm" disabled title="${escapeHtml(lt({ zh: '你已经拥有这个卡牌皮肤了！', en: 'You already own this card skin!', fr: 'Vous possédez déjà ce skin de carte !', ja: 'すでにこのカードスキンを持っています！' }))}">${escapeHtml(lt({ zh: '已拥有', en: 'Owned', fr: 'Possédé', ja: '所持済み' }))}</button>`
             : `<button class="btn btn-primary btn-sm" data-card-skin-buy="${offer.slot}" ${cardSkinShopBusy ? 'disabled' : ''}>${thornDewAmountHtml(offer.price)}</button>`;
         return `
         <article class="title-shop-item card-skin-shop-item" data-slot="${offer.slot}">
@@ -20066,20 +20066,21 @@ function renderCardSkinInventory() {
                 </div>
             </div>
         </div>`;
+    const ownedItems = items.filter(item => item.owned);
     panel.innerHTML = `
         <div class="card-skin-inventory">
             ${row('', lt({ zh: '默认卡背', en: 'Default back', fr: 'Dos par défaut', ja: 'デフォルト裏面' }), defaultBack, '', equipped === '', true)}
-            ${items.map(item => row(
+            ${ownedItems.map(item => row(
                 item.skin_id, item.name, item.back_url, item.front_url,
-                item.equipped === true || (!item.owned && false), item.owned,
+                item.equipped === true, true,
             )).join('')}
         </div>
-        <div class="card-skin-hint">${escapeHtml(lt({
-            zh: '皮肤在商店获取。装备后你的全部手牌卡背会变成该造型；未拥有的皮肤需要先在商店购买。',
-            en: 'Skins come from the shop. Equipping changes all your hand card backs; buy skins in the shop first.',
-            fr: 'Les skins viennent de la boutique. Les équiper change le dos de toutes vos cartes.',
-            ja: 'スキンはショップで入手。装備すると自分の手札の裏面がすべて変わります。',
-        }))}</div>`;
+        ${ownedItems.length ? '' : `<div class="card-skin-hint">${escapeHtml(lt({
+            zh: '还没有卡牌皮肤——去商店看看吧。',
+            en: 'No card skins yet — check out the shop.',
+            fr: 'Pas encore de skin — voyez la boutique.',
+            ja: 'カードスキンがまだありません——ショップをチェック。',
+        }))}</div>`}`;
     panel.querySelectorAll('[data-card-skin-equip]').forEach(btn => {
         btn.addEventListener('click', async () => {
             if (cardSkinInventoryBusy) return;

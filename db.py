@@ -15707,13 +15707,14 @@ def purchase_card_skin_offer(user_id, set_id, slot):
         if purchased is not None:
             conn.rollback()
             return None, '本轮已购买该商品'
+        # 跨天刷新后同一皮肤再次上架也禁止购买（不同于称号的重复获得）。
         already_owned = conn.execute(
             'SELECT 1 FROM user_card_skins WHERE user_id = ? AND skin_id = ?',
             (uid, offer['skin_id']),
         ).fetchone()
         if already_owned is not None:
             conn.rollback()
-            return None, '已拥有该皮肤'
+            return None, '你已经拥有这个卡牌皮肤了！'
         user = conn.execute('SELECT * FROM users WHERE id = ? AND deleted_at IS NULL', (uid,)).fetchone()
         if user is None:
             conn.rollback()

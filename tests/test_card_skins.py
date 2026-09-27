@@ -82,6 +82,33 @@ class CardSkinTests(unittest.TestCase):
         self.assertIsNone(error)
         self.assertEqual(payload['equipped'], target['skin_id'])
 
+    def test_cross_day_duplicate_skin_purchase_blocked(self):
+        """跨天刷新后同一皮肤再次上架：已拥有 → 禁止购买，文案「你已经拥有这个卡牌皮肤了！」"""
+        shop, _ = db.get_card_skin_shop(self.user['id'])
+        target = shop['offers'][0]
+        result, error = db.purchase_card_skin_offer(self.user['id'], shop['set_id'], target['slot'])
+        self.assertIsNone(error)
+        # 模拟跨天：新建下一日的全局 set 并把用户 active_set 切过去（等价于每日 rollover）
+        with db.get_db_connection() as conn:
+            card_skins.ensure_card_skin_schema(conn)
+            import secrets as _secrets
+            new_set = f'daily:next-day:{_secrets.token_hex(4)}'
+            conn.execute(
+                "INSERT INTO card_skin_shop_sets (set_id, shop_date, scope_key, kind, created_at) VALUES (?, date('now'), 'global', 'daily', datetime('now'))",
+                (new_set,),
+            )
+            conn.execute(
+                'INSERT INTO card_skin_shop_offers (set_id, slot, skin_id, price) VALUES (?, 1, ?, ?)',
+                (new_set, target['skin_id'], 10000),
+            )
+            conn.execute(
+                "UPDATE card_skin_shop_user_state SET active_set_id = ? WHERE user_id = ?",
+                (new_set, self.user['id']),
+            )
+            conn.commit()
+        _, error = db.purchase_card_skin_offer(self.user['id'], new_set, 1)
+        self.assertEqual(error, '你已经拥有这个卡牌皮肤了！')
+
     def test_refresh_cost_increments(self):
         shop, _ = db.get_card_skin_shop(self.user['id'])
         self.assertEqual(shop['refresh_cost'], 700)
