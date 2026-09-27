@@ -235,7 +235,16 @@ def clear_spikeball_play_flags(card: CardInstance):
 
 def reset_card_after_play(card: CardInstance):
     preserve_fission = 'preserve_fission' in normalize_card_flags(getattr(card, 'instance_flags', set()) or set()) or 'preserve_fission' in normalize_card_flags(getattr(card.card_def, 'flags', set()) or set())
-    preserved_fission_level = clamp_card_layer(getattr(card, 'fission_level', 1)) if preserve_fission else 1
+    if preserve_fission:
+        preserved_fission_level = clamp_card_layer(getattr(card, 'fission_level', 1))
+    else:
+        # 设计 9.27：初始具裂变的卡打出后裂变层数恢复**原卡数值**（此前错重置为 1）。
+        try:
+            card_def = card.card_def
+            default_fission = int(getattr(card_def, 'fission_level', 1) or 1)
+        except Exception:
+            default_fission = 1
+        preserved_fission_level = clamp_card_layer(default_fission)
     card.cost_e_override = None
     card.cost_m_override = None
     card.mimic_discount = 0
@@ -2396,7 +2405,8 @@ class GameEngine:
                 power = clamp_card_power(getattr(source_card, 'power_value', 0) or 0)
             except Exception:
                 power = 0
-            damage = max(0, damage + int(math.ceil(power / max(1, int(hits or 1)))))
+            # 设计 9.27：威力只加在第一段伤害（与 deal_attack_damage 口径一致）。
+            damage = max(0, damage + (int(power) if power else 0))
         if 0 <= attacker_id < len(self.players):
             attacker = self.players[attacker_id]
             try:
@@ -5785,6 +5795,8 @@ class GameEngine:
                 elif 'multi_petal_base' in self._effective_card_flags(card):
                     card.instance_flags.add('multi_petal_fission')
                 elif int(getattr(card, 'fission_level', 1) or 1) > 1:
+                    # 设计 9.27：多重瓣对初始裂变卡仍临时 +1 层；
+                    # 打出后由 reset_card_after_play 恢复原卡数值。
                     card.fission_level = clamp_card_layer(int(card.fission_level) + 1)
                     card.fission_count = max(0, card.fission_level - 1)
                 else:
@@ -18780,10 +18792,13 @@ class GameEngine:
             self._last_positive_damage_hits = [0] * len(self.players)
         self._last_positive_damage_hits[target_id] = 0
         immune = self._is_status_immune(target_id)
-        for _ in range(hits):
+        # 设计 9.27：威力只加在第一段伤害上（+全部威力层数），后续段不加。
+        power_first_hit_applied = False
+        for hit_index in range(hits):
             self._consume_action_work(4)
             precision_dodged = False
             plank_blocks_attack = False
+            is_first_hit = hit_index == 0
             if ps.dodge > 0 and not immune:
                 ps.dodge -= 1
                 if is_precision:
@@ -18832,8 +18847,10 @@ class GameEngine:
                     power = clamp_card_power(getattr(source_card, 'power_value', 0) or 0)
                 except Exception:
                     power = 0
-            if power != 0:
-                dmg += int(math.ceil(power / max(1, int(hits or 1))))
+            if power != 0 and is_first_hit and not power_first_hit_applied:
+                # 威力层数全部加在第一段伤害上。
+                dmg += int(power)
+                power_first_hit_applied = True
                 dmg = max(0, dmg)
             if 0 <= attacker_id < len(self.players):
                 multiplier = float(getattr(self.players[attacker_id], 'damage_multiplier', 1.0) or 1.0)
