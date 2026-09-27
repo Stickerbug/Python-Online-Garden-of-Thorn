@@ -149,13 +149,25 @@
       let out = escapeHtml((item && item.text) || '');
       const mentions = Array.isArray(item && item.mentions) ? item.mentions : [];
       const ownUserId = options.userId != null ? String(options.userId) : '';
-      mentions.slice(0, 8).forEach((mention) => {
+      /* #232：@ 匹配要带边界——@_FlowerSoul_（不存在的昵称）不能因为包含
+         真实昵称 @_FlowerSoul 子串就上色。与服务端正则同一套边界规则。 */
+      const boundaryAfter = '(?![\\w\\u4e00-\\u9fff\\u3040-\\u30ff\\uac00-\\ud7af-])';
+      const seenTokens = new Set();
+      const sorted = mentions.slice(0, 8).sort((a, b) => {
+        const an = String((a && a.nickname) || '').length;
+        const bn = String((b && b.nickname) || '').length;
+        return bn - an;   // 长昵称优先，避免短名先占位
+      });
+      sorted.forEach((mention) => {
         const name = escapeHtml((mention && mention.nickname) || '');
-        if (!name) return;
+        if (!name || seenTokens.has(name)) return;
+        seenTokens.add(name);
         const token = `@${name}`;
         const isSelf = !!ownUserId && mention && mention.user_id != null
           && String(mention.user_id) === ownUserId;
-        out = out.split(token).join(`<span class="chat-mention-token${isSelf ? ' mention-self' : ''}">${token}</span>`);
+        const pattern = new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + boundaryAfter, 'g');
+        out = out.replace(pattern,
+          `<span class="chat-mention-token${isSelf ? ' mention-self' : ''}">${token}</span>`);
       });
       /* 链接化：先转义再包装（chatLinkHtml 只对未进入 span 的 http(s) 片段生效）。 */
       if (typeof actions.chatLinkHtml === 'function') {
@@ -197,9 +209,19 @@
         ? `<span class="chat-spectator-prefix">[${escapeHtml(names.spectator || '观战')}]</span>` : '';
       const consolePrefix = (!system && (item.console_player || item.special_role === 'console'))
         ? `<span class="player-title-inline">[${escapeHtml(names.console || '控制台')}]</span>` : '';
+      /* #232：休闲页里来自大厅玩家的消息也要显示 [多人] 前缀
+         （此前 originBadgeHtml 对 multiplayer 返回空，前缀整个消失） */
+      const originPrefix = (() => {
+        const origin = String((item && (item.chat_origin || item.origin)) || '').toLowerCase();
+        if (origin === 'multiplayer') {
+          const text = names.multiplayer || '多人';
+          return `<span class="chat-origin-prefix chat-origin-multiplayer">[${escapeHtml(text)}]</span>`;
+        }
+        return originBadgeHtml(item);
+      })();
       const head = system
         ? `${name || `[${escapeHtml(names.system || '系统')}]`} `
-        : spectator + '<span class="chat-player-name">' + reputationHtml(item) + consolePrefix
+        : spectator + '<span class="chat-player-name">' + originPrefix + reputationHtml(item) + consolePrefix
           + titlesHtml(item) + nameHtml(item, name || '?') + '</span>: ';
       const messageId = Number(item.message_id || item.messageId || 0);
       return `<div class="chat-msg"${messageId > 0 ? ` data-chat-message-id="${messageId}"` : ''}>`

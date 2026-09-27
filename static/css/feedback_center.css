@@ -1945,3 +1945,22 @@ html.fc-scroll-locked body {
   font-weight: 700;
   overflow-wrap: anywhere;
 }
+
+/* #231：顶栏返回游戏主页按钮（原页脚位置在长列表页几乎不可见） */
+.fc-button-home {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border: 1px solid var(--fc-line);
+  border-radius: 8px;
+  background: var(--fc-surface);
+  color: var(--fc-text);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.fc-button-home:hover {
+  border-color: var(--fc-accent);
+  color: var(--fc-accent);
+}

@@ -23,6 +23,7 @@ const DEFAULT_LABELS = {
   recallFailed: '撤回失败：消息可能已被撤回，或你没有权限',
   recallConfirm: (name) => `撤回 ${name} 的这条消息？撤回后所有玩家都看不到它。`,
   linkExternal: '这不是本站链接（非 *.stickerbug.top），确定要打开吗？',
+  multiplayer: '多人',
   categories: {
     abusive_language: '辱骂 / 攻击性语言',
     sexual_content: '色情内容',

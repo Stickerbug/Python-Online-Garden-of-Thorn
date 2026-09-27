@@ -8016,6 +8016,9 @@ def recall_chat_message(message_id, *, actor_user_id=0, actor_name=''):
                 ),
             )
             conn.commit()
+        else:
+            # 反馈 #233：已撤回的消息再撤 → 返回 None，不再重复广播占位。
+            return None
         return {
             'message_id': mid,
             'room_id': row['room_id'],
