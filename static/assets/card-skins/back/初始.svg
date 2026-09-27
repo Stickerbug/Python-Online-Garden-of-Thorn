@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_1" data-name="图层_1" xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1133.86 1133.86">
+  <!-- Generator: Adobe Illustrator 29.0.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 186)  -->
+  <defs>
+    <style>
+      .st0 {
+        clip-path: url(#clippath-6);
+      }
+
+      .st1 {
+        clip-path: url(#clippath-7);
+      }
+
+      .st2 {
+        fill: #ea5723;
+      }
+
+      .st3 {
+        clip-path: url(#clippath-4);
+      }
+
+      .st4 {
+        stroke: #ebebec;
+        stroke-width: 5px;
+      }
+
+      .st4, .st5, .st6, .st7, .st8, .st9, .st10 {
+        fill: none;
+      }
+
+      .st4, .st6, .st8, .st9, .st10 {
+        stroke-miterlimit: 10;
+      }
+
+      .st11 {
+        clip-path: url(#clippath-9);
+      }
+
+      .st12 {
+        fill: #fff;
+      }
+
+      .st13 {
+        fill: #13ae67;
+        font-family: Ubuntu-Bold, Ubuntu;
+        font-size: 254.65px;
+        font-weight: 700;
+      }
+
+      .st14 {
+        fill: #dedfdf;
+      }
+
+      .st15 {
+        opacity: .25;
+      }
+
+      .st16 {
+        fill: #f7f8f8;
+      }
+
+      .st17 {
+        fill: #094;
+      }
+
+      .st18 {
+        clip-path: url(#clippath-1);
+      }
+
+      .st6 {
+        stroke: #e53010;
+      }
+
+      .st6, .st9 {
+        stroke-width: 10px;
+      }
+
+      .st19 {
+        clip-path: url(#clippath-5);
+      }
+
+      .st20 {
+        clip-path: url(#clippath-8);
+      }
+
+      .st21 {
+        clip-path: url(#clippath-3);
+      }
+
+      .st7 {
+        stroke: #006934;
+        stroke-miterlimit: 25.2;
+        stroke-width: 8.19px;
+      }
+
+      .st8 {
+        stroke: #d7d7d8;
+        stroke-width: 8.65px;
+      }
+
+      .st22 {
+        opacity: .26;
+      }
+
+      .st23 {
+        clip-path: url(#clippath-2);
+      }
+
+      .st9 {
+        stroke: #2ca239;
+      }
+
+      .st24 {
+        clip-path: url(#clippath);
+      }
+
+      .st10 {
+        stroke: #acadae;
+        stroke-width: 15px;
+      }
+
+      .st25 {
+        opacity: .5;
+      }
+
+      .st26 {
+        fill: #56b432;
+      }
+    </style>
+    <clipPath id="clippath">
+      <rect class="st5" x="244.87" y="119.8" width="245.07" height="245.07"/>
+    </clipPath>
+    <clipPath id="clippath-1">
+      <rect class="st5" x="244.87" y="119.8" width="245.07" height="245.07"/>
+    </clipPath>
+    <clipPath id="clippath-2">
+      <rect class="st5" x="628.14" y="765.54" width="283.46" height="283.46"/>
+    </clipPath>
+    <clipPath id="clippath-3">
+      <rect class="st5" x="628.14" y="765.54" width="283.46" height="283.46"/>
+    </clipPath>
+    <clipPath id="clippath-4">
+      <rect class="st5" x="628.14" y="765.54" width="283.46" height="283.46"/>
+    </clipPath>
+    <clipPath id="clippath-5">
+      <rect class="st5" x="691.5" y="828.9" width="156.73" height="156.73"/>
+    </clipPath>
+    <clipPath id="clippath-6">
+      <rect class="st5" x="771.2" y="859.01" width="33.35" height="33.35"/>
+    </clipPath>
+    <clipPath id="clippath-7">
+      <rect class="st5" x="208.27" y="746.94" width="283.46" height="283.46" transform="translate(-122.02 58.35) rotate(-8.12)"/>
+    </clipPath>
+    <clipPath id="clippath-8">
+      <rect class="st5" x="208.27" y="746.94" width="283.46" height="283.46" transform="translate(-122.02 58.35) rotate(-8.12)"/>
+    </clipPath>
+    <clipPath id="clippath-9">
+      <rect class="st5" x="636.6" y="100.6" width="283.46" height="283.46"/>
+    </clipPath>
+  </defs>
+  <path class="st17" d="M290.67,131.03h552.51c19.14,0,34.65,15.77,34.65,35.22v801.36c0,19.45-15.51,35.22-34.65,35.22H290.67c-19.14,0-34.65-15.77-34.65-35.22V166.25c0-19.45,15.51-35.22,34.65-35.22Z"/>
+  <path class="st7" d="M290.67,131.03h552.51c19.14,0,34.65,15.77,34.65,35.22v801.36c0,19.45-15.51,35.22-34.65,35.22H290.67c-19.14,0-34.65-15.77-34.65-35.22V166.25c0-19.45,15.51-35.22,34.65-35.22Z"/>
+  <g class="st15">
+    <g class="st24">
+      <g class="st18">
+        <path class="st16" d="M428.1,181.64c-3.93,2.99,1.8-5.08,1.8-7.93,0-10.15-8.23-18.38-18.38-18.38s-18.38,8.23-18.38,18.38c0,6.92,3.82,12.95,9.48,16.08l-87.75,87.75c-3.13-5.65-9.16-9.48-16.08-9.48-10.15,0-18.38,8.22-18.38,18.38s8.23,18.38,18.38,18.38c2.84,0,5.53-.65,7.93-1.8,2.66-2.89-1.8,5.08-1.8,7.92,0,10.15,8.23,18.38,18.38,18.38s18.38-8.23,18.38-18.38c0-6.92-3.82-12.95-9.48-16.08l87.74-87.74c3.13,5.65,9.16,9.48,16.08,9.48,10.15,0,18.38-8.23,18.38-18.38s-8.23-18.38-18.38-18.38c-2.84,0-5.52.64-7.92,1.8"/>
+        <path class="st8" d="M428.1,181.64c-3.93,2.99,1.8-5.08,1.8-7.93,0-10.15-8.23-18.38-18.38-18.38s-18.38,8.23-18.38,18.38c0,6.92,3.82,12.95,9.48,16.08l-87.75,87.75c-3.13-5.65-9.16-9.48-16.08-9.48-10.15,0-18.38,8.22-18.38,18.38s8.23,18.38,18.38,18.38c2.84,0,5.53-.65,7.93-1.8,2.66-2.89-1.8,5.08-1.8,7.92,0,10.15,8.23,18.38,18.38,18.38s18.38-8.23,18.38-18.38c0-6.92-3.82-12.95-9.48-16.08l87.74-87.74c3.13,5.65,9.16,9.48,16.08,9.48,10.15,0,18.38-8.23,18.38-18.38s-8.23-18.38-18.38-18.38c-2.84,0-5.52.64-7.92,1.8"/>
+      </g>
+    </g>
+  </g>
+  <g class="st15">
+    <g class="st23">
+      <g class="st21">
+        <g class="st3">
+          <g class="st25">
+            <g class="st19">
+              <path class="st14" d="M840.73,907.27c0,39.14-31.73,70.87-70.87,70.87s-70.87-31.73-70.87-70.87,31.73-70.87,70.87-70.87,70.87,31.73,70.87,70.87"/>
+              <circle class="st10" cx="769.87" cy="907.27" r="70.87"/>
+            </g>
+          </g>
+          <g class="st25">
+            <g class="st0">
+              <path class="st12" d="M802.05,875.68c0,7.83-6.35,14.17-14.17,14.17s-14.17-6.35-14.17-14.17,6.35-14.17,14.17-14.17,14.17,6.35,14.17,14.17"/>
+              <circle class="st4" cx="787.87" cy="875.68" r="14.17"/>
+            </g>
+          </g>
+        </g>
+      </g>
+    </g>
+  </g>
+  <g class="st25">
+    <g class="st1">
+      <g class="st20">
+        <path class="st26" d="M274.94,817.21s50.67-6.19,90.29,16.72c36.74,21.25,40.03,69.35,20.86,89.42-19.17,20.08-71.57,21.37-90.29-16.72-19.99-40.66-20.86-89.42-20.86-89.42"/>
+        <path class="st9" d="M274.94,817.21s50.67-6.19,90.29,16.72c36.74,21.25,40.03,69.35,20.86,89.42-19.17,20.08-71.57,21.37-90.29-16.72-19.99-40.66-20.86-89.42-20.86-89.42Z"/>
+        <line class="st9" x1="386.09" y1="923.36" x2="426.33" y2="959.94"/>
+        <line class="st9" x1="274.94" y1="817.21" x2="368.95" y2="908.05"/>
+      </g>
+    </g>
+  </g>
+  <g class="st22">
+    <g class="st11">
+      <polygon class="st2" points="736.63 309.45 702.92 230.48 744.83 249.36 746.9 175.09 787.77 253.3 793.17 175.09 814.33 252.68 836.53 191.89 853.75 267.2 833.16 309.58 736.63 309.45"/>
+      <polygon class="st6" points="736.63 309.45 702.92 230.48 744.83 249.36 746.9 175.09 787.77 253.3 793.17 175.09 814.33 252.68 836.53 191.89 853.75 267.2 833.16 309.58 736.63 309.45"/>
+    </g>
+  </g>
+  <text class="st13" transform="translate(475.15 825.48) rotate(-53.58)"><tspan x="0" y="0">GTN</tspan></text>
+</svg>

@@ -12139,6 +12139,65 @@ function getCardLayerLabel(cardDict) {
     return parts.length ? ` (${parts.join(' ')})` : '';
 }
 
+/* ---------- 卡牌皮肤（设计 2026-09-26） ---------- */
+
+function cardSkinById(skinId) {
+    return String(skinId || '').trim();
+}
+
+function cardSkinBackUrl(skinId) {
+    const id = cardSkinById(skinId);
+    return id ? `/static/assets/card-skins/back/${encodeURIComponent(id)}.svg` : '';
+}
+
+function cardSkinFrontUrl(skinId) {
+    const id = cardSkinById(skinId);
+    return id ? `/static/assets/card-skins/front/${encodeURIComponent(id)}.svg` : '';
+}
+
+window.__cardSkinCatalog = window.__cardSkinCatalog || {};
+void (async () => {
+    try {
+        const response = await fetch('/api/card-skins', { credentials: 'same-origin' });
+        const data = await response.json().catch(() => ({}));
+        if (data && Array.isArray(data.items)) {
+            data.items.forEach((item) => { window.__cardSkinCatalog[item.skin_id] = item; });
+        }
+    } catch (_) { /* 目录缓存失败只影响「区」特殊提示，不影响默认渲染 */ }
+})();
+
+/* 我的装备（登录=服务器值；游客=本地值） */
+function myEquippedCardSkin() {
+    if (currentAccount && currentAccount.id != null) {
+        return cardSkinById(currentAccount.card_skin);
+    }
+    try { return cardSkinById(localStorage.getItem('gtn_card_skin')); } catch (_) { return ''; }
+}
+
+/* 指定对局玩家的皮肤：gameState.player_card_skins[座位] */
+function playerCardSkinAt(playerId) {
+    const gs = gameState || {};
+    const list = Array.isArray(gs.player_card_skins) ? gs.player_card_skins : [];
+    const id = Number(playerId);
+    if (Number.isFinite(id) && list[id] != null) return cardSkinById(list[id]);
+    if (id === Number(gs.your_id)) return myEquippedCardSkin();
+    return '';
+}
+
+/* 别人看我明牌时是否被「区」类皮肤替换卡面（back_as_front 特殊） */
+function cardFaceReplacedByBackForViewers(cardDict) {
+    const gs = gameState || {};
+    if (replayMode || gs.replay_mode) {
+        // 回放里按当时皮肤：viewpoint 仍是 your_id 指定者
+    }
+    const ownerKey = cardDict && (cardDict.owner_id ?? cardDict.player_id);
+    const skinId = playerCardSkinAt(ownerKey);
+    if (!skinId) return false;
+    // 需要皮肤目录的 special 标记：皮肤清单在首次加载后缓存于 window
+    const meta = (window.__cardSkinCatalog || {})[skinId];
+    return !!meta && meta.special === 'back_as_front';
+}
+
 function getCardArtUrl(cardDict, cardDef) {
     const extraHits = Math.max(0, Number(cardDict && cardDict.extra_hits || 0));
     const setupModifiers = Array.isArray(cardDict && cardDict.setup_modifiers) ? cardDict.setup_modifiers : [];
@@ -12343,7 +12402,10 @@ function createCardElement(cardDict, options = {}) {
     const el = document.createElement('div');
     el.className = 'card' + (small ? ' card-small' : '') + (faceDown ? ' card-facedown' : '');
     if (faceDown) {
-        el.innerHTML = '<div class="card-back">?</div>';
+        const skinBack = cardSkinBackUrl(myEquippedCardSkin());
+        el.innerHTML = skinBack
+            ? `<div class="card-back card-back-skin"><img src="${escapeHtml(skinBack)}" alt="" draggable="false"></div>`
+            : '<div class="card-back">?</div>';
         return el;
     }
     const defId = cardDict.def_id || '';
@@ -12460,7 +12522,23 @@ function createCardElement(cardDict, options = {}) {
         ? instanceEnglishName
         : '';
     const effectText = blinded ? '?' : getCardEffectTextForInstance(cardDict, cardDef);
-    const imageUrl = (!blinded && showCardImages) ? getCardArtUrl(cardDict, cardDef) : '';
+    let imageUrl = (!blinded && showCardImages) ? getCardArtUrl(cardDict, cardDef) : '';
+    // 「区」规则：渲染的不是牌主视角，且牌主装备了 back_as_front 皮肤 →
+    // 卡面区域显示该皮肤的卡背图（真卡面只有牌主自己可见）。
+    if (imageUrl && !blinded) {
+        const ownerKey = cardDict && (cardDict.owner_id ?? cardDict.player_id ?? cardDict._viewer_offset);
+        const viewerId = Number(gameState && gameState.your_id);
+        const ownerId = Number(ownerKey);
+        const isOwnView = !Number.isFinite(ownerId) || ownerId === viewerId;
+        const ownerSkin = playerCardSkinAt(ownerId);
+        if (!isOwnView && ownerSkin) {
+            const meta = (window.__cardSkinCatalog || {})[ownerSkin];
+            if (meta && meta.special === 'back_as_front') {
+                imageUrl = cardSkinBackUrl(ownerSkin);
+                el.classList.add('card-art-is-skin-back');
+            }
+        }
+    }
     if (blinded) {
         el.classList.add('card-blinded');
         el.classList.toggle('card-blinded-deep', hideTypeByBlind);
@@ -18695,16 +18773,14 @@ function renderAchievementCenter() {
     const list = $('achievements-list');
     const dewPanel = $('achievements-dew-panel');
     const dailyPanel = $('achievements-daily-panel');
-    const titlesPanel = $('achievements-titles-panel');
     const tasksPanel = $('achievements-tasks-panel');
-    if (!summary || !list || !dewPanel || !dailyPanel || !titlesPanel || !tasksPanel) return;
+    if (!summary || !list || !dewPanel || !dailyPanel || !tasksPanel) return;
     document.querySelectorAll('[data-achievement-tab]').forEach(btn => {
         btn.classList.toggle('active', (btn.dataset.achievementTab || 'dew') === achievementActiveTab);
     });
     dewPanel.classList.toggle('hidden', achievementActiveTab !== 'dew');
     dailyPanel.classList.toggle('hidden', achievementActiveTab !== 'daily');
     list.classList.toggle('hidden', achievementActiveTab !== 'achievements');
-    titlesPanel.classList.toggle('hidden', achievementActiveTab !== 'titles');
     tasksPanel.classList.toggle('hidden', achievementActiveTab !== 'tasks');
     if (!currentAccount) {
         summary.textContent = UI.account_need_login || '请先登录账号';
@@ -18773,7 +18849,7 @@ function renderAchievementCenter() {
 }
 
 function setAchievementTab(tab) {
-    achievementActiveTab = ['dew', 'daily', 'achievements', 'titles', 'tasks'].includes(tab) ? tab : 'dew';
+    achievementActiveTab = ['dew', 'daily', 'achievements', 'tasks'].includes(tab) ? tab : 'dew';
     renderAchievementCenter();
 }
 
@@ -18938,6 +19014,10 @@ function renderTitleShop() {
     });
 }
 
+async function refreshTitleShopQuietly() {
+    try { await loadTitleShop(true); } catch (_) { /* 商店刷新失败不打断 */ }
+}
+
 async function loadTitleShop(force = false) {
     if (!currentAccount) {
         titleShop = null;
@@ -19085,7 +19165,7 @@ function toggleTitleShopPopover(force) {
         toggleChangelogPopover(false);
         loadTitleShop(false);
         titleShopCountdownTimer = setInterval(updateTitleShopCountdown, 15000);
-        switchTitleShopTab(titleShopAfdianTabActive ? 'afdian' : 'titles');
+        switchTitleShopTab(titleShopAfdianTabActive ? 'afdian' : (cardSkinShopActive ? 'card-skins' : 'titles'));
         if (titleShopAfdianTabActive) void loadTitleShopAfdian();
     } else {
         switchTitleShopTab('titles');
@@ -19096,21 +19176,151 @@ function toggleTitleShopPopover(force) {
 
 let titleShopAfdianTabActive = false;
 
+let cardSkinShopActive = false;
+let cardSkinShopData = null;
+let cardSkinShopBusy = false;
+
 function switchTitleShopTab(tab) {
     titleShopAfdianTabActive = tab === 'afdian';
+    cardSkinShopActive = tab === 'card-skins';
     const tabs = document.querySelectorAll('#title-shop-popover [data-shop-tab]');
     tabs.forEach((btn) => btn.classList.toggle('active', btn.dataset.shopTab === tab));
     const toolbar = document.querySelector('#title-shop-popover .title-shop-toolbar');
     const grid = $('title-shop-grid');
     const status = $('title-shop-status');
     const afdianPanel = $('title-shop-afdian-panel');
-    const showTitles = !titleShopAfdianTabActive;
-    if (toolbar) toolbar.classList.toggle('hidden', !showTitles);
+    const skinPanel = $('card-skin-shop-panel');
+    const showTitles = !titleShopAfdianTabActive && !cardSkinShopActive;
+    if (toolbar) toolbar.classList.toggle('hidden', !cardSkinShopActive ? !showTitles : true);
     if (grid) grid.classList.toggle('hidden', !showTitles);
     if (status) status.classList.toggle('hidden', !showTitles);
     if (afdianPanel) afdianPanel.classList.toggle('hidden', !titleShopAfdianTabActive);
+    if (skinPanel) skinPanel.classList.toggle('hidden', !cardSkinShopActive);
     const countdown = $('title-shop-countdown');
     if (countdown && !showTitles) countdown.textContent = '';
+    if (cardSkinShopActive) void loadCardSkinShop();
+}
+
+async function loadCardSkinShop(force = false) {
+    if (!currentAccount) {
+        const status = $('card-skin-shop-status');
+        if (status) status.textContent = UI.account_need_login || '请先登录账号';
+        const grid = $('card-skin-shop-grid');
+        if (grid) grid.innerHTML = '';
+        return;
+    }
+    if (cardSkinShopBusy) return;
+    if (cardSkinShopData && !force) { renderCardSkinShop(); return; }
+    cardSkinShopBusy = true;
+    try {
+        const response = await fetch('/api/card-skins/shop', { credentials: 'same-origin' });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.success) throw new Error(data.error || '读取失败');
+        cardSkinShopData = data.shop;
+        renderCardSkinShop();
+    } catch (err) {
+        const status = $('card-skin-shop-status');
+        if (status) status.textContent = err.message || '读取失败';
+    } finally {
+        cardSkinShopBusy = false;
+    }
+}
+
+function renderCardSkinShop() {
+    const grid = $('card-skin-shop-grid');
+    const status = $('card-skin-shop-status');
+    if (!grid || !status) return;
+    if (!cardSkinShopData) { grid.innerHTML = ''; status.textContent = ''; return; }
+    status.textContent = cardSkinShopData.locked ? lt({
+        zh: '当前商品已锁定，不会被每日刷新替换。',
+        en: 'Offers locked — daily refresh will not replace them.',
+        fr: 'Offres verrouillées — le renouvellement quotidien ne les remplacera pas.',
+        ja: 'ロック中：毎日の更新では入れ替わりません。',
+    }) : '';
+    const shopBalance = titleShop?.balance?.total ?? currentAccount?.thorn_dew_total ?? 0;
+    grid.innerHTML = (cardSkinShopData.offers || []).map(offer => {
+        const owned = !!offer.owned;
+        const specialNote = offer.special === 'back_as_front'
+            ? `<div class="card-skin-note">${escapeHtml(lt({
+                zh: '特殊：其他玩家看到的卡面也是这张卡的卡背（真卡面仅自己可见）。',
+                en: 'Special: others see this skin’s back as the card face too (real face only for you).',
+                fr: 'Spécial : les autres voient aussi le dos comme face (vraie face pour vous seul).',
+                ja: '特殊：他プレイヤーにもこの裏面が表面として見えます（本当の表面は自分のみ）。',
+              }))}</div>`
+            : '';
+        const action = owned
+            ? `<button class="btn btn-secondary btn-sm" disabled>${escapeHtml(lt({ zh: '已拥有', en: 'Owned', fr: 'Possédé', ja: '所持済み' }))}</button>`
+            : `<button class="btn btn-primary btn-sm" data-card-skin-buy="${offer.slot}" ${cardSkinShopBusy ? 'disabled' : ''}>${thornDewAmountHtml(offer.price)}</button>`;
+        return `
+        <article class="title-shop-item card-skin-shop-item" data-slot="${offer.slot}">
+            <div class="card-skin-preview">
+                <div class="card-skin-preview-face"><img src="${escapeHtml(offer.front_url)}" alt=""></div>
+                <div class="card-skin-preview-back"><img src="${escapeHtml(offer.back_url)}" alt=""></div>
+            </div>
+            <div class="card-skin-meta">
+                <strong>${escapeHtml(offer.name)}</strong>
+                ${specialNote}
+                <div class="card-skin-actions">${action}</div>
+            </div>
+        </article>`;
+    }).join('');
+    grid.querySelectorAll('[data-card-skin-buy]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            if (!cardSkinShopData || cardSkinShopBusy) return;
+            const slot = Number(btn.dataset.cardSkinBuy);
+            cardSkinShopBusy = true;
+            btn.disabled = true;
+            try {
+                const response = await fetch('/api/card-skins/shop/purchase', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ set_id: cardSkinShopData.set_id, slot }),
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || !data.success) throw new Error(data.error || '购买失败');
+                cardSkinShopData = data.shop;
+                if (typeof refreshTitleShopQuietly === 'function') void refreshTitleShopQuietly();
+                renderCardSkinShop();
+            } catch (err) {
+                const status = $('card-skin-shop-status');
+                if (status) status.textContent = err.message || '购买失败';
+                btn.disabled = false;
+            } finally {
+                cardSkinShopBusy = false;
+            }
+        });
+    });
+    // 商店工具栏的刷新按钮在 card-skins tab 下复用：改由面板内提供刷新
+    const refreshRow = document.createElement('div');
+    refreshRow.className = 'card-skin-refresh-row';
+    const refreshBtn = document.createElement('button');
+    refreshBtn.className = 'mini-btn title-shop-refresh-btn';
+    refreshBtn.innerHTML = cardSkinShopData
+        ? `${escapeHtml(lt({ zh: '刷新', en: 'Refresh', fr: 'Actualiser', ja: '更新' }))} · ${thornDewAmountHtml(cardSkinShopData.refresh_cost, 'dew-amount')}`
+        : '';
+    refreshBtn.addEventListener('click', async () => {
+        if (cardSkinShopBusy) return;
+        cardSkinShopBusy = true;
+        refreshBtn.disabled = true;
+        try {
+            const response = await fetch('/api/card-skins/shop/refresh', {
+                method: 'POST', credentials: 'same-origin',
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || !data.success) throw new Error(data.error || '刷新失败');
+            cardSkinShopData = data.shop;
+            if (typeof refreshTitleShopQuietly === 'function') void refreshTitleShopQuietly();
+            renderCardSkinShop();
+        } catch (err) {
+            const statusEl = $('card-skin-shop-status');
+            if (statusEl) statusEl.textContent = err.message || '刷新失败';
+        } finally {
+            cardSkinShopBusy = false;
+        }
+    });
+    refreshRow.appendChild(refreshBtn);
+    grid.appendChild(refreshRow);
 }
 
 async function loadTitleShopAfdian() {
@@ -19768,6 +19978,155 @@ function resetSkinEditor() {
     renderSkinEditorPreview();
 }
 
+/* ---------- 外观页三 tab：形象 / 称号 / 卡牌皮肤 ---------- */
+
+let skinPageTab = 'look';
+let cardSkinInventory = null;
+let cardSkinInventoryBusy = false;
+
+function switchSkinPageTab(tab) {
+    skinPageTab = ['look', 'titles', 'card-skins'].includes(tab) ? tab : 'look';
+    document.querySelectorAll('.skin-page-tabs [data-skin-tab]').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.skinTab === skinPageTab);
+    });
+    const lookBody = $('skin-look-body');
+    const titlesPanel = $('skin-titles-panel');
+    const cardPanel = $('card-skins-panel');
+    if (lookBody) lookBody.classList.toggle('hidden', skinPageTab !== 'look');
+    if (titlesPanel) titlesPanel.classList.toggle('hidden', skinPageTab !== 'titles');
+    if (cardPanel) cardPanel.classList.toggle('hidden', skinPageTab !== 'card-skins');
+    if (skinPageTab === 'titles') void loadSkinPageTitles();
+    if (skinPageTab === 'card-skins') void loadCardSkinInventory();
+}
+
+async function loadSkinPageTitles() {
+    const panel = $('skin-titles-panel');
+    if (!panel) return;
+    if (!currentAccount) {
+        panel.innerHTML = `<div class="account-replay-sub">${escapeHtml(UI.account_need_login || '请先登录账号')}</div>`;
+        return;
+    }
+    try {
+        const response = await fetch('/api/achievements', { credentials: 'same-origin' });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.success) throw new Error(data.error || '读取失败');
+        renderTitleCenter(panel, data.titles || { items: [], equipped: [], max_equipped: 3 });
+    } catch (err) {
+        panel.innerHTML = `<div class="account-replay-sub">${escapeHtml(err.message || '读取失败')}</div>`;
+    }
+}
+
+async function loadCardSkinInventory() {
+    const panel = $('card-skins-panel');
+    if (!panel) return;
+    if (!currentAccount) {
+        panel.innerHTML = `<div class="account-replay-sub">${escapeHtml(UI.account_need_login || '请先登录账号')} · <button class="mini-btn" id="btn-card-skin-guest-back">${escapeHtml(lt({ zh: '用默认卡背', en: 'Use default back', fr: 'Dos par défaut', ja: 'デフォルトの裏面' }))}</button></div>`;
+        const guestBtn = panel.querySelector('#btn-card-skin-guest-back');
+        if (guestBtn) guestBtn.onclick = () => applyLocalCardSkin('');
+        return;
+    }
+    if (cardSkinInventoryBusy) return;
+    cardSkinInventoryBusy = true;
+    panel.innerHTML = `<div class="account-replay-sub">${escapeHtml(UI.leaderboard_loading || '正在加载...')}</div>`;
+    try {
+        const response = await fetch('/api/card-skins', { credentials: 'same-origin' });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.success) throw new Error(data.error || '读取失败');
+        cardSkinInventory = data;
+        renderCardSkinInventory();
+    } catch (err) {
+        panel.innerHTML = `<div class="account-replay-sub">${escapeHtml(err.message || '读取失败')}</div>`;
+    } finally {
+        cardSkinInventoryBusy = false;
+    }
+}
+
+function applyLocalCardSkin(skinId) {
+    // 游客：本地记录（不影响服务器；对局里也按本地值渲染自己的卡背）
+    try { localStorage.setItem('gtn_card_skin', String(skinId || '')); } catch (_) {}
+    cardSkinInventory = { ...(cardSkinInventory || { items: [] }), equipped: String(skinId || '') };
+    renderCardSkinInventory();
+}
+
+function renderCardSkinInventory() {
+    const panel = $('card-skins-panel');
+    if (!panel || !cardSkinInventory) return;
+    const items = Array.isArray(cardSkinInventory.items) ? cardSkinInventory.items : [];
+    const equipped = String(cardSkinInventory.equipped || '');
+    const defaultBack = cardSkinInventory.default_back_url || '/static/assets/card-skins/back/初始.svg';
+    const row = (skinId, name, backUrl, frontUrl, isEquipped, owned) => `
+        <div class="card-skin-item${isEquipped ? ' equipped' : ''}" data-skin-id="${escapeHtml(skinId)}">
+            <div class="card-skin-thumb"><img src="${escapeHtml(backUrl)}" alt=""></div>
+            <div class="card-skin-item-meta">
+                <strong>${escapeHtml(name)}</strong>
+                <div class="card-skin-item-actions">
+                    ${isEquipped
+                        ? `<button class="btn btn-secondary btn-sm" data-card-skin-unequip="${escapeHtml(skinId)}">${escapeHtml(lt({ zh: '卸下', en: 'Unequip', fr: 'Retirer', ja: '解除' }))}</button>`
+                        : `<button class="btn btn-primary btn-sm" data-card-skin-equip="${escapeHtml(skinId)}" ${owned ? '' : 'disabled'}>${escapeHtml(lt({ zh: '装备', en: 'Equip', fr: 'Équiper', ja: '装備' }))}</button>`}
+                </div>
+            </div>
+        </div>`;
+    panel.innerHTML = `
+        <div class="card-skin-inventory">
+            ${row('', lt({ zh: '默认卡背', en: 'Default back', fr: 'Dos par défaut', ja: 'デフォルト裏面' }), defaultBack, '', equipped === '', true)}
+            ${items.map(item => row(
+                item.skin_id, item.name, item.back_url, item.front_url,
+                item.equipped === true || (!item.owned && false), item.owned,
+            )).join('')}
+        </div>
+        <div class="card-skin-hint">${escapeHtml(lt({
+            zh: '皮肤在商店获取。装备后你的全部手牌卡背会变成该造型；未拥有的皮肤需要先在商店购买。',
+            en: 'Skins come from the shop. Equipping changes all your hand card backs; buy skins in the shop first.',
+            fr: 'Les skins viennent de la boutique. Les équiper change le dos de toutes vos cartes.',
+            ja: 'スキンはショップで入手。装備すると自分の手札の裏面がすべて変わります。',
+        }))}</div>`;
+    panel.querySelectorAll('[data-card-skin-equip]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            if (cardSkinInventoryBusy) return;
+            const skinId = btn.dataset.cardSkinEquip;
+            cardSkinInventoryBusy = true;
+            try {
+                const response = await fetch('/api/card-skins/equip', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ skin_id: skinId }),
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || !data.success) throw new Error(data.error || '装备失败');
+                cardSkinInventory = data;
+                renderCardSkinInventory();
+            } catch (err) {
+                flashStatus(err.message || '装备失败', 2000, 'error');
+            } finally {
+                cardSkinInventoryBusy = false;
+            }
+        });
+    });
+    panel.querySelectorAll('[data-card-skin-unequip]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            if (cardSkinInventoryBusy) return;
+            cardSkinInventoryBusy = true;
+            try {
+                const response = await fetch('/api/card-skins/equip', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ skin_id: '' }),
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || !data.success) throw new Error(data.error || '卸载失败');
+                cardSkinInventory = data;
+                renderCardSkinInventory();
+            } catch (err) {
+                flashStatus(err.message || '卸载失败', 2000, 'error');
+            } finally {
+                cardSkinInventoryBusy = false;
+            }
+        });
+    });
+}
+
 function openSkinEditor() {
     setSkinError('');
     syncSkinFormFromCurrent();
@@ -20007,6 +20366,11 @@ function buildReplaySpectateState(frame, perspective = accountReplayPerspective)
     base.winner = snapshot.winner ?? base.winner;
     base.winning_team = snapshot.winning_team ?? base.winning_team;
     base.player_names = playerNames;
+    const replayMeta = accountReplayData && accountReplayData.replay && accountReplayData.replay.meta
+        ? accountReplayData.replay.meta : (accountReplayData && accountReplayData.meta ? accountReplayData.meta : null);
+    if (replayMeta && Array.isArray(replayMeta.player_card_skins)) {
+        base.player_card_skins = replayMeta.player_card_skins;
+    }
     base.spectate_players = players;
     base.spectating = true;
     base.replay_mode = true;
@@ -39278,6 +39642,9 @@ async function init() {
     if ($('btn-account-top')) $('btn-account-top').addEventListener('click', () => toggleAccountPopover());
     if ($('btn-friends-top')) $('btn-friends-top').addEventListener('click', () => openSocialCenter('friends'));
     if ($('btn-skin-top')) $('btn-skin-top').addEventListener('click', openSkinEditor);
+    document.querySelectorAll('.skin-page-tabs [data-skin-tab]').forEach((btn) => {
+        btn.addEventListener('click', () => switchSkinPageTab(btn.dataset.skinTab));
+    });
     if ($('btn-changelog-top')) $('btn-changelog-top').addEventListener('click', openChangelog);
     if ($('btn-qq-top')) $('btn-qq-top').addEventListener('click', () => {
         window.open('https://qm.qq.com/q/KngslbBBmM', '_blank', 'noopener');

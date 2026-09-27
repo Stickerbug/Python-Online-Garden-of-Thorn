@@ -21893,3 +21893,75 @@ html[data-ui-style="minimal"][data-theme="dark"] .card,
   font-size: 11px;
   color: var(--text-muted, #999);
 }
+
+/* ===== 卡牌皮肤（设计 2026-09-26） ===== */
+.card-back.card-back-skin {
+  background: #101510;
+  padding: 0;
+}
+.card-back.card-back-skin img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  pointer-events: none;
+  user-select: none;
+}
+.card-art.card-art-is-skin-back img {
+  object-fit: cover;
+}
+
+.card-skin-shop-item,
+.card-skin-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px;
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  margin-bottom: 10px;
+  background: var(--bg-card);
+}
+.card-skin-item.equipped {
+  border-color: var(--accent, #3a7d44);
+  box-shadow: 0 0 0 1px var(--accent, #3a7d44) inset;
+}
+.card-skin-preview {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.card-skin-preview img {
+  width: 64px;
+  height: 89px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border-light);
+  display: block;
+}
+.card-skin-thumb img {
+  width: 52px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border-light);
+  display: block;
+}
+.card-skin-meta { flex: 1; min-width: 0; }
+.card-skin-note {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 4px 0;
+}
+.card-skin-actions { margin-top: 6px; }
+.card-skin-refresh-row { display: flex; justify-content: flex-end; padding: 6px 0 2px; }
+.card-skin-inventory { display: grid; gap: 8px; }
+.card-skin-item-meta { flex: 1; }
+.card-skin-item-actions { margin-top: 6px; display: flex; gap: 6px; }
+.card-skin-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 8px;
+  line-height: 1.5;
+}
+.skin-page-tabs { margin: 8px 0; }

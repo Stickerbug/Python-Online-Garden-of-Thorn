@@ -1188,6 +1188,64 @@ def init_db(
         )
         conn.execute(
             '''
+            CREATE TABLE IF NOT EXISTS user_card_skins (
+                user_id INTEGER NOT NULL,
+                skin_id TEXT NOT NULL,
+                acquired_source TEXT NOT NULL DEFAULT 'shop',
+                acquired_ref TEXT,
+                acquired_at TEXT NOT NULL,
+                PRIMARY KEY(user_id, skin_id),
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS card_skin_shop_sets (
+                set_id TEXT PRIMARY KEY,
+                shop_date TEXT NOT NULL,
+                scope_key TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            '''
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS card_skin_shop_offers (
+                set_id TEXT NOT NULL,
+                slot INTEGER NOT NULL,
+                skin_id TEXT NOT NULL,
+                price INTEGER NOT NULL,
+                PRIMARY KEY(set_id, slot)
+            )
+            '''
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS card_skin_shop_purchases (
+                user_id INTEGER NOT NULL,
+                set_id TEXT NOT NULL,
+                slot INTEGER NOT NULL,
+                acquired_at TEXT NOT NULL,
+                PRIMARY KEY(user_id, set_id, slot)
+            )
+            '''
+        )
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS card_skin_shop_user_state (
+                user_id INTEGER PRIMARY KEY,
+                active_set_id TEXT NOT NULL,
+                locked INTEGER NOT NULL DEFAULT 0,
+                refresh_date TEXT NOT NULL,
+                refresh_count INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL
+            )
+            '''
+        )
+        conn.execute(
+            '''
             CREATE TABLE IF NOT EXISTS title_catalog_revisions (
                 revision_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 parent_revision_id INTEGER,
@@ -15429,3 +15487,282 @@ def rebuild_user_play_seconds_from_matches():
             'total_seconds': sum(totals.values()),
             'recovered_player_refs': recovered_player_refs,
         }
+
+# ===== 卡牌皮肤商店（设计 2026-09-26）：3 槽加权不重复，刷新规则同称号商店 =====
+
+CARD_SKIN_OFFER_COUNT = 3
+CARD_SKIN_REFRESH_BASE_COST = 700
+CARD_SKIN_REFRESH_COST_STEP = 300
+
+
+def _card_skin_shop_date(now=None):
+    return _title_shop_date(now)
+
+
+def _weighted_unique_skin_ids(rows, count):
+    """与 _weighted_unique_title_ids 同算法：按权重不重复抽取。"""
+    pool = [row for row in rows if max(0, int(row['shop_weight'] or 0)) > 0]
+    chosen = []
+    chooser = random.SystemRandom()
+    while pool and len(chosen) < count:
+        total = sum(max(0, int(row['shop_weight'] or 0)) for row in pool)
+        pick = chooser.uniform(0, total)
+        cursor = 0.0
+        selected_index = len(pool) - 1
+        for index, row in enumerate(pool):
+            cursor += max(0, int(row['shop_weight'] or 0))
+            if pick <= cursor:
+                selected_index = index
+                break
+        chosen.append(pool.pop(selected_index))
+    return chosen
+
+
+def _create_card_skin_shop_set_conn(conn, shop_date, scope_key, kind):
+    catalog = conn.execute(
+        'SELECT skin_id, price, shop_weight FROM card_skin_catalog WHERE active = 1 AND shop_weight > 0'
+    ).fetchall()
+    if len(catalog) < CARD_SKIN_OFFER_COUNT:
+        raise ValueError('可售皮肤不足')
+    suffix = secrets.token_hex(8)
+    set_id = f'{kind}:{shop_date}:{suffix}'
+    now = utc_now()
+    conn.execute(
+        'INSERT INTO card_skin_shop_sets (set_id, shop_date, scope_key, kind, created_at) VALUES (?, ?, ?, ?, ?)',
+        (set_id, shop_date, str(scope_key or '')[:80], kind, now),
+    )
+    for slot, row in enumerate(_weighted_unique_skin_ids(catalog, CARD_SKIN_OFFER_COUNT), start=1):
+        conn.execute(
+            'INSERT INTO card_skin_shop_offers (set_id, slot, skin_id, price) VALUES (?, ?, ?, ?)',
+            (set_id, slot, row['skin_id'], max(0, int(row['price'] or 0))),
+        )
+    return set_id
+
+
+def _ensure_global_card_skin_set_conn(conn, shop_date):
+    row = conn.execute(
+        "SELECT set_id FROM card_skin_shop_sets WHERE shop_date = ? AND scope_key = 'global' AND kind = 'daily' ORDER BY created_at ASC LIMIT 1",
+        (shop_date,),
+    ).fetchone()
+    if row is not None:
+        count = conn.execute(
+            'SELECT COUNT(*) AS count FROM card_skin_shop_offers WHERE set_id = ?',
+            (row['set_id'],),
+        ).fetchone()['count']
+        if int(count or 0) == CARD_SKIN_OFFER_COUNT:
+            return str(row['set_id'])
+    return _create_card_skin_shop_set_conn(conn, shop_date, 'global', 'daily')
+
+
+def _ensure_card_skin_user_state_conn(conn, user_id, shop_date):
+    uid = int(user_id)
+    global_set_id = _ensure_global_card_skin_set_conn(conn, shop_date)
+    row = conn.execute(
+        'SELECT * FROM card_skin_shop_user_state WHERE user_id = ?', (uid,),
+    ).fetchone()
+    now = utc_now()
+    if row is None:
+        conn.execute(
+            "INSERT INTO card_skin_shop_user_state (user_id, active_set_id, locked, refresh_date, refresh_count, updated_at) VALUES (?, ?, 0, ?, 0, ?)",
+            (uid, global_set_id, shop_date, now),
+        )
+        return conn.execute('SELECT * FROM card_skin_shop_user_state WHERE user_id = ?', (uid,)).fetchone()
+    active_set_id = str(row['active_set_id'] or '')
+    locked = bool(row['locked'])
+    refresh_date = str(row['refresh_date'] or '')
+    refresh_count = max(0, int(row['refresh_count'] or 0))
+    active = conn.execute(
+        'SELECT shop_date FROM card_skin_shop_sets WHERE set_id = ?', (active_set_id,),
+    ).fetchone() if active_set_id else None
+    if refresh_date != shop_date:
+        refresh_date = shop_date
+        refresh_count = 0
+    if not locked and (active is None or str(active['shop_date'] or '') != shop_date):
+        active_set_id = global_set_id
+    elif active is None:
+        active_set_id = global_set_id
+    conn.execute(
+        "UPDATE card_skin_shop_user_state SET active_set_id = ?, refresh_date = ?, refresh_count = ?, updated_at = ? WHERE user_id = ?",
+        (active_set_id, refresh_date, refresh_count, now, uid),
+    )
+    return conn.execute('SELECT * FROM card_skin_shop_user_state WHERE user_id = ?', (uid,)).fetchone()
+
+
+def get_card_skin_shop(user_id):
+    """商店 payload：3 个槽位（含已购标记）+ 刷新价 + 锁定态 + 剩余刷新时间。"""
+    import card_skins as _cs
+    uid = int(user_id)
+    current = _title_shop_now()
+    shop_date = _card_skin_shop_date(current)
+    with get_db_connection() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        _cs.ensure_card_skin_schema(conn)
+        state = _ensure_card_skin_user_state_conn(conn, uid, shop_date)
+        active_set_id = str(state['active_set_id'] or '')
+        refresh_count = max(0, int(state['refresh_count'] or 0))
+        offers = conn.execute(
+            "SELECT o.slot, o.skin_id, o.price, c.name, c.special FROM card_skin_shop_offers o JOIN card_skin_catalog c ON c.skin_id = o.skin_id WHERE o.set_id = ? ORDER BY o.slot",
+            (active_set_id,),
+        ).fetchall()
+        owned = _cs.list_owned_card_skins(conn, uid)
+        equipped = _cs.get_equipped_card_skin(conn, uid)
+        conn.commit()
+    items = []
+    for offer in offers:
+        items.append({
+            'slot': int(offer['slot']),
+            'skin_id': offer['skin_id'],
+            'name': offer['name'],
+            'price': int(offer['price'] or 0),
+            'special': offer['special'] or '',
+            'purchased': offer['skin_id'] in owned,
+            'owned': offer['skin_id'] in owned,
+            'front_url': "/static/assets/card-skins/front/%s.svg" % offer['skin_id'],
+            'back_url': "/static/assets/card-skins/back/%s.svg" % offer['skin_id'],
+        })
+    return {
+        'set_id': active_set_id,
+        'locked': bool(state['locked']),
+        'refresh_cost': CARD_SKIN_REFRESH_BASE_COST + refresh_count * CARD_SKIN_REFRESH_COST_STEP,
+        'refresh_count': refresh_count,
+        'seconds_to_refresh': _title_shop_seconds_to_refresh(current),
+        'shop_date': shop_date,
+        'equipped': equipped,
+        'offers': items,
+        'offer_count': CARD_SKIN_OFFER_COUNT,
+    }, None
+
+
+def refresh_card_skin_shop(user_id):
+    """手动刷新：荆露花费 700+300×次数（与称号商店一致）。"""
+    uid = int(user_id)
+    current = _title_shop_now()
+    shop_date = _card_skin_shop_date(current)
+    with get_db_connection() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        import card_skins as _cs
+        _cs.ensure_card_skin_schema(conn)
+        state = _ensure_card_skin_user_state_conn(conn, uid, shop_date)
+        refresh_count = max(0, int(state['refresh_count'] or 0))
+        cost = CARD_SKIN_REFRESH_BASE_COST + refresh_count * CARD_SKIN_REFRESH_COST_STEP
+        user = conn.execute('SELECT * FROM users WHERE id = ? AND deleted_at IS NULL', (uid,)).fetchone()
+        if user is None:
+            conn.rollback()
+            return None, '账号不存在'
+        balance = _thorn_dew_payload(user)
+        if balance['total'] < cost:
+            conn.rollback()
+            return None, '荆露不足'
+        free_spent = min(balance['free'], cost)
+        paid_spent = cost - free_spent
+        free_after = balance['free'] - free_spent
+        paid_after = balance['paid'] - paid_spent
+        conn.execute(
+            'UPDATE users SET thorn_dew_free = ?, thorn_dew_paid = ? WHERE id = ?',
+            (free_after, paid_after, uid),
+        )
+        set_id = _create_card_skin_shop_set_conn(conn, shop_date, 'user:%d' % uid, 'manual')
+        conn.execute(
+            "INSERT INTO card_skin_shop_user_state (user_id, active_set_id, locked, refresh_date, refresh_count, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET active_set_id = excluded.active_set_id, locked = excluded.locked, refresh_date = excluded.refresh_date, refresh_count = excluded.refresh_count, updated_at = excluded.updated_at",
+            (uid, set_id, int(state['locked'] or 0), shop_date, refresh_count + 1, utc_now()),
+        )
+        conn.execute(
+            "INSERT INTO user_currency_transactions (user_id, currency, free_delta, paid_delta, reason, source_type, source_id, balance_free_after, balance_paid_after, admin_username, created_at) VALUES (?, 'thorn_dew', ?, ?, ?, 'card_skin_shop_refresh', ?, ?, ?, '', ?)",
+            (uid, -free_spent, -paid_spent, '刷新卡牌皮肤商店（第%d次）' % (refresh_count + 1),
+             set_id + ':refresh', free_after, paid_after, utc_now()),
+        )
+        conn.commit()
+    shop, error = get_card_skin_shop(uid)
+    if error:
+        return None, error
+    return shop, None
+
+
+def purchase_card_skin_offer(user_id, set_id, slot):
+    """购买一个皮肤槽位：扣荆露、入 user_card_skins、记录购买。"""
+    import card_skins as _cs
+    uid = int(user_id)
+    offer_slot = int(slot)
+    current = _title_shop_now()
+    shop_date = _card_skin_shop_date(current)
+    with get_db_connection() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        _cs.ensure_card_skin_schema(conn)
+        state = _ensure_card_skin_user_state_conn(conn, uid, shop_date)
+        active_set_id = str(state['active_set_id'] or '')
+        if str(set_id or '') != active_set_id:
+            conn.rollback()
+            return None, '商店内容已刷新，请按当前商品操作'
+        offer = conn.execute(
+            "SELECT o.slot, o.skin_id, o.price, c.name FROM card_skin_shop_offers o JOIN card_skin_catalog c ON c.skin_id = o.skin_id WHERE o.set_id = ? AND o.slot = ? AND c.active = 1",
+            (active_set_id, offer_slot),
+        ).fetchone()
+        if offer is None:
+            conn.rollback()
+            return None, '商品不存在或已下架'
+        purchased = conn.execute(
+            'SELECT 1 FROM card_skin_shop_purchases WHERE user_id = ? AND set_id = ? AND slot = ?',
+            (uid, active_set_id, offer_slot),
+        ).fetchone()
+        if purchased is not None:
+            conn.rollback()
+            return None, '本轮已购买该商品'
+        already_owned = conn.execute(
+            'SELECT 1 FROM user_card_skins WHERE user_id = ? AND skin_id = ?',
+            (uid, offer['skin_id']),
+        ).fetchone()
+        if already_owned is not None:
+            conn.rollback()
+            return None, '已拥有该皮肤'
+        user = conn.execute('SELECT * FROM users WHERE id = ? AND deleted_at IS NULL', (uid,)).fetchone()
+        if user is None:
+            conn.rollback()
+            return None, '账号不存在'
+        price = max(0, int(offer['price'] or 0))
+        balance = _thorn_dew_payload(user)
+        if balance['total'] < price:
+            conn.rollback()
+            return None, '荆露不足'
+        free_spent = min(balance['free'], price)
+        paid_spent = price - free_spent
+        free_after = balance['free'] - free_spent
+        paid_after = balance['paid'] - paid_spent
+        conn.execute(
+            'UPDATE users SET thorn_dew_free = ?, thorn_dew_paid = ? WHERE id = ?',
+            (free_after, paid_after, uid),
+        )
+        source_id = '%s:%s' % (active_set_id, offer_slot)
+        conn.execute(
+            "INSERT INTO user_currency_transactions (user_id, currency, free_delta, paid_delta, reason, source_type, source_id, balance_free_after, balance_paid_after, admin_username, created_at) VALUES (?, 'thorn_dew', ?, ?, ?, 'card_skin_purchase', ?, ?, ?, '', ?)",
+            (uid, -free_spent, -paid_spent, '购买卡牌皮肤：' + offer['name'], source_id,
+             free_after, paid_after, utc_now()),
+        )
+        conn.execute(
+            "INSERT INTO user_card_skins (user_id, skin_id, acquired_source, acquired_ref, acquired_at) VALUES (?, ?, 'shop', ?, ?)",
+            (uid, offer['skin_id'], source_id, utc_now()),
+        )
+        conn.execute(
+            'INSERT INTO card_skin_shop_purchases (user_id, set_id, slot, acquired_at) VALUES (?, ?, ?, ?)',
+            (uid, active_set_id, offer_slot, utc_now()),
+        )
+        conn.commit()
+        payload = _cs.card_skin_payload(conn, uid)
+    shop, _ = get_card_skin_shop(uid)
+    return {'shop': shop, **payload}, None
+
+
+def set_user_card_skin(user_id, skin_id):
+    """装备/卸载皮肤。返回 (payload, error)。"""
+    import card_skins as _cs
+    uid = int(user_id)
+    skin_id = str(skin_id or '').strip()
+    with get_db_connection() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        _cs.ensure_card_skin_schema(conn)
+        error = _cs.equip_card_skin(conn, uid, skin_id)
+        if error:
+            conn.rollback()
+            return None, error
+        payload = _cs.card_skin_payload(conn, uid)
+        conn.commit()
+    return payload, None

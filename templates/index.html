@@ -259,13 +259,11 @@
     <button class="account-mode-tab active" type="button" data-achievement-tab="dew">荆露</button>
     <button class="account-mode-tab" type="button" data-achievement-tab="daily">签到</button>
     <button class="account-mode-tab" type="button" data-achievement-tab="achievements">成就</button>
-    <button class="account-mode-tab" type="button" data-achievement-tab="titles">称号</button>
     <button class="account-mode-tab" type="button" data-achievement-tab="tasks">每日任务</button>
   </div>
   <div id="achievements-dew-panel" class="achievement-tab-panel"></div>
   <div id="achievements-daily-panel" class="achievement-tab-panel hidden"></div>
   <div id="achievements-list" class="achievements-list"></div>
-  <div id="achievements-titles-panel" class="achievement-tab-panel title-center-panel hidden"></div>
   <div id="achievements-tasks-panel" class="achievement-tab-panel hidden"></div>
 </div>
 <div id="title-shop-popover" class="account-popover title-shop-popover hidden">
@@ -277,6 +275,11 @@
   </div>
   <div class="account-mode-tabs title-shop-tabs">
     <button id="title-shop-tab-titles" class="account-mode-tab active" type="button" data-shop-tab="titles">称号</button>
+    <button id="title-shop-tab-card-skins" class="account-mode-tab" type="button" data-shop-tab="card-skins">卡牌皮肤</button>
+  </div>
+  <div id="card-skin-shop-panel" class="achievement-tab-panel hidden">
+    <div id="card-skin-shop-grid" class="title-shop-grid"></div>
+    <div id="card-skin-shop-status" class="account-replay-sub"></div>
   </div>
   <div class="title-shop-toolbar">
     <span id="title-shop-countdown" class="title-shop-countdown"></span>
@@ -428,10 +431,17 @@
   <div class="skin-editor-page">
     <div class="skin-editor-panel">
       <div class="skin-editor-head">
-        <h2 id="skin-title">皮肤</h2>
+        <h2 id="skin-title">外观</h2>
         <button id="btn-skin-back" class="btn btn-secondary" type="button">返回</button>
       </div>
-      <div class="skin-editor-body">
+      <div class="account-mode-tabs skin-page-tabs">
+        <button class="account-mode-tab active" type="button" data-skin-tab="look">形象</button>
+        <button class="account-mode-tab" type="button" data-skin-tab="titles">称号</button>
+        <button class="account-mode-tab" type="button" data-skin-tab="card-skins">卡牌皮肤</button>
+      </div>
+      <div id="skin-titles-panel" class="achievement-tab-panel title-center-panel hidden"></div>
+      <div id="card-skins-panel" class="achievement-tab-panel hidden"></div>
+      <div class="skin-editor-body" id="skin-look-body">
         <div class="skin-preview-column">
           <div id="skin-preview-avatar" class="skin-preview-avatar"></div>
           <div id="skin-sync-note" class="skin-sync-note">游客皮肤会保存在本地；账号皮肤会保存到服务器。</div>

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_1" data-name="图层_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 1133.86 1133.86">
+  <!-- Generator: Adobe Illustrator 29.0.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 186)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: #f8ef9e;
+        font-family: SimHei, SimHei;
+        font-size: 494.09px;
+      }
+
+      .st1 {
+        fill: none;
+        stroke: #d6c462;
+        stroke-miterlimit: 25.2;
+        stroke-width: 8.19px;
+      }
+
+      .st2 {
+        fill: #f5d73f;
+        opacity: .25;
+      }
+    </style>
+  </defs>
+  <path class="st2" d="M290.67,131.03h552.51c19.14,0,34.65,15.77,34.65,35.22v801.36c0,19.45-15.51,35.22-34.65,35.22H290.67c-19.14,0-34.65-15.77-34.65-35.22V166.25c0-19.45,15.51-35.22,34.65-35.22Z"/>
+  <path class="st1" d="M290.67,131.03h552.51c19.14,0,34.65,15.77,34.65,35.22v801.36c0,19.45-15.51,35.22-34.65,35.22H290.67c-19.14,0-34.65-15.77-34.65-35.22V166.25c0-19.45,15.51-35.22,34.65-35.22Z"/>
+  <text class="st0" transform="translate(740.63 813.97) rotate(-90)"><tspan x="0" y="0">区</tspan></text>
+</svg>

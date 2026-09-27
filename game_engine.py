@@ -4848,7 +4848,7 @@ class GameEngine:
 
     def _visible_card_dicts(self, cards, viewer_id: int, owner_id: int, *, choice_list: bool = False):
         return [
-            c.to_dict() for c in cards
+            {**c.to_dict(), 'owner_id': owner_id} for c in cards
             if (owner_id == viewer_id and not (choice_list and self._card_is_sublime(c))) or (
                 owner_id != viewer_id
                 and
@@ -4943,7 +4943,7 @@ class GameEngine:
             opp_data['revealed_tag_cards'] = self._revealed_tag_cards[for_player]
         # Auto-detect revealed tag on opponent hand cards
         opp_revealed = [
-            c.to_dict()
+            {**c.to_dict(), 'owner_id': opponent}
             for c in self.players[opponent].hand
             if 'revealed' in c.flags and c.def_id != ERROR_CARD_ID and not self._card_is_sublime(c)
         ]

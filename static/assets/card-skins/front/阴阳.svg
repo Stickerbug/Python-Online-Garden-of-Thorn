@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_1" data-name="图层_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 1133.86 1133.86">
+  <!-- Generator: Adobe Illustrator 29.0.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 186)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: #231815;
+      }
+
+      .st0, .st1 {
+        opacity: .5;
+      }
+
+      .st2 {
+        fill: none;
+        stroke: #727171;
+        stroke-miterlimit: 25.2;
+        stroke-width: 8.19px;
+      }
+
+      .st1, .st3 {
+        fill: #efefef;
+      }
+    </style>
+  </defs>
+  <path class="st0" d="M681.36,131.03v435.9h-228.86v435.9h-161.83c-19.13,0-34.65-15.77-34.65-35.22V166.25c0-19.45,15.52-35.22,34.65-35.22h390.69Z"/>
+  <path class="st1" d="M877.83,166.25v801.36c0,19.45-15.51,35.22-34.65,35.22h-390.68v-435.9h228.86V131.03h161.82c19.14,0,34.65,15.77,34.65,35.22Z"/>
+  <path class="st2" d="M290.67,131.03h552.51c19.14,0,34.65,15.77,34.65,35.22v801.36c0,19.45-15.51,35.22-34.65,35.22H290.67c-19.14,0-34.65-15.77-34.65-35.22V166.25c0-19.45,15.51-35.22,34.65-35.22Z"/>
+  <rect class="st3" x="382.25" y="262.69" width="172.88" height="172.88" rx="34.96" ry="34.96"/>
+  <rect class="st0" x="578.72" y="699.92" width="172.88" height="172.88" rx="34.96" ry="34.96"/>
+</svg>

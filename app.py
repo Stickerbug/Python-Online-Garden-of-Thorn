@@ -53,6 +53,7 @@ from flask_socketio import SocketIO, emit, join_room, leave_room
 from werkzeug.security import check_password_hash, generate_password_hash
 import leisure_ticket
 import leisure_ticket_settlement
+import card_skins
 import minigame_2048
 import minigame_2048_service
 import minigame_registry
@@ -2052,6 +2053,7 @@ def admin_match_record(room, result='finished'):
             'mode': room.mode,
             **room_match_payload(room),
             'players': names,
+            'player_card_skins': [player_card_skin_for_sid(psid, room) for psid in room.player_sids],
             'player_ids': player_user_ids,
             'teams': copy.deepcopy(getattr(e, 'teams', [[0], [1]])),
             'surrender_player_indices': list(getattr(room, '_surrender_player_indices', []) or []),
@@ -5168,6 +5170,7 @@ def make_room_player_profile(source=None, sid=None, player_index=-1, room=None):
         'skin': public_skin_config(source.get('skin')),
         'skin_look': normalize_skin_look(source.get('skin_look')),
         'avatar_kind': 'phelren' if str(source.get('avatar_kind') or '').strip().lower() == 'phelren' else '',
+        'card_skin': str(source.get('card_skin') or ''),
         'mode': source.get('mode', getattr(room, 'mode', '1v1') if room is not None else '1v1'),
         'match_type': source.get('match_type', room_match_type(room) if room is not None else 'casual'),
         'match_mode': source.get('match_mode', room_match_mode(room) if room is not None else 'casual_1v1'),
@@ -5400,6 +5403,21 @@ def normalize_skin_look(value=None):
     }
 
 
+def player_card_skin_for_sid(sid, room=None):
+    profile = room_player_profile(room, sid)
+    skin_id = str(profile.get('card_skin') or '').strip()
+    if skin_id:
+        return skin_id
+    uid = profile.get('user_id')
+    if uid:
+        try:
+            with get_db_connection() as conn:
+                return card_skins.get_equipped_card_skin(conn, uid)
+        except Exception:
+            return ''
+    return ''
+
+
 def player_skin_for_sid(sid, room=None):
     return public_skin_config(room_player_profile(room, sid).get('skin'))
 
@@ -5426,6 +5444,9 @@ def inject_player_skins(state, room, perspective):
     state['player_skins'] = player_skins
     state['player_skin_looks'] = player_skin_looks
     state['player_avatar_kinds'] = player_avatar_kinds
+    state['player_card_skins'] = [
+        player_card_skin_for_sid(psid, room) for psid in getattr(room, 'player_sids', []) or []
+    ]
     try:
         pidx = int(perspective)
     except (TypeError, ValueError):
@@ -17241,6 +17262,7 @@ def send_draft_state(room, pidx):
         'player_skins': [player_skin_for_sid(psid, room) for psid in room.player_sids],
         'player_skin_looks': [player_skin_look_for_sid(psid, room) for psid in room.player_sids],
         'player_avatar_kinds': [player_avatar_kind_for_sid(psid, room) for psid in room.player_sids],
+        'player_card_skins': [player_card_skin_for_sid(psid, room) for psid in room.player_sids],
         'selected_opening_events': _selected_opening_event_names(engine),
         'room_chat_history': room_chat_history_for_sid(room, sid),
         **_pregame_timer_payload(room, pidx, your_status),
@@ -17363,6 +17385,7 @@ def send_event_state(room, pidx):
         'player_skins': [player_skin_for_sid(psid, room) for psid in room.player_sids],
         'player_skin_looks': [player_skin_look_for_sid(psid, room) for psid in room.player_sids],
         'player_avatar_kinds': [player_avatar_kind_for_sid(psid, room) for psid in room.player_sids],
+        'player_card_skins': [player_card_skin_for_sid(psid, room) for psid in room.player_sids],
         'selected_opening_events': _selected_opening_event_names(engine),
         'room_chat_history': room_chat_history_for_sid(room, sid),
         **_pregame_timer_payload(room, pidx, 'event_select'),
@@ -24688,6 +24711,7 @@ def api_auth_change_username():
                     player['nickname'] = user.get('username')
                     player['display_name'] = payload.get('display_name') or user.get('username')
                     player['skin'] = normalized_skin
+                    player['card_skin'] = str(user.get('card_skin') or '')
                     updated_sids.append(sid)
         finally:
             _lock.release()
@@ -24753,6 +24777,7 @@ def api_auth_skin():
             for sid, player in players.items():
                 if player.get('user_id') == user_id:
                     player['skin'] = normalized_skin
+                    player['card_skin'] = str(user.get('card_skin') or '')
         finally:
             _lock.release()
     else:
@@ -25484,6 +25509,119 @@ def api_title_shop_purchase():
     except Exception as exc:
         admin_event('error', f'title shop purchase failed: {exc}')
         return jsonify({'success': False, 'error': '购买失败'}), 500
+
+
+@app.route('/api/card-skins/shop')
+def api_card_skin_shop():
+    if not DB_AVAILABLE:
+        return jsonify({'success': False, 'error': DB_INIT_ERROR}), 503
+    user = _current_account_user()
+    if not user:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    try:
+        shop, error = get_card_skin_shop(user.get('id'))
+        if error:
+            return jsonify({'success': False, 'error': error}), 400
+        return jsonify({'success': True, 'shop': shop})
+    except sqlite3.OperationalError as exc:
+        admin_event('error', f'card skin shop failed: {exc}')
+        return jsonify({'success': False, 'error': '商店暂时不可用，请稍后再试'}), 503
+    except Exception as exc:
+        admin_event('error', f'card skin shop failed: {exc}')
+        return jsonify({'success': False, 'error': '读取失败'}), 500
+
+
+@app.route('/api/card-skins/shop/refresh', methods=['POST'])
+def api_card_skin_shop_refresh():
+    if not DB_AVAILABLE:
+        return jsonify({'success': False, 'error': DB_INIT_ERROR}), 503
+    user = _current_account_user()
+    if not user:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    try:
+        shop, error = refresh_card_skin_shop(user.get('id'))
+        if error:
+            return jsonify({'success': False, 'error': error}), 400
+        fresh = get_user_by_id(user.get('id')) or user
+        _set_account_session(fresh)
+        return jsonify({'success': True, 'shop': shop, 'user': auth_user_payload(fresh)})
+    except sqlite3.OperationalError as exc:
+        admin_event('error', f'card skin refresh failed: {exc}')
+        return jsonify({'success': False, 'error': '商店暂时不可用，请稍后再试'}), 503
+    except Exception as exc:
+        admin_event('error', f'card skin refresh failed: {exc}')
+        return jsonify({'success': False, 'error': '刷新失败'}), 500
+
+
+@app.route('/api/card-skins/shop/purchase', methods=['POST'])
+def api_card_skin_shop_purchase():
+    if not DB_AVAILABLE:
+        return jsonify({'success': False, 'error': DB_INIT_ERROR}), 503
+    user = _current_account_user()
+    if not user:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    data = request.get_json(silent=True) or {}
+    try:
+        result, error = purchase_card_skin_offer(
+            user.get('id'), data.get('set_id'), data.get('slot')
+        )
+        if error:
+            return jsonify({'success': False, 'error': error}), 400
+        fresh = get_user_by_id(user.get('id')) or user
+        _set_account_session(fresh)
+        return jsonify({'success': True, **(result or {}), 'user': auth_user_payload(fresh)})
+    except sqlite3.OperationalError as exc:
+        admin_event('error', f'card skin purchase failed: {exc}')
+        return jsonify({'success': False, 'error': '商店暂时不可用，请稍后再试'}), 503
+    except Exception as exc:
+        admin_event('error', f'card skin purchase failed: {exc}')
+        return jsonify({'success': False, 'error': '购买失败'}), 500
+
+
+@app.route('/api/card-skins')
+def api_card_skins_inventory():
+    """外观页：已拥有列表 + 装备态 + 默认卡背。"""
+    if not DB_AVAILABLE:
+        return jsonify({'success': False, 'error': DB_INIT_ERROR}), 503
+    user = _current_account_user()
+    if not user:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    try:
+        with get_db_connection() as conn:
+            payload = card_skins.card_skin_payload(conn, user.get('id'))
+        return jsonify({'success': True, **payload})
+    except Exception as exc:
+        admin_event('error', f'card skins inventory failed: {exc}')
+        return jsonify({'success': False, 'error': '读取失败'}), 500
+
+
+@app.route('/api/card-skins/equip', methods=['POST'])
+def api_card_skins_equip():
+    """装备/卸载（skin_id 传空卸载）。成功后刷新在线会话的 card_skin。"""
+    if not DB_AVAILABLE:
+        return jsonify({'success': False, 'error': DB_INIT_ERROR}), 503
+    user = _current_account_user()
+    if not user:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    data = request.get_json(silent=True) or {}
+    try:
+        payload, error = set_user_card_skin(user.get('id'), data.get('skin_id'))
+        if error:
+            return jsonify({'success': False, 'error': error}), 400
+        fresh = get_user_by_id(user.get('id')) or user
+        _set_account_session(fresh)
+        equipped = str(fresh.get('card_skin') or '')
+        with _lock:
+            for sid, player in players.items():
+                if player.get('user_id') == user.get('id'):
+                    player['card_skin'] = equipped
+        return jsonify({'success': True, **payload, 'equipped': equipped, 'user': auth_user_payload(fresh)})
+    except sqlite3.OperationalError as exc:
+        admin_event('error', f'card skin equip failed: {exc}')
+        return jsonify({'success': False, 'error': '暂时不可用，请稍后再试'}), 503
+    except Exception as exc:
+        admin_event('error', f'card skin equip failed: {exc}')
+        return jsonify({'success': False, 'error': '装备失败'}), 500
 
 
 @app.route('/api/leaderboard')
@@ -28138,6 +28276,7 @@ def on_login(data):
             'beta_mode': is_beta_mode,
             'skin': skin_config,
             'skin_look': dict(DEFAULT_SKIN_LOOK),
+            'card_skin': str((account_user or {}).get('card_skin') or ''),
         }
         if players[sid]['match_type'] == 'ranked':
             ranked_eligible, _ = ranked_match_eligibility([players[sid]])
