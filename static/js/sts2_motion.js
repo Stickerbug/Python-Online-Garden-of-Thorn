@@ -129,17 +129,22 @@
     }
 
     // ---------- 幽灵卡 ----------
-    // 牌背视觉对齐游戏自身的暗色牌背（card-facedown dark：#3d3d5c）
-    function makeGhost(cardEl, rect, cardBack) {
-        const ghost = cardEl
-            ? cardEl.cloneNode(true)
-            : document.createElement('div');
-        ghost.classList.add('sts2-ghost');
-        if (!cardEl && cardBack) {
-            const back = document.createElement('div');
-            back.className = 'sts2-card-back';
-            ghost.appendChild(back);
+    // 优先级：cardEl 克隆 > backTemplate 克隆（游戏真实牌背，可含皮肤图）> 内置牌背
+    function makeGhost(cardEl, rect, cardBack, backTemplate) {
+        let ghost;
+        if (cardEl) {
+            ghost = cardEl.cloneNode(true);
+        } else if (backTemplate && backTemplate instanceof Element) {
+            ghost = backTemplate.cloneNode(true);
+        } else {
+            ghost = document.createElement('div');
+            if (cardBack) {
+                const back = document.createElement('div');
+                back.className = 'sts2-card-back';
+                ghost.appendChild(back);
+            }
         }
+        ghost.classList.add('sts2-ghost');
         // 以中心定位（对齐 rect 中心），避免半张偏移
         ghost.style.left = `${rect.left + rect.width / 2}px`;
         ghost.style.top = `${rect.top + rect.height / 2}px`;
@@ -184,7 +189,7 @@
         const p0 = centerOf(fromRect);
         const p2 = centerOf(toRect);
         const p1 = arcControl(p0, p2, arcHeight);
-        const ghost = makeGhost(opts.cardEl, fromRect, opts.cardBack !== false);
+        const ghost = makeGhost(opts.cardEl, fromRect, opts.cardBack !== false, opts.backTemplate);
         ghost.style.zIndex = String(opts.z ?? 4200);
 
         await runArcFlight(ghost, p0, p1, p2, {
@@ -287,6 +292,7 @@
                 from: pileRect,
                 to: slotRect,
                 cardBack: true,
+                backTemplate: opts.backTemplate,
                 duration,
                 arcHeight: 90,
                 scaleFrom: 0.72,
@@ -401,6 +407,7 @@
                     from: fromRect,
                     to: toRect,
                     cardBack: true,
+                    backTemplate: opts.backTemplate,
                     duration,
                     arcHeight: 190 + (i % streams) * 42,
                     scaleFrom: 0.5,
