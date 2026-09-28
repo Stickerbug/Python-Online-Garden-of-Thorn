@@ -1297,6 +1297,15 @@ class GameEngine:
         self._set_invincible_until_next_own_turn_end(player_id)
         self.players[player_id].invincible_expire_on_turn_start = True
 
+    def _set_invincible_until_player_next_turn_start(self, player_id: int, trigger_player_id: Optional[int]):
+        """无敌到「触发该效果的玩家」下个回合开始（设计 9.29：ygg 无敌改为
+        触发者的下一回合开始时清除，而不是持有者自己的回合开始）。"""
+        if not (0 <= player_id < len(self.players)):
+            return
+        self._set_invincible_until_next_own_turn_start(player_id)
+        if trigger_player_id is not None and 0 <= trigger_player_id < len(self.players):
+            self.players[player_id].invincible_until_player = int(trigger_player_id)
+
     def _set_invincible_until_next_own_turn_end(self, player_id: int):
         if not (0 <= player_id < len(self.players)):
             return
@@ -1604,12 +1613,30 @@ class GameEngine:
         ps.invincible_granted_turn_marker = -1
 
     def _should_expire_invincible_on_turn_start(self, player_id: int) -> bool:
-        ps = self.players[player_id] if 0 <= player_id < len(self.players) else None
-        if ps is None or not ps.invincible:
-            return False
-        if not getattr(ps, 'invincible_expire_on_turn_start', False):
-            return False
-        return self._should_expire_invincible_on_turn_end(player_id)
+        """该玩家回合开始时，是否有"无敌到该玩家下个回合开始"的效果到期
+        （设计 9.29：到期的可能是以他为触发者的**其他玩家**的 ygg 无敌，
+        不只是他自己的）。"""
+        return bool(self._expiring_invincible_player_ids_on_turn_start(player_id))
+
+    def _expiring_invincible_player_ids_on_turn_start(self, player_id: int) -> list:
+        if not (0 <= player_id < len(self.players)):
+            return []
+        expiring = []
+        current_round = int(getattr(self, 'round_num', 0) or 0)
+        current_marker = self._current_turn_marker()
+        for ps in self.players:
+            if not getattr(ps, 'invincible', False):
+                continue
+            if not getattr(ps, 'invincible_expire_on_turn_start', False):
+                continue
+            if getattr(ps, 'invincible_until_player', None) != player_id:
+                continue
+            grant_round = int(getattr(ps, 'invincible_granted_round', -1) or -1)
+            grant_marker = int(getattr(ps, 'invincible_granted_turn_marker', -1) or -1)
+            if grant_round == current_round and grant_marker == current_marker:
+                continue
+            expiring.append(ps.player_id)
+        return expiring
 
     def _should_expire_invincible_on_turn_end(self, player_id: int) -> bool:
         if not (0 <= player_id < len(self.players)):
@@ -7302,7 +7329,11 @@ class GameEngine:
         ps.health = 5
         self._note_achievement_health(target_id)
         self._clear_yggdrasil_effects(target_id)
-        self._set_invincible_until_next_own_turn_start(target_id)
+        # 设计 9.29：无敌到「触发该效果的玩家」下个回合开始（自己触发则自己的）。
+        self._set_invincible_until_player_next_turn_start(
+            target_id,
+            source_player_id if source_player_id is not None else target_id,
+        )
         drawn = self._draw_cards_with_v2_hooks(target_id, 3, 'yggdrasil')
         if card is not None:
             if exile_from_hand and card in ps.hand:
@@ -7313,10 +7344,12 @@ class GameEngine:
         actor_text = ''
         if source_player_id is not None and source_player_id != target_id:
             actor_text = f"{self.pn(source_player_id)}的世界树之叶使"
+            invincible_text = f"无敌直到{self.pn(source_player_id)}的下一个回合开始！"
         else:
             actor_text = f"{self.pn(target_id)}的世界树之叶"
+            invincible_text = '无敌直到自己的下一个回合开始！'
         revive_text = '复活，' if was_dead else ''
-        self.log_msg(f"{actor_text}{self.pn(target_id)}{revive_text}生命值设为5，抽{len(drawn)}张牌，清除所有效果，无敌直到下一个自己回合结束！")
+        self.log_msg(f"{actor_text}{self.pn(target_id)}{revive_text}生命值设为5，抽{len(drawn)}张牌，清除所有效果，{invincible_text}")
         return True
 
     def _check_yggdrasil(self, player_id: int):
@@ -7334,7 +7367,12 @@ class GameEngine:
             for card in ps.hand[:]:
                 if card.def_id == self.SETUP_CARD_YGGDRASIL or self._card_has_v2_event(
                         card.card_def, 'on_fatal_set_health_exile'):
-                    self._trigger_yggdrasil_effect(player_id, card, exile_from_hand=True)
+                    # 设计 9.29：触发者=当前行动玩家（无敌到触发者下个回合开始；
+                    # 自己回合内触发则回落为自己）。
+                    self._trigger_yggdrasil_effect(
+                        player_id, card, exile_from_hand=True,
+                        source_player_id=int(getattr(self, 'current_player', player_id)),
+                    )
                     self._check_game_over()
                     return
                 if card.card_def and card.card_def.effects:
@@ -7345,7 +7383,10 @@ class GameEngine:
                             params = effect_params
                             log = effect.get('log', '') if isinstance(effect, dict) else ''
                             health_amount = params.get('health', 5)
-                            self._trigger_yggdrasil_effect(player_id, card, exile_from_hand=True)
+                            self._trigger_yggdrasil_effect(
+                                player_id, card, exile_from_hand=True,
+                                source_player_id=int(getattr(self, 'current_player', player_id)),
+                            )
                             ps.health = health_amount
                             self._note_achievement_health(player_id)
                             self.log_msg(log or f"{self.pn(player_id)}的{card.name_cn}发动！清除己方所有效果，生命值设为{health_amount}，无敌直到下一个自己回合结束！")
@@ -18480,13 +18521,11 @@ class GameEngine:
             self.players[player_id].custom_vars.pop('jurassic_magic_tooth_damage_this_turn', None)
         except Exception:
             pass
-        # 设计 9.22：ygg 无敌改为「触发玩家下个回合开始时」消失。
-        if (
-            0 <= player_id < len(self.players)
-            and self._should_expire_invincible_on_turn_start(player_id)
-        ):
-            self._clear_invincible_state(player_id)
-            self.log_msg(f"{self.pn(player_id)}的无敌效果结束")
+        # 设计 9.29：ygg 无敌到「触发玩家下个回合开始」消失——到期的可能是
+        # 以当前玩家为触发者的其他玩家，逐个清除。
+        for expiring_id in self._expiring_invincible_player_ids_on_turn_start(player_id):
+            self._clear_invincible_state(expiring_id)
+            self.log_msg(f"{self.pn(expiring_id)}的无敌效果结束")
         ps = self.players[player_id]
         self._decay_sealed_equipment_for_owner_turn(player_id)
         self._activate_pending_corruption()

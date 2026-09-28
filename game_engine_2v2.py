@@ -618,9 +618,7 @@ class GameEngine2v2(GameEngine):
         self._apply_equal_suffering_turn_end(player_id)
         if self.game_over:
             return
-        self._apply_energy_surge_turn_end(player_id)
-        if self.game_over:
-            return
+        # 能量涌动记账已移到回合开始（设计 9.29），此处不再处理。
         from engine_runtime_support import cleanup_turn_end
         cleanup_turn_end(self, player_id)
         self._decay_equipment_armor_end_turn(player_id)
@@ -2071,13 +2069,11 @@ class GameEngine2v2(GameEngine):
             self.players[player_id].custom_vars.pop('jurassic_magic_tooth_damage_this_turn', None)
         except Exception:
             pass
-        # 设计 9.22：ygg 无敌改为「触发玩家下个回合开始时」消失。
-        if (
-            0 <= player_id < len(self.players)
-            and self._should_expire_invincible_on_turn_start(player_id)
-        ):
-            self._clear_invincible_state(player_id)
-            self.log_msg(f"{self.pn(player_id)}的无敌效果结束")
+        # 设计 9.29：ygg 无敌到「触发玩家下个回合开始」消失——到期的可能是
+        # 以当前玩家为触发者的其他玩家，逐个清除。
+        for expiring_id in self._expiring_invincible_player_ids_on_turn_start(player_id):
+            self._clear_invincible_state(expiring_id)
+            self.log_msg(f"{self.pn(expiring_id)}的无敌效果结束")
         ps = self.players[player_id]
         # 设计 9.29：血盾按各自回合开始衰减——floor(2/3×最大生命) →
         # floor(1/3×最大生命) → 0（0 后不再变动；值按当前最大生命动态取）。
