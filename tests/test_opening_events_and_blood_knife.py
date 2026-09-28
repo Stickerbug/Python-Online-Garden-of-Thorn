@@ -257,23 +257,25 @@ class OpeningEventsAndBloodKnifeTests(unittest.TestCase):
         self.assertEqual(sorted((fire[2] - 1, fire[3] - 2)), [0, 3])
         self.assertTrue(any('随机敌方+3灼烧' in line for line in engine.log))
 
-    def test_energy_surge_banks_turn_end_elixir_without_backlash(self):
+    def test_energy_surge_banks_turn_start_elixir_without_backlash(self):
+        """设计 9.29：记账时点改到回合开始（回复前）。"""
         engine = GameEngine()
         engine.opening_event_picks[0] = '6'
         player = engine.players[0]
         player.elixir = 5
         player.health = 100
 
-        engine._apply_energy_surge_turn_end(0)
+        engine._opening_event_elixir_recovery_bonus(0)
 
         self.assertEqual(player.health, 100)
         self.assertEqual(
             player.custom_vars.get(GameEngine.ENERGY_SURGE_PENDING_KEY), 2
         )
         self.assertFalse(any('反噬' in line for line in engine.log))
-        self.assertTrue(any('剩余5E，下回合额外回复2E' in line for line in engine.log))
+        self.assertTrue(any('回合开始剩余5E' in line for line in engine.log))
 
-    def test_energy_surge_banks_by_actual_turn_end_elixir(self):
+    def test_energy_surge_no_longer_banks_at_turn_end(self):
+        """回合结束不再记账：记好的账不受回合结束时的 E 影响。"""
         engine = GameEngine()
         engine.opening_event_picks[0] = 6
         engine.first_player = 0
@@ -282,13 +284,14 @@ class OpeningEventsAndBloodKnifeTests(unittest.TestCase):
         player = engine.players[0]
         player.health = 100
         player.elixir = 3
+        player.custom_vars[GameEngine.ENERGY_SURGE_PENDING_KEY] = 7
         engine._start_player_turn = lambda _player_id: None
 
         engine._end_player_turn(0)
 
         self.assertEqual(player.health, 100)
         self.assertEqual(
-            player.custom_vars.get(GameEngine.ENERGY_SURGE_PENDING_KEY), 1
+            player.custom_vars.get(GameEngine.ENERGY_SURGE_PENDING_KEY), 7
         )
 
     def test_energy_surge_grants_banked_elixir_at_next_turn_start(self):
@@ -296,10 +299,8 @@ class OpeningEventsAndBloodKnifeTests(unittest.TestCase):
         engine.round_num = 2
         engine.opening_event_picks[0] = 6
         player = engine.players[0]
-        player.elixir = 5
-        engine._apply_energy_surge_turn_end(0)
-
-        # 对手回合里用反制牌把 E 花光，不会改变已经记好的账。
+        player.custom_vars[GameEngine.ENERGY_SURGE_PENDING_KEY] = 2
+        # 回合开始（回复前）E 为 0：返还上回合记的 2E，重新记账 0
         player.elixir = 0
         engine._apply_turn_start_effects(0)
 
@@ -314,8 +315,7 @@ class OpeningEventsAndBloodKnifeTests(unittest.TestCase):
         engine.opening_event_picks[0] = 6
         player = engine.players[0]
         player.max_elixir = 10
-        player.elixir = 10
-        engine._apply_energy_surge_turn_end(0)
+        player.custom_vars[GameEngine.ENERGY_SURGE_PENDING_KEY] = 99
 
         player.elixir = 3
         engine._apply_turn_start_effects(0)
@@ -328,22 +328,16 @@ class OpeningEventsAndBloodKnifeTests(unittest.TestCase):
         engine.round_num = 2
         engine.opening_event_picks[0] = 6
         player = engine.players[0]
-        player.elixir = 4
         player.health = 100
-
-        engine._apply_energy_surge_turn_end(0)
-
-        self.assertEqual([p.health for p in engine.players], [100, 100, 100, 100])
-        self.assertEqual(
-            player.custom_vars.get(GameEngine.ENERGY_SURGE_PENDING_KEY), 2
-        )
+        player.custom_vars[GameEngine.ENERGY_SURGE_PENDING_KEY] = 2
 
         player.elixir = 0
         engine._apply_turn_start_effects_2v2(0)
         self.assertEqual(player.elixir, 7)
+        self.assertEqual([p.health for p in engine.players], [100, 100, 100, 100])
 
     def test_energy_surge_text_matches_the_authoritative_rule(self):
-        expected = '回合结束时每剩余2[[icon:E]]，下回合开始多回复1[[icon:E]]'
+        expected = '回合开始时每剩余2[[icon:E]]，下回合开始多回复1[[icon:E]]'
         self.assertEqual(GameEngine.OPENING_EVENTS[6]['desc'], expected)
         self.assertEqual(OPENING_EVENT_I18N[6]['desc']['zh'], expected)
         for language in ('zh', 'en', 'fr', 'ja'):

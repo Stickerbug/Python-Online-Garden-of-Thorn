@@ -928,7 +928,8 @@ class GameEngine:
     SETUP_CARD_YGGDRASIL = 'Yggdrasil'
     # Built-in fallback card of ``add_equipment_to_zone`` when data omits it.
     SETUP_CARD_LEAF = 'Leaf'
-    # 能量涌动（事件 6）：自己回合结束时把剩余 E//2 记账，下回合开始返还。
+    # 能量涌动（事件 6，设计 9.29）：回合开始（回复前）把剩余 E//2 记账，
+    # 下回合开始返还。
     ENERGY_SURGE_PENDING_KEY = 'energy_surge_pending_bonus'
     # 反制窗口节奏（设计 2026-09-28，仅真实对局启用——solo/AI 训练保持即时）：
     # 有人可反制的窗口最长 5s，到点服务端自动替未响应者「不反制」；
@@ -946,7 +947,7 @@ class GameEngine:
         6: {
             'id': 6,
             'name': '能量涌动',
-            'desc': '回合结束时每剩余2[[icon:E]]，下回合开始多回复1[[icon:E]]',
+            'desc': '回合开始时每剩余2[[icon:E]]，下回合开始多回复1[[icon:E]]',
             'position': 3,
         },
         7: {'id': 7, 'name': '先手压制', 'desc': '必定先手，先手回复7E并抽5张牌', 'position': 3},
@@ -6053,7 +6054,7 @@ class GameEngine:
         elif event_id == 6:
             ps.custom_vars[self.ENERGY_SURGE_PENDING_KEY] = 0
             self.log_msg(
-                f"{self.pn(player_id)}【能量涌动】：回合结束时每剩余2E，"
+                f"{self.pn(player_id)}【能量涌动】：回合开始时每剩余2E，"
                 "下回合开始额外回复1E"
             )
         elif event_id == 7:
@@ -6151,9 +6152,9 @@ class GameEngine:
         return picks[player_id] is not None and str(picks[player_id]) == '11'
 
     def _opening_event_elixir_recovery_bonus(self, player_id: int) -> int:
-        """能量涌动（事件 6）：返还自己回合结束时记账的 E//2（取用后清零）。
-
-        记账时点在自己回合结束，因此对手回合里用反制牌消耗 E 不会改变它；
+        """能量涌动（事件 6）：返还上回合开始时记账的 E//2，并按本回合开始
+        （回复前）的剩余 E 重新记账给下回合（设计 9.29：记账时点从回合结束
+        改到回合开始，对手回合里反制消耗的 E 会降低记账值）。
         返还仍走 ``gain_elixir``，照常受 E 上限限制。
         """
         if not self._valid_player_id(player_id):
@@ -6166,27 +6167,14 @@ class GameEngine:
         if not isinstance(custom_vars, dict):
             return 0
         pending = max(0, int(custom_vars.get(self.ENERGY_SURGE_PENDING_KEY, 0) or 0))
-        if pending > 0:
-            custom_vars[self.ENERGY_SURGE_PENDING_KEY] = 0
+        remaining_now = max(0, int(getattr(ps, 'elixir', 0) or 0))
+        custom_vars[self.ENERGY_SURGE_PENDING_KEY] = remaining_now // 2
+        if remaining_now // 2 > 0:
+            self.log_msg(
+                f"{self.pn(player_id)}【能量涌动】：回合开始剩余{remaining_now}E，"
+                f"记账{remaining_now // 2}E于下回合返还"
+            )
         return pending
-
-    def _apply_energy_surge_turn_end(self, player_id: int):
-        """能量涌动（事件 6）：按回合结束时的 E 记账，下回合开始额外回复。"""
-        if not self._valid_player_id(player_id):
-            return
-        picks = getattr(self, 'opening_event_picks', []) or []
-        if player_id >= len(picks) or str(picks[player_id]) != '6':
-            return
-        ps = self.players[player_id]
-        remaining_elixir = max(0, int(getattr(ps, 'elixir', 0) or 0))
-        bonus = remaining_elixir // 2
-        if not isinstance(getattr(ps, 'custom_vars', None), dict):
-            ps.custom_vars = {}
-        ps.custom_vars[self.ENERGY_SURGE_PENDING_KEY] = bonus
-        self.log_msg(
-            f"{self.pn(player_id)}【能量涌动】：回合结束剩余{remaining_elixir}E，"
-            f"下回合额外回复{bonus}E"
-        )
 
     def _apply_v2_opening_event(self, player_id: int, event_id) -> bool:
         if event_id is None:
@@ -14094,9 +14082,7 @@ class GameEngine:
         self._apply_equal_suffering_turn_end(player_id)
         if self.game_over:
             return
-        self._apply_energy_surge_turn_end(player_id)
-        if self.game_over:
-            return
+        # 能量涌动记账已移到回合开始（设计 9.29），此处不再处理。
         # Turn-end phase for generic timed_effect entries (target_turn_end /
         # owner_turn_end).  Skipped turns run through _end_player_turn as well, so
         # a stunned player still reaches this phase exactly once.

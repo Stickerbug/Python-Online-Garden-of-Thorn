@@ -265,12 +265,12 @@ OPENING_EVENT_I18N = {
     6: {
         'name': _t('能量涌动', 'Energy Surge', 'Poussée d’énergie', 'Surto de Energia', 'Всплеск энергии', 'エネルギー奔流'),
         'desc': _t(
-            '回合结束时每剩余2[[icon:E]]，下回合开始多回复1[[icon:E]]',
-            'At the end of your turn, every 2 remaining [[icon:E]] grant 1 extra [[icon:E]] at the start of your next turn',
-            'À la fin de votre tour, chaque 2 [[icon:E]] restants accordent 1 [[icon:E]] supplémentaire au début de votre prochain tour',
-            'No fim do seu turno, cada 2 [[icon:E]] restantes concede 1 [[icon:E]] extra no início do seu próximo turno',
-            'В конце своего хода каждые 2 оставшихся [[icon:E]] дают 1 дополнительную [[icon:E]] в начале вашего следующего хода',
-            '自分のターン終了時、残り2[[icon:E]]ごとに、次のターン開始時の回復が1増える',
+            '回合开始时每剩余2[[icon:E]]，下回合开始多回复1[[icon:E]]',
+            'At the start of your turn, every 2 remaining [[icon:E]] grant 1 extra [[icon:E]] at the start of your next turn',
+            'Au début de votre tour, chaque 2 [[icon:E]] restants accordent 1 [[icon:E]] supplémentaire au début de votre prochain tour',
+            'No início do seu turno, cada 2 [[icon:E]] restantes concede 1 [[icon:E]] extra no início do seu próximo turno',
+            'В начале своего хода каждые 2 оставшихся [[icon:E]] дают 1 дополнительную [[icon:E]] в начале вашего следующего хода',
+            '自分のターン開始時、残り2[[icon:E]]ごとに、次のターン開始時の回復が1増える',
         ),
     },
     7: {
