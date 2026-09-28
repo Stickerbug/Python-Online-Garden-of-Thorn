@@ -349,6 +349,9 @@ class PlayerState:
         self.invincible_until_player: Optional[int] = None
         self.invincible_granted_round: int = -1
         self.invincible_granted_turn_marker: int = -1
+        # 2v2 血盾（设计 9.29 改为按玩家各自持有/衰减）：floor(2/3×最大生命)
+        # → 自己回合开始 → floor(1/3×最大生命) → 再下个自己回合 → 0。
+        self.blood_shield: int = 0
         self.skip_turn: int = 0
         self.forced_skip_turn: int = 0
         self.damage_multiplier: float = 1.0
@@ -473,6 +476,7 @@ class PlayerState:
             'invincible_until_player': self.invincible_until_player,
             'invincible_granted_round': self.invincible_granted_round,
             'invincible_granted_turn_marker': self.invincible_granted_turn_marker,
+            'blood_shield': self.blood_shield,
             'skip_turn': self.skip_turn,
             'forced_skip_turn': self.forced_skip_turn,
             'damage_multiplier': self.damage_multiplier,
@@ -610,6 +614,7 @@ class PlayerState:
                 ps.untargetable = 0
         ps.sponge_active = d.get('sponge_active', False)
         ps.shovel_active = d.get('shovel_active', False)
+        ps.blood_shield = max(0, int(d.get('blood_shield', 0) or 0))
         ps.sluggish = d.get('sluggish', 0)
         ps.enemy_draw_reduction = int(d.get('enemy_draw_reduction', 0) or 0)
         ps.enemy_e_reduction = int(d.get('enemy_e_reduction', 0) or 0)
@@ -6606,7 +6611,12 @@ class GameEngine:
             )
 
     def _blood_shield_health_floor(self, player_id: int) -> int:
-        """伤害后血量下限（2v2 血盾）；1v1 恒为 0 即无保护。"""
+        """伤害后血量下限（2v2 血盾，按玩家各自持有）；1v1 恒为 0 即无保护。"""
+        try:
+            if 0 <= player_id < len(self.players):
+                return max(0, int(getattr(self.players[player_id], 'blood_shield', 0) or 0))
+        except Exception:
+            pass
         return 0
 
     def _apply_shield_clamp_to_health(self, ps, player_id: int, old_health) -> bool:

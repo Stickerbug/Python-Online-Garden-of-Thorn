@@ -21,9 +21,9 @@ from cards import (
 
 
 class GameEngine2v2(GameEngine):
-    # 2v2 保护（血盾）：开局 66，每个新回合开始 -33（66 → 33 → 0）。
-    BLOOD_SHIELD_INITIAL = 66
-    BLOOD_SHIELD_DECAY_PER_ROUND = 33
+    # 2v2 保护（血盾，设计 9.29）：按玩家各自持有——开局
+    # floor(2/3×最大生命)，自己回合开始衰减为 floor(1/3×最大生命)，
+    # 再下个自己回合归 0（值动态取自玩家当前最大生命，不再是全局常量）。
     # 有人可反制的反制窗口：最长 5s（到点自动替未响应者「不反制」）；
     # 2s 内到达的响应由 app 层压到整 2s 再结算（2s 内完成也 2s 时结束）。
     FORCED_RESPONSE_WINDOW_SECONDS = 5.0
@@ -84,9 +84,9 @@ class GameEngine2v2(GameEngine):
         # 新开局规则（调度）：与 1v1 相同，全员提交后 _finish_game_start 继续。
         self.mulligan_enabled: bool = True
         self.mulligan_picks: List[Optional[List[int]]] = [None] * 4
-        # 2v2 保护（血盾）：开局 66，每个新回合开始 -33（第1回合 66、第2回合
-        # 33、第3回合起失效）；血量不会被伤害打到护盾值以下。
-        self.blood_shield_value: int = 0
+        # 2v2 血盾（设计 9.29）：按玩家各自持有——开局 floor(2/3×最大生命)，
+        # 自己回合开始时衰减为 floor(1/3×最大生命)，再下个自己回合归 0；
+        # 血量不会被伤害打到自己的护盾值以下（PlayerState.blood_shield）。
         # Per-player ready state: True when draft done AND sub-choice done (if any)
         self.player_ready: List[bool] = [False] * 4
         self.player_draft_started: List[bool] = [False] * 4
@@ -103,9 +103,6 @@ class GameEngine2v2(GameEngine):
         self.timed_effects: List[dict] = []
         self._init_mod_variables()
         self._bind_player_callbacks()
-
-    def _blood_shield_health_floor(self, player_id: int) -> int:
-        return max(0, int(getattr(self, 'blood_shield_value', 0) or 0))
 
     def team_of(self, player_id: int) -> int:
         for ti, team in enumerate(self.teams):
@@ -469,10 +466,15 @@ class GameEngine2v2(GameEngine):
     def _finish_game_start(self) -> bool:
         self._save_all_match_start_snapshots()
         self.round_num = 1
-        self.blood_shield_value = self.BLOOD_SHIELD_INITIAL
+        # 设计 9.29：血盾按玩家各自初始化 floor(2/3×最大生命)（开局事件
+        # 结束后最大生命已定），衰减改到各自回合开始（_apply_turn_start_effects_2v2）。
+        for player in self.players:
+            player.blood_shield = max(0, int(getattr(player, 'max_health', 0) or 0)) * 2 // 3
         self.log_msg(f"2v2游戏开始！{self.pn(self.first_player)}先手。")
         self.log_msg(f"回合顺序：{' → '.join(self.pn(p) for p in self.turn_order)}")
-        self.log_msg(f"血盾生效：第1回合血量不会低于{self.BLOOD_SHIELD_INITIAL}")
+        shield_samples = sorted({int(p.blood_shield) for p in self.players if p.health > 0})
+        self.log_msg("血盾生效：开局血量不会低于最大生命的2/3（各自回合开始时衰减）" + (
+            f"，当前护盾值{shield_samples}" if shield_samples else ""))
         self.log_msg(f"=== 第{self.round_num}回合 ===")
         if getattr(self, 'v2_event_hooks', None):
             # Round 66 / 批次 BD：``on_game_start`` / ``on_match_start``（同义组）
@@ -682,14 +684,6 @@ class GameEngine2v2(GameEngine):
 
     def _end_round(self):
         self.round_num += 1
-        if self.blood_shield_value > 0:
-            self.blood_shield_value = max(
-                0, self.blood_shield_value - self.BLOOD_SHIELD_DECAY_PER_ROUND
-            )
-            if self.blood_shield_value > 0:
-                self.log_msg(f"血盾衰减：本回合血量不会低于{self.blood_shield_value}")
-            else:
-                self.log_msg("血盾已失效")
         if self.game_over:
             return
         self._start_draw_phase()
@@ -2085,6 +2079,17 @@ class GameEngine2v2(GameEngine):
             self._clear_invincible_state(player_id)
             self.log_msg(f"{self.pn(player_id)}的无敌效果结束")
         ps = self.players[player_id]
+        # 设计 9.29：血盾按各自回合开始衰减——floor(2/3×最大生命) →
+        # floor(1/3×最大生命) → 0（0 后不再变动；值按当前最大生命动态取）。
+        shield_now = max(0, int(getattr(ps, 'blood_shield', 0) or 0))
+        if shield_now > 0:
+            shield_stage2 = max(0, int(getattr(ps, 'max_health', 0) or 0)) // 3
+            if shield_now > shield_stage2:
+                ps.blood_shield = shield_stage2
+                self.log_msg(f"血盾衰减：{self.pn(player_id)}本回合血量不会低于{shield_stage2}")
+            else:
+                ps.blood_shield = 0
+                self.log_msg(f"{self.pn(player_id)}的血盾已失效")
         self._decay_sealed_equipment_for_owner_turn(player_id)
         self._activate_pending_corruption()
         self._clear_forced_target_at_turn_start(player_id)
