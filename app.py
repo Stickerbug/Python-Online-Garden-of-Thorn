@@ -22860,7 +22860,7 @@ def feedback_attachment_serve(token):
     return response
 
 
-@app.route('/feedback/handling-pane')@app.route('/feedback/handling-pane')
+@app.route('/feedback/handling-pane')
 def feedback_handling_pane():
     if not is_feedback_handling_authenticated():
         return 'Forbidden', 403
