@@ -22033,28 +22033,27 @@ html[data-ui-style="minimal"][data-theme="dark"] .card,
 }
 .skin-page-tabs { margin: 8px 0; }
 
-/* 卡牌皮肤：装备皮肤的牌主视角，明牌卡牌底层垫皮肤卡背图（182.3% 让卡框
-   正好铺满，与卡背同口径）。名字/卡图/效果文字照常渲染在上层，
-   文字区加半透明面板保证可读，皮肤边框在卡牌四周完整可见。 */
+/* 卡牌皮肤：装备皮肤的牌主视角，明牌底层垫皮肤卡面（front）图。
+   用内部 img 层而不是 background：background 会被卡片矩形裁剪，
+   img + overflow:visible 才能让叶框等装饰物溢出卡框显示（与卡背同口径）。
+   isolation 卡片自成层叠上下文，img z-index:-1 垫在全部内容之下、卡底色之上；
+   卡面其他元素（名字/卡图/效果文字）不加面板，直接渲染在皮肤图上面。 */
 .card.card-skin-backed {
-  background:
-    var(--card-skin-back-url) center / 182.3% 182.3% no-repeat,
-    var(--bg-card);
+  background: transparent;
+  overflow: visible;
+  isolation: isolate;
 }
-.card.card-skin-backed .card-name,
-.card.card-skin-backed .card-english-name,
-.card.card-skin-backed .card-effect {
-  background: rgba(255, 255, 255, 0.78);
-  border-radius: 2.2cqi;
+.card.card-skin-backed::after {
+  display: none; /* 皮肤 front 自带卡框描边 */
 }
-.card.card-skin-backed .card-art {
-  background: rgba(255, 255, 255, 0.78);
-}
-[data-theme="dark"] .card.card-skin-backed .card-name,
-[data-theme="dark"] .card.card-skin-backed .card-english-name,
-[data-theme="dark"] .card.card-skin-backed .card-effect {
-  background: rgba(24, 30, 38, 0.82);
-}
-[data-theme="dark"] .card.card-skin-backed .card-art {
-  background: rgba(24, 30, 38, 0.82);
+.card-skin-under {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 182.3%;
+  height: auto;
+  transform: translate(-50%, -50%);
+  z-index: -1;
+  pointer-events: none;
+  user-select: none;
 }

@@ -12456,16 +12456,18 @@ function createCardElement(cardDict, options = {}) {
     if (cardDef.card_type) {
         el.classList.add(cardDef.card_type);
     }
-    /* 卡牌皮肤：牌主装备皮肤时（自己视角），明牌卡牌底层垫皮肤卡背图，
-       名字/卡图/效果文字照常渲染在上层（文字区有半透明面板保可读）。 */
+    /* 卡牌皮肤：牌主装备皮肤时，明牌底层垫皮肤卡面（front）图。
+       img 层 z-index:-1 压在全部内容之下、卡面其他元素照常直接渲染；
+       超出卡框的装饰物（叶框等）随 overflow:visible 溢出显示，与卡背同口径。 */
+    let skinUnderHtml = '';
     {
         const ownerKey = cardDict && (cardDict.owner_id ?? cardDict.player_id);
         const ownerSkin = playerCardSkinAt(Number(ownerKey));
         if (ownerSkin) {
-            const backUrl = cardSkinBackUrl(ownerSkin);
-            if (backUrl) {
+            const frontUrl = cardSkinFrontUrl(ownerSkin);
+            if (frontUrl) {
                 el.classList.add('card-skin-backed');
-                el.style.setProperty('--card-skin-back-url', `url("${backUrl}")`);
+                skinUnderHtml = `<img class="card-skin-under" src="${escapeHtml(frontUrl)}" alt="" draggable="false">`;
             }
         }
     }
@@ -12700,6 +12702,7 @@ function createCardElement(cardDict, options = {}) {
            </div>`
         : '';
     el.innerHTML = `
+        ${skinUnderHtml}
         <div class="card-costs">
             <span class="cost-e">${blinded ? '?' : displayCostE}</span>
             <span class="card-name" style="color:${displayTypeColor}">${escapeHtml(cardName)}</span>
