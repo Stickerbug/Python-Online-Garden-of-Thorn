@@ -12204,8 +12204,15 @@ function playerCardSkinAt(playerId) {
     const gs = gameState || {};
     const list = Array.isArray(gs.player_card_skins) ? gs.player_card_skins : [];
     const id = Number(playerId);
-    if (Number.isFinite(id) && list[id] != null) return cardSkinById(list[id]);
+    if (Number.isFinite(id) && list[id] != null) {
+        const sid = cardSkinById(list[id]);
+        if (sid) return sid;
+    }
     if (id === Number(gs.your_id)) return myEquippedCardSkin();
+    /* 图鉴等非对局场景没有座位表，预览牌都是"自己视角"，回落到本地装备值 */
+    if (gs.your_id == null && !list.length) return myEquippedCardSkin();
+    /* 单人训练场对手位：服务端按自己皮肤注入，游客注入为空时同样回落 */
+    if (gs.solo && !gs.spectating) return myEquippedCardSkin();
     return '';
 }
 
@@ -12434,10 +12441,10 @@ function createCardElement(cardDict, options = {}) {
             && Number(ownerKey) !== Number(gameState && gameState.your_id))
             ? playerCardSkinAt(Number(ownerKey))
             : myEquippedCardSkin();
-        const skinBack = cardSkinBackUrl(backSkin);
-        el.innerHTML = skinBack
-            ? `<div class="card-back card-back-skin"><img src="${escapeHtml(skinBack)}" alt="" draggable="false"></div>`
-            : '<div class="card-back">?</div>';
+        /* 未装备皮肤时用「初始」默认卡背（替换原来的问号） */
+        const skinBack = cardSkinBackUrl(backSkin) || '/static/assets/card-skins/back/初始.svg';
+        el.classList.add('card-skin-back-card');
+        el.innerHTML = `<div class="card-back card-back-skin"><img src="${escapeHtml(skinBack)}" alt="" draggable="false"></div>`;
         return el;
     }
     const defId = cardDict.def_id || '';
@@ -12449,15 +12456,15 @@ function createCardElement(cardDict, options = {}) {
     if (cardDef.card_type) {
         el.classList.add(cardDef.card_type);
     }
-    /* 卡牌皮肤：牌主装备皮肤时（自己视角），卡牌背景换皮肤卡背。 */
+    /* 卡牌皮肤：牌主装备皮肤时（自己视角），明牌卡牌背景换皮肤 front 变体。 */
     {
         const ownerKey = cardDict && (cardDict.owner_id ?? cardDict.player_id);
         const ownerSkin = playerCardSkinAt(Number(ownerKey));
         if (ownerSkin) {
-            const backUrl = cardSkinBackUrl(ownerSkin);
-            if (backUrl) {
+            const frontUrl = cardSkinFrontUrl(ownerSkin);
+            if (frontUrl) {
                 el.classList.add('card-skin-backed');
-                el.style.setProperty('--card-skin-back-url', `url("${backUrl}")`);
+                el.style.setProperty('--card-skin-front-url', `url("${frontUrl}")`);
             }
         }
     }

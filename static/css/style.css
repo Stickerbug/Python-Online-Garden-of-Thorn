@@ -21929,21 +21929,37 @@ html[data-ui-style="minimal"][data-theme="dark"] .card,
   color: var(--text-muted, #999);
 }
 
-/* ===== 卡牌皮肤（设计 2026-09-26） ===== */
+/* ===== 卡牌皮肤（渲染重做 2026-09-28） =====
+   皮肤 SVG 均为 1133.86×1133.86 方形画布，卡框内容居中、宽 622（占 54.85%）。
+   把方形图放大到 1133.86/622 ≈ 182.3% 卡宽，卡框正好铺满卡面；
+   叶框/金叶框等带装饰物的皮肤内容超出标准卡框约 11%，靠 overflow:visible 露出。 */
+.card.card-skin-back-card {
+  overflow: visible;
+  background: transparent;
+}
+.card.card-skin-back-card::after {
+  display: none; /* SVG 自带完整卡框描边，去掉通用边框线 */
+}
 .card-back.card-back-skin {
-  background: #101510;
+  background: transparent;
   padding: 0;
+  overflow: visible;
+}
+.card-back.card-back-skin::after {
+  display: none;
 }
 .card-back.card-back-skin img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: inherit;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 182.3%;
+  height: auto;
+  transform: translate(-50%, -50%);
   pointer-events: none;
   user-select: none;
 }
 .card-art.card-art-is-skin-back img {
-  object-fit: cover;
+  object-fit: contain; /* 「区」卡面占位：完整显示迷你卡背设计 */
 }
 
 .card-skin-shop-item,
@@ -21966,21 +21982,37 @@ html[data-ui-style="minimal"][data-theme="dark"] .card,
   gap: 6px;
   flex-shrink: 0;
 }
-.card-skin-preview img {
+/* 缩略图同样按 182.3% 放大让卡框铺满（装饰物在小图上裁掉即可） */
+.card-skin-preview-face,
+.card-skin-preview-back,
+.card-skin-thumb {
+  position: relative;
+  overflow: hidden;
+  border-radius: 6px;
+  border: 1px solid var(--border-light);
+  flex-shrink: 0;
+}
+.card-skin-preview-face,
+.card-skin-preview-back {
   width: 64px;
   height: 89px;
-  object-fit: cover;
-  border-radius: 6px;
-  border: 1px solid var(--border-light);
-  display: block;
 }
-.card-skin-thumb img {
+.card-skin-thumb {
   width: 52px;
   height: 72px;
-  object-fit: cover;
-  border-radius: 6px;
-  border: 1px solid var(--border-light);
+}
+.card-skin-preview-face img,
+.card-skin-preview-back img,
+.card-skin-thumb img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 182.3%;
+  height: auto;
+  transform: translate(-50%, -50%);
   display: block;
+  pointer-events: none;
+  user-select: none;
 }
 .card-skin-meta { flex: 1; min-width: 0; }
 .card-skin-note {
@@ -22001,18 +22033,10 @@ html[data-ui-style="minimal"][data-theme="dark"] .card,
 }
 .skin-page-tabs { margin: 8px 0; }
 
-/* 卡牌皮肤：装备皮肤的牌主视角，卡牌背景换皮肤卡背（图鉴/手牌明牌通用）。
-   内容层仍在 .card-content 之上，背景图只做底层纹理。 */
+/* 卡牌皮肤：装备皮肤的牌主视角，明牌卡牌背景换皮肤 front 变体
+   （front 资产自带半透明填充，就是为垫在卡面内容下设计的，无需再压暗罩层）。 */
 .card.card-skin-backed {
   background:
-    var(--card-skin-back-url) center / cover no-repeat,
+    var(--card-skin-front-url) center / 182.3% 182.3% no-repeat,
     var(--bg-card);
-}
-.card.card-skin-backed::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: var(--bg-card);
-  opacity: 0.55;
-  pointer-events: none;
 }
