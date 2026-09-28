@@ -12467,6 +12467,8 @@ function createCardElement(cardDict, options = {}) {
             const frontUrl = cardSkinFrontUrl(ownerSkin);
             if (frontUrl) {
                 el.classList.add('card-skin-backed');
+                /* 非初始皮肤：右上角类型色 1/4 圆圈不显示（初始卡面保留） */
+                if (ownerSkin !== '初始') el.classList.add('card-skin-no-corner');
                 skinUnderHtml = `<img class="card-skin-under" src="${escapeHtml(frontUrl)}" alt="" draggable="false">`;
             }
         }

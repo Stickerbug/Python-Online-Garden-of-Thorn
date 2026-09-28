@@ -22044,7 +22044,13 @@ html[data-ui-style="minimal"][data-theme="dark"] .card,
   isolation: isolate;
 }
 .card.card-skin-backed::after {
-  display: none; /* 皮肤 front 自带卡框描边 */
+  /* 类型颜色边框不隐藏，垫到皮肤图（z-index:-1）之下：
+     装饰物遮住一段、皮肤图案的空隙处透出一段（能否透出取决于各皮肤图形状）。 */
+  z-index: -2;
+}
+html[data-ui-style="minimal"] .card.card-skin-no-corner::before,
+.battle-classic .card.card-skin-no-corner::before {
+  display: none; /* 非初始皮肤：右上角类型色 1/4 圆圈不显示 */
 }
 .card-skin-under {
   position: absolute;
