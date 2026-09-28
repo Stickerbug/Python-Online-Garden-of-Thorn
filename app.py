@@ -826,7 +826,7 @@ GTN_STATIC_VERSION += '-minigame-2048-sync-cache-fix-1'
 GTN_STATIC_VERSION += '-minigame-2048-boot-reconcile-1'
 GTN_STATIC_VERSION += '-minigame-2048-leaderboard-cache-1'
 GTN_STATIC_VERSION += '-leisure-ticket-1-chat-links-1-tdz-fix-1'
-GTN_STATIC_VERSION += '-sts2-card-motion-4-pile-layout-1'
+GTN_STATIC_VERSION += '-sts2-card-motion-5-pile-stack-1'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 STORY_COOP_ENABLED = os.environ.get('GTN_STORY_COOP_ENABLED', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 GTN_AI_1V1_TEST_ENABLED = os.environ.get('GTN_AI_1V1_TEST_ENABLED', '1').strip().lower() in ('1', 'true', 'yes', 'on')
@@ -5491,13 +5491,16 @@ def inject_player_skins(state, room, perspective):
     return state
 
 
-def inject_solo_skins(state, owner_skin=None, perspective=0):
+def inject_solo_skins(state, owner_skin=None, perspective=0, owner_card_skin=''):
     if not isinstance(state, dict):
         return state
     skins = [public_skin_config(owner_skin), dict(DEFAULT_PUBLIC_SKIN)]
     looks = [dict(DEFAULT_SKIN_LOOK), dict(DEFAULT_SKIN_LOOK)]
     state['player_skins'] = skins
     state['player_skin_looks'] = looks
+    # 卡牌皮肤：单人训练场里对手也用自己的皮肤（用户要求：看对面的卡背卡框与自己一致）。
+    own_skin = str(owner_card_skin or '').strip()
+    state['player_card_skins'] = [own_skin, own_skin]
     try:
         pidx = int(perspective)
     except (TypeError, ValueError):
@@ -19721,7 +19724,8 @@ def send_solo_state(sid, perspective=None, *, broadcast_spectators=True):
         inject_player_skins(state, ai_room, perspective)
     else:
         owner_skin = players.get(sid, {}).get('skin') if sid in players else None
-        inject_solo_skins(state, owner_skin=owner_skin, perspective=perspective)
+        owner_card_skin = str((players.get(sid) or {}).get('card_skin') or '')
+        inject_solo_skins(state, owner_skin=owner_skin, owner_card_skin=owner_card_skin, perspective=perspective)
     state['solo'] = True
     if not ai_meta:
         check_solo_achievements(sid, engine)

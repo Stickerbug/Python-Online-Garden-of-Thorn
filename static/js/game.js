@@ -12427,7 +12427,14 @@ function createCardElement(cardDict, options = {}) {
     const el = document.createElement('div');
     el.className = 'card' + (small ? ' card-small' : '') + (faceDown ? ' card-facedown' : '');
     if (faceDown) {
-        const skinBack = cardSkinBackUrl(myEquippedCardSkin());
+        /* 反面牌的皮肤 = 这摞牌主人的皮肤。单人训练场里对手位也注入了同一皮肤
+           （服务端 solo 注入/回放 meta 都带 player_card_skins），所以按座位取即可。 */
+        const ownerKey = cardDict && (cardDict.owner_id ?? cardDict.player_id);
+        const backSkin = (Number.isFinite(Number(ownerKey))
+            && Number(ownerKey) !== Number(gameState && gameState.your_id))
+            ? playerCardSkinAt(Number(ownerKey))
+            : myEquippedCardSkin();
+        const skinBack = cardSkinBackUrl(backSkin);
         el.innerHTML = skinBack
             ? `<div class="card-back card-back-skin"><img src="${escapeHtml(skinBack)}" alt="" draggable="false"></div>`
             : '<div class="card-back">?</div>';
@@ -20133,7 +20140,7 @@ function renderCardSkinInventory() {
             ${row('', lt({ zh: '默认卡背', en: 'Default back', fr: 'Dos par défaut', ja: 'デフォルト裏面' }), defaultBack, '', equipped === '', true)}
             ${ownedItems.map(item => row(
                 item.skin_id, item.name, item.back_url, item.front_url,
-                item.equipped === true, true,
+                equipped === String(item.skin_id), true,
             )).join('')}
         </div>
         ${ownedItems.length ? '' : `<div class="card-skin-hint">${escapeHtml(lt({
@@ -20158,6 +20165,14 @@ function renderCardSkinInventory() {
                 if (!response.ok || !data.success) throw new Error(data.error || '装备失败');
                 cardSkinInventory = data;
                 cardSkinInventory.equipped = String(data.equipped || '');
+                if (data.user && currentAccount) {
+                    currentAccount = data.user;
+                    try { cacheAccount(currentAccount); } catch (_) {}
+                }
+                if (gameState && Array.isArray(gameState.player_card_skins)
+                    && Number.isFinite(Number(gameState.your_id))) {
+                    gameState.player_card_skins[Number(gameState.your_id)] = cardSkinInventory.equipped;
+                }
                 renderCardSkinInventory();
             } catch (err) {
                 flashStatus(err.message || '装备失败', 2000, 'error');
@@ -20181,6 +20196,14 @@ function renderCardSkinInventory() {
                 if (!response.ok || !data.success) throw new Error(data.error || '卸载失败');
                 cardSkinInventory = data;
                 cardSkinInventory.equipped = String(data.equipped || '');
+                if (data.user && currentAccount) {
+                    currentAccount = data.user;
+                    try { cacheAccount(currentAccount); } catch (_) {}
+                }
+                if (gameState && Array.isArray(gameState.player_card_skins)
+                    && Number.isFinite(Number(gameState.your_id))) {
+                    gameState.player_card_skins[Number(gameState.your_id)] = cardSkinInventory.equipped;
+                }
                 renderCardSkinInventory();
             } catch (err) {
                 flashStatus(err.message || '卸载失败', 2000, 'error');
@@ -31370,6 +31393,11 @@ function renderOppHand(oppData, containerId = 'opp-hand') {
     if (!container) return;
     removeFloatingCardPreview();
     container.innerHTML = '';
+    /* 反面牌归属=对手：faceDown 卡背按对手座位取皮肤（训练场=自己的皮肤）。 */
+    const oppOwnerId = Number(oppData && (oppData.id ?? oppData.player_id ?? oppData.index));
+    const fallbackOwnerId = Number.isFinite(oppOwnerId)
+        ? oppOwnerId
+        : Number(gameState && gameState.your_id) === 0 ? 1 : 0;
     const useSpectate2v2Chip = !!(isSpectating && gameState && gameState.mode === '2v2');
     const revealedHand = oppData.revealed_hand || oppData.hand;
     const revealedTagCards = oppData.revealed_tag_cards || [];
@@ -31398,7 +31426,7 @@ function renderOppHand(oppData, containerId = 'opp-hand') {
             container.appendChild(el);
         });
         for (let i = 0; i < hiddenCount; i++) {
-            const card = createCardElement({}, { faceDown: true, small: true });
+            const card = createCardElement({ owner_id: fallbackOwnerId }, { faceDown: true, small: true });
             container.appendChild(card);
         }
     } else {
@@ -31408,7 +31436,7 @@ function renderOppHand(oppData, containerId = 'opp-hand') {
             return;
         }
         for (let i = 0; i < count; i++) {
-            const card = createCardElement({}, { faceDown: true, small: true });
+            const card = createCardElement({ owner_id: fallbackOwnerId }, { faceDown: true, small: true });
             container.appendChild(card);
         }
     }

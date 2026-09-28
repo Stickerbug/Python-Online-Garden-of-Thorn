@@ -5300,6 +5300,8 @@ def row_to_user(row):
         'thorn_dew_paid': max(0, int(row['thorn_dew_paid'] or 0)) if 'thorn_dew_paid' in row.keys() else 0,
         'password_changed_at': row['password_changed_at'] if 'password_changed_at' in row.keys() else None,
         'skin': normalize_skin_config(skin_raw),
+        # 卡牌皮肤装备值必须随账号下发——客户端 myEquippedCardSkin 靠它渲染（图鉴/训练场全依赖）。
+        'card_skin': str(row['card_skin'] or '') if 'card_skin' in row.keys() else '',
         'total_gr': round(float(row['total_gr'] or GR_INITIAL), 1) if 'total_gr' in row.keys() else float(GR_INITIAL),
         'season_gr': round(float(row['season_gr'] or GR_INITIAL), 1) if 'season_gr' in row.keys() else float(GR_INITIAL),
         'highest_gr': round(float(row['highest_gr'] or GR_INITIAL), 1) if 'highest_gr' in row.keys() else float(GR_INITIAL),
