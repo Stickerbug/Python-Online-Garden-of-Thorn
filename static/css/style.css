@@ -22048,6 +22048,9 @@ html[data-ui-style="minimal"][data-theme="dark"] .card,
      装饰物遮住一段、皮肤图案的空隙处透出一段（能否透出取决于各皮肤图形状）。 */
   z-index: -2;
 }
+.card.card-skin-backed .card-art {
+  background: transparent; /* 皮肤卡：图片区不叠半透明白底，皮肤图直接透出 */
+}
 html[data-ui-style="minimal"] .card.card-skin-no-corner::before,
 .battle-classic .card.card-skin-no-corner::before {
   display: none; /* 非初始皮肤：右上角类型色 1/4 圆圈不显示 */
