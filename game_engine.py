@@ -18901,8 +18901,10 @@ class GameEngine:
                     power = clamp_card_power(getattr(source_card, 'power_value', 0) or 0)
                 except Exception:
                     power = 0
-            if power != 0 and is_first_hit and not power_first_hit_applied:
-                # 威力层数全部加在第一段伤害上。
+            if power != 0 and is_first_hit and not power_first_hit_applied and int(getattr(source_card, 'fission_hit', 0) or 0) == 0:
+                # 威力层数全部加在该笔伤害的第一段上（设计 9.27 口径 + 2026-09-29
+                # 修订：裂变的后续迭代（fission_hit>0）不带威力，整次出牌只加一次；
+                # 同一次效果里的其他独立 deal（如西兰花被反制加伤）各自享受第一段）。
                 dmg += int(power)
                 power_first_hit_applied = True
                 dmg = max(0, dmg)

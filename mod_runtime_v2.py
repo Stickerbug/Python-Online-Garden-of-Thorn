@@ -510,17 +510,9 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
             if not _valid_player(engine, target_id):
                 continue
             engine._hel_current_crit_hits = 0
-            # Fission splits this card's Power bonus across its copies, exactly
-            # like the engine's own attack helper does.
-            original_power = None
-            if card is not None and hasattr(engine, "_effective_card_flags"):
-                try:
-                    original_power = clamp_card_power(getattr(card, "power_value", 0) or 0)
-                    fission_level = max(1, int(getattr(card, "fission_level", 1) or 1))
-                    if original_power and fission_level > 1:
-                        card.power_value = int(math.ceil(original_power / fission_level))
-                except Exception:
-                    original_power = None
+            # 设计 2026-09-29：删除"威力按裂变份数切分"的旧口径——威力现在
+            # 由 deal_attack_damage 统一加在整次出牌的第一段上（跨裂变迭代、
+            # 跨多目标只加一次，靠 _power_applied_this_play 标记），本层不再改 power。
             try:
                 dealt = engine.deal_attack_damage(
                     target_id,
@@ -535,9 +527,6 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
                 )
             except TypeError:
                 dealt = engine.deal_attack_damage(target_id, amount, hits, is_precision=is_precision)
-            finally:
-                if original_power is not None:
-                    card.power_value = original_power
             crit_hits = int(getattr(engine, "_hel_current_crit_hits", 0) or 0)
             engine._last_attack_crit_hits = crit_hits
             if hasattr(engine, "_last_damage_value"):
@@ -650,6 +639,11 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
         context["last_damage"] = total
         context["last_positive_hits"] = positive_hits
         context.setdefault("vars", {})["last_positive_hits"] = positive_hits
+        # 设计 2026-09-29：deal_damage 的实伤总额同步写入 event_value，供同
+        # 一步骤表后续表达式引用（"每造成X点伤害"类卡，如毒刺/针——此前
+        # 只写 last_damage，读 event_value 的表达式恒得 0）。
+        context["event_value"] = total
+        context.setdefault("vars", {})["event_value"] = total
         return {"success": True, "last_damage": total, "last_positive_hits": positive_hits}
 
     if op in ("direct_damage", "deal_direct_damage"):
