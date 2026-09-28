@@ -8913,16 +8913,7 @@ html.blind-level-4 .card-prediction-part.magic {
   color: #F5B7B1;
 }
 
-/* 图鉴状态列表：玩家属性分组表头 */
-.gallery-status-group-header {
-  padding: 8px 10px 4px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-secondary);
-  border-bottom: 1px dashed var(--border-light);
-  margin-top: 6px;
-}
-
+/* 图鉴玩家属性页：详情说明行 */
 .gallery-attr-note {
   margin-top: 4px;
   font-size: 12px;

@@ -912,7 +912,7 @@ const I18N = {
         status_attack_blocked: 'Attack Blocked', status_attack_only: 'Attack Only', status_untargetable: 'Untargetable', status_bandage: 'Bandage', status_sponge: 'Sponge', status_shovel: 'Shovel', status_sluggish: 'Sluggish', status_overload: 'Overload', status_foresight: 'Foresight', status_fracture: 'Fracture', status_stagnation: 'Stagnation', status_blind: 'Blind', status_heal_block: 'Heal Block', status_weakness: 'Weakness', status_bleed: 'Bleed', status_fragment: 'Fragment', status_fragment_stacks: 'Fragment',
         flag_precision: 'Precision', flag_exile: 'Exile', flag_non_stackable: 'Non-stack', flag_indestructible: 'Indestructible', flag_sprout: 'Sprout', flag_symbiosis: 'Symbiosis', flag_attract: 'Attract', flag_void: 'Void', flag_self_only: 'No target', flag_uncancellable: 'Uncancellable', flag_infinite_exclude: 'Removed from Infinite Fire', flag_rebound: 'Rebound', flag_copy: 'Copy', flag_unique: 'Unique', flag_swift: 'Swift', flag_temp_swift: 'Temporary Swift', flag_temp_heavy: 'Temporary Heavy', flag_temp_magic_heavy: 'Temporary Magic Heavy', flag_floating: 'Floating', flag_stealth: 'Stealth', flag_revealed: 'Revealed', flag_sublime: 'Sublime', flag_team_limited: 'Team Limited', flag_team_unique: 'Team Unique', flag_power: 'Power', flag_magic_swift: 'Magic Swift', flag_wide_strike: 'Wide Strike', flag_self_target: 'Self-target', flag_charge: 'Charge', flag_ocean_blinded: 'Obscured',
     tag_precision: 'Precision', tag_exile: 'Exile', tag_non_stackable: 'Non-stack', tag_indestructible: 'Indestructible', tag_sprout: 'Sprout', tag_symbiosis: 'Symbiosis', tag_attract: 'Attract', tag_void: 'Void', tag_self_only: 'No target', tag_uncancellable: 'Uncancellable', tag_infinite_exclude: 'Removed from Infinite Fire', tag_rebound: 'Rebound', tag_copy: 'Copy', tag_unique: 'Unique', tag_swift: 'Swift', tag_heavy: 'Heavy', tag_temp_swift: 'Temporary Swift', tag_temp_heavy: 'Temporary Heavy', tag_temp_magic_heavy: 'Temporary Magic Heavy', tag_floating: 'Floating', tag_stealth: 'Stealth', tag_revealed: 'Revealed', tag_sublime: 'Sublime', tag_team_limited: 'Team Limited', tag_team_unique: 'Team Unique', tag_power: 'Power', tag_magic_swift: 'Magic Swift', tag_wide_strike: 'Wide Strike', tag_self_target: 'Self-target', tag_charge: 'Charge', tag_ocean_blinded: 'Obscured',
-        gallery_title: 'Compendium', gallery_cards: 'Cards', gallery_tags: 'Tags', gallery_events: 'Opening Events', gallery_statuses: 'States', gallery_search: 'Search', gallery_no_items: 'No entries.', gallery_cards_with_tag: 'Cards with this tag', gallery_card_count: '{0} cards',
+        gallery_title: 'Compendium', gallery_cards: 'Cards', gallery_tags: 'Tags', gallery_events: 'Opening Events', gallery_statuses: 'States', gallery_attrs: 'Attributes', gallery_search: 'Search', gallery_no_items: 'No entries.', gallery_cards_with_tag: 'Cards with this tag', gallery_card_count: '{0} cards',
         gallery_type: 'Type', gallery_cost: 'Cost', gallery_tags_label: 'Tags', gallery_description: 'Description', gallery_effect: 'Effect', gallery_trigger: 'Trigger',
         choose_convert_count: 'Choose convert count', choose_magic_card_n: 'Choose magic card #{0}', choose_source_card_n: 'Choose source card #{0}', choose_light_cards: 'Choose Attack cards to convert', choose_yggdrasil_card: 'Choose Yggdrasil card', opening_sequence_title: 'Floral Arrangement', opening_sequence_message: 'Drag cards to rearrange your draw pile. The top card is drawn first.',
         convert_label: 'Convert', convert_per_type: 'Max {0} per type', selected_count: 'Selected {0}/{1}', max_selection_warning: 'Cannot exceed {0}', deck_total: 'Deck: {0} cards', view_deck_title: 'View Deck',
@@ -1093,7 +1093,7 @@ I18N.zh = { ...I18N.en,
     error_attack_only: '本回合只能使用攻击牌',
     error_waiting_response_ui: '等待响应',
     tag_precision: '精准', tag_exile: '放逐', tag_non_stackable: '不叠加', tag_indestructible: '不可摧毁', tag_sprout: '萌芽', tag_symbiosis: '共生', tag_attract: '吸附', tag_void: '虚无', tag_self_only: '不选择目标', tag_uncancellable: '不可取消', tag_infinite_exclude: '无限火力移除', tag_rebound: '回转', tag_copy: '副本', tag_unique: '唯一', tag_swift: '迅捷', tag_heavy: '沉重', tag_temp_swift: '暂时迅捷', tag_temp_heavy: '暂时沉重', tag_temp_magic_heavy: '暂时魔力沉重', tag_floating: '漂浮', tag_stealth: '隐匿', tag_revealed: '被揭示', tag_sublime: '崇高', tag_team_limited: '队伍限定', tag_team_unique: '队伍独一', tag_power: '威力', tag_magic_swift: '魔力迅捷', tag_wide_strike: '广域打击', tag_self_target: '自刃', tag_charge: '电荷', tag_ocean_blinded: '蒙蔽',
-    gallery_title: '图鉴', gallery_cards: '卡牌', gallery_tags: '标签', gallery_events: '配装倾向', gallery_statuses: '状态', gallery_search: '搜索', gallery_no_items: '暂无条目。', gallery_cards_with_tag: '拥有此标签的卡牌', gallery_card_count: '{0} 张卡牌',
+    gallery_title: '图鉴', gallery_cards: '卡牌', gallery_tags: '标签', gallery_events: '配装倾向', gallery_statuses: '状态', gallery_attrs: '属性', gallery_search: '搜索', gallery_no_items: '暂无条目。', gallery_cards_with_tag: '拥有此标签的卡牌', gallery_card_count: '{0} 张卡牌',
     gallery_type: '类型', gallery_cost: '费用', gallery_tags_label: '标签', gallery_description: '描述', gallery_effect: '效果', gallery_trigger: '触发',
     mode_select: '模式', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '无限火力', mode_random_deck: '随机卡组',
     mode_casual_1v1: '娱乐 1v1', mode_casual_2v2: '娱乐 2v2', mode_ranked_1v1: '天梯 1v1', mode_ranked_2v2: '天梯 2v2', mode_casual_urf: '无限火力', mode_casual_random_deck: '随机卡组',
@@ -1663,7 +1663,7 @@ Object.assign(I18N.fr, {
     rules_examples_text: '{stinger} est une attaque Précision ; {sewage} détruit les équipements ; {bubble} répond à une attaque et donne Esquive.',
     rules_skip_confirm_title: 'Notice',
     rules_skip_confirm_msg: 'Passer la présentation du jeu ?\nVous pourrez la rouvrir dans À propos > Règles.',
-    gallery_title: 'Encyclopédie', gallery_cards: 'Cartes', gallery_tags: 'Tags', gallery_events: 'Événements de départ', gallery_statuses: 'États',
+    gallery_title: 'Encyclopédie', gallery_cards: 'Cartes', gallery_tags: 'Tags', gallery_events: 'Événements de départ', gallery_statuses: 'États', gallery_attrs: 'Attributs',
     gallery_search: 'Rechercher', gallery_no_items: 'Aucune entrée.', gallery_cards_with_tag: 'Cartes avec ce tag',
     gallery_card_count: '{0} cartes', gallery_type: 'Type', gallery_cost: 'Coût', gallery_tags_label: 'Tags',
     gallery_description: 'Description', gallery_effect: 'Effet', gallery_trigger: 'Déclenchement',
@@ -1717,7 +1717,7 @@ Object.assign(I18N.ja, {
     rules_examples_text: '{stinger} は精密攻撃です。{sewage} は装備を破壊します。{bubble} は攻撃に反応して回避を得ます。',
     rules_skip_confirm_title: '確認',
     rules_skip_confirm_msg: 'ゲーム紹介をスキップしますか？\n概要 > 遊び方 から再度開けます。',
-    gallery_title: '図鑑', gallery_cards: 'カード', gallery_tags: 'タグ', gallery_events: '開局イベント', gallery_statuses: '状態',
+    gallery_title: '図鑑', gallery_cards: 'カード', gallery_tags: 'タグ', gallery_events: '開局イベント', gallery_statuses: '状態', gallery_attrs: '属性',
     gallery_search: '検索', gallery_no_items: '項目がありません。', gallery_cards_with_tag: 'このタグを持つカード',
     gallery_card_count: '{0}枚のカード', gallery_type: 'タイプ', gallery_cost: 'コスト', gallery_tags_label: 'タグ',
     gallery_description: '説明', gallery_effect: '効果', gallery_trigger: '発動',
@@ -6705,6 +6705,8 @@ function updateStaticText() {
     if (galleryTabEvents) galleryTabEvents.textContent = UI.gallery_events;
     const galleryTabStatuses = $('gallery-tab-statuses');
     if (galleryTabStatuses) galleryTabStatuses.textContent = UI.gallery_statuses;
+    const galleryTabAttrs = $('gallery-tab-attrs');
+    if (galleryTabAttrs) galleryTabAttrs.textContent = UI.gallery_attrs || lt({ zh: '属性', en: 'Attributes', fr: 'Attributs', ja: '属性' });
     const gallerySearch = $('gallery-search');
     if (gallerySearch) gallerySearch.placeholder = UI.gallery_search;
     const btnOpenRules = $('btn-open-rules');
@@ -8411,7 +8413,7 @@ function bindHiddenFeatureLongPress() {
 
 function setGalleryMode(mode) {
     galleryMode = mode || 'cards';
-    ['cards', 'tags', 'events', 'statuses'].forEach(name => {
+    ['cards', 'tags', 'events', 'statuses', 'attrs'].forEach(name => {
         const tab = $(`gallery-tab-${name}`);
         if (tab) tab.classList.toggle('active', galleryMode === name);
     });
@@ -9144,6 +9146,10 @@ function renderCardGallery() {
         renderStatusGallery(list, detail, q);
         return;
     }
+    if (galleryMode === 'attrs') {
+        renderAttrGallery(list, detail, q);
+        return;
+    }
     ensureGalleryCardFilterState();
     const previousListScrollTop = list.scrollTop || 0;
     list.className = 'gallery-card-list gallery-filter-list gallery-mod-filter-list';
@@ -9509,12 +9515,6 @@ function getAllStatusDefs() {
         { key: 'jungle:turn_heal_turns', iconKey: 'turn_heal', label: '回合回复', desc: '回合回复:X;Y：出现时及自己回合开始时回复Y[[icon:H]]，然后X-1；X为0时移除。', color: '#F48FB1', source: 'vanilla' },
         { key: 'jungle:turn_magic_turns', iconKey: 'turn_magic', label: '魔力回合回复', desc: '魔力回合回复:X;Y：出现时及自己回合开始时回复Y[[icon:M]]，然后X-1；X为0时移除。', color: COLORS.magic, source: 'vanilla' },
         { key: 'jungle:toxic_poison', iconKey: 'toxic_poison', label: '剧毒', desc: '中毒结算后，对自己施加等同于剧毒层数的[[icon:P]]；不自动减少。', color: '#5E8C31', source: 'vanilla' },
-        /* 玩家属性（不是状态，不受状态免疫影响）：放在状态列表末尾成组展示。
-           label/desc 由术语库按别名填充（blood_shield 术语见 getTermIntroLibrary）。 */
-        { key: 'blood_shield', group: 'player_attr', iconKey: 'blood_shield', label: lt({ zh: '血盾', en: 'Blood Shield', fr: 'Bouclier Sanguin', ja: 'ブラッドシールド' }), desc: '', color: '#B03A2E', source: '玩家属性' },
-        { key: 'invincible', group: 'player_attr', iconKey: 'invincible', label: UI.status_invincible, desc: '', color: COLORS.elixir, source: '玩家属性' },
-        { key: 'armor', group: 'player_attr', iconKey: 'armor', label: UI.status_armor || '护甲', desc: '', color: COLORS.armor_text, source: '玩家属性' },
-        { key: 'crit', group: 'player_attr', label: lt({ zh: '暴击倍率', en: 'Critical Multiplier', fr: 'Multiplicateur critique', ja: 'クリティカル倍率' }), desc: '', color: '#D4AC0D', source: '玩家属性' },
     ];
     const statusTermAliases = {
         poison: 'P', fire: 'F', toxic: 'toxic', triangle: 'triangle', nazar: 'nazar',
@@ -9526,8 +9526,6 @@ function getAllStatusDefs() {
         heal_block: 'heal_block', weakness: 'weakness', bleed: 'bleed', fragment: 'fragment',
         magic_blocked: 'magic_blocked', root_status: 'root_status', blood_debt: 'blood_debt',
         unable_counter: 'unable_counter', luck: 'luck', blazing_fire: 'blazing_fire',
-        blood_shield: 'blood_shield', invincible: 'invincible', armor: 'A',
-        crit: 'crit',
         'jungle:fragile': 'fragile', 'jungle:shield': 'shield',
         'jungle:turn_heal_turns': 'turn_heal', 'jungle:turn_magic_turns': 'turn_magic',
         'jungle:toxic_poison': 'toxic_poison',
@@ -9583,7 +9581,7 @@ const STATUS_ICON_KEYS = new Set([
     'armor', 'attack_blocked', 'attack_only', 'bandage', 'bleed', 'blind', 'blood_debt', 'dodge', 'equip_protect',
     'fire', 'foresight', 'fracture', 'fragile', 'fragment', 'heal_block',
     'invincible', 'luck', 'magic_blocked', 'magic_nazar', 'nazar', 'overload', 'poison',
-    'blood_shield',
+    'blood_shield', 'critical',
     'root_status', 'shield', 'sluggish', 'stagnation', 'status_immune',
     'stunned', 'toxic_poison', 'toxic', 'triangle', 'turn_heal', 'turn_magic',
     'unable_counter', 'blazing_fire', 'frost', 'debt', 'extra_healing', 'shield_conversion',
@@ -9632,18 +9630,10 @@ function renderStatusGallery(list, detail, q) {
     const statusIds = statuses.map(s => `status:${s.key}`);
     if (!statusIds.includes(gallerySelectedId)) gallerySelectedId = statusIds[0] || null;
     list.innerHTML = '';
-    let attrHeaderEmitted = false;
     statuses.forEach(s => {
         const id = `status:${s.key}`;
-        if (s.group === 'player_attr' && !attrHeaderEmitted) {
-            const header = document.createElement('div');
-            header.className = 'gallery-status-group-header';
-            header.textContent = lt({ zh: '玩家属性（不是状态，不受状态免疫影响）', en: 'Player Attributes (not statuses; unaffected by Status Immune)', fr: 'Attributs du joueur (pas des statuts ; insensibles à l’immunité aux statuts)', ja: 'プレイヤー属性（状態ではない。状態免疫の影響を受けない）' });
-            list.appendChild(header);
-            attrHeaderEmitted = true;
-        }
         const row = document.createElement('div');
-        row.className = 'gallery-card-row' + (id === gallerySelectedId ? ' active' : '') + (s.group === 'player_attr' ? ' gallery-attr-row' : '');
+        row.className = 'gallery-card-row' + (id === gallerySelectedId ? ' active' : '');
         const statusColorStyle = `--status-fg:${escapeHtml(s.color || COLORS.text_primary)}`;
         const sourceTag = s.source === 'vanilla' ? '' : `<span class="gallery-row-meta gallery-status-source" style="${statusColorStyle}">${escapeHtml(s.source)}</span>`;
         row.innerHTML = `<div class="gallery-row-title gallery-status-title" style="${statusColorStyle}">${renderStatusIconHtml(s.key, s.label, s.iconKey, 'gallery-row')}${escapeHtml(s.label)}</div>${sourceTag}`;
@@ -9662,7 +9652,59 @@ function renderStatusGallery(list, detail, q) {
         <p><b>ID：</b>${escapeHtml(s.key)}</p>
         <p><b>来源：</b>${escapeHtml(s.source === 'vanilla' ? '原版' : s.source)}</p>
         <p>${colorizeCardText(s.desc || '')}</p>
-        ${s.group === 'player_attr' ? `<p class="gallery-attr-note">${escapeHtml(lt({ zh: '玩家属性：不是状态，不受状态免疫影响。', en: 'Player attribute: not a status; unaffected by Status Immune.', fr: 'Attribut du joueur : ce n’est pas un statut ; insensible à l’immunité aux statuts.', ja: 'プレイヤー属性：状態ではないため、状態免疫の影響を受けません。' }))}</p>` : ''}
+    </div>`;
+    bindGalleryTermDescriptionInteractions(detail);
+}
+
+/* 玩家属性页：无敌/护甲/暴击倍率/血盾——不是状态，不受状态免疫影响。
+   描述复用术语库（getTermIntroLibrary），显示名用本表（术语库 crit 标签是
+   "暴击"、A 是"A：护甲(Armor)"，不适合做条目名）。 */
+function getPlayerAttrDefs() {
+    const termLib = getTermIntroLibrary();
+    const entries = [
+        { key: 'blood_shield', iconKey: 'blood_shield', label: lt({ zh: '血盾', en: 'Blood Shield', fr: 'Bouclier Sanguin', ja: 'ブラッドシールド' }), color: '#B03A2E', term: 'blood_shield' },
+        { key: 'invincible', iconKey: 'invincible', label: UI.status_invincible || lt({ zh: '无敌', en: 'Invincible', fr: 'Invincible', ja: '無敵' }), color: COLORS.elixir, term: 'invincible' },
+        { key: 'armor', iconKey: 'armor', label: UI.status_armor || lt({ zh: '护甲', en: 'Armor', fr: 'Armure', ja: '護甲' }), color: COLORS.armor_text, term: 'A' },
+        { key: 'crit', iconKey: 'critical', label: lt({ zh: '暴击倍率', en: 'Critical Multiplier', fr: 'Multiplicateur critique', ja: 'クリティカル倍率' }), color: '#D4AC0D', term: 'crit' },
+    ];
+    return entries.map(entry => {
+        const term = termLib[entry.term] || {};
+        return { ...entry, desc: term.desc || '', termKey: `term:${entry.term}` };
+    });
+}
+
+function renderAttrGallery(list, detail, q) {
+    list.className = 'gallery-card-list';
+    detail.className = 'gallery-detail';
+    const allAttrs = getPlayerAttrDefs();
+    const attrs = allAttrs.filter(a => {
+        const text = `${a.key} ${a.label} ${a.desc}`.toLowerCase();
+        return !q || text.includes(q);
+    });
+    const attrIds = attrs.map(a => `attr:${a.key}`);
+    if (!attrIds.includes(gallerySelectedId)) gallerySelectedId = attrIds[0] || null;
+    list.innerHTML = '';
+    attrs.forEach(a => {
+        const id = `attr:${a.key}`;
+        const row = document.createElement('div');
+        row.className = 'gallery-card-row' + (id === gallerySelectedId ? ' active' : '');
+        const colorStyle = `--status-fg:${escapeHtml(a.color)}`;
+        row.innerHTML = `<div class="gallery-row-title gallery-status-title" style="${colorStyle}">${renderStatusIconHtml(a.key, a.label, a.iconKey, 'gallery-row')}${escapeHtml(a.label)}</div>`;
+        row.onclick = () => { gallerySelectedId = id; renderCardGallery(); };
+        list.appendChild(row);
+    });
+    const selectedKey = gallerySelectedId ? String(gallerySelectedId).replace('attr:', '') : null;
+    const a = allAttrs.find(item => item.key === selectedKey);
+    if (!a) {
+        detail.innerHTML = `<p>${UI.gallery_no_items}</p>`;
+        return;
+    }
+    gallerySelectedId = `attr:${a.key}`;
+    detail.innerHTML = `<div class="gallery-simple-detail">
+        <h3 class="gallery-status-heading" style="--status-fg:${escapeHtml(a.color)}">${renderStatusIconHtml(a.key, a.label, a.iconKey, 'gallery-detail')}${escapeHtml(a.label)}</h3>
+        <p><b>ID：</b>${escapeHtml(a.key)}</p>
+        <p>${colorizeCardText(a.desc || '')}</p>
+        <p class="gallery-attr-note">${escapeHtml(lt({ zh: '玩家属性：不是状态，不受状态免疫影响。', en: 'Player attribute: not a status; unaffected by Status Immune.', fr: 'Attribut du joueur : ce n’est pas un statut ; insensible à l’immunité aux statuts.', ja: 'プレイヤー属性：状態ではないため、状態免疫の影響を受けません。' }))}</p>
     </div>`;
     bindGalleryTermDescriptionInteractions(detail);
 }
@@ -40499,6 +40541,7 @@ async function init() {
     if ($('gallery-tab-tags')) $('gallery-tab-tags').addEventListener('click', () => { setGalleryMode('tags'); gallerySelectedId = null; scheduleRenderCardGallery(20); });
     if ($('gallery-tab-events')) $('gallery-tab-events').addEventListener('click', () => { setGalleryMode('events'); gallerySelectedId = null; scheduleRenderCardGallery(20); });
     if ($('gallery-tab-statuses')) $('gallery-tab-statuses').addEventListener('click', () => { setGalleryMode('statuses'); gallerySelectedId = null; scheduleRenderCardGallery(20); });
+    if ($('gallery-tab-attrs')) $('gallery-tab-attrs').addEventListener('click', () => { setGalleryMode('attrs'); gallerySelectedId = null; scheduleRenderCardGallery(20); });
     if ($('btn-open-rules')) $('btn-open-rules').addEventListener('click', () => openAbout());
     if ($('btn-gallery-back')) $('btn-gallery-back').addEventListener('click', () => {
         if (galleryReturnToRules) {
