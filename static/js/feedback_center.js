@@ -1105,6 +1105,12 @@
       }
     }
 
+    const attachments = Array.isArray(detail.attachments) ? detail.attachments : [];
+    const attachmentsHtml = attachments.length
+      ? `<div class="fc-issue-attachments">${attachments.map(att =>
+          `<img src="${esc(att.url)}" alt="attachment" loading="lazy">`).join('')}</div>`
+      : '';
+
     container.innerHTML = `<div class="fc-detail-nav"><button type="button" class="fc-button fc-button-secondary fc-button-small" data-action="back">← ${esc(t('back_list'))}</button>` +
       `<a href="/" target="_blank" rel="noopener">${esc(t('back_game'))}</a></div>` +
       `<div class="fc-detail-head"><div class="fc-detail-title-wrap">` +
@@ -1112,6 +1118,7 @@
       `<h2 class="fc-detail-title">${esc(detail.title)}${statusChip(detail.kind, detail.status)}</h2></div></div>` +
       `<div class="fc-detail-subline">${detail.author ? userHtml(detail.author) : ''}<span>${esc(fmt(detail.created_at))}</span></div>` +
       actionBar +
+      attachmentsHtml +
       `<div class="fc-detail-body-grid"><div class="fc-detail-main">` +
       `<div class="fc-body">${esc(detail.body)}</div>` +
       notFixedBlock +
@@ -1333,6 +1340,74 @@
     $('fc-create-dialog').showModal();
   }
 
+  /* #235：配图上传（≤3 张，每张 ≤300KB，客户端先拦截超限）。 */
+  const createImageIds = [];
+
+  function renderCreateImagePreview() {
+    const preview = $('fc-create-images-preview');
+    if (!preview) return;
+    const inputs = $('fc-create-images');
+    if (!inputs) return;
+    preview.innerHTML = '';
+    createImageIds.forEach((entry, index) => {
+      const wrap = document.createElement('span');
+      wrap.className = 'fc-attach-item';
+      const img = document.createElement('img');
+      img.src = entry.url;
+      img.alt = entry.name || '';
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'fc-attach-remove';
+      remove.textContent = '×';
+      remove.title = '移除';
+      remove.addEventListener('click', () => {
+        createImageIds.splice(index, 1);
+        renderCreateImagePreview();
+      });
+      wrap.appendChild(img);
+      wrap.appendChild(remove);
+      preview.appendChild(wrap);
+    });
+    inputs.value = '';
+  }
+
+  function bindCreateImageUpload() {
+    const inputs = $('fc-create-images');
+    if (!inputs) return;
+    inputs.addEventListener('change', async () => {
+      const errorEl = $('fc-create-error');
+      if (errorEl) errorEl.textContent = '';
+      const files = [...(inputs.files || [])];
+      inputs.value = '';
+      for (const file of files) {
+        if (createImageIds.length >= 3) {
+          if (errorEl) errorEl.textContent = '最多 3 张配图';
+          break;
+        }
+        if (file.size > 300 * 1024) {
+          if (errorEl) errorEl.textContent = `${file.name} 超过 300KB，请压缩后再上传`;
+          continue;
+        }
+        const form = new FormData();
+        form.append('file', file);
+        try {
+          const response = await fetch('/api/feedback/attachments', {
+            method: 'POST',
+            credentials: 'same-origin',
+            body: form,
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok || !data.success) throw new Error(data.error || '上传失败');
+          createImageIds.push({ id: data.id, url: data.url, name: file.name });
+        } catch (err) {
+          if (errorEl) errorEl.textContent = err.message || '上传失败';
+          break;
+        }
+      }
+      renderCreateImagePreview();
+    });
+  }
+
   async function submitCreate(event) {
     event.preventDefault();
     const title = $('fc-create-title-input').value.trim();
@@ -1341,8 +1416,11 @@
     if (!title || !body) { $('fc-create-error').textContent = '标题与内容不能为空'; return; }
     const payload = { kind: $('fc-create-kind').value, title, body };
     if (replayId) payload.replay_id = replayId;
+    if (createImageIds.length) payload.attachment_ids = createImageIds.map(entry => entry.id);
     try {
       const data = await api('/api/public-feedback/issues', { method: 'POST', body: payload });
+      createImageIds.length = 0;
+      renderCreateImagePreview();
       $('fc-create-dialog').close();
       state.kind = data.issue.kind;
       state.status = '';
@@ -1469,6 +1547,7 @@
     $('fc-list-create').addEventListener('click', openCreate);
     $('fc-create-form').addEventListener('submit', submitCreate);
     $('fc-report-form').addEventListener('submit', submitReport);
+    bindCreateImageUpload();
     document.querySelectorAll('[data-close-dialog]').forEach((button) => button.addEventListener('click', () => closeDialog('fc-create-dialog')));
     document.querySelectorAll('[data-close-report]').forEach((button) => button.addEventListener('click', () => closeDialog('fc-report-dialog')));
 

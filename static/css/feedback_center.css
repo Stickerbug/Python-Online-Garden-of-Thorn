@@ -1964,3 +1964,34 @@ html.fc-scroll-locked body {
   border-color: var(--fc-accent);
   color: var(--fc-accent);
 }
+
+/* #235：反馈配图上传预览 */
+.fc-attach-preview {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.fc-attach-preview img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--fc-line);
+}
+.fc-attach-preview .fc-attach-remove {
+  cursor: pointer;
+}
+.fc-issue-attachments {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+.fc-issue-attachments img {
+  max-width: 220px;
+  max-height: 160px;
+  border-radius: 6px;
+  border: 1px solid var(--fc-line);
+  cursor: zoom-in;
+}

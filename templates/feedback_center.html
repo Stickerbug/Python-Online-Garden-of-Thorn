@@ -108,6 +108,11 @@
         <span>回放 ID（可选）</span>
         <input id="fc-create-replay" type="text" maxlength="40" placeholder="R-12345 或 P-12345" autocomplete="off">
       </label>
+      <div class="fc-field">
+        <span>配图（可选，最多 3 张，每张 ≤300KB，PNG/JPG/WebP/GIF）</span>
+        <input id="fc-create-images" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple>
+        <div id="fc-create-images-preview" class="fc-attach-preview"></div>
+      </div>
       <p id="fc-create-error" class="fc-error" role="alert"></p>
       <div class="fc-dialog-actions">
         <button class="fc-button fc-button-secondary" type="button" data-close-dialog>取消</button>

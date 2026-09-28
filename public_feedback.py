@@ -333,6 +333,22 @@ def _watching_conn(conn, issue_id, user_id):
     return bool(row)
 
 
+def _issue_attachments_conn(conn, issue_id):
+    """#235：反馈配图列表（含外链 comment 图片由各端按 URL 渲染）。"""
+    rows = conn.execute(
+        'SELECT token, mime, size_bytes FROM feedback_attachments WHERE issue_id = ? ORDER BY id',
+        (int(issue_id),),
+    ).fetchall()
+    return [
+        {
+            'url': f'/feedback-attachments/{row["token"]}',
+            'mime': row['mime'],
+            'size_bytes': int(row['size_bytes'] or 0),
+        }
+        for row in rows
+    ]
+
+
 def _issue_payload_conn(
     conn,
     row,
@@ -366,6 +382,7 @@ def _issue_payload_conn(
         'comment_count': _comment_count_conn(conn, issue_id),
         'watcher_count': _watcher_count_conn(conn, issue_id),
         'vote_count': _effective_vote_count_conn(conn, issue_id, int(row['author_user_id'])),
+        'attachments': _issue_attachments_conn(conn, issue_id),
     }
     if viewer_user_id is not None:
         payload['own_vote'] = _own_vote_conn(conn, issue_id, viewer_user_id)

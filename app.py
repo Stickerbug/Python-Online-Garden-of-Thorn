@@ -54,6 +54,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 import leisure_ticket
 import leisure_ticket_settlement
 import card_skins
+import feedback_attachments
 import minigame_2048
 import minigame_2048_service
 import minigame_registry
@@ -540,6 +541,10 @@ def room_match_payload(room):
         'match_mode': room_match_mode(room),
         'ranked': room_match_type(room) == 'ranked',
     }
+
+
+def public_feedback_max_attachments():
+    return feedback_attachments.ATTACHMENT_MAX_PER_ISSUE
 
 
 def _public_data_query_key():
@@ -22817,7 +22822,45 @@ def title_editor_page():
     )
 
 
-@app.route('/feedback/handling-pane')
+@app.route('/api/feedback/attachments', methods=['POST'])
+def api_feedback_attachment_upload():
+    """上传一张反馈配图：仅登录；PNG/JPEG/WebP/GIF；≤300KB。返回 {id, url}。"""
+    if not DB_AVAILABLE:
+        return jsonify({'success': False, 'error': DB_INIT_ERROR}), 503
+    user = _current_account_user()
+    if not user:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    file = request.files.get('file')
+    if file is None:
+        return jsonify({'success': False, 'error': '缺少文件'}), 400
+    data = file.read()
+    try:
+        attachment_id, url = feedback_attachments.save_attachment(
+            user.get('id'), data, declared_name=file.filename or '',
+        )
+    except public_feedback.PublicFeedbackError as exc:
+        return jsonify({'success': False, 'error': exc.args[1] if len(exc.args) > 1 else str(exc)}), 400
+    except Exception as exc:
+        admin_event('error', f'feedback attachment save failed: {exc}')
+        return jsonify({'success': False, 'error': '上传失败'}), 500
+    return jsonify({'success': True, 'id': attachment_id, 'url': url})
+
+
+@app.route('/feedback-attachments/<token>')
+def feedback_attachment_serve(token):
+    attachment = feedback_attachments.open_attachment_file(token)
+    if attachment is None:
+        return jsonify({'success': False, 'error': 'not found'}), 404
+    path, mime = attachment
+    with open(path, 'rb') as fh:
+        data = fh.read()
+    response = app.response_class(data, mimetype=mime)
+    response.headers['Content-Disposition'] = 'inline'
+    response.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+    return response
+
+
+@app.route('/feedback/handling-pane')@app.route('/feedback/handling-pane')
 def feedback_handling_pane():
     if not is_feedback_handling_authenticated():
         return 'Forbidden', 403
@@ -26233,6 +26276,15 @@ def api_public_feedback_issue_create():
             normalized_body=normalized_body,
             risk_level=risk_level,
         )
+        # #235：挂上反馈图片附件（严格限制：≤300KB/张、≤3张、上传时已校验）。
+        attachment_ids = data.get('attachment_ids') or []
+        if isinstance(attachment_ids, list) and attachment_ids:
+            try:
+                valid_ids = [int(aid) for aid in attachment_ids[:public_feedback_max_attachments()]]
+                for aid in valid_ids:
+                    feedback_attachments.attach_to_issue(aid, payload.get('id'))
+            except (TypeError, ValueError) as exc:
+                admin_event('warning', f'feedback attachment link failed: {exc}', user_id=user_id)
         if replay_id:
             try:
                 hold_replay(

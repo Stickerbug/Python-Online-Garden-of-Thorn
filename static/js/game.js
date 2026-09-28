@@ -2633,6 +2633,12 @@ if (localStorage.getItem('gtn_lang') !== currentLang) localStorage.setItem('gtn_
 let showEnglishCardNames = localStorage.getItem('gtn_show_english_card_names') !== '0';
 let showHandOrder = localStorage.getItem('gtn_show_hand_order') === '1';
 let showCardImages = localStorage.getItem('gtn_show_card_images') !== '0';
+/* #242：触控兼容——开启后双击卡牌/术语 = 右键（打开/关闭介绍）。 */
+let touchDblclickIntro = localStorage.getItem('gtn_touch_dblclick_intro') === '1';
+
+function touchDblclickEnabled() {
+    try { return localStorage.getItem('gtn_touch_dblclick_intro') === '1'; } catch (_) { return false; }
+}
 let landscapeModeEnabled = localStorage.getItem('gtn_landscape_mode') === '1';
 let storyCardBordersHidden = localStorage.getItem('gtn_story_hide_card_borders') === '1';
 let playGestureAnimationEnabled = localStorage.getItem('gtn_play_gesture_animation') === '1';
@@ -7786,6 +7792,12 @@ function bindRulesCardChips(root) {
         };
         chip.addEventListener('click', showIntro);
         chip.addEventListener('contextmenu', toggleIntro);
+        chip.addEventListener('dblclick', (event) => {
+            if (!touchDblclickEnabled()) return;
+            event.preventDefault();
+            event.stopPropagation();
+            toggleIntro(event);
+        });
         chip.addEventListener('keydown', (event) => {
             if (event.key === 'Enter' || event.key === ' ') showIntro(event);
         });
@@ -9306,6 +9318,12 @@ function renderCardGallery() {
                 };
                 wrap.addEventListener('click', openIntro);
                 wrap.addEventListener('contextmenu', toggleIntro);
+                wrap.addEventListener('dblclick', (event) => {
+                    if (!touchDblclickEnabled()) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    toggleIntro(event);
+                });
                 fragment.appendChild(wrap);
             }
             grid.appendChild(fragment);
@@ -40019,6 +40037,14 @@ async function init() {
     if (cardImagesToggle) {
         cardImagesToggle.checked = showCardImages;
         cardImagesToggle.addEventListener('change', (e) => applyShowCardImages(e.target.checked));
+    }
+    const touchDblclickToggle = $('settings-touch-dblclick-intro');
+    if (touchDblclickToggle) {
+        touchDblclickToggle.checked = touchDblclickEnabled();
+        touchDblclickToggle.addEventListener('change', (e) => {
+            try { localStorage.setItem('gtn_touch_dblclick_intro', e.target.checked ? '1' : '0'); } catch (_) {}
+            touchDblclickIntro = e.target.checked;
+        });
     }
     const playGestureToggle = $('settings-play-gesture-animation');
     if (playGestureToggle) {
