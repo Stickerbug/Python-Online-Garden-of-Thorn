@@ -25,7 +25,7 @@ class GameEngine2v2(GameEngine):
     BLOOD_SHIELD_INITIAL = 66
     BLOOD_SHIELD_DECAY_PER_ROUND = 33
     # 有人可反制的反制窗口：最长 5s（到点自动替未响应者「不反制」）；
-    # 所有响应者提前表态则立即结算（passed_responder_ids 全员命中）。
+    # 2s 内到达的响应由 app 层压到整 2s 再结算（2s 内完成也 2s 时结束）。
     FORCED_RESPONSE_WINDOW_SECONDS = 5.0
     # 无人可反制的纯等待窗：固定 2s 后直接结算，不出响应面板。
     FORCED_WAIT_SECONDS = 2.0
@@ -1516,6 +1516,10 @@ class GameEngine2v2(GameEngine):
         finally:
             self._pending_response_preview = prev_preview
         if not self._pending_response_has_payable_counter({'counter_cards': counter_cards}):
+            # 装备牌（root）无人可反制时直接结算、不开 2s 强制等待
+            # （设计 2026-09-28：没有反制牌能反制装备）。
+            if getattr(card, 'card_type', '') == 'root':
+                return None
             # 2s 强制反制窗口：无人能反制时也开窗（隐匿在函数开头已返回 None），
             # 到点由 app 层定时器调 resolve_forced_response 结算，不泄露手牌信息。
             return {
@@ -1544,7 +1548,8 @@ class GameEngine2v2(GameEngine):
             'forced_wait': False,
             'responder_ids': list(responder_ids),
             'passed_responder_ids': [],
-            # 反制窗口最长 5s：到点替未响应者「不反制」；全员提前表态则立即结算。
+            # 反制窗口最长 5s：到点替未响应者「不反制」；2s 内到达的响应由
+            # app 层压到整 2s 再结算（2s 内完成也 2s 时结束暂停）。
             'window_deadline': time.time() + self.FORCED_RESPONSE_WINDOW_SECONDS,
         }
 

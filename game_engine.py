@@ -4,6 +4,7 @@ import json
 import base64
 import re
 import copy
+import time
 from contextlib import contextmanager
 from typing import Any, List, Dict, Optional, Tuple, Set
 from cards import (
@@ -924,6 +925,12 @@ class GameEngine:
     SETUP_CARD_LEAF = 'Leaf'
     # 能量涌动（事件 6）：自己回合结束时把剩余 E//2 记账，下回合开始返还。
     ENERGY_SURGE_PENDING_KEY = 'energy_surge_pending_bonus'
+    # 反制窗口节奏（设计 2026-09-28，仅真实对局启用——solo/AI 训练保持即时）：
+    # 有人可反制的窗口最长 5s，到点服务端自动替未响应者「不反制」；
+    # 无人可反制的非装备牌也开 2s 纯等待窗（不泄露时序信息）；
+    # 2s 内到达的响应由 app 层压到整 2s 再结算（2s 内完成也 2s 时结束）。
+    FORCED_RESPONSE_WINDOW_SECONDS = 5.0
+    FORCED_WAIT_SECONDS = 2.0
     OPENING_EVENTS = {
         1: {'id': 1, 'name': '生命强化', 'desc': '最大生命值+20', 'position': 1},
         2: {'id': 2, 'name': '魔力转化', 'desc': '将最多3张牌转化为[[card:ManaOrb|flag=sprout|flag=symbiosis]]', 'position': 2},
@@ -9398,12 +9405,33 @@ class GameEngine:
             self._active_choice = prev_choice
             self._pending_response_preview = prev_preview
         if not needs_response:
+            # 反制窗口节奏（真实对局，response_pacing 由房间层开启）：装备牌
+            # （root）与隐匿直接结算；其余牌开 2s 纯等待窗——不管对手有没有
+            # 反制都停 2s，不泄露时序信息，到点由 app 层结算。
+            if (
+                getattr(self, 'response_pacing', False)
+                and getattr(card, 'card_type', '') != 'root'
+                and not self._card_blocks_response(card)
+            ):
+                self.pending_response = {
+                    'card': card.to_dict(),
+                    'player_id': player_id,
+                    'target_player_id': response_target_id,
+                    'original_choice': choice,
+                    'is_precision': 'precision' in self._effective_card_flags(card),
+                    'bio_pre_play_snapshot': getattr(card, '_bio_pre_play_snapshot', None),
+                    'paid_e': self._actual_card_elixir_cost(card),
+                    'paid_m': max(0, int(getattr(card, '_paid_m_this_play', getattr(card, 'cost_m', 0)) or 0)),
+                    'forced_wait': True,
+                    'forced_deadline': time.time() + self.FORCED_WAIT_SECONDS,
+                }
+                return {'success': True, 'needs_response': True, 'card': card.to_dict()}
             return None
         self._fire_window_open_hook(
             'on_response_window', player_id, response_target_id, card,
             window='response', def_id=getattr(card, 'def_id', ''),
         )
-        self.pending_response = {
+        pending = {
             'card': card.to_dict(),
             'player_id': player_id,
             'target_player_id': response_target_id,
@@ -9413,7 +9441,33 @@ class GameEngine:
             'paid_e': self._actual_card_elixir_cost(card),
             'paid_m': max(0, int(getattr(card, '_paid_m_this_play', getattr(card, 'cost_m', 0)) or 0)),
         }
+        if getattr(self, 'response_pacing', False):
+            pending['forced_wait'] = False
+            pending['window_deadline'] = time.time() + self.FORCED_RESPONSE_WINDOW_SECONDS
+        self.pending_response = pending
         return {'success': True, 'needs_response': True, 'card': card.to_dict()}
+
+    def resolve_forced_response(self) -> dict:
+        """结算 2s 强制等待窗：无人可反制，到点直接执行被卡住的出牌。"""
+        pending = self.pending_response
+        if not isinstance(pending, dict) or not pending.get('forced_wait'):
+            return {'success': False, 'error': '没有待结算的强制反制窗口'}
+        self.pending_response = None
+        player_id = int(pending['player_id'])
+        card = CardInstance.from_dict(pending['card'])
+        card._paid_e_this_play = max(
+            0,
+            int(pending.get('paid_e', getattr(card, 'cost_e', 0)) or 0),
+        )
+        card._paid_m_this_play = max(
+            0,
+            int(pending.get('paid_m', getattr(card, 'cost_m', 0)) or 0),
+        )
+        if isinstance(pending.get('bio_pre_play_snapshot'), dict):
+            card._bio_pre_play_snapshot = dict(pending.get('bio_pre_play_snapshot') or {})
+        choice = pending.get('original_choice')
+        result = self._execute_card_effect(player_id, card, choice)
+        return self._after_response_result(player_id, result)
 
     def play_card(self, player_id: int, card_instance_id: int, choice: Optional[dict] = None) -> dict:
         ps = self.players[player_id]

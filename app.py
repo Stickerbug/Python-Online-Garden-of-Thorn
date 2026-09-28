@@ -3256,6 +3256,8 @@ class GameRoom:
             self.engine = GameEngineInfiniteFire()
         else:
             self.engine = GameEngine()
+        # 反制窗口节奏只作用于真实对局房间（solo/AI 训练引擎保持即时结算）。
+        self.engine.response_pacing = True
         self.engine.allowed_card_ids = apply_runtime_content_filter(allowed_card_ids, mode) if allowed_card_ids is not None else None
         self.match_allowed_card_ids = (
             frozenset(self.engine.allowed_card_ids)
@@ -20212,9 +20214,25 @@ def _auto_resolve_unreachable_pending_response(room, reason='unreachable'):
     return True
 
 
+def _response_window_hold_seconds(pending):
+    """反制窗口 2s 保底（真实对局）：窗口开启 2s 内不结算——2s 内完成的
+    响应也压到整 2s 才结束暂停。返回还需等待的秒数（不适用则 0）。
+    以 window_deadline 的存在性识别服务端窗口节奏（solo/AI 的 pending
+    没有该字段，保持即时）。"""
+    if not isinstance(pending, dict) or pending.get('forced_wait'):
+        return 0.0
+    if not pending.get('window_deadline'):
+        return 0.0
+    created = _pending_created_at(pending)
+    if not created:
+        return 0.0
+    return max(0.0, created + 2.0 - time.time())
+
+
 def schedule_forced_response_resolution(room):
-    """2v2 反制窗口 2s 硬上限：到点替所有未响应者「不反制」并结算；
-    无人可反制的强制窗口则直接执行被打出的牌。"""
+    """反制窗口服务端时限（1v1/2v2 同口径）：有人可反制的窗口到点（5s）替
+    所有未响应者「不反制」并结算；无人可反制的强制等待窗到点（2s）直接
+    执行被打出的牌。"""
     engine = getattr(room, 'engine', None)
     pending = getattr(engine, 'pending_response', None) if engine is not None else None
     if not isinstance(pending, dict):
@@ -20300,10 +20318,11 @@ def schedule_forced_response_resolution(room):
 def emit_or_resolve_pending_response(room, reason='emit'):
     _stamp_pending_interactions(room)
     pending_now = getattr(getattr(room, 'engine', None), 'pending_response', None)
-    if getattr(room, 'mode', None) == '2v2' and isinstance(pending_now, dict):
-        # 反制窗口最长 5s（设计 9.22 #零-5 修订）：到点自动替未响应者
-        # 「不反制」；全员提前表态则立即结算。forced_wait（无人可反制）
-        # 是纯等待窗：不发响应请求，固定 2s 后直接结算。
+    if isinstance(pending_now, dict):
+        # 反制窗口节奏（设计 2026-09-28，1v1/2v2 同口径）：有人可反制最长 5s，
+        # 到点自动替未响应者「不反制」；2s 内到达的响应由 on_response 压到
+        # 整 2s 再结算。forced_wait（无人可反制）是纯等待窗：不发响应请求，
+        # 固定 2s 后直接结算。
         schedule_forced_response_resolution(room)
         if pending_now.get('forced_wait'):
             return 0
@@ -20325,7 +20344,32 @@ def emit_or_resolve_pending_response(room, reason='emit'):
 
 
 def _auto_fire_stand_ready_counters(room):
-    """蓄势待发（导弹词条）：符合条件的反制牌立即自动使用，不等玩家点击。"""
+    """蓄势待发（导弹词条）：符合条件的反制牌立即自动使用，不等玩家点击。
+    反制窗口 2s 保底期间推迟到整 2s 触发（返回 'deferred'，由后台任务接管）。"""
+    engine = getattr(room, 'engine', None)
+    pending = getattr(engine, 'pending_response', None) if engine is not None else None
+    if not isinstance(pending, dict) or getattr(engine, 'game_over', False):
+        return False
+    hold_seconds = _response_window_hold_seconds(pending)
+    if hold_seconds > 0:
+        def _fire_later():
+            socketio.sleep(hold_seconds)
+            engine_now = getattr(room, 'engine', None)
+            if getattr(engine_now, 'pending_response', None) is not pending:
+                return
+            if not _fire_stand_ready_counters_now(room):
+                return
+            with _lock:
+                _sync_room_action_timer_after_state_change(room)
+            emit_turn_timer_update(room)
+            broadcast_game_state(room)
+            emit_pending_interaction_after_state_change(room, reason='stand_ready_held')
+        _start_socket_background_task(_fire_later)
+        return 'deferred'
+    return _fire_stand_ready_counters_now(room)
+
+
+def _fire_stand_ready_counters_now(room):
     engine = getattr(room, 'engine', None)
     pending = getattr(engine, 'pending_response', None) if engine is not None else None
     if not isinstance(pending, dict) or getattr(engine, 'game_over', False):
@@ -20373,9 +20417,13 @@ def emit_pending_interaction_after_state_change(room, reason='state_change'):
     if engine is None or getattr(engine, 'game_over', False):
         return
     if getattr(engine, 'pending_response', None):
-        if _auto_fire_stand_ready_counters(room):
+        fired = _auto_fire_stand_ready_counters(room)
+        if fired is True:
             broadcast_game_state(room)
             emit_pending_interaction_after_state_change(room, reason=f'{reason}:stand_ready')
+            return
+        if fired == 'deferred':
+            # 2s 保底期间延迟触发；窗口本身由后台任务在触发后广播
             return
         emit_or_resolve_pending_response(room, reason=reason)
         return
@@ -34717,12 +34765,29 @@ def on_response(data):
         engine = room.engine
     if reject_stale_room_event_context(sid, 'response', data, room, pidx):
         return
-    busy_lock = _try_acquire_room_action(room, sid, 'response', pidx)
+    # 反制窗口 2s 保底：窗口开启 2s 内到达的响应压到整 2s 再处理（2s 内
+    # 完成响应也 2s 时结束暂停）；2s 后随到随结，5s 上限由服务端定时器兜底。
+    with _lock:
+        pending_early = getattr(engine, 'pending_response', None)
+        hold_seconds = _response_window_hold_seconds(pending_early)
+    if hold_seconds > 0:
+        socketio.sleep(hold_seconds)
+    # 2s 点位可能多个响应同时醒来竞争房间锁：短暂重试，避免响应被静默丢弃
+    busy_lock = None
+    for _attempt in range(10):
+        busy_lock = _try_acquire_room_action(room, sid, 'response', pidx)
+        if busy_lock is not None:
+            break
+        socketio.sleep(0.2)
     if busy_lock is None:
         return
     try:
         pending_response = getattr(engine, 'pending_response', None)
         if not pending_response:
+            soft_reject(sid, 'response', 'RESPONSE_NOT_EXPECTED', room=room, pidx=pidx, send_state=True)
+            return
+        if pending_response.get('forced_wait'):
+            # 强制等待窗不收响应（本就无人可反制）
             soft_reject(sid, 'response', 'RESPONSE_NOT_EXPECTED', room=room, pidx=pidx, send_state=True)
             return
         if room.mode == '2v2':
@@ -35594,6 +35659,7 @@ def on_rematch(data=None):
                     room.engine = GameEngineInfiniteFire()
                 else:
                     room.engine = GameEngine()
+                room.engine.response_pacing = True
                 room.engine.available_builtin_setup_card_ids = apply_runtime_content_filter(BUILTIN_SETUP_CARD_IDS, room.mode)
                 room._history_recorded = False
                 room.match_seq = int(getattr(room, 'match_seq', 1) or 1) + 1
