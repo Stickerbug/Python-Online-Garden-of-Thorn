@@ -16836,20 +16836,13 @@ html[data-ui-style="minimal"] .btn-end-turn {
 .classic-pile-btn.icon-counter {
   font-size: 30px;
 }
-/* 弃牌+放逐组：StS2 式贴屏幕右下角（command-panel 覆盖 end 区） */
-.classic-command-panel {
-  position: relative;
-}
+/* 弃牌+放逐组：StS2 式右侧垂直堆叠——排在 End Turn 按钮下方，不重叠 */
 .classic-command-panel .classic-piles-discard {
-  position: absolute;
-  right: 14px;
-  bottom: 10px;
   display: inline-flex;
   align-items: center;
   gap: 12px;
-  margin: 0;
-  padding: 4px 6px;
-  z-index: 7;
+  margin: 2px 0 0;
+  padding: 2px 4px;
 }
 
 .classic-stage {

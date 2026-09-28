@@ -854,15 +854,11 @@
   </div>
   <div id="classic-hand-fan" class="classic-hand-fan"></div>
   <div class="classic-command-panel">
-    <div class="classic-piles classic-piles-discard">
-      <button type="button" id="classic-discard-count" class="classic-pile-btn" title="Discard"></button>
-      <button type="button" id="classic-exile-count" class="classic-pile-btn" title="Exile"></button>
-    </div>
     <div id="classic-extra-controls" class="classic-extra-controls hidden">
       <button id="classic-switch-perspective" class="classic-mini-btn hidden" type="button">Switch</button>
-      <button id="classic-view-deck" class="classic-mini-btn" type="button">查看抽牌堆</button>
-      <button id="classic-view-discard" class="classic-mini-btn" type="button">查看弃牌堆</button>
-      <button id="classic-view-exile" class="classic-mini-btn" type="button">查看放逐区</button>
+      <button id="classic-view-deck" class="classic-mini-btn hidden" type="button">查看抽牌堆</button>
+      <button id="classic-view-discard" class="classic-mini-btn hidden" type="button">查看弃牌堆</button>
+      <button id="classic-view-exile" class="classic-mini-btn hidden" type="button">查看放逐区</button>
       <button id="classic-leave-spectate" class="classic-mini-btn hidden" type="button">退出</button>
       <button id="classic-urf-replace" class="classic-mini-btn hidden" type="button">替换手牌</button>
       <button id="classic-urf-sell" class="classic-mini-btn hidden" type="button">售卖装备</button>
@@ -870,6 +866,11 @@
       <button id="classic-solo-edit" class="classic-mini-btn hidden" type="button">暂停编辑</button>
     </div>
     <button id="classic-end-turn" class="classic-end-turn" type="button">结束回合</button>
+    <!-- StS2 式右侧垂直堆叠：End Turn 在上，弃牌+放逐图标在其下方的右下角 -->
+    <div class="classic-piles classic-piles-discard">
+      <button type="button" id="classic-discard-count" class="classic-pile-btn" title="Discard"></button>
+      <button type="button" id="classic-exile-count" class="classic-pile-btn" title="Exile"></button>
+    </div>
   </div>
 </div>
 <div class="game-container">
