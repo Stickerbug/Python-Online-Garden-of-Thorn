@@ -15622,8 +15622,8 @@ def get_card_skin_shop(user_id):
             'special': offer['special'] or '',
             'purchased': offer['skin_id'] in owned,
             'owned': offer['skin_id'] in owned,
-            'front_url': "/static/assets/card-skins/front/%s.svg" % offer['skin_id'],
-            'back_url': "/static/assets/card-skins/back/%s.svg" % offer['skin_id'],
+            'front_url': "/static/assets/card-skins/front/%s.svg?v=%d" % (offer['skin_id'], _cs.CARD_SKIN_ART_REVISION),
+            'back_url': "/static/assets/card-skins/back/%s.svg?v=%d" % (offer['skin_id'], _cs.CARD_SKIN_ART_REVISION),
         })
     return {
         'set_id': active_set_id,

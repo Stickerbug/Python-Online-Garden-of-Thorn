@@ -12225,14 +12225,18 @@ function cardSkinById(skinId) {
     return String(skinId || '').trim();
 }
 
+/* 卡面/卡背美术修订号：换图时 bump（与 GTN_STATIC_VERSION 独立，
+   服务端 card_skins.py 的 URL 同步带参，避免旧 SVG 被浏览器缓存） */
+const CARD_SKIN_ART_REVISION = 2;
+
 function cardSkinBackUrl(skinId) {
     const id = cardSkinById(skinId);
-    return id ? `/static/assets/card-skins/back/${encodeURIComponent(id)}.svg` : '';
+    return id ? `/static/assets/card-skins/back/${encodeURIComponent(id)}.svg?v=${CARD_SKIN_ART_REVISION}` : '';
 }
 
 function cardSkinFrontUrl(skinId) {
     const id = cardSkinById(skinId);
-    return id ? `/static/assets/card-skins/front/${encodeURIComponent(id)}.svg` : '';
+    return id ? `/static/assets/card-skins/front/${encodeURIComponent(id)}.svg?v=${CARD_SKIN_ART_REVISION}` : '';
 }
 
 window.__cardSkinCatalog = window.__cardSkinCatalog || {};
@@ -20188,7 +20192,7 @@ function renderCardSkinInventory() {
     if (!panel || !cardSkinInventory) return;
     const items = Array.isArray(cardSkinInventory.items) ? cardSkinInventory.items : [];
     const equipped = String(cardSkinInventory.equipped || '');
-    const defaultBack = cardSkinInventory.default_back_url || '/static/assets/card-skins/back/初始.svg';
+    const defaultBack = cardSkinInventory.default_back_url || `/static/assets/card-skins/back/初始.svg?v=${CARD_SKIN_ART_REVISION}`;
     const row = (skinId, name, backUrl, frontUrl, isEquipped, owned) => `
         <div class="card-skin-item${isEquipped ? ' equipped' : ''}" data-skin-id="${escapeHtml(skinId)}">
             <div class="card-skin-thumb"><img src="${escapeHtml(backUrl)}" alt=""></div>

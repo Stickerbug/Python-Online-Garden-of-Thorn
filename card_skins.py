@@ -28,6 +28,9 @@ CARD_SKIN_CATALOG = [
 ]
 
 DEFAULT_CARD_BACK = '初始'
+# 卡面/卡背美术修订号：换图时 bump（客户端 game.js 的 CARD_SKIN_ART_REVISION 同步改），
+# 让 URL 带参避免浏览器缓存旧 SVG。
+CARD_SKIN_ART_REVISION = 2
 
 SKIN_BY_ID = {item['skin_id']: item for item in CARD_SKIN_CATALOG}
 
@@ -121,13 +124,13 @@ def card_skin_payload(conn, user_id):
             'special': item['special'],
             'owned': item['skin_id'] in owned,
             'equipped': item['skin_id'] == equipped,
-            'front_url': f"/static/assets/card-skins/front/{item['skin_id']}.svg",
-            'back_url': f"/static/assets/card-skins/back/{item['skin_id']}.svg",
+            'front_url': f"/static/assets/card-skins/front/{item['skin_id']}.svg?v={CARD_SKIN_ART_REVISION}",
+            'back_url': f"/static/assets/card-skins/back/{item['skin_id']}.svg?v={CARD_SKIN_ART_REVISION}",
         })
     return {
         'items': items,
         'equipped': equipped,
-        'default_back_url': f'/static/assets/card-skins/back/{DEFAULT_CARD_BACK}.svg',
+        'default_back_url': f'/static/assets/card-skins/back/{DEFAULT_CARD_BACK}.svg?v={CARD_SKIN_ART_REVISION}',
     }
 
 
