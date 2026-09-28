@@ -19307,7 +19307,7 @@ function renderCardSkinShop() {
             : '';
         const action = owned
             ? `<button type="button" class="title-shop-buy-btn" disabled title="${escapeHtml(lt({ zh: '你已经拥有这个卡牌皮肤了！', en: 'You already own this card skin!', fr: 'Vous possédez déjà ce skin de carte !', ja: 'すでにこのカードスキンを持っています！' }))}">${escapeHtml(lt({ zh: '已拥有', en: 'Owned', fr: 'Possédé', ja: '所持済み' }))}</button>`
-            : `<button type="button" class="title-shop-buy-btn" data-card-skin-buy="${offer.slot}" ${cardSkinShopBusy ? 'disabled' : ''}>${thornDewAmountHtml(offer.price, 'dew-amount')}</button>`;
+            : `<button type="button" class="title-shop-buy-btn" data-card-skin-buy="${offer.slot}">${thornDewAmountHtml(offer.price, 'dew-amount')}</button>`;
         return `
         <article class="title-shop-item card-skin-shop-item" data-slot="${offer.slot}">
             <div class="card-skin-preview">
@@ -19327,19 +19327,19 @@ function renderCardSkinShop() {
             const slot = Number(btn.dataset.cardSkinBuy);
             const offer = (cardSkinShopData.offers || []).find(item => Number(item.slot) === slot);
             if (!offer) return;
-            const confirmed = await gameConfirm(
-                lt({ zh: '购买卡牌皮肤', en: 'Buy card skin', fr: 'Acheter le skin', ja: 'スキンを購入' }),
-                lt({
-                    zh: `花费 ${Number(offer.price || 0).toLocaleString()} 荆露购买“${offer.name || ''}”？`,
-                    en: `Buy “${offer.name || ''}” for ${Number(offer.price || 0).toLocaleString()} Thorn Dew?`,
-                    fr: `Acheter « ${offer.name || ''} » pour ${Number(offer.price || 0).toLocaleString()} Rosée d’épines ?`,
-                    ja: `「${offer.name || ''}」を${Number(offer.price || 0).toLocaleString()}ソーンデューで購入しますか？`,
-                }),
-            );
-            if (!confirmed) return;
+            /* busy 在确认框前就置位：确认期间再点其他购买/刷新按钮直接被守卫拦下 */
             cardSkinShopBusy = true;
-            btn.disabled = true;
             try {
+                const confirmed = await gameConfirm(
+                    lt({ zh: '购买卡牌皮肤', en: 'Buy card skin', fr: 'Acheter le skin', ja: 'スキンを購入' }),
+                    lt({
+                        zh: `花费 ${Number(offer.price || 0).toLocaleString()} 荆露购买“${offer.name || ''}”？`,
+                        en: `Buy “${offer.name || ''}” for ${Number(offer.price || 0).toLocaleString()} Thorn Dew?`,
+                        fr: `Acheter « ${offer.name || ''} » pour ${Number(offer.price || 0).toLocaleString()} Rosée d’épines ?`,
+                        ja: `「${offer.name || ''}」を${Number(offer.price || 0).toLocaleString()}ソーンデューで購入しますか？`,
+                    }),
+                );
+                if (!confirmed) return;
                 const response = await fetch('/api/card-skins/shop/purchase', {
                     method: 'POST',
                     credentials: 'same-origin',
@@ -19354,7 +19354,6 @@ function renderCardSkinShop() {
             } catch (err) {
                 const status = $('card-skin-shop-status');
                 if (status) status.textContent = err.message || '购买失败';
-                btn.disabled = false;
             } finally {
                 cardSkinShopBusy = false;
             }
@@ -19371,19 +19370,18 @@ function renderCardSkinShop() {
     refreshBtn.addEventListener('click', async () => {
         if (cardSkinShopBusy || !cardSkinShopData) return;
         const cost = Math.max(0, Number(cardSkinShopData.refresh_cost || 0) || 0);
-        const confirmed = await gameConfirm(
-            lt({ zh: '刷新商店', en: 'Refresh shop', fr: 'Actualiser la boutique', ja: 'ショップを更新' }),
-            lt({
-                zh: `花费 ${cost.toLocaleString()} 荆露刷新3个卡牌皮肤？本轮未购买的商品将被替换。`,
-                en: `Spend ${cost.toLocaleString()} Thorn Dew to refresh all 3 card skin offers? Unpurchased offers will be replaced.`,
-                fr: `Dépenser ${cost.toLocaleString()} Rosée d’épines pour remplacer les 3 skins ?`,
-                ja: `${cost.toLocaleString()}ソーンデューで3つのスキンを更新しますか？`,
-            }),
-        );
-        if (!confirmed) return;
         cardSkinShopBusy = true;
-        refreshBtn.disabled = true;
         try {
+            const confirmed = await gameConfirm(
+                lt({ zh: '刷新商店', en: 'Refresh shop', fr: 'Actualiser la boutique', ja: 'ショップを更新' }),
+                lt({
+                    zh: `花费 ${cost.toLocaleString()} 荆露刷新3个卡牌皮肤？本轮未购买的商品将被替换。`,
+                    en: `Spend ${cost.toLocaleString()} Thorn Dew to refresh all 3 card skin offers? Unpurchased offers will be replaced.`,
+                    fr: `Dépenser ${cost.toLocaleString()} Rosée d’épines pour remplacer les 3 skins ?`,
+                    ja: `${cost.toLocaleString()}ソーンデューで3つのスキンを更新しますか？`,
+                }),
+            );
+            if (!confirmed) return;
             const response = await fetch('/api/card-skins/shop/refresh', {
                 method: 'POST', credentials: 'same-origin',
             });
