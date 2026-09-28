@@ -8868,6 +8868,67 @@ html.blind-level-4 .card-prediction-part.magic {
   color: #FFF1A8;
 }
 
+/* 血盾（2v2 玩家属性）：与护甲/暴击/无敌计量条同款样式 */
+.blood-shield-meter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 42px;
+  height: 24px;
+  padding: 2px 7px;
+  border: 1px solid #B03A2E;
+  border-radius: 4px;
+  background: #FBEAE8;
+  color: #7B241C;
+  font-family: var(--font-main);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: 0 1px 2px rgba(35, 45, 45, 0.12);
+}
+
+.blood-shield-meter.hidden {
+  display: none !important;
+}
+
+.blood-shield-meter-icon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  flex: 0 0 auto;
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.35));
+}
+
+.blood-shield-meter-value {
+  min-width: 1.2em;
+  text-align: center;
+}
+
+[data-theme="dark"] .blood-shield-meter {
+  background: color-mix(in srgb, #F5B7B1 28%, #1d2328);
+  border-color: #C74A3E;
+  color: #F5B7B1;
+}
+
+/* 图鉴状态列表：玩家属性分组表头 */
+.gallery-status-group-header {
+  padding: 8px 10px 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  border-bottom: 1px dashed var(--border-light);
+  margin-top: 6px;
+}
+
+.gallery-attr-note {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
 .card.card-hel-extra-compact {
   --card-effect-font-scale: 7.25cqi;
   --card-effect-line-height: 1.12;

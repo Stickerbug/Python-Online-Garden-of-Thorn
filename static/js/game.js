@@ -7186,9 +7186,9 @@ function formatRoundStatus(gs, phaseText = '') {
     if (!Number.isFinite(roundNum) || roundNum <= 0) {
         if ((gs && gs.phase) === 'draft') return UI.draft_phase;
         if ((gs && gs.phase) === 'event_select') return UI.select_event;
-        return (phaseName || UI.draft_phase) + bloodShieldSuffix(gs);
+        return (phaseName || UI.draft_phase);
     }
-    return UI.round_status.replace('{0}', roundNum).replace('{1}', phaseName) + bloodShieldSuffix(gs);
+    return UI.round_status.replace('{0}', roundNum).replace('{1}', phaseName);
 }
 
 function isReadOnlyBattleStatus(gs = gameState) {
@@ -7253,20 +7253,14 @@ function formatBattlePhaseText(gs) {
     return gs.phase || '';
 }
 
-function bloodShieldSuffix(gs) {
-    const shield = Number(gs && gs.blood_shield);
-    if (!Number.isFinite(shield) || shield <= 0) return '';
-    return ` · ${UI.blood_shield_status ? UI.blood_shield_status.replace('{0}', String(shield)) : `盾${shield}`}`;
-}
-
 function formatCompactRoundStatus(gs, phaseText = '') {
     const roundNum = Number(gs && gs.round_num);
     if (!Number.isFinite(roundNum) || roundNum <= 0) {
         if ((gs && gs.phase) === 'draft') return UI.draft_phase;
         if ((gs && gs.phase) === 'event_select') return UI.select_event;
-        return (phaseText || UI.draft_phase) + bloodShieldSuffix(gs);
+        return (phaseText || UI.draft_phase);
     }
-    return `R${roundNum} · ${phaseText}` + bloodShieldSuffix(gs);
+    return `R${roundNum} · ${phaseText}`;
 }
 
 function formatGameBottomStatus(gs) {
@@ -9507,11 +9501,7 @@ function getAllStatusDefs() {
         { key: 'root_status', iconKey: 'root_status', label: '树根', desc: '树根层数显示在对应装备上，并计入目标护甲；目标受到[[icon:D]]时，对应装备减少1层树根。', color: '#6E8B3D' },
         { key: 'blood_debt', iconKey: 'blood_debt', label: '血债', desc: '受到[[icon:D]]时清除；攻击者获得等同于血债层数的[[icon:E]]。', color: '#8E1B2A' },
         { key: 'unable_counter', label: '无法反制', desc: '从左到右将层数张反制牌置入弃牌堆，然后减少对应层数。若层数不为0，抽到反制牌时自动将其置入弃牌堆并降低层数。', color: '#536878' },
-        { key: 'blood_shield', label: lt({ zh: '血盾', en: 'Blood Shield', fr: 'Bouclier Sanguin', ja: 'ブラッドシールド' }), desc: '2v2 模式机制：开局全体获得66层；期间自己血量不会低于当前血盾值；每个新回合开始时-33（66→33→0），为0后不再变动。对局中显示在回合数旁。血盾是模式机制而不是状态，不受状态免疫影响。', color: '#B03A2E' },
-        { key: 'invincible', iconKey: 'invincible', label: UI.status_invincible, desc: '', color: COLORS.elixir },
-        { key: 'armor', iconKey: 'armor', label: UI.status_armor || '护甲', desc: '', color: COLORS.armor_text },
-        { key: 'crit', label: lt({ zh: '暴击倍率', en: 'Critical Multiplier', fr: 'Multiplicateur critique', ja: 'クリティカル倍率' }), desc: '', color: '#D4AC0D' },
-        { key: 'equipment_armor', label: lt({ zh: '装备护甲', en: 'Equipment Armor', fr: 'Armure d’équipement', ja: '装備護甲' }), desc: '', color: COLORS.indestructible },
+        { key: 'luck', iconKey: 'luck', label: '幸运', desc: '即将造成一段[[icon:D]]时，若幸运层数不少于该段减伤前伤害，则消耗等量幸运，使该段伤害暴击。', color: '#63B85C', source: 'vanilla' },
         { key: 'luck', iconKey: 'luck', label: '幸运', desc: '即将造成一段[[icon:D]]时，若幸运层数不少于该段减伤前伤害，则消耗等量幸运，使该段伤害暴击。', color: '#63B85C', source: 'vanilla' },
         { key: 'blazing_fire', iconKey: 'blazing_fire', label: '烈火', desc: '自己回合开始时，对自己施加等同于烈火层数的[[icon:F]]；不自动减少。', color: '#FF5D2E', source: 'vanilla' },
         { key: 'jungle:fragile', label: '易损', desc: '护甲降低对应层数；若护甲被降到负数，会让受到的物理伤害增加。自己回合开始时清除。', color: '#8E5A2A', source: 'vanilla' },
@@ -9519,6 +9509,12 @@ function getAllStatusDefs() {
         { key: 'jungle:turn_heal_turns', iconKey: 'turn_heal', label: '回合回复', desc: '回合回复:X;Y：出现时及自己回合开始时回复Y[[icon:H]]，然后X-1；X为0时移除。', color: '#F48FB1', source: 'vanilla' },
         { key: 'jungle:turn_magic_turns', iconKey: 'turn_magic', label: '魔力回合回复', desc: '魔力回合回复:X;Y：出现时及自己回合开始时回复Y[[icon:M]]，然后X-1；X为0时移除。', color: COLORS.magic, source: 'vanilla' },
         { key: 'jungle:toxic_poison', iconKey: 'toxic_poison', label: '剧毒', desc: '中毒结算后，对自己施加等同于剧毒层数的[[icon:P]]；不自动减少。', color: '#5E8C31', source: 'vanilla' },
+        /* 玩家属性（不是状态，不受状态免疫影响）：放在状态列表末尾成组展示。
+           label/desc 由术语库按别名填充（blood_shield 术语见 getTermIntroLibrary）。 */
+        { key: 'blood_shield', group: 'player_attr', iconKey: 'blood_shield', label: lt({ zh: '血盾', en: 'Blood Shield', fr: 'Bouclier Sanguin', ja: 'ブラッドシールド' }), desc: '', color: '#B03A2E', source: '玩家属性' },
+        { key: 'invincible', group: 'player_attr', iconKey: 'invincible', label: UI.status_invincible, desc: '', color: COLORS.elixir, source: '玩家属性' },
+        { key: 'armor', group: 'player_attr', iconKey: 'armor', label: UI.status_armor || '护甲', desc: '', color: COLORS.armor_text, source: '玩家属性' },
+        { key: 'crit', group: 'player_attr', label: lt({ zh: '暴击倍率', en: 'Critical Multiplier', fr: 'Multiplicateur critique', ja: 'クリティカル倍率' }), desc: '', color: '#D4AC0D', source: '玩家属性' },
     ];
     const statusTermAliases = {
         poison: 'P', fire: 'F', toxic: 'toxic', triangle: 'triangle', nazar: 'nazar',
@@ -9531,7 +9527,7 @@ function getAllStatusDefs() {
         magic_blocked: 'magic_blocked', root_status: 'root_status', blood_debt: 'blood_debt',
         unable_counter: 'unable_counter', luck: 'luck', blazing_fire: 'blazing_fire',
         blood_shield: 'blood_shield', invincible: 'invincible', armor: 'A',
-        crit: 'crit', equipment_armor: 'equipment_armor',
+        crit: 'crit',
         'jungle:fragile': 'fragile', 'jungle:shield': 'shield',
         'jungle:turn_heal_turns': 'turn_heal', 'jungle:turn_magic_turns': 'turn_magic',
         'jungle:toxic_poison': 'toxic_poison',
@@ -9587,6 +9583,7 @@ const STATUS_ICON_KEYS = new Set([
     'armor', 'attack_blocked', 'attack_only', 'bandage', 'bleed', 'blind', 'blood_debt', 'dodge', 'equip_protect',
     'fire', 'foresight', 'fracture', 'fragile', 'fragment', 'heal_block',
     'invincible', 'luck', 'magic_blocked', 'magic_nazar', 'nazar', 'overload', 'poison',
+    'blood_shield',
     'root_status', 'shield', 'sluggish', 'stagnation', 'status_immune',
     'stunned', 'toxic_poison', 'toxic', 'triangle', 'turn_heal', 'turn_magic',
     'unable_counter', 'blazing_fire', 'frost', 'debt', 'extra_healing', 'shield_conversion',
@@ -9635,10 +9632,18 @@ function renderStatusGallery(list, detail, q) {
     const statusIds = statuses.map(s => `status:${s.key}`);
     if (!statusIds.includes(gallerySelectedId)) gallerySelectedId = statusIds[0] || null;
     list.innerHTML = '';
+    let attrHeaderEmitted = false;
     statuses.forEach(s => {
         const id = `status:${s.key}`;
+        if (s.group === 'player_attr' && !attrHeaderEmitted) {
+            const header = document.createElement('div');
+            header.className = 'gallery-status-group-header';
+            header.textContent = lt({ zh: '玩家属性（不是状态，不受状态免疫影响）', en: 'Player Attributes (not statuses; unaffected by Status Immune)', fr: 'Attributs du joueur (pas des statuts ; insensibles à l’immunité aux statuts)', ja: 'プレイヤー属性（状態ではない。状態免疫の影響を受けない）' });
+            list.appendChild(header);
+            attrHeaderEmitted = true;
+        }
         const row = document.createElement('div');
-        row.className = 'gallery-card-row' + (id === gallerySelectedId ? ' active' : '');
+        row.className = 'gallery-card-row' + (id === gallerySelectedId ? ' active' : '') + (s.group === 'player_attr' ? ' gallery-attr-row' : '');
         const statusColorStyle = `--status-fg:${escapeHtml(s.color || COLORS.text_primary)}`;
         const sourceTag = s.source === 'vanilla' ? '' : `<span class="gallery-row-meta gallery-status-source" style="${statusColorStyle}">${escapeHtml(s.source)}</span>`;
         row.innerHTML = `<div class="gallery-row-title gallery-status-title" style="${statusColorStyle}">${renderStatusIconHtml(s.key, s.label, s.iconKey, 'gallery-row')}${escapeHtml(s.label)}</div>${sourceTag}`;
@@ -9657,6 +9662,7 @@ function renderStatusGallery(list, detail, q) {
         <p><b>ID：</b>${escapeHtml(s.key)}</p>
         <p><b>来源：</b>${escapeHtml(s.source === 'vanilla' ? '原版' : s.source)}</p>
         <p>${colorizeCardText(s.desc || '')}</p>
+        ${s.group === 'player_attr' ? `<p class="gallery-attr-note">${escapeHtml(lt({ zh: '玩家属性：不是状态，不受状态免疫影响。', en: 'Player attribute: not a status; unaffected by Status Immune.', fr: 'Attribut du joueur : ce n’est pas un statut ; insensible à l’immunité aux statuts.', ja: 'プレイヤー属性：状態ではないため、状態免疫の影響を受けません。' }))}</p>` : ''}
     </div>`;
     bindGalleryTermDescriptionInteractions(detail);
 }
@@ -15353,6 +15359,7 @@ function getTermIntroLibrary() {
         crit: { label: lt({ zh: '暴击', en: 'Critical', fr: 'Critique', ja: 'クリティカル' }), desc: lt({ zh: '使一次物理伤害乘以暴击倍率。初始暴击倍率为×2，部分效果可以提高倍率。', en: 'Multiplies one physical damage hit by the critical multiplier. The base multiplier is ×2, and some effects can raise it.', fr: 'Multiplie un coup de dégâts physiques par le multiplicateur critique. Le multiplicateur de base est ×2, certains effets peuvent l’augmenter.', ja: '1回の物理ダメージに暴击倍率を掛けます。基本倍率は×2で、一部効果で上昇します。' }), color: '#D4AC0D', iconKey: 'critical' },
         A: { label: lt({ zh: 'A：护甲(Armor)', en: 'A: Armor', fr: 'A : armure', ja: 'A：護甲' }), desc: lt({ zh: '用于抵消 D；不会减少中毒、灼烧等状态造成的魔法伤害。护甲不是状态，不受状态免疫影响。', en: 'Reduces D. It does not reduce magic damage from Poison, Burn, or similar states. Armor is not a status and is not affected by Status Immune.', fr: 'Réduit D. Ne réduit pas les dégâts magiques du Poison, de la Brûlure ou des états similaires. L’armure n’est pas un statut et n’est pas affectée par l’immunité aux statuts.', ja: 'D を軽減します。中毒、灼烧などの魔法ダメージは軽減しません。護甲は状態ではなく、状態免疫の影響を受けません。' }), color: COLORS.armor_text },
         invincible: { label: UI.status_invincible || lt({ zh: '无敌', en: 'Invincible', fr: 'Invincible', ja: '無敵' }), desc: lt({ zh: '无敌期间免疫受到的伤害。无敌不是状态，不受状态免疫影响。', en: 'Prevents incoming damage while active. Invincible is not a state and is not affected by Status Immune.', fr: 'Empêche les dégâts reçus tant que l’effet est actif. Invincible n’est pas un statut et n’est pas affecté par l’immunité aux statuts.', ja: '有効中は受けるダメージを無効にします。無敵は状態ではなく、状態免疫の影響を受けません。' }), color: COLORS.elixir, iconKey: 'invincible' },
+        blood_shield: { label: lt({ zh: '血盾', en: 'Blood Shield', fr: 'Bouclier Sanguin', ja: 'ブラッドシールド' }), desc: lt({ zh: '2v2 模式下全体玩家共用：开局66层，期间自己血量不会低于当前血盾值；每个新回合开始时-33（66→33→0），为0后不再变动。血盾是玩家属性而不是状态，不受状态免疫影响。', en: '2v2 mode, shared by all players: starts at 66; your health cannot drop below the current Blood Shield value; it drops by 33 at the start of each new round (66→33→0) and stops changing at 0. Blood Shield is a player attribute, not a status, and is unaffected by Status Immune.', fr: 'Mode 2v2, partagé par tous les joueurs : commence à 66 ; vos points de vie ne peuvent pas descendre sous la valeur du Bouclier Sanguin ; il diminue de 33 au début de chaque nouveau tour (66→33→0) puis reste à 0. Le Bouclier Sanguin est un attribut du joueur, pas un statut ; insensible à l’immunité aux statuts.', ja: '2v2モードで全プレイヤー共通：開幕66層。効果中、自分のHは現在のブラッドシールド値を下回りません。新しいラウンド開始時に-33（66→33→0）、0で変動なし。ブラッドシールドは状態ではなくプレイヤー属性のため、状態免疫の影響を受けません。' }), color: '#B03A2E', iconKey: 'blood_shield' },
         P: { label: lt({ zh: 'P：中毒(Poison)', en: 'P: Poison', fr: 'P : poison', ja: 'P：毒' }), desc: lt({ zh: '你的回合开始时，先受到等同当前 P 层数的魔法伤害；如果没有被击败，P 变为向下取整的一半，例如 10P→5P，5P→2P。', en: 'At your turn start, take magic damage equal to current P. If you survive, P halves rounded down, e.g. 10P→5P, 5P→2P.', fr: 'Au début de votre tour, subissez des dégâts magiques égaux au P actuel. Si vous survivez, P est divisé par deux arrondi à l’inférieur, ex. 10P→5P, 5P→2P.', ja: '自分のターン開始時、現在の P と同じ魔法ダメージを受けます。生存していれば P は切り捨てで半減します。例：10P→5P、5P→2P。' }), color: COLORS.poison },
         F: { label: lt({ zh: 'F：灼烧(Fire)', en: 'F: Burn', fr: 'F : brûlure', ja: 'F：火傷' }), desc: lt({ zh: '你的回合开始时，受到等同当前 F 层数的魔法伤害。灼烧层数不会减少。回合进行到 10 回合及以上后，每回合开始时对所有玩家施加1层灼烧。', en: 'At your turn start, take magic damage equal to current F. Burn stacks do not decrease. From round 10 onward, all players gain 1 Burn at each turn start.', fr: 'Au début de votre tour, subissez des dégâts magiques égaux au F actuel. Les charges de Brûlure ne diminuent pas. À partir du tour 10, tous les joueurs gagnent 1 Brûlure au début de chaque tour.', ja: '自分のターン開始時、現在の F と同じ魔法ダメージを受けます。火傷は減少しません。10ラウンド以降、各ターン開始時に全員へ火傷1層を付与します。' }), color: COLORS.fire },
         toxic: { label: `${UI.status_toxic || 'Toxic'}(Toxic)`, desc: lt({ zh: '造成实际 D 后，对目标施加与淬毒层数相同的 P 层数。伤害被完全挡住时不会触发。', en: 'After actually dealing D, apply P equal to Toxic stacks. It does not trigger if all damage is blocked.', fr: 'Après avoir réellement infligé D, applique P égal aux charges de Toxique. Ne se déclenche pas si tous les dégâts sont bloqués.', ja: '実際に D を与えた後、淬毒層数と同じ P を付与します。ダメージが完全に防がれた場合は発動しません。' }), color: '#6C3483' },
@@ -31100,7 +31107,8 @@ function renderPlayerBars(containerId, playerData) {
     if (container.querySelectorAll('.bar-wrapper').length !== bars.length
         || !container.querySelector('.armor-meter')
         || !container.querySelector('.crit-meter')
-        || !container.querySelector('.invincible-meter')) {
+        || !container.querySelector('.invincible-meter')
+        || !container.querySelector('.blood-shield-meter')) {
         container.innerHTML = '';
         bars.forEach(bar => {
             const wrapper = document.createElement('div');
@@ -31150,6 +31158,19 @@ function renderPlayerBars(containerId, playerData) {
         invincible.dataset.termColor = COLORS.elixir;
         invincible.innerHTML = '<img class="invincible-meter-icon" src="/static/assets/status-icons/invincible.svg" alt="" aria-hidden="true">';
         container.appendChild(invincible);
+        /* 血盾（2v2 玩家属性）：与护甲/暴击/无敌同一套计量条样式 */
+        const bloodShield = document.createElement('button');
+        const bloodShieldLabel = (getTermIntroLibrary().blood_shield || {}).label || '血盾';
+        bloodShield.type = 'button';
+        bloodShield.className = 'blood-shield-meter hidden';
+        bloodShield.dataset.termKey = 'term:blood_shield';
+        bloodShield.dataset.termLabel = bloodShieldLabel;
+        bloodShield.dataset.termColor = '#B03A2E';
+        bloodShield.innerHTML = `
+            <img class="blood-shield-meter-icon" src="/static/assets/status-icons/blood_shield.svg" alt="" aria-hidden="true">
+            <span class="blood-shield-meter-value">0</span>
+        `;
+        container.appendChild(bloodShield);
     }
     const wrappers = container.querySelectorAll('.bar-wrapper');
     bars.forEach((bar, i) => {
@@ -31197,6 +31218,21 @@ function renderPlayerBars(containerId, playerData) {
         delete invincibleMeter.dataset.termIntroBound;
         delete invincibleMeter.dataset.termIntroSuppressClick;
         attachTermIntroToTermKey(invincibleMeter, 'term:invincible');
+    }
+    const bloodShieldMeter = container.querySelector('.blood-shield-meter');
+    if (bloodShieldMeter) {
+        /* 2v2 全体共用的玩家属性；为0后隐藏，与无敌计量条一致 */
+        const shieldValue = Math.max(0, Number(gameState && gameState.blood_shield) || 0);
+        const shown = shieldValue > 0 && !masked;
+        const bloodShieldLabel = (getTermIntroLibrary().blood_shield || {}).label || '血盾';
+        bloodShieldMeter.classList.toggle('hidden', !shown);
+        bloodShieldMeter.dataset.statusValue = String(shieldValue);
+        bloodShieldMeter.title = `${bloodShieldLabel}: ${shieldValue}`;
+        const shieldValueEl = bloodShieldMeter.querySelector('.blood-shield-meter-value');
+        if (shieldValueEl) shieldValueEl.textContent = String(shieldValue);
+        delete bloodShieldMeter.dataset.termIntroBound;
+        delete bloodShieldMeter.dataset.termIntroSuppressClick;
+        attachTermIntroToTermKey(bloodShieldMeter, 'term:blood_shield');
     }
 }
 
