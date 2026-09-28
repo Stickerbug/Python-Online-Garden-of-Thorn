@@ -22033,10 +22033,28 @@ html[data-ui-style="minimal"][data-theme="dark"] .card,
 }
 .skin-page-tabs { margin: 8px 0; }
 
-/* 卡牌皮肤：装备皮肤的牌主视角，明牌卡牌背景换皮肤 front 变体
-   （front 资产自带半透明填充，就是为垫在卡面内容下设计的，无需再压暗罩层）。 */
+/* 卡牌皮肤：装备皮肤的牌主视角，明牌卡牌底层垫皮肤卡背图（182.3% 让卡框
+   正好铺满，与卡背同口径）。名字/卡图/效果文字照常渲染在上层，
+   文字区加半透明面板保证可读，皮肤边框在卡牌四周完整可见。 */
 .card.card-skin-backed {
   background:
-    var(--card-skin-front-url) center / 182.3% 182.3% no-repeat,
+    var(--card-skin-back-url) center / 182.3% 182.3% no-repeat,
     var(--bg-card);
+}
+.card.card-skin-backed .card-name,
+.card.card-skin-backed .card-english-name,
+.card.card-skin-backed .card-effect {
+  background: rgba(255, 255, 255, 0.78);
+  border-radius: 2.2cqi;
+}
+.card.card-skin-backed .card-art {
+  background: rgba(255, 255, 255, 0.78);
+}
+[data-theme="dark"] .card.card-skin-backed .card-name,
+[data-theme="dark"] .card.card-skin-backed .card-english-name,
+[data-theme="dark"] .card.card-skin-backed .card-effect {
+  background: rgba(24, 30, 38, 0.82);
+}
+[data-theme="dark"] .card.card-skin-backed .card-art {
+  background: rgba(24, 30, 38, 0.82);
 }

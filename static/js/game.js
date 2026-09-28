@@ -12456,15 +12456,16 @@ function createCardElement(cardDict, options = {}) {
     if (cardDef.card_type) {
         el.classList.add(cardDef.card_type);
     }
-    /* 卡牌皮肤：牌主装备皮肤时（自己视角），明牌卡牌背景换皮肤 front 变体。 */
+    /* 卡牌皮肤：牌主装备皮肤时（自己视角），明牌卡牌底层垫皮肤卡背图，
+       名字/卡图/效果文字照常渲染在上层（文字区有半透明面板保可读）。 */
     {
         const ownerKey = cardDict && (cardDict.owner_id ?? cardDict.player_id);
         const ownerSkin = playerCardSkinAt(Number(ownerKey));
         if (ownerSkin) {
-            const frontUrl = cardSkinFrontUrl(ownerSkin);
-            if (frontUrl) {
+            const backUrl = cardSkinBackUrl(ownerSkin);
+            if (backUrl) {
                 el.classList.add('card-skin-backed');
-                el.style.setProperty('--card-skin-front-url', `url("${frontUrl}")`);
+                el.style.setProperty('--card-skin-back-url', `url("${backUrl}")`);
             }
         }
     }
