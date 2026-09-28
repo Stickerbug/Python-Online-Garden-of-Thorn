@@ -9007,7 +9007,14 @@ function hasGalleryMultiPetalPreview(cd) {
 }
 
 function makeGalleryCardPreviewDict(cd) {
-    const cardDict = { def_id: cd.id, instance_flags: [], disabled_flags: [] };
+    /* 卡牌皮肤：图鉴以"自己视角"预览——own_id 让卡面渲染走皮肤逻辑。 */
+    const ownId = Number(gameState && gameState.your_id);
+    const cardDict = {
+        def_id: cd.id,
+        instance_flags: [],
+        disabled_flags: [],
+        owner_id: Number.isFinite(ownId) ? ownId : 0,
+    };
     if (galleryShowMultiPetalPreview && hasGalleryMultiPetalPreview(cd)) {
         cardDict.setup_modifiers = ['multi_petal'];
         if (!(cd.id === 'Fission' || cd.legacy_id === 'Fission')) {
@@ -12434,6 +12441,18 @@ function createCardElement(cardDict, options = {}) {
     }
     if (cardDef.card_type) {
         el.classList.add(cardDef.card_type);
+    }
+    /* 卡牌皮肤：牌主装备皮肤时（自己视角），卡牌背景换皮肤卡背。 */
+    {
+        const ownerKey = cardDict && (cardDict.owner_id ?? cardDict.player_id);
+        const ownerSkin = playerCardSkinAt(Number(ownerKey));
+        if (ownerSkin) {
+            const backUrl = cardSkinBackUrl(ownerSkin);
+            if (backUrl) {
+                el.classList.add('card-skin-backed');
+                el.style.setProperty('--card-skin-back-url', `url("${backUrl}")`);
+            }
+        }
     }
     if (defId === 'Assembler' || cardDef.id === 'Assembler' || cardDef.legacy_id === 'Assembler' || cardDef.name_cn === '重构机') {
         addPresetCardEffectScaleClass(el, 'card-assembler');
@@ -19267,8 +19286,8 @@ function renderCardSkinShop() {
               }))}</div>`
             : '';
         const action = owned
-            ? `<button class="btn btn-secondary btn-sm" disabled title="${escapeHtml(lt({ zh: '你已经拥有这个卡牌皮肤了！', en: 'You already own this card skin!', fr: 'Vous possédez déjà ce skin de carte !', ja: 'すでにこのカードスキンを持っています！' }))}">${escapeHtml(lt({ zh: '已拥有', en: 'Owned', fr: 'Possédé', ja: '所持済み' }))}</button>`
-            : `<button class="btn btn-primary btn-sm" data-card-skin-buy="${offer.slot}" ${cardSkinShopBusy ? 'disabled' : ''}>${thornDewAmountHtml(offer.price)}</button>`;
+            ? `<button type="button" class="title-shop-buy-btn" disabled title="${escapeHtml(lt({ zh: '你已经拥有这个卡牌皮肤了！', en: 'You already own this card skin!', fr: 'Vous possédez déjà ce skin de carte !', ja: 'すでにこのカードスキンを持っています！' }))}">${escapeHtml(lt({ zh: '已拥有', en: 'Owned', fr: 'Possédé', ja: '所持済み' }))}</button>`
+            : `<button type="button" class="title-shop-buy-btn" data-card-skin-buy="${offer.slot}" ${cardSkinShopBusy ? 'disabled' : ''}>${thornDewAmountHtml(offer.price, 'dew-amount')}</button>`;
         return `
         <article class="title-shop-item card-skin-shop-item" data-slot="${offer.slot}">
             <div class="card-skin-preview">
@@ -19286,6 +19305,18 @@ function renderCardSkinShop() {
         btn.addEventListener('click', async () => {
             if (!cardSkinShopData || cardSkinShopBusy) return;
             const slot = Number(btn.dataset.cardSkinBuy);
+            const offer = (cardSkinShopData.offers || []).find(item => Number(item.slot) === slot);
+            if (!offer) return;
+            const confirmed = await gameConfirm(
+                lt({ zh: '购买卡牌皮肤', en: 'Buy card skin', fr: 'Acheter le skin', ja: 'スキンを購入' }),
+                lt({
+                    zh: `花费 ${Number(offer.price || 0).toLocaleString()} 荆露购买“${offer.name || ''}”？`,
+                    en: `Buy “${offer.name || ''}” for ${Number(offer.price || 0).toLocaleString()} Thorn Dew?`,
+                    fr: `Acheter « ${offer.name || ''} » pour ${Number(offer.price || 0).toLocaleString()} Rosée d’épines ?`,
+                    ja: `「${offer.name || ''}」を${Number(offer.price || 0).toLocaleString()}ソーンデューで購入しますか？`,
+                }),
+            );
+            if (!confirmed) return;
             cardSkinShopBusy = true;
             btn.disabled = true;
             try {
@@ -19318,7 +19349,18 @@ function renderCardSkinShop() {
         ? `${escapeHtml(lt({ zh: '刷新', en: 'Refresh', fr: 'Actualiser', ja: '更新' }))} · ${thornDewAmountHtml(cardSkinShopData.refresh_cost, 'dew-amount')}`
         : '';
     refreshBtn.addEventListener('click', async () => {
-        if (cardSkinShopBusy) return;
+        if (cardSkinShopBusy || !cardSkinShopData) return;
+        const cost = Math.max(0, Number(cardSkinShopData.refresh_cost || 0) || 0);
+        const confirmed = await gameConfirm(
+            lt({ zh: '刷新商店', en: 'Refresh shop', fr: 'Actualiser la boutique', ja: 'ショップを更新' }),
+            lt({
+                zh: `花费 ${cost.toLocaleString()} 荆露刷新3个卡牌皮肤？本轮未购买的商品将被替换。`,
+                en: `Spend ${cost.toLocaleString()} Thorn Dew to refresh all 3 card skin offers? Unpurchased offers will be replaced.`,
+                fr: `Dépenser ${cost.toLocaleString()} Rosée d’épines pour remplacer les 3 skins ?`,
+                ja: `${cost.toLocaleString()}ソーンデューで3つのスキンを更新しますか？`,
+            }),
+        );
+        if (!confirmed) return;
         cardSkinShopBusy = true;
         refreshBtn.disabled = true;
         try {
@@ -20051,6 +20093,7 @@ async function loadCardSkinInventory() {
         const data = await response.json().catch(() => ({}));
         if (!response.ok || !data.success) throw new Error(data.error || '读取失败');
         cardSkinInventory = data;
+        cardSkinInventory.equipped = String(data.equipped || '');
         renderCardSkinInventory();
     } catch (err) {
         panel.innerHTML = `<div class="account-replay-sub">${escapeHtml(err.message || '读取失败')}</div>`;
@@ -20114,6 +20157,7 @@ function renderCardSkinInventory() {
                 const data = await response.json().catch(() => ({}));
                 if (!response.ok || !data.success) throw new Error(data.error || '装备失败');
                 cardSkinInventory = data;
+                cardSkinInventory.equipped = String(data.equipped || '');
                 renderCardSkinInventory();
             } catch (err) {
                 flashStatus(err.message || '装备失败', 2000, 'error');
@@ -20136,6 +20180,7 @@ function renderCardSkinInventory() {
                 const data = await response.json().catch(() => ({}));
                 if (!response.ok || !data.success) throw new Error(data.error || '卸载失败');
                 cardSkinInventory = data;
+                cardSkinInventory.equipped = String(data.equipped || '');
                 renderCardSkinInventory();
             } catch (err) {
                 flashStatus(err.message || '卸载失败', 2000, 'error');
@@ -30431,7 +30476,18 @@ const classicHandMotionDone = new Map();
 
 function classicHandMotionBattleKey() {
     const gs = gameState || {};
-    return `${gs.room_id ?? 'x'}|${gs.mode ?? ''}|${gs.match_key ?? ''}`;
+    // your_id 纳入 key：训练场回合结束会把行动方视角切给客户端（you 换人，
+    // 手牌整批更换），视角翻转必须静默重建快照，不能当成抽牌重放动画
+    return `${gs.room_id ?? 'x'}|${gs.mode ?? ''}|${gs.match_key ?? ''}|${normalizePlayerId(gs.your_id) ?? 'x'}`;
+}
+
+// 真实牌背模板（含已装备的卡背皮肤图），抽牌/洗牌幽灵克隆它而不是画默认牌背
+function classicCardBackTemplate() {
+    try {
+        return createCardElement(null, { faceDown: true });
+    } catch (tplErr) {
+        return null;
+    }
 }
 
 function gs_round_num_snapshot() {
@@ -30517,6 +30573,7 @@ function finishClassicHandMotion(vm, container, oldRects, prev) {
             STS2.drawToHand({
                 pileEl: $('classic-deck-count'),
                 slots,
+                backTemplate: classicCardBackTemplate(),
                 stagger: drawnIds.size >= 5 ? T.DRAW_STAGGER_BATCH : T.DRAW_STAGGER,
                 duration: T.DRAW_FLY,
                 trailColor: 'rgba(125, 128, 158, 0.5)',
@@ -30543,6 +30600,7 @@ function finishClassicHandMotion(vm, container, oldRects, prev) {
         STS2.shuffleStream({
             fromEl: $('classic-discard-count'),
             toEl: $('classic-deck-count'),
+            backTemplate: classicCardBackTemplate(),
             count: Math.min(Math.abs(discardDelta), 14),
         }).catch(() => {});
     }

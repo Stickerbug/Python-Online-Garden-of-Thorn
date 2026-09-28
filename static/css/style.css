@@ -1408,7 +1408,8 @@ a.title-shop-afdian-go:hover {
 .achievement-tabs {
   margin: 8px 0;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  /* 移除「称号」tab 后按实际按钮数自适应（此前固定 5 列，最右会空一格） */
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
   gap: 6px;
 }
 
@@ -2331,7 +2332,7 @@ a.title-shop-afdian-go:hover {
 }
 
 .achievement-tabs.account-mode-tabs {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
 }
 
 .replay-scope-tabs.account-mode-tabs {
@@ -16831,8 +16832,24 @@ html[data-ui-style="minimal"] .btn-end-turn {
   outline: 2px solid var(--border-light, #b9a77c);
   outline-offset: 2px;
 }
+/* StS2 式大图标：图标随字号放大（icon-counter-img 为 1.18em） */
 .classic-pile-btn.icon-counter {
-  font-size: 20px;
+  font-size: 30px;
+}
+/* 弃牌+放逐组：StS2 式贴屏幕右下角（command-panel 覆盖 end 区） */
+.classic-command-panel {
+  position: relative;
+}
+.classic-command-panel .classic-piles-discard {
+  position: absolute;
+  right: 14px;
+  bottom: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 4px 6px;
+  z-index: 7;
 }
 
 .classic-stage {
@@ -21990,3 +22007,19 @@ html[data-ui-style="minimal"][data-theme="dark"] .card,
   line-height: 1.5;
 }
 .skin-page-tabs { margin: 8px 0; }
+
+/* 卡牌皮肤：装备皮肤的牌主视角，卡牌背景换皮肤卡背（图鉴/手牌明牌通用）。
+   内容层仍在 .card-content 之上，背景图只做底层纹理。 */
+.card.card-skin-backed {
+  background:
+    var(--card-skin-back-url) center / cover no-repeat,
+    var(--bg-card);
+}
+.card.card-skin-backed::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--bg-card);
+  opacity: 0.55;
+  pointer-events: none;
+}
