@@ -8,6 +8,7 @@
 <link rel="icon" href="/static/assets/icons/icon.svg" type="image/svg+xml">
 <link rel="preload" href="/fonts/Kreadon-Demi.subset.woff2?v=3" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="/static/css/style.css?v={{ static_version|default('dev')|urlencode }}">
+    <link rel="stylesheet" href="/static/css/sts2_motion.css?v={{ static_version|default('dev')|urlencode }}">
     <link rel="stylesheet" href="/static/css/card_compat.css?v={{ static_version|default('dev')|urlencode }}">
     <link rel="stylesheet" href="/static/css/shared-afk.css?v={{ static_version|default('dev')|urlencode }}">
     <link rel="stylesheet" href="/static/css/shared-lobby-chat.css?v={{ static_version|default('dev')|urlencode }}">
@@ -821,9 +822,9 @@
       <div id="classic-m-orbs" class="classic-orbs classic-m-orbs" title="M" aria-label="M"></div>
     </div>
     <div class="classic-piles">
-      <span id="classic-deck-count">▣0</span>
-      <span id="classic-discard-count">⟲0</span>
-      <span id="classic-exile-count">◇0</span>
+      <button type="button" id="classic-deck-count" class="classic-pile-btn" title="Draw Deck"></button>
+      <button type="button" id="classic-discard-count" class="classic-pile-btn" title="Discard"></button>
+      <button type="button" id="classic-exile-count" class="classic-pile-btn" title="Exile"></button>
     </div>
   </div>
   <div class="classic-stage">
@@ -1419,6 +1420,7 @@
       window.__GTN_CHANGELOG_VERSION__ = {{ changelog_version|default('')|tojson }};
     </script>
     <script src="/static/js/card_compat.js?v={{ static_version|default('dev')|urlencode }}"></script>
+    <script src="/static/js/sts2_motion.js?v={{ static_version|default('dev')|urlencode }}"></script>
     <script src="/static/js/resource_orbs.js?v={{ static_version|default('dev')|urlencode }}"></script>
     <script src="/static/js/equipment_motion.js?v={{ static_version|default('dev')|urlencode }}"></script>
     <script src="/static/js/shared-chat-actions.js?v={{ static_version|default('dev')|urlencode }}"></script>

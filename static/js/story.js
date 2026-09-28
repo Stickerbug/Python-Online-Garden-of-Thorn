@@ -5923,7 +5923,21 @@
         ghost.style.setProperty('--story-pile-x', `${targetRect.left + targetRect.width / 2 - sourceRect.left - sourceRect.width / 2}px`);
         ghost.style.setProperty('--story-pile-y', `${targetRect.top + targetRect.height / 2 - sourceRect.top - sourceRect.height / 2}px`);
         document.body.append(ghost);
-        await waitForStoryAnimation(ghost, 'is-moving', 300);
+        if (window.STS2) {
+            // StS2 风格：弧线飞行 + 卡牌剪影残影（颜色取自卡种框色）
+            ghost.style.animation = 'none';
+            await STS2.flyElement(ghost, {
+                to: target,
+                duration: 400,
+                arcHeight: destination === 'draw' ? 150 : 120,
+                scaleTo: 0.55,
+                rotate: 16,
+                ease: 'inout',
+                trailColor: source ? STS2.sampleFrameColor(source) : 'rgba(125, 128, 158, 0.5)',
+            }).catch(() => {});
+        } else {
+            await waitForStoryAnimation(ghost, 'is-moving', 300);
+        }
         ghost.remove();
     }
 
@@ -5996,7 +6010,36 @@
             `${targetCenterY - sourceCenterY}px`,
         );
         document.body.append(ghost);
-        await waitForStoryAnimation(ghost, 'is-flying', 380);
+        if (window.STS2 && mode === 'play') {
+            // 出牌：弧线飞向目标 + 卡牌剪影残影（StS2 风格）
+            ghost.style.animation = 'none';
+            await STS2.flyElement(ghost, {
+                to: target,
+                duration: 430,
+                arcHeight: 150,
+                scaleFrom: 1,
+                scaleTo: 0.5,
+                rotate: 12,
+                ease: 'out',
+                trailColor: useSourceVisual && source
+                    ? STS2.sampleFrameColor(source)
+                    : 'rgba(125, 128, 158, 0.5)',
+            }).catch(() => {});
+        } else if (window.STS2) {
+            // 入手/回堆：低调度弧线，只有轻微残影
+            ghost.style.animation = 'none';
+            await STS2.flyElement(ghost, {
+                to: target,
+                duration: 400,
+                arcHeight: 100,
+                scaleFrom: 0.9,
+                scaleTo: 0.6,
+                ease: 'inout',
+                trail: false,
+            }).catch(() => {});
+        } else {
+            await waitForStoryAnimation(ghost, 'is-flying', 380);
+        }
         ghost.remove();
     }
 
@@ -6042,7 +6085,22 @@
         ghost.style.setProperty('--story-pile-y', `${targetRect.top + targetRect.height * .58 - sourceRect.top - sourceRect.height / 2}px`);
         if (Number(event?.count) > 1) ghost.dataset.count = String(event.count);
         document.body.append(ghost);
-        await waitForStoryAnimation(ghost, 'is-moving', 300);
+        if (window.STS2) {
+            // 抽牌入手：弧线滑入 + 轻残影（StS2 实测 350ms）
+            ghost.style.animation = 'none';
+            await STS2.flyElement(ghost, {
+                to: target,
+                duration: STS2.TIMING.DRAW_FLY,
+                arcHeight: 90,
+                scaleFrom: 0.8,
+                scaleTo: 1,
+                ease: 'out',
+                trailColor: 'rgba(125, 128, 158, 0.5)',
+                sliverScale: 0.55,
+            }).catch(() => {});
+        } else {
+            await waitForStoryAnimation(ghost, 'is-moving', 300);
+        }
         ghost.remove();
     }
 

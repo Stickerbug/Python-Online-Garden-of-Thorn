@@ -16806,6 +16806,35 @@ html[data-ui-style="minimal"] .btn-end-turn {
   font-size: 12px;
 }
 
+/* StS2 风格牌堆图标按钮：图片即按钮（图标+张数角标），无文字 */
+.classic-pile-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  justify-self: start;
+  transition: transform 120ms ease, filter 120ms ease;
+}
+.classic-pile-btn:hover {
+  transform: translateY(-2px) scale(1.05);
+  filter: brightness(1.12);
+}
+.classic-pile-btn:active {
+  transform: translateY(0) scale(0.97);
+}
+.classic-pile-btn:focus-visible {
+  outline: 2px solid var(--border-light, #b9a77c);
+  outline-offset: 2px;
+}
+.classic-pile-btn.icon-counter {
+  font-size: 20px;
+}
+
 .classic-stage {
   grid-area: stage;
   position: relative;
@@ -18582,10 +18611,6 @@ html[data-ui-style="minimal"] .btn-end-turn {
   font-family: var(--font-main);
   font-weight: 900;
   pointer-events: none;
-}
-
-.classic-piles {
-  display: none !important;
 }
 
 .classic-piles .pile-icon-count {

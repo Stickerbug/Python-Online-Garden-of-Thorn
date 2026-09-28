@@ -149,8 +149,8 @@ class LocalAiWorkerClient:
             "127.0.0.1",
             "--port",
             "0",
-            "--token",
-            self._token,
+            # token_urlsafe 可能以 "-" 开头，分离传参会被 argparse 当成选项；等号形式始终安全
+            f"--token={self._token}",
             "--ready-file",
             str(self.ready_file),
             "--game-root",

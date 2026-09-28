@@ -25200,9 +25200,9 @@ function getGameShortcutContext() {
         }
 
         const pileActions = [
-            ['view_draw', ['btn-view-deck', 'classic-view-deck', 'btn-spectate-view-deck']],
-            ['view_discard', ['btn-view-discard', 'classic-view-discard', 'btn-spectate-view-discard']],
-            ['view_exile', ['btn-view-exile', 'classic-view-exile', 'btn-spectate-view-exile']],
+            ['view_draw', ['btn-view-deck', 'classic-deck-count', 'classic-view-deck', 'btn-spectate-view-deck']],
+            ['view_discard', ['btn-view-discard', 'classic-discard-count', 'classic-view-discard', 'btn-spectate-view-discard']],
+            ['view_exile', ['btn-view-exile', 'classic-exile-count', 'classic-view-exile', 'btn-spectate-view-exile']],
         ];
         pileActions.forEach(([actionId, ids]) => {
             const buttons = ids.map(id => $(id)).filter(isShortcutElementVisible);
@@ -26113,7 +26113,7 @@ function tutorialCardForAnchor(anchor) {
 }
 
 function getTutorialAnchorElement(anchor) {
-    if (anchor === 'deck') return getVisibleTutorialElement(['#classic-view-deck', '#btn-view-deck']);
+    if (anchor === 'deck') return getVisibleTutorialElement(['#classic-deck-count', '#classic-view-deck', '#btn-view-deck']);
     if (anchor === 'end') return getVisibleTutorialElement(['#classic-end-turn', '#btn-end-turn']);
     if (anchor === 'response') return getVisibleTutorialElement(['#response-panel.visible', '#response-panel:not(.hidden)']);
     if (anchor === 'trigger') {
@@ -29336,18 +29336,11 @@ function updateClassicExtraControls(gs) {
     const classicSwitch = $('classic-switch-perspective');
     if (classicSwitch) classicSwitch.dataset.dynamic = (isReadOnlyBattle && spectatePlayerCount > 1) ? '1' : '';
 
-    if (setClassicControlButton('classic-view-deck', !isUrf, {
-        text: UI.view_draw_deck || UI.view_deck,
-        disabled: false,
-    })) visibleCount += 1;
-    if (setClassicControlButton('classic-view-discard', !isUrf, {
-        text: UI.view_discard,
-        disabled: false,
-    })) visibleCount += 1;
-    if (setClassicControlButton('classic-view-exile', !isUrf, {
-        text: UI.view_exile,
-        disabled: false,
-    })) visibleCount += 1;
+    // 牌堆查看入口已由左下角牌堆图标按钮（classic-*-count）接管，
+    // 文字按钮保留 DOM 引用（键位/教程兜底）但不再显示。
+    setClassicControlButton('classic-view-deck', false);
+    setClassicControlButton('classic-view-discard', false);
+    setClassicControlButton('classic-view-exile', false);
     if (setClassicControlButton('classic-leave-spectate', isReadOnlyBattle, {
         text: replayMode ? (UI.close || '关闭') : (UI.leave_spectate || '退出观战'),
         disabled: false,
@@ -30429,6 +30422,160 @@ function renderClassicFighter(container, player, side, selectedCard = null, mask
     attachClassicStatusIntros(container);
 }
 
+// —— StS2 风格手牌动画（sts2_motion.js）：状态差分驱动 ——
+// 经典多人模式没有结构化逐卡事件，动画靠前后两次渲染的手牌快照差分推导：
+// 新出现的 instance_id = 抽牌（从抽牌堆飞入）；消失的 = 离手（按牌堆计数
+// 变化判断去向）。已由出牌/融合克隆动画演过的卡登记在案，避免重复演出。
+let classicHandMotionPrev = null;
+const classicHandMotionDone = new Map();
+
+function classicHandMotionBattleKey() {
+    const gs = gameState || {};
+    return `${gs.room_id ?? 'x'}|${gs.mode ?? ''}|${gs.match_key ?? ''}`;
+}
+
+function gs_round_num_snapshot() {
+    return (gameState && gameState.round_num) || 0;
+}
+
+function markClassicHandMotionDone(id) {
+    if (id == null || id === '') return;
+    classicHandMotionDone.set(String(id), Date.now() + 1800);
+}
+
+// 残影颜色取自游戏卡种框色（--thorn/--bloom/--root），保持画面配色统一
+function classicCardFrameColor(cardDict) {
+    try {
+        const def = getCardDef((cardDict && cardDict.def_id) || '');
+        const typeVar = def && def.card_type === 'thorn' ? '--thorn'
+            : def && def.card_type === 'bloom' ? '--bloom'
+            : def && def.card_type === 'root' ? '--root' : '';
+        if (typeVar) {
+            const value = getComputedStyle(document.body).getPropertyValue(typeVar).trim();
+            if (value) return value;
+        }
+    } catch (motionErr) { /* 取不到就回退暗琥珀 */ }
+    return '#a08050';
+}
+
+function finishClassicHandMotion(vm, container, oldRects, prev) {
+    const now = Date.now();
+    for (const [doneKey, expiresAt] of classicHandMotionDone) {
+        if (expiresAt <= now) classicHandMotionDone.delete(doneKey);
+    }
+    const hand = vm.hand || [];
+    const rects = new Map();
+    container.querySelectorAll('.classic-hand-card[data-instance-id]').forEach(el => {
+        rects.set(String(el.dataset.instanceId), el.getBoundingClientRect());
+    });
+    const snapshot = {
+        battleKey: classicHandMotionBattleKey(),
+        round: Number(gs_round_num_snapshot()) || 0,
+        ids: new Set(rects.keys()),
+        cards: hand.map(card => ({ id: String(card.instance_id ?? ''), card })),
+        rects,
+        deck: Number(vm.deckCount) || 0,
+        discard: Number(vm.discardCount) || 0,
+        exile: Number(vm.exileCount) || 0,
+    };
+    classicHandMotionPrev = snapshot;
+    if (!window.STS2) return;
+
+    // 抽牌/弃牌差分（换局、回放、观战、非战斗阶段不演出）
+    // 换局信号用回合数回退（重开对局 round_num 回 1）；同局内"整手弃掉再抽"
+    // 的新旧 id 也可能毫无交集，不能用交集判断换局。
+    const motionAllowed = !replayMode && !isSpectating && isActiveBattlePhase(phase)
+        && prev && prev.battleKey === snapshot.battleKey
+        && Number(snapshot.round) >= Number(prev.round);
+    const drawnIds = new Set();
+    if (motionAllowed) {
+        hand.forEach(card => {
+            const id = String(card.instance_id ?? '');
+            if (id && !prev.ids.has(id)) drawnIds.add(id);
+        });
+    }
+    // 扇形 FLIP 重排（新入场且即将演抽牌动画的卡跳过淡入，避免双重动画）
+    try {
+        STS2.playFan(container, oldRects, { skipNew: drawnIds });
+    } catch (flipErr) { /* 重排失败不影响对局渲染 */ }
+    if (!motionAllowed) return;
+
+    // —— 抽牌入手：牌背幽灵从抽牌堆错峰飞入，到达即揭示真身 ——
+    if (drawnIds.size) {
+        const hiddenEls = [];
+        const slots = [];
+        hand.forEach(card => {
+            if (!drawnIds.has(String(card.instance_id ?? ''))) return;
+            const el = container.querySelector(`.classic-hand-card[data-instance-id="${CSS.escape(String(card.instance_id))}"]`);
+            if (!el) return;
+            el.style.visibility = 'hidden';
+            hiddenEls.push(el);
+            slots.push(el.getBoundingClientRect());
+        });
+        if (hiddenEls.length) {
+            const T = STS2.TIMING;
+            STS2.drawToHand({
+                pileEl: $('classic-deck-count'),
+                slots,
+                stagger: drawnIds.size >= 5 ? T.DRAW_STAGGER_BATCH : T.DRAW_STAGGER,
+                duration: T.DRAW_FLY,
+                trailColor: 'rgba(125, 128, 158, 0.5)',
+                onEach: (i) => {
+                    if (hiddenEls[i] && hiddenEls[i].isConnected) hiddenEls[i].style.visibility = '';
+                },
+            }).catch(() => {}).finally(() => {
+                hiddenEls.forEach(el => {
+                    if (el.isConnected) el.style.visibility = '';
+                });
+            });
+        }
+    }
+
+    // —— 离手：上帧有、本帧无的卡（弃牌/放逐/回堆） ——
+    const gone = prev.cards.filter(entry =>
+        entry.id && !snapshot.ids.has(entry.id) && !(classicHandMotionDone.get(entry.id) > now));
+    if (!gone.length) return;
+    const deckDelta = snapshot.deck - prev.deck;
+    const discardDelta = snapshot.discard - prev.discard;
+    const exileDelta = snapshot.exile - prev.exile;
+    // 弃牌堆清空、抽牌堆回满 → 洗牌流（多流抛物线，不阻塞其他演出）
+    if (deckDelta > 0 && discardDelta < 0) {
+        STS2.shuffleStream({
+            fromEl: $('classic-discard-count'),
+            toEl: $('classic-deck-count'),
+            count: Math.min(Math.abs(discardDelta), 14),
+        }).catch(() => {});
+    }
+    let destId = 'classic-discard-count';
+    if (exileDelta > 0 && discardDelta <= 0 && deckDelta <= 0) destId = 'classic-exile-count';
+    const pileEl = $(destId);
+    if (!pileEl) return;
+    const pileRect = pileEl.getBoundingClientRect();
+    gone.forEach((entry, i) => {
+        const rect = oldRects.get(entry.id) || (prev.rects && prev.rects.get(entry.id));
+        if (!rect) return;
+        let tempCard = null;
+        try {
+            tempCard = createCardElement(entry.card.raw || entry.card, { draggable: false });
+        } catch (cardErr) { return; }
+        const frameColor = classicCardFrameColor(entry.card.raw || entry.card);
+        window.setTimeout(() => {
+            STS2.flyCard({
+                from: rect,
+                to: pileEl,
+                cardEl: tempCard,
+                duration: STS2.TIMING.DISCARD_FLY,
+                arcHeight: Math.max(110, (rect.top - pileRect.top) * 0.5),
+                scaleTo: 0.4,
+                rotate: 40 + (i % 3) * 12,
+                ease: 'inout',
+                trailColor: frameColor,
+                z: 4180,
+            }).catch(() => {});
+        }, i * 110);
+    });
+}
+
 function renderClassicHand(vm) {
     const container = $('classic-hand-fan');
     if (!container) return;
@@ -30437,6 +30584,7 @@ function renderClassicHand(vm) {
     container.querySelectorAll('.classic-hand-card[data-instance-id]').forEach(el => {
         oldRects.set(String(el.dataset.instanceId), el.getBoundingClientRect());
     });
+    const motionPrev = classicHandMotionPrev;
     container.innerHTML = '';
     const hand = vm.hand || [];
     const count = hand.length;
@@ -30495,6 +30643,7 @@ function renderClassicHand(vm) {
         });
         container.appendChild(wrap);
     });
+    finishClassicHandMotion(vm, container, oldRects, motionPrev);
 }
 
 function renderClassicLog(vm) {
@@ -35202,6 +35351,8 @@ function animatePlayedCard(cardInstanceId, options = {}) {
         `.card[data-instance-id="${cardInstanceId}"], .classic-hand-card[data-instance-id="${cardInstanceId}"], [data-instance-id="${cardInstanceId}"]`
     );
     if (!cardEl) return;
+    // 出牌克隆动画已演出，登记后状态差分不再为这张卡补播离手动画
+    markClassicHandMotionDone(cardInstanceId);
     const rect = cardEl.getBoundingClientRect();
     const flash = cardEl.cloneNode(true);
     flash.classList.add('card-play-flash');
@@ -35232,13 +35383,34 @@ function animatePlayedCard(cardInstanceId, options = {}) {
             }
             : null
     );
+    let useArcFlight = false;
+    let arcLaunch = null;
     if (targetPoint) {
         const dx = targetPoint.x - (rect.left + rect.width / 2);
         const dy = targetPoint.y - (rect.top + rect.height / 2);
-        flash.classList.add('card-play-flash-targeted');
-        flash.style.setProperty('--play-dx', `${dx}px`);
-        flash.style.setProperty('--play-dy', `${dy}px`);
         targeted = true;
+        const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (window.STS2 && !reducedMotion) {
+            // StS2 风格：弧线飞行 + 卡牌剪影残影（残影颜色取自卡种框色）。
+            // 关掉原直线 CSS 动画，避免和逐帧 transform 相互覆盖。
+            useArcFlight = true;
+            flash.style.animation = 'none';
+            arcLaunch = () => {
+                STS2.flyElement(flash, {
+                    to: { left: targetPoint.x - 1, top: targetPoint.y - 1, width: 2, height: 2 },
+                    duration: 500 * durationScale,
+                    arcHeight: Math.min(180, Math.abs(dy) * 0.55 + 60),
+                    scaleTo: 0.5,
+                    rotate: (dx >= 0 ? 1 : -1) * 14,
+                    ease: 'out',
+                    trailColor: STS2.sampleFrameColor(cardEl),
+                }).catch(() => {});
+            };
+        } else {
+            flash.classList.add('card-play-flash-targeted');
+            flash.style.setProperty('--play-dx', `${dx}px`);
+            flash.style.setProperty('--play-dy', `${dy}px`);
+        }
         setTimeout(() => {
             const burst = document.createElement('div');
             burst.className = 'card-impact-burst';
@@ -35250,7 +35422,10 @@ function animatePlayedCard(cardInstanceId, options = {}) {
     }
     flash.style.animationDuration = `${(targeted ? 500 : 380) * durationScale}ms`;
     const startDelay = Math.max(0, Number(options.startDelay || 0));
-    const appendFlash = () => document.body.appendChild(flash);
+    const appendFlash = () => {
+        document.body.appendChild(flash);
+        if (useArcFlight && arcLaunch) arcLaunch();
+    };
     if (startDelay > 0) setTimeout(appendFlash, startDelay);
     else appendFlash();
     if (options.shatterAfter) {
@@ -35343,6 +35518,9 @@ function animateVirtualPlayGesture(cardInstanceId, options = {}) {
 
 function animateFusionMerge(fusionCardId, targetIds = [], options = {}) {
     const startDelay = Number(options.startDelay || 0);
+    // 融合的几张卡都会离手，全部登记避免差分动画重复演出
+    [fusionCardId].concat(Array.isArray(targetIds) ? targetIds : [])
+        .forEach(id => markClassicHandMotionDone(id));
     const fusionEl = document.querySelector(`.card[data-instance-id="${fusionCardId}"]`);
     if (!fusionEl || !Array.isArray(targetIds) || !targetIds.length) {
         animatePlayedCard(fusionCardId);
@@ -40137,6 +40315,10 @@ async function init() {
     if ($('classic-view-deck')) $('classic-view-deck').addEventListener('click', onViewDeck);
     if ($('classic-view-discard')) $('classic-view-discard').addEventListener('click', onViewDiscard);
     if ($('classic-view-exile')) $('classic-view-exile').addEventListener('click', onViewExile);
+    // StS2 风格：牌堆图标本身就是查看按钮（抽牌动画的飞行起点/终点也是它们）
+    if ($('classic-deck-count')) $('classic-deck-count').addEventListener('click', onViewDeck);
+    if ($('classic-discard-count')) $('classic-discard-count').addEventListener('click', onViewDiscard);
+    if ($('classic-exile-count')) $('classic-exile-count').addEventListener('click', onViewExile);
     if ($('classic-switch-perspective')) {
         $('classic-switch-perspective').addEventListener('click', () => {
             if (replayMode) {

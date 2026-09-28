@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STS2 手牌动画演示 — 荆棘花园</title>
+<link rel="stylesheet" href="/static/css/sts2_motion.css">
+<style>
+    /* 演示页自带的最小舞台样式（仅演示用，不代表正式 UI） */
+    * { box-sizing: border-box; }
+    body {
+        margin: 0; min-height: 100vh; overflow: hidden;
+        background: linear-gradient(180deg, #232b3b 0%, #1a2030 58%, #141926 100%);
+        font-family: system-ui, "Microsoft YaHei", sans-serif;
+        color: #cfd4dd;
+    }
+    .stage { position: fixed; inset: 0; }
+    .fighter {
+        position: absolute; bottom: 24%;
+        width: 150px; height: 190px;
+        border-radius: 14px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 64px;
+        background: rgba(255,255,255,0.04);
+        border: 2px solid rgba(255,255,255,0.10);
+    }
+    .fighter .hp {
+        position: absolute; bottom: -26px; left: 50%; transform: translateX(-50%);
+        width: 120px; height: 12px; border-radius: 6px;
+        background: #3a1220; overflow: hidden; border: 1px solid rgba(255,255,255,0.2);
+    }
+    .fighter .hp i { display: block; height: 100%; background: linear-gradient(90deg, #e74c3c, #ff7b5a); }
+    .fighter.self { left: 12%; }
+    .fighter.enemy { right: 12%; }
+    .fighter.enemy .hp i { width: 62%; }
+
+    .pile-rail { position: fixed; left: 18px; bottom: 18px; display: flex; gap: 10px; align-items: flex-end; z-index: 50; }
+    .pile-rail .discard-rail { position: fixed; right: 18px; bottom: 18px; display: flex; gap: 10px; }
+    .energy {
+        position: fixed; left: 96px; bottom: 92px; z-index: 50;
+        width: 58px; height: 58px; border-radius: 50% 46% 52% 48%;
+        display: flex; align-items: center; justify-content: center;
+        font: 700 16px system-ui; color: #fff;
+        background: radial-gradient(circle at 35% 30%, #ff9d5c, #c0392b 70%);
+        border: 3px solid #7d1f14;
+        box-shadow: 0 0 18px rgba(255, 120, 60, 0.35);
+    }
+
+    /* 手牌扇形（与正式 classic-hand-card 同参：±13°、4.2°/张、中心抬 18px） */
+    .hand-fan {
+        position: fixed; left: 50%; bottom: -46px; transform: translateX(-50%);
+        display: flex; justify-content: center; z-index: 60;
+    }
+    .hand-card {
+        position: relative;
+        width: 116px; height: 162px;
+        margin-inline: -18px;
+        border-radius: 10px;
+        transform-origin: 50% 110%;
+        transition: transform 120ms ease, margin 170ms ease;
+        cursor: pointer;
+    }
+    .hand-card:hover {
+        transform: translateY(-128px) rotate(0deg) scale(1.42) !important;
+        z-index: 999 !important;
+    }
+    .hand-card .face {
+        position: absolute; inset: 0; border-radius: 10px; overflow: hidden;
+        border: 3px solid var(--frame, #c0392b);
+        background: linear-gradient(180deg, #3a3f4d 0%, #262a35 100%);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        display: flex; flex-direction: column;
+    }
+    .hand-card:hover .face { box-shadow: 0 0 18px var(--glow, rgba(255,120,90,0.6)), 0 6px 16px rgba(0,0,0,0.5); }
+    .hand-card .gem {
+        position: absolute; top: -8px; left: -8px; z-index: 2;
+        width: 26px; height: 26px; border-radius: 8px;
+        display: flex; align-items: center; justify-content: center;
+        font: 700 14px system-ui; color: #fff;
+        background: #d35400; border: 2px solid #ffd9a0;
+        transform: rotate(45deg);
+    }
+    .hand-card .gem span { transform: rotate(-45deg); }
+    .hand-card .ribbon {
+        margin: 8px 10px 0; padding: 2px 6px; border-radius: 6px;
+        background: rgba(255,255,255,0.12);
+        font: 700 12px/1.5 system-ui; color: #fff; text-align: center;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .hand-card .art { flex: 1; margin: 6px 10px; border-radius: 6px; background: var(--art, #555); opacity: 0.9; }
+    .hand-card .type {
+        margin: 0 10px 8px; align-self: center; padding: 1px 10px; border-radius: 5px;
+        background: rgba(0,0,0,0.5); font: 11px/1.6 system-ui; color: #cfd4dd;
+    }
+
+    .end-turn {
+        position: fixed; right: 22px; bottom: 34%; z-index: 50;
+        padding: 12px 22px; border-radius: 12px;
+        border: 2px solid #3c4a63; background: #2b3a55; color: #fff;
+        font: 700 16px system-ui; cursor: pointer;
+        transition: all 120ms ease;
+    }
+    .end-turn:hover { border-color: #6fd6ff; box-shadow: 0 0 14px rgba(111, 214, 255, 0.5); }
+
+    .ctl {
+        position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+        display: flex; gap: 8px; z-index: 100; flex-wrap: wrap; justify-content: center;
+        background: rgba(10, 14, 22, 0.72); padding: 8px 12px; border-radius: 12px;
+        border: 1px solid rgba(255,255,255,0.08);
+    }
+    .ctl button {
+        padding: 7px 13px; border-radius: 8px; border: 1px solid #46536e;
+        background: #313c52; color: #e8ecf4; font: 600 13px system-ui; cursor: pointer;
+    }
+    .ctl button:hover { background: #3d4a66; border-color: #6fd6ff; }
+    .hint { position: fixed; top: 104px; left: 50%; transform: translateX(-50%); z-index: 99; font: 12px system-ui; color: #8a93a6; text-align: center; }
+</style>
+</head>
+<body>
+<div class="stage">
+    <div class="fighter self">🛡️<div class="hp"><i style="width:80%"></i></div></div>
+    <div class="fighter enemy" id="enemy">🐙<div class="hp"><i></i></div></div>
+</div>
+
+<div class="energy" id="energy">3/3</div>
+<div class="pile-rail" id="pile-left"></div>
+<div class="pile-rail discard-rail" id="pile-right"></div>
+
+<button class="end-turn" id="btn-end-turn">结束回合</button>
+<div class="hand-fan" id="hand"></div>
+
+<div class="ctl">
+    <button data-act="draw">抽 5 张（错峰入手）</button>
+    <button data-act="draw-batch">批量抽（近齐发）</button>
+    <button data-act="play">出牌攻击（弧线+拖尾）</button>
+    <button data-act="discard1">弃一张</button>
+    <button data-act="end">结束回合（全弃）</button>
+    <button data-act="shuffle">洗牌（多流抛物线）</button>
+    <button data-act="banner">回合横幅</button>
+    <button data-act="reset">清空手牌</button>
+</div>
+<div class="hint">演示：杀戮尖塔2 实测参数（抽350ms/错峰200ms · 出牌400ms · 弃牌420ms · 洗牌700ms/错峰30ms · 拖尾色=卡框色）</div>
+
+<script src="/static/js/sts2_motion.js"></script>
+<script>
+(function () {
+    'use strict';
+    const hand = document.getElementById('hand');
+    const enemy = document.getElementById('enemy');
+    const T = STS2.TIMING;
+    let seq = 0;
+
+    // ---- 牌堆按钮（图片式，无文字；用游戏自带 ui-icons）----
+    function makePileBtn(kind, label, startCount) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'sts2-pile-btn';
+        btn.dataset.kind = kind;
+        btn.title = label;
+        btn.setAttribute('aria-label', label);
+        btn.innerHTML = `<img src="/static/assets/ui-icons/${kind}-pile.svg" alt=""><span class="sts2-pile-count">${startCount}</span>`;
+        return btn;
+    }
+    const drawPile = makePileBtn('draw', '抽牌堆', 12);
+    const discardPile = makePileBtn('discard', '弃牌堆', 0);
+    const exilePile = makePileBtn('exile', '放逐区', 0);
+    document.getElementById('pile-left').append(drawPile);
+    document.getElementById('pile-right').append(discardPile, exilePile);
+
+    // ---- 演示卡牌（正式环境用 createCardElement 生成后传入即可）----
+    const CARDS = [
+        { name: '打击', cost: 1, type: '攻击', frame: '#c0392b', glow: 'rgba(255,120,80,0.65)', trail: 'rgba(255,140,60,0.9)', art: 'linear-gradient(140deg,#7e2519,#b8432c)' },
+        { name: '防御', cost: 1, type: '技能', frame: '#16a085', glow: 'rgba(60,220,180,0.6)', trail: 'rgba(90,230,170,0.9)', art: 'linear-gradient(140deg,#12503f,#1e8a68)' },
+        { name: '痛击', cost: 2, type: '攻击', frame: '#c0392b', glow: 'rgba(255,120,80,0.65)', trail: 'rgba(255,140,60,0.9)', art: 'linear-gradient(140deg,#6d1f3e,#a23360)' },
+        { name: '剜影', cost: 0, type: '技能', frame: '#8e44ad', glow: 'rgba(190,120,255,0.6)', trail: 'rgba(220,140,255,0.9)', art: 'linear-gradient(140deg,#3d1f5e,#6b34a8)' },
+        { name: '重刃', cost: 2, type: '攻击', frame: '#c0392b', glow: 'rgba(255,120,80,0.65)', trail: 'rgba(255,140,60,0.9)', art: 'linear-gradient(140deg,#5e2a12,#a8571e)' },
+    ];
+
+    function layoutFan() {
+        const cards = [...hand.children];
+        const n = cards.length;
+        cards.forEach((el, i) => {
+            const offset = i - (n - 1) / 2;
+            const rot = Math.max(-13, Math.min(13, offset * 4.2));
+            const lift = Math.max(0, 18 - Math.abs(offset) * 4);
+            el.style.transform = `translateY(${-lift}px) rotate(${rot}deg)`;
+            el.style.zIndex = String(100 + (20 - Math.abs(offset)));
+        });
+    }
+
+    function makeCard(def) {
+        const el = document.createElement('div');
+        el.className = 'hand-card';
+        el.dataset.instanceId = `demo-${seq += 1}`;
+        el.style.setProperty('--frame', def.frame);
+        el.style.setProperty('--glow', def.glow);
+        el.innerHTML = `<div class="face">
+            <div class="gem"><span>${def.cost}</span></div>
+            <div class="ribbon">${def.name}</div>
+            <div class="art" style="${def.art ? `background:${def.art}` : ''}"></div>
+            <div class="type">${def.type}</div>
+        </div>`;
+        el._def = def;
+        return el;
+    }
+
+    function addCards(defs) {
+        const before = STS2.captureFan(hand);
+        defs.forEach((d) => hand.appendChild(makeCard(d)));
+        layoutFan();
+        STS2.playFan(hand, before);
+    }
+
+    function slotRects() {
+        return [...hand.children].map((el) => el.getBoundingClientRect());
+    }
+
+    function bump(btn, delta) {
+        const now = Math.max(0, (parseInt(btn.querySelector('.sts2-pile-count').textContent, 10) || 0) + delta);
+        STS2.setPileCount(btn, now);
+    }
+
+    // ---- 动作 ----
+    async function actDraw(batch) {
+        const defs = CARDS.slice(0, Math.min(5, 5 - Math.min(hand.children.length, 4)));
+        if (!defs.length) defs.push(CARDS[0]);
+        const pending = defs.map((d) => {
+            const el = makeCard(d);
+            el.style.visibility = 'hidden';
+            hand.appendChild(el);
+            return el;
+        });
+        layoutFan();
+        await STS2.drawToHand({
+            pileEl: drawPile,
+            slots: slotRects(),
+            stagger: batch ? T.DRAW_STAGGER_BATCH : T.DRAW_STAGGER,
+            duration: T.DRAW_FLY,
+            trailColor: 'rgba(140, 220, 255, 0.8)',
+            onEach: (i) => { pending[i].style.visibility = ''; },
+        });
+        bump(drawPile, -pending.length);
+    }
+
+    async function actPlay() {
+        const card = hand.children[Math.floor(hand.children.length / 2)];
+        if (!card) return;
+        const def = card._def || {};
+        const rect = card.getBoundingClientRect();
+        card.style.visibility = 'hidden';
+        await STS2.flyCard({
+            from: rect,
+            to: enemy,
+            cardEl: card,
+            duration: T.PLAY_FLY,
+            arcHeight: 150,
+            scaleFrom: 1.35,
+            scaleTo: 0.35,
+            rotate: 18,
+            ease: 'out',
+            trailColor: def.trail || 'rgba(255,140,60,0.9)',
+        });
+        hand.removeChild(card);
+        layoutFan();
+        STS2.popText({ target: enemy, text: '13', variant: 'damage' });
+        STS2.shake({ el: enemy, intensity: 7, duration: 200 });
+    }
+
+    async function actDiscardOne() {
+        const card = hand.children[hand.children.length - 1];
+        if (!card) return;
+        const rect = card.getBoundingClientRect();
+        card.style.visibility = 'hidden';
+        await STS2.flyCard({
+            from: rect,
+            to: discardPile,
+            cardEl: card,
+            duration: T.DISCARD_FLY,
+            arcHeight: 210,
+            scaleTo: 0.4,
+            rotate: 55,
+            ease: 'inout',
+            trailColor: (card._def || {}).trail,
+        });
+        hand.removeChild(card);
+        layoutFan();
+        bump(discardPile, 1);
+    }
+
+    async function actEndTurn() {
+        const cards = [...hand.children].slice();
+        if (!cards.length) return;
+        STS2.popText({ target: { left: innerWidth / 2 - 60, top: innerHeight * 0.3, width: 120, height: 60 }, text: 'Enemy Turn', variant: 'status', size: 40, life: 1400 });
+        await STS2.endTurnDiscard({
+            pileEl: discardPile,
+            cardEls: cards,
+            stagger: T.DISCARD_STAGGER,
+            duration: T.DISCARD_FLY,
+            trailColor: (el) => (el._def || {}).trail,
+            onEach: () => bump(discardPile, 1),
+        });
+        hand.innerHTML = '';
+        bump(drawPile, 5);
+    }
+
+    async function actShuffle() {
+        bump(drawPile, 10);
+        bump(discardPile, -10);
+        await STS2.shuffleStream({ fromEl: discardPile, toEl: drawPile, count: 14, streams: 3 });
+    }
+
+    function actBanner() {
+        const b = document.createElement('div');
+        b.className = 'sts2-banner';
+        b.innerHTML = '<div class="sts2-banner-main">Player Turn</div><div class="sts2-banner-sub">Turn 6</div>';
+        document.body.appendChild(b);
+        setTimeout(() => b.remove(), 1900);
+    }
+
+    document.querySelector('.ctl').addEventListener('click', (event) => {
+        const act = event.target.dataset && event.target.dataset.act;
+        if (!act) return;
+        if (act === 'draw') actDraw(false);
+        else if (act === 'draw-batch') actDraw(true);
+        else if (act === 'play') actPlay();
+        else if (act === 'discard1') actDiscardOne();
+        else if (act === 'end') actEndTurn();
+        else if (act === 'shuffle') actShuffle();
+        else if (act === 'banner') actBanner();
+        else if (act === 'reset') { hand.innerHTML = ''; }
+    });
+
+    // 初始手牌
+    addCards(CARDS.slice(0, 4));
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,169 @@
+/*
+ * sts2_motion.css — 杀戮尖塔2风格动画的配套样式
+ * 依赖：与 static/js/sts2_motion.js 配套；类名全部带 sts2- 前缀，不与现有样式冲突。
+ * 视觉原则：卡牌剪影残影（无模糊无霓虹），牌背对齐游戏暗色牌背。
+ */
+
+/* ---------- 幽灵卡（飞行中的卡牌克隆） ---------- */
+.sts2-ghost {
+    position: fixed;
+    pointer-events: none;
+    margin: 0;
+    transform-origin: 50% 50%;
+    will-change: transform;
+    /* 只有深度阴影，没有彩色辉光 */
+    filter: drop-shadow(0 5px 10px rgba(0, 0, 0, 0.35));
+}
+
+/* 牌背：对齐游戏 .card-facedown 的暗色主题（#3d3d5c）+ 细边框 + 内衬线 */
+.sts2-ghost .sts2-card-back {
+    width: 100%;
+    height: 100%;
+    border-radius: 8px;
+    background: #3d3d5c;
+    border: 1.5px solid #56567a;
+    box-sizing: border-box;
+    position: relative;
+}
+.sts2-ghost .sts2-card-back::before {
+    content: "";
+    position: absolute;
+    inset: 7%;
+    border-radius: 5px;
+    border: 1px solid rgba(160, 160, 190, 0.28);
+}
+
+/* ---------- 拖尾：卡牌剪影残影 ---------- */
+.sts2-trail-card {
+    position: fixed;
+    pointer-events: none;
+    z-index: 4150;
+    border-radius: 10% / 7%;
+    border: 1.5px solid var(--sts2-sliver-border, rgba(160, 128, 80, 0.55));
+    background: var(--sts2-sliver-fill, rgba(160, 128, 80, 0.08));
+    box-sizing: border-box;
+    opacity: 0.66;
+    animation: sts2SliverFade var(--sts2-trail-life, 340ms) ease-out forwards;
+}
+@keyframes sts2SliverFade {
+    from { opacity: 0.66; transform: scale(1); }
+    to { opacity: 0; transform: scale(0.5); }
+}
+
+/* ---------- 伤害数字 / 状态文字 ---------- */
+.sts2-pop {
+    position: fixed;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 9500;
+    font-weight: 700;
+    text-shadow:
+        0 2px 0 rgba(0, 0, 0, 0.65),
+        0 0 10px rgba(0, 0, 0, 0.4);
+    animation: sts2PopBounce 240ms cubic-bezier(0.34, 1.56, 0.64, 1) both,
+        sts2PopFloat 700ms 220ms ease-out forwards;
+}
+.sts2-pop-damage { color: #ffffff; }
+.sts2-pop-crit { color: #ffd54a; }
+.sts2-pop-status { color: #ff6b6b; font-size: 0.72em !important; letter-spacing: 0.04em; }
+.sts2-pop-block { color: #6fd6ff; font-size: 0.8em !important; }
+@keyframes sts2PopBounce {
+    from { transform: translate(-50%, -50%) scale(1.25); opacity: 0; }
+    to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+@keyframes sts2PopFloat {
+    from { margin-top: 0; opacity: 1; }
+    to { margin-top: -34px; opacity: 0; }
+}
+
+/* ---------- 回合横幅（Player Turn / Enemy Turn） ---------- */
+.sts2-banner {
+    position: fixed;
+    left: 50%;
+    top: 34%;
+    transform: translate(-50%, -50%);
+    z-index: 9400;
+    pointer-events: none;
+    text-align: center;
+    font-family: Georgia, "Times New Roman", "Noto Serif SC", serif;
+    animation: sts2BannerLife var(--sts2-banner-ms, 1800ms) ease both;
+}
+.sts2-banner .sts2-banner-main {
+    font-size: 52px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: #f5d67b;
+    text-shadow: 0 3px 0 rgba(0, 0, 0, 0.7), 0 0 24px rgba(245, 214, 123, 0.4);
+}
+.sts2-banner .sts2-banner-sub {
+    margin-top: 4px;
+    font-size: 18px;
+    color: #d8cba4;
+    text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6);
+}
+.sts2-banner.enemy .sts2-banner-main {
+    color: #e8a13c;
+    text-shadow: 0 3px 0 rgba(0, 0, 0, 0.7), 0 0 24px rgba(232, 120, 60, 0.45);
+}
+@keyframes sts2BannerLife {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(0.92); }
+    12% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    80% { opacity: 1; }
+    100% { opacity: 0; transform: translate(-50%, -52%) scale(1.02); }
+}
+
+/* ---------- 能量不足气泡 ---------- */
+.sts2-speech {
+    position: fixed;
+    z-index: 9450;
+    pointer-events: none;
+    padding: 6px 14px;
+    border-radius: 10px;
+    background: rgba(30, 34, 44, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #cfd4dd;
+    font: 14px/1.4 system-ui, sans-serif;
+    animation: sts2SpeechLife 1400ms ease both;
+}
+@keyframes sts2SpeechLife {
+    0% { opacity: 0; transform: translateY(6px); }
+    12% { opacity: 1; transform: translateY(0); }
+    80% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+/* ---------- 演示页用：牌堆图标按钮 + 右侧牌堆轨道 ---------- */
+.sts2-pile-btn {
+    position: relative;
+    width: 54px;
+    height: 54px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    transition: transform 120ms ease, filter 120ms ease;
+}
+.sts2-pile-btn img,
+.sts2-pile-btn svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45));
+}
+.sts2-pile-btn:hover { transform: translateY(-2px) scale(1.06); filter: brightness(1.15); }
+.sts2-pile-btn:active { transform: translateY(0) scale(0.97); }
+.sts2-pile-count {
+    position: absolute;
+    right: -4px;
+    bottom: -2px;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 5px;
+    border-radius: 11px;
+    background: #56617a;
+    color: #fff;
+    font: 700 13px/22px system-ui, sans-serif;
+    text-align: center;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.pile-rail.discard-rail { left: auto; right: 18px; }
