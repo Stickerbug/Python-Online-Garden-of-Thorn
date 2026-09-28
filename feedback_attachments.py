@@ -148,6 +148,22 @@ def open_attachment_file(token):
     if not re.fullmatch(r'[A-Za-z0-9]{20,24}', str(token or '')):
         return None
     with closing(db.get_db_connection()) as conn:
+        # 只读路径不能因缺表而 500：GET 可能先于任何上传发生。
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS feedback_attachments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                token TEXT NOT NULL UNIQUE,
+                filename TEXT NOT NULL,
+                mime TEXT NOT NULL,
+                size_bytes INTEGER NOT NULL,
+                uploader_user_id INTEGER,
+                issue_id INTEGER,
+                created_at TEXT NOT NULL
+            )
+            '''
+        )
+        conn.commit()
         row = conn.execute(
             'SELECT filename, mime FROM feedback_attachments WHERE token = ?',
             (str(token),),
