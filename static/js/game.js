@@ -12384,6 +12384,197 @@ function getCardEffectTextForInstance(cardDict, cardDef) {
 const pendingCardEffectFits = new Set();
 let pendingCardEffectFitFrame = 0;
 
+// ===== 皮肤卡文字对比度自适应（2026-09-29） =====
+// 自动采样皮肤图在文字区域的底色亮度，向对比度更大的方向偏移：
+// 亮底（金叶）压暗字+深衬，暗底提亮字+白衬，中间带保持现状零变化。
+// 元素级（卡名/英文副名/类型标签/底部队）+ 字符级（效果文字：中文按字、
+// 英文按词 wrap inline span，不改布局）。底色采样用离屏 canvas 光栅化
+// 的皮肤图（静态，按 skinId 缓存），失败静默回落现状。
+const skinInkCanvasCache = new Map();
+const SKIN_INK_CANVAS_SIZE = 288;
+const SKIN_INK_BRIGHT = 0.60;
+const SKIN_INK_DARK = 0.40;
+
+function getSkinInkCanvasData(skinId) {
+    if (!skinId) return Promise.resolve(null);
+    if (skinInkCanvasCache.has(skinId)) return skinInkCanvasCache.get(skinId);
+    const url = cardSkinFrontUrl(skinId);
+    const job = (async () => {
+        if (!url) return null;
+        try {
+            const img = new Image();
+            img.decoding = 'async';
+            img.src = url;
+            await img.decode();
+            const cv = document.createElement('canvas');
+            cv.width = SKIN_INK_CANVAS_SIZE;
+            cv.height = SKIN_INK_CANVAS_SIZE;
+            const ctx = cv.getContext('2d', { willReadFrequently: true });
+            ctx.drawImage(img, 0, 0, SKIN_INK_CANVAS_SIZE, SKIN_INK_CANVAS_SIZE);
+            return { data: ctx.getImageData(0, 0, SKIN_INK_CANVAS_SIZE, SKIN_INK_CANVAS_SIZE), size: SKIN_INK_CANVAS_SIZE };
+        } catch (_) {
+            return null;
+        }
+    })();
+    skinInkCanvasCache.set(skinId, job);
+    return job;
+}
+
+function warmSkinInkCanvasData() {
+    try {
+        const ids = new Set([myEquippedCardSkin(), '初始']);
+        (gameState && gameState.player_card_skins || []).forEach(id => { if (id) ids.add(id); });
+        ids.forEach(id => { if (id) getSkinInkCanvasData(id); });
+    } catch (_) {}
+}
+
+// rel: {x,y,w,h} 相对卡面左上（px）。皮肤 img = 182.3% 卡宽方形居中（与 CSS 同口径）
+function sampleSkinBrightness(skin, rel, cardW, cardH) {
+    const px = skin.data.data;
+    const imgSize = cardW * 1.823;
+    const offX = (cardW - imgSize) / 2;
+    const offY = (cardH - imgSize) / 2;
+    const scale = skin.size / imgSize;
+    const x0 = Math.max(0, Math.floor((rel.x - offX) * scale));
+    const y0 = Math.max(0, Math.floor((rel.y - offY) * scale));
+    const x1 = Math.min(skin.size - 1, Math.ceil((rel.x + rel.w - offX) * scale));
+    const y1 = Math.min(skin.size - 1, Math.ceil((rel.y + rel.h - offY) * scale));
+    if (x1 <= x0 || y1 <= y0) return null;
+    const step = Math.max(1, Math.floor(Math.max(x1 - x0, y1 - y0) / 12));
+    const lumas = [];
+    for (let y = y0; y <= y1; y += step) {
+        for (let x = x0; x <= x1; x += step) {
+            const i = (y * skin.size + x) * 4;
+            const a = px[i + 3];
+            if (a < 70) continue; // 近透明像素（出血/装饰外）跳过
+            // 感知亮度（Rec.601 近似），alpha 低时向 0.5 收敛（卡底未知）
+            const luma = (0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]) / 255;
+            lumas.push(luma * (a / 255) + 0.5 * (1 - a / 255));
+        }
+    }
+    if (lumas.length < 3) return null;
+    lumas.sort((a, b) => a - b);
+    return lumas[Math.floor(lumas.length / 2)];
+}
+
+function skinInkStyleFor(luma) {
+    if (luma == null) return null;
+    if (luma >= SKIN_INK_BRIGHT) {
+        const t = Math.min(1, (luma - SKIN_INK_BRIGHT) / (1 - SKIN_INK_BRIGHT));
+        return {
+            mixTo: 'black',
+            mixAmt: 0.26 + 0.26 * t,
+            shadow: `rgba(12, 16, 12, ${(0.40 + 0.24 * t).toFixed(2)})`,
+            stroke: `rgba(22, 28, 22, ${(0.34 + 0.26 * t).toFixed(2)})`,
+        };
+    }
+    if (luma <= SKIN_INK_DARK) {
+        const t = Math.min(1, (SKIN_INK_DARK - luma) / SKIN_INK_DARK);
+        return {
+            mixTo: 'white',
+            mixAmt: 0.28 + 0.30 * t,
+            shadow: `rgba(242, 246, 242, ${(0.34 + 0.24 * t).toFixed(2)})`,
+            stroke: `rgba(238, 242, 238, ${(0.30 + 0.24 * t).toFixed(2)})`,
+        };
+    }
+    return null;
+}
+
+function parseRgbColor(text) {
+    const m = /rgba?\((\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s]+([\d.]+))?\)/.exec(String(text || ''));
+    if (!m) return null;
+    return [Number(m[1]), Number(m[2]), Number(m[3])];
+}
+
+function mixRgbTowards(base, target, amount) {
+    const to = target === 'white' ? 255 : 0;
+    return `rgb(${Math.round(base[0] + (to - base[0]) * amount)}, ${Math.round(base[1] + (to - base[1]) * amount)}, ${Math.round(base[2] + (to - base[2]) * amount)})`;
+}
+
+function applySkinInkToNode(node, skin, cardRect) {
+    const rect = node.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const luma = sampleSkinBrightness(skin, {
+        x: rect.left - cardRect.left,
+        y: rect.top - cardRect.top,
+        w: rect.width,
+        h: rect.height,
+    }, cardRect.width, cardRect.height);
+    const style = skinInkStyleFor(luma);
+    node.classList.toggle('skin-ink-live', !!style);
+    if (!style) {
+        node.style.removeProperty('--skin-ink-color');
+        node.style.removeProperty('--skin-ink-shadow');
+        node.style.removeProperty('--skin-ink-stroke');
+        return;
+    }
+    let baseRgb = null;
+    const cached = node.getAttribute('data-ink-base');
+    if (cached) {
+        baseRgb = parseRgbColor(cached);
+    } else {
+        node.style.removeProperty('--skin-ink-color');
+        baseRgb = parseRgbColor(getComputedStyle(node).color);
+        if (baseRgb) node.setAttribute('data-ink-base', `rgb(${baseRgb[0]}, ${baseRgb[1]}, ${baseRgb[2]})`);
+    }
+    if (baseRgb) {
+        node.style.setProperty('--skin-ink-color', mixRgbTowards(baseRgb, style.mixTo, style.mixAmt));
+    }
+    node.style.setProperty('--skin-ink-shadow', `0 0.5cqi 1.5cqi ${style.shadow}`);
+    node.style.setProperty('--skin-ink-stroke', `0.24cqi ${style.stroke}`);
+}
+
+// 效果文字字符级 wrap：只动 TEXT_NODE（chips/图标/br 不碰），
+// 连续 ASCII 数字字母为一组，空白保留裸文本，其余（中日文单字/符号）逐字
+function wrapSkinInkTextNodes(container) {
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+        acceptNode: n => (n.nodeValue && n.nodeValue.trim() ? 1 : 2),
+    });
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach(node => {
+        const parts = String(node.nodeValue).match(/[A-Za-z0-9'’%]+|\s+|[^\sA-Za-z0-9'’%]/gu) || [];
+        const frag = document.createDocumentFragment();
+        parts.forEach(part => {
+            if (/^\s+$/.test(part)) {
+                frag.appendChild(document.createTextNode(part));
+                return;
+            }
+            const span = document.createElement('span');
+            span.className = 'skin-ink';
+            span.textContent = part;
+            frag.appendChild(span);
+        });
+        node.parentNode.replaceChild(frag, node);
+    });
+}
+
+function applySkinTextContrast(cardEl) {
+    try {
+        if (!cardEl || !cardEl.classList.contains('card-skin-backed') || !cardEl.isConnected) return;
+        const img = cardEl.querySelector(':scope > .card-skin-under');
+        const skinId = img && img.dataset.skinId;
+        if (!skinId) return;
+        const cardRect = cardEl.getBoundingClientRect();
+        if (cardRect.width < 40) return;
+        getSkinInkCanvasData(skinId).then(skin => {
+            if (!skin || !cardEl.isConnected) return;
+            const current = cardEl.getBoundingClientRect();
+            if (Math.abs(current.width - cardRect.width) > 0.5) return; // 尺寸已变，等下一轮
+            cardEl.querySelectorAll(
+                ':scope .card-name, :scope .card-type-label, :scope .card-english-name, :scope .card-bottom-zone .card-flags'
+            ).forEach(node => applySkinInkToNode(node, skin, cardRect));
+            const effectEl = cardEl.querySelector(':scope > .card-effect');
+            if (effectEl && cardRect.width >= 100) {
+                if (!effectEl.querySelector(':scope .skin-ink')) {
+                    wrapSkinInkTextNodes(effectEl);
+                }
+                effectEl.querySelectorAll('.skin-ink').forEach(span => applySkinInkToNode(span, skin, cardRect));
+            }
+        }).catch(() => {});
+    } catch (_) {}
+}
+
 function addPresetCardEffectScaleClass(cardEl, className) {
     if (!cardEl || !className) return;
     cardEl.classList.add(className, 'card-effect-scale-preset');
@@ -12465,6 +12656,8 @@ function scheduleCardEffectFit(cardEl) {
         const cards = Array.from(pendingCardEffectFits);
         pendingCardEffectFits.clear();
         cards.forEach(fitCardEffectText);
+        // 字号/布局已定型，随后做皮肤文字对比度采样（异步，不阻塞本帧）
+        cards.forEach(applySkinTextContrast);
     });
 }
 
@@ -12532,7 +12725,8 @@ function createCardElement(cardDict, options = {}) {
                 el.classList.add('card-skin-backed');
                 /* 非初始皮肤：右上角类型色 1/4 圆圈不显示（初始卡面保留） */
                 if (ownerSkin !== '初始') el.classList.add('card-skin-no-corner');
-                skinUnderHtml = `<img class="card-skin-under" src="${escapeHtml(frontUrl)}" alt="" draggable="false">`;
+                /* data-skin-id 供文字对比度自适应采样底色用 */
+                skinUnderHtml = `<img class="card-skin-under" data-skin-id="${escapeHtml(ownerSkin)}" src="${escapeHtml(frontUrl)}" alt="" draggable="false">`;
             }
         }
     }
@@ -16654,6 +16848,10 @@ function connectSocket(serverUrl) {
     }
     });
     bindPlayPredictionSocket();
+    try {
+        if (window.requestIdleCallback) requestIdleCallback(() => warmSkinInkCanvasData(), { timeout: 4000 });
+        else setTimeout(warmSkinInkCanvasData, 2500);
+    } catch (_) {}
     bindSocketEvent('response_request', (data) => {
         if (!shouldAcceptNetworkMatchPayload(data, 'response_request', { allowSwitch: false })) return;
         debugLog('[RESPONSE] response_request, counter_cards:', (data.counter_cards || []).length);
