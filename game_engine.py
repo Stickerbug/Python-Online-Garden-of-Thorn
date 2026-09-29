@@ -2533,7 +2533,15 @@ class GameEngine:
             'current_event': event_name,
             'current_action': extra,
         }
-        result = run_v2_event(self, context, event_def)
+        # 设计 2026-09-29：v2 事件执行期间同步挂 _active_effect_context——
+        # 事件步骤里落回引擎原子的条件/取值（if_else 等）此前读不到事件上下文
+        # （伤害字段、current_equipment 等），装备事件的条件恒失败。
+        prev_effect_context = getattr(self, '_active_effect_context', None)
+        self._active_effect_context = context
+        try:
+            result = run_v2_event(self, context, event_def)
+        finally:
+            self._active_effect_context = prev_effect_context
         if isinstance(result, dict) and result.get('needs_v2_ui'):
             self._store_v2_ui_pause(result.get('v2_ui_pause') or {})
         return result
@@ -16510,6 +16518,34 @@ class GameEngine:
             if ref == 'status_count':
                 target_id = self._resolve_target(player_id, expr.get('target', 'self'))
                 return self._get_status_count(target_id, expr.get('status', ''))
+            if ref == 'player_stat':
+                # 设计 2026-09-29：引擎路径条件与运行时同口径——读玩家资源
+                # （elixir/magic/health/max_* 等）。此前引擎求值器不认，条件恒 0。
+                target_id = self._resolve_target(player_id, expr.get('target', 'self'))
+                if not self._valid_player_id(target_id):
+                    return 0
+                stat = str(expr.get('stat', expr.get('name', '')) or '').strip().lower()
+                stat_map = {
+                    'elixir': 'elixir', 'e': 'elixir',
+                    'magic': 'magic', 'm': 'magic',
+                    'health': 'health', 'hp': 'health', 'h': 'health',
+                    'max_elixir': 'max_elixir', 'max_magic': 'max_magic',
+                    'max_health': 'max_health', 'max_hp': 'max_health',
+                    'armor': 'armor',
+                }
+                attr = stat_map.get(stat)
+                if attr is None:
+                    return 0
+                return max(0, int(getattr(self.players[target_id], attr, 0) or 0))
+            if ref == 'equipment_prop':
+                # 设计 2026-09-29：引擎路径读装备属性（与运行时 equipment_prop
+                # 同口径；装备引用默认 current_equipment）。
+                eq = self._resolve_equipment_ref(
+                    player_id, expr.get('equipment', {'ref': 'current_equipment'}), card,
+                )
+                if eq is None:
+                    return 0
+                return self._get_equipment_property_value(eq, expr.get('property', 'turns_equipped'))
             if ref == 'zone_count':
                 target_id = self._resolve_target(player_id, expr.get('target', 'self'))
                 if expr.get('require_selectable') or expr.get('exclude_current', expr.get('exclude_self', False)):
@@ -17328,7 +17364,15 @@ class GameEngine:
                 **(context.get('current_action') if isinstance(context.get('current_action'), dict) else {}),
                 'v2_ui': clean,
             }
-            result = run_v2_steps(self, context, pending.get('remaining_steps') or [])
+            # 设计 2026-09-29：resume 续跑同样挂 _active_effect_context（与
+            # _run_v2_card_event 同口径），续跑步骤里落回引擎原子的条件才能
+            # 读到事件上下文（伤害字段、current_equipment 等）。
+            prev_effect_context = getattr(self, '_active_effect_context', None)
+            self._active_effect_context = context
+            try:
+                result = run_v2_steps(self, context, pending.get('remaining_steps') or [])
+            finally:
+                self._active_effect_context = prev_effect_context
             if isinstance(result, dict) and result.get('needs_v2_ui'):
                 self._store_v2_ui_pause(result.get('v2_ui_pause') or {})
                 return {'success': True, 'needs_v2_ui': True}
@@ -19341,7 +19385,11 @@ class GameEngine:
         blood_knife_return = bool((getattr(card, 'custom_vars', {}) or {}).pop('bio_blood_knife_return', False))
         reset_card_after_play(card)
         force_exile_after_auto_play = 'ocean_no_auto' in getattr(card, 'instance_flags', set()) and 'exile' in card.flags
-        if (card.card_type == 'root' and not script_controls_play) or placed_as_equipment:
+        # 设计 2026-09-29：on_play 里已自毁的装备牌不再被 root 自动装回
+        # （一跳标记，跳过后即清，重抽重打不受影响）。
+        equipment_destroyed_this_play = bool(getattr(card, '_equipment_destroyed_this_play', False))
+        card.__dict__.pop('_equipment_destroyed_this_play', None)
+        if ((card.card_type == 'root' and not script_controls_play) or placed_as_equipment) and not equipment_destroyed_this_play:
             eq = self._find_equipment_for_card(equip_owner_id, card)
             if eq is None:
                 eq = EquipmentInstance(card, equip_owner_id)
@@ -21919,6 +21967,10 @@ class GameEngine:
         if mode == 'self':
             owner_id, eq = self._find_equipment_owner_of_card(player_id, card)
             if eq is not None and self._destroy_equipment(owner_id, eq, check_protection=False, source_id=source_id):
+                # 设计 2026-09-29：on_play 里自毁的装备牌（魔法盐0充能等）——
+                # 打一轮标记，出牌后置的 root 自动装回要跳过这一张。
+                if card is not None:
+                    card.__dict__['_equipment_destroyed_this_play'] = True
                 if log:
                     self.log_msg(log)
             return
