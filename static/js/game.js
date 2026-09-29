@@ -12753,20 +12753,24 @@ function createCardElement(cardDict, options = {}) {
     if (!blinded) {
         flagsHtml += equipmentCounterFlagHtml(cardDict);
     }
-    const predictionHtml = blinded ? '' : getCardPlayEffectPredictionHtml(cardDict, {
+    const predictionContextOptions = {
         ...predictionOptions,
         ownerState: predictionOptions.ownerState || cardOwnerState,
         attackerState: predictionOptions.attackerState || cardOwnerState,
-    });
+    };
+    // 预测数据来自服务端模拟（异步预取）：eligible 的卡常驻一个 holder，
+    // 数据到达后 refreshVisiblePlayPredictions() 定点回填，避免整页重渲染
+    const predictionEligible = !blinded && shouldShowCardPlayEffectPrediction(cardDict, predictionContextOptions);
+    const predictionHtml = predictionEligible ? getCardPlayEffectPredictionHtml(cardDict, predictionContextOptions) : '';
     if (cardDef.card_type === 'thorn' && predictionHtml) {
         el.classList.add('card-effect-fit-prediction');
     }
     const displayCostE = getCardDisplayCostELabel(cardDict, cardDef, totalE);
     const displayCostM = isVoidPlaceholderCard(cardDict, cardDef) ? '?' : totalM;
-    const bottomHtml = (predictionHtml || flagsHtml)
+    const bottomHtml = (predictionEligible || flagsHtml)
         ? `<div class="card-bottom-zone ${predictionHtml ? 'has-prediction' : ''}">
-                ${predictionHtml || ''}
-                ${predictionHtml || flagsHtml ? `<div class="card-flags ${flagsHtml ? '' : 'card-flags-empty'}">${flagsHtml}</div>` : ''}
+                ${predictionEligible ? `<span class="card-prediction-holder">${predictionHtml || ''}</span>` : ''}
+                ${(predictionHtml || flagsHtml) ? `<div class="card-flags ${flagsHtml ? '' : 'card-flags-empty'}">${flagsHtml}</div>` : ''}
            </div>`
         : '';
     el.innerHTML = `
@@ -12783,6 +12787,13 @@ function createCardElement(cardDict, options = {}) {
         ${bottomHtml}
     `;
     bindInlineCardChips(el);
+    if (predictionEligible) {
+        el.__predictionContext = {
+            cardDict,
+            options: predictionContextOptions,
+            isThorn: cardDef.card_type === 'thorn',
+        };
+    }
     scheduleCardEffectFit(el);
     if (draggable) {
         el.classList.add('card-draggable');
@@ -13806,135 +13817,6 @@ function getDefaultPredictionTargetState(cardDict, ownerState = null) {
     return getFirstPredictionEnemyState(ownerState);
 }
 
-function cardHasEffectiveFlagForPrediction(cardDict, cardDef, flag) {
-    const sets = getEffectiveCardFlagSets(cardDict || {}, cardDef || {});
-    return sets.effective.has(flag);
-}
-
-function predictionEquipmentRuntimeActive(eq = {}) {
-    const custom = (eq && eq.custom_vars && typeof eq.custom_vars === 'object')
-        ? eq.custom_vars
-        : {};
-    const sealedLayers = Math.max(0, Number(custom.sewers_sealed || 0));
-    return !(sealedLayers > 0 || custom._sewers_sealed_suspended);
-}
-
-function predictionEquipmentMatches(eq, ...ids) {
-    const wanted = new Set(ids.map(id => String(id || '').toLowerCase()).filter(Boolean));
-    const card = eq && (eq.card_instance || eq.card || eq);
-    const id = String(card && card.def_id || '').toLowerCase();
-    return wanted.has(id) || Array.from(wanted).some(w => id.endsWith(`:${w}`));
-}
-
-function getPredictionEquipmentEntries() {
-    const players = getPredictionPlayerRefs().slice().sort((left, right) => {
-        const leftId = normalizePlayerId(left && (left.player_id ?? left.id));
-        const rightId = normalizePlayerId(right && (right.player_id ?? right.id));
-        if (leftId == null) return rightId == null ? 0 : 1;
-        if (rightId == null) return -1;
-        return leftId - rightId;
-    });
-    const entries = [];
-    players.forEach((ownerState, playerIndex) => {
-        const ownerId = normalizePlayerId(ownerState && (ownerState.player_id ?? ownerState.id));
-        (Array.isArray(ownerState && ownerState.equipment) ? ownerState.equipment : []).forEach((eq, slotIndex) => {
-            entries.push({
-                eq,
-                ownerState,
-                ownerId: ownerId != null ? ownerId : normalizePlayerId(eq && eq.owner),
-                playerIndex,
-                slotIndex,
-            });
-        });
-    });
-    let nextFallbackOrder = entries.reduce((highest, entry) => {
-        const custom = (entry.eq && entry.eq.custom_vars) || {};
-        const order = Math.max(0, Math.floor(Number(custom.non_stack_equipped_order || 0)));
-        return Number.isFinite(order) ? Math.max(highest, order) : highest;
-    }, 0) + 1;
-    entries.forEach((entry, index) => {
-        const custom = (entry.eq && entry.eq.custom_vars) || {};
-        const explicit = Math.max(0, Math.floor(Number(custom.non_stack_equipped_order || 0)));
-        entry.globalIndex = index;
-        entry.nonStackOrder = Number.isFinite(explicit) && explicit > 0 ? explicit : nextFallbackOrder++;
-    });
-    return entries;
-}
-
-function predictionEquipmentUsesNonStackRule(eq = {}) {
-    const card = eq && (eq.card_instance || eq.card || eq);
-    const cardDef = getCardDef((card && card.def_id) || '');
-    const effective = getEffectiveCardFlagSets(card || {}, cardDef || {}).effective;
-    return effective.has('non_stackable') || effective.has('tag_non_stackable');
-}
-
-function getPredictionActiveEquipmentEntries() {
-    const entries = getPredictionEquipmentEntries();
-    return entries.filter(entry => {
-        if (!predictionEquipmentRuntimeActive(entry.eq)) return false;
-        if (!predictionEquipmentUsesNonStackRule(entry.eq)) return true;
-        const card = entry.eq && (entry.eq.card_instance || entry.eq.card || entry.eq);
-        const defId = String(card && card.def_id || '').toLowerCase();
-        return !entries.some(candidate => {
-            if (candidate === entry) return false;
-            if (!predictionEquipmentUsesNonStackRule(candidate.eq)) return false;
-            const candidateCard = candidate.eq && (candidate.eq.card_instance || candidate.eq.card || candidate.eq);
-            if (String(candidateCard && candidateCard.def_id || '').toLowerCase() !== defId) return false;
-            return candidate.nonStackOrder < entry.nonStackOrder
-                || (candidate.nonStackOrder === entry.nonStackOrder && candidate.globalIndex < entry.globalIndex);
-        });
-    });
-}
-
-function predictionEquipmentEffectTarget(entry) {
-    const explicitTarget = normalizePlayerId(entry && entry.eq && entry.eq.effect_target);
-    return explicitTarget != null ? explicitTarget : normalizePlayerId(entry && entry.ownerId);
-}
-
-function getPredictionEquipmentTargeting(playerState = {}, ...ids) {
-    const targetId = normalizePlayerId(playerState && (playerState.player_id ?? playerState.id));
-    if (targetId == null) {
-        return getPredictionActiveEquipmentEntries().filter(entry => (
-            entry.ownerState === playerState && predictionEquipmentMatches(entry.eq, ...ids)
-        ));
-    }
-    return getPredictionActiveEquipmentEntries().filter(entry => (
-        predictionEquipmentEffectTarget(entry) === targetId
-        && predictionEquipmentMatches(entry.eq, ...ids)
-    ));
-}
-
-function countPredictionEquipmentTargeting(playerState = {}, ...ids) {
-    return getPredictionEquipmentTargeting(playerState, ...ids).length;
-}
-
-function countActiveCorruptionEquipment() {
-    if (!gameState) return 0;
-    const seenEquipment = new Set();
-    let count = 0;
-    getPredictionActiveEquipmentEntries().forEach(entry => {
-        const eq = entry.eq;
-        const card = eq && (eq.card_instance || eq.card || eq);
-        if (!predictionEquipmentMatches(eq, 'Corruption', 'vanilla:corruption') || !eq.corruption_active) return;
-        const instanceId = eq.instance_id ?? eq.equipment_instance_id ?? card.instance_id ?? card.instanceId;
-        const key = instanceId != null && instanceId !== ''
-            ? `eq:${instanceId}`
-            : `owner:${entry.ownerId != null ? entry.ownerId : entry.playerIndex}:slot:${entry.slotIndex}`;
-        if (seenEquipment.has(key)) return;
-        seenEquipment.add(key);
-        count += 1;
-    });
-    return count;
-}
-
-function countDizzyEquipmentForPrediction(attackerState = {}) {
-    return countPredictionEquipmentTargeting(attackerState, 'Dizzy');
-}
-
-function countCutterEquipmentForPrediction(attackerState = {}) {
-    return countPredictionEquipmentTargeting(attackerState, 'Cutter');
-}
-
 function getPredictionCustomStatusValue(playerState = {}, ...keys) {
     const custom = (playerState && playerState.custom_statuses && typeof playerState.custom_statuses === 'object')
         ? playerState.custom_statuses
@@ -13942,392 +13824,8 @@ function getPredictionCustomStatusValue(playerState = {}, ...keys) {
     return keys.reduce((sum, key) => sum + Math.max(0, Number(custom[key] || playerState[key] || 0)), 0);
 }
 
-function getPredictionStatusMaxValue(playerState = {}, ...keys) {
-    const custom = (playerState && playerState.custom_statuses && typeof playerState.custom_statuses === 'object')
-        ? playerState.custom_statuses
-        : {};
-    return keys.reduce((maxValue, key) => {
-        const value = Math.max(0, Number(custom[key] || playerState[key] || 0));
-        return Math.max(maxValue, Number.isFinite(value) ? value : 0);
-    }, 0);
-}
-
 function isPredictionStatusImmune(playerState = {}) {
     return getPredictionCustomStatusValue(playerState, 'status_immune', 'immune', '状态免疫') > 0;
-}
-
-function predictionPlayerHasEquipment(playerState = {}, ...ids) {
-    return countPredictionEquipmentTargeting(playerState, ...ids) > 0;
-}
-
-function getPredictionVisibleHandCards(playerState = {}) {
-    const zones = [playerState.hand, playerState.revealed_hand, playerState.revealed_tag_cards];
-    const seen = new Set();
-    const cards = [];
-    zones.forEach((zone, zoneIndex) => {
-        (Array.isArray(zone) ? zone : []).forEach((card, cardIndex) => {
-            if (!card) return;
-            const instanceId = card.instance_id ?? card.instanceId;
-            const key = instanceId != null && instanceId !== ''
-                ? `card:${instanceId}`
-                : `zone:${zoneIndex}:slot:${cardIndex}`;
-            if (seen.has(key)) return;
-            seen.add(key);
-            cards.push(card);
-        });
-    });
-    return cards;
-}
-
-function createPredictionDamageRuntime(attackerState = {}, targetState = {}, options = {}) {
-    const playerStates = new Map();
-    const addPlayer = state => {
-        const id = normalizePlayerId(state && (state.player_id ?? state.id));
-        if (id != null && !playerStates.has(id)) playerStates.set(id, state);
-    };
-    getPredictionPlayerRefs().forEach(addPlayer);
-    addPlayer(attackerState);
-    addPlayer(targetState);
-    const magicByPlayer = new Map();
-    playerStates.forEach((state, id) => {
-        magicByPlayer.set(id, Math.max(0, Number(state && (state.magic ?? state.m) || 0)));
-    });
-    const attackerId = normalizePlayerId(attackerState && (attackerState.player_id ?? attackerState.id));
-    const paidMagic = Math.max(0, Number(options.paidMagic || 0));
-    if (attackerId != null && paidMagic > 0) {
-        magicByPlayer.set(attackerId, Math.max(0, Number(magicByPlayer.get(attackerId) || 0) - paidMagic));
-    }
-    const attackerVars = (attackerState && attackerState.custom_vars) || {};
-    return {
-        attackerId,
-        targetId: normalizePlayerId(targetState && (targetState.player_id ?? targetState.id)),
-        playerStates,
-        playerDamageStates: new Map(),
-        equipmentEntries: getPredictionActiveEquipmentEntries(),
-        magicByPlayer,
-        resourceDeltas: new Map(),
-        mitigations: [],
-        redirectedDamage: new Map(),
-        spongePoisonByPlayer: new Map(),
-        attackPositiveHitsByPlayer: new Map(),
-        attackDamageMultiplier: Number(attackerState && attackerState.damage_multiplier || 1) || 1,
-        puppeteerDamageMultiplier: Number(attackerVars.void_puppeteer_damage_multiplier || 1) || 1,
-    };
-}
-
-function ensurePredictionDamagePlayer(runtime, playerOrId) {
-    const id = typeof playerOrId === 'object'
-        ? normalizePlayerId(playerOrId && (playerOrId.player_id ?? playerOrId.id))
-        : normalizePlayerId(playerOrId);
-    if (id == null) return null;
-    if (runtime.playerDamageStates.has(id)) return runtime.playerDamageStates.get(id);
-    const state = (typeof playerOrId === 'object' && playerOrId) || runtime.playerStates.get(id) || {};
-    runtime.playerStates.set(id, state);
-    if (!runtime.magicByPlayer.has(id)) {
-        runtime.magicByPlayer.set(id, Math.max(0, Number(state && (state.magic ?? state.m) || 0)));
-    }
-    const immune = isPredictionStatusImmune(state);
-    let nazarStacks = immune ? 0 : getPredictionCustomStatusValue(state, 'nazar', '邪眼', 'Nazar');
-    if (!immune && state && state.nazar_active) {
-        nazarStacks += Math.max(0, 2 - Math.max(0, Number(state.nazar_big_hits || 0)));
-    }
-    const maxHealth = readPlayerHealthValue(state, ['max_health', 'maxHp', 'maxH', 'max_h'], 0);
-    const amberCards = getPredictionVisibleHandCards(state)
-        .filter(card => predictionEquipmentMatches({ card_instance: card }, 'Amber', 'jurassic:amber'))
-        .map(card => ({ card, power: Number(card.power_value || 0) || 0 }));
-    const damageState = {
-        id,
-        state,
-        immune,
-        dodge: immune ? 0 : Math.max(0, Number(state && state.dodge || 0)),
-        invincible: !!(state && state.invincible),
-        armor: Math.max(0, Number(state && state.armor || 0)),
-        rootArmor: immune ? 0 : getPredictionCustomStatusValue(state, 'jungle:root', 'jungle:root_status', 'root_status'),
-        fragile: immune ? 0 : getPredictionCustomStatusValue(state, 'jungle:fragile', 'fragile'),
-        shield: immune ? 0 : getPredictionCustomStatusValue(state, 'jungle:shield', 'shield'),
-        sponge: immune ? false : !!(state && state.sponge_active),
-        nazarStacks,
-        turnDamageTaken: Math.max(0, Number(state && state.turn_damage_taken || 0)),
-        maxHealth,
-        health: readPlayerHealthValue(state, ['health', 'hp', 'h'], maxHealth),
-        amberCards,
-    };
-    runtime.playerDamageStates.set(id, damageState);
-    return damageState;
-}
-
-function predictionEquipmentEntriesTargeting(runtime, targetId, ...ids) {
-    return runtime.equipmentEntries.filter(entry => (
-        predictionEquipmentEffectTarget(entry) === targetId
-        && predictionEquipmentMatches(entry.eq, ...ids)
-    ));
-}
-
-function recordPredictionMitigation(runtime, playerId, kind, prevented, details = {}) {
-    const amount = Math.max(0, Math.floor(Number(prevented || 0)));
-    if (amount <= 0) return;
-    runtime.mitigations.push({ playerId, kind, prevented: amount, ...details });
-}
-
-function recordPredictionMagicSpend(runtime, playerId, amount) {
-    const spend = Math.max(0, Math.floor(Number(amount || 0)));
-    if (playerId == null || spend <= 0) return;
-    runtime.magicByPlayer.set(playerId, Math.max(0, Number(runtime.magicByPlayer.get(playerId) || 0) - spend));
-    const current = runtime.resourceDeltas.get(playerId) || { magic: 0 };
-    current.magic -= spend;
-    runtime.resourceDeltas.set(playerId, current);
-}
-
-function predictionOutgoingDamage(runtime, sourceId, damage, { includeCutter = false, includeDizzy = true } = {}) {
-    let amount = Math.max(0, Math.ceil(Number(damage || 0)));
-    const corruptionCount = runtime.equipmentEntries.filter(entry => (
-        predictionEquipmentMatches(entry.eq, 'Corruption', 'vanilla:corruption')
-        && !!entry.eq.corruption_active
-    )).length;
-    if (corruptionCount > 0) amount = Math.ceil(amount * (1.5 ** corruptionCount));
-    if (includeDizzy) {
-        const dizzyCount = runtime.equipmentEntries.filter(entry => (
-            predictionEquipmentEffectTarget(entry) === sourceId
-            && predictionEquipmentMatches(entry.eq, 'Dizzy')
-        )).length;
-        if (dizzyCount > 0) amount = Math.ceil(amount * (1 + 0.5 * dizzyCount));
-    }
-    if (includeCutter) {
-        const cutterCount = runtime.equipmentEntries.filter(entry => (
-            predictionEquipmentEffectTarget(entry) === sourceId
-            && predictionEquipmentMatches(entry.eq, 'Cutter')
-        )).length;
-        amount += cutterCount * 2;
-    }
-    return amount;
-}
-
-function predictionTeammateId(playerId) {
-    if (!gameState || gameState.mode !== '2v2') return null;
-    if (![0, 1, 2, 3].includes(playerId)) return null;
-    return playerId % 2 === 0 ? playerId + 1 : playerId - 1;
-}
-
-function tryPredictionMagicCopperRod(runtime, target, damage) {
-    if (damage <= 0 || !target) return damage;
-    const equipment = predictionEquipmentEntriesTargeting(
-        runtime,
-        target.id,
-        'MagicCopperRod',
-        'void:magic_copper_rod',
-    ).find(entry => entry.ownerId != null && Number(runtime.magicByPlayer.get(entry.ownerId) || 0) >= 1);
-    if (!equipment) return damage;
-    recordPredictionMagicSpend(runtime, equipment.ownerId, 1);
-    recordPredictionMitigation(runtime, target.id, 'magic_copper_rod', damage, {
-        ownerPlayerId: equipment.ownerId,
-    });
-    return 0;
-}
-
-function applyPredictionUniversalDamageShields(runtime, target, damage, options = {}) {
-    let amount = Math.max(0, Math.floor(Number(damage || 0)));
-    if (!target || amount <= 0) return amount;
-    const allowRelic = options.allowRelic !== false && options.sourceKind !== 'relic_transfer';
-    if (
-        allowRelic
-        && predictionEquipmentEntriesTargeting(runtime, target.id, 'Relic', 'jungle:relic').length > 0
-    ) {
-        const teammateId = predictionTeammateId(target.id);
-        const teammate = teammateId == null ? null : ensurePredictionDamagePlayer(runtime, teammateId);
-        if (teammate && teammate.health > 0) {
-            const transfer = Math.floor(amount * 2 / 3);
-            const kept = Math.floor(amount / 3);
-            if (transfer > 0) {
-                const redirected = simulatePredictionDirectDamageHit(
-                    runtime,
-                    target.id,
-                    teammate,
-                    transfer,
-                    {
-                        sourceKind: 'relic_transfer',
-                        damageType: options.damageType || 'physical',
-                        damageTag: 'direct',
-                        allowRelic: false,
-                    },
-                );
-                const redirectedHits = runtime.redirectedDamage.get(teammate.id) || [];
-                redirectedHits.push(redirected);
-                runtime.redirectedDamage.set(teammate.id, redirectedHits);
-            }
-            recordPredictionMitigation(runtime, target.id, 'relic_transfer', amount - kept, {
-                toPlayerId: teammate.id,
-                transferred: transfer,
-            });
-            amount = kept;
-        }
-    }
-    if (target.shield > 0 && amount > 0) {
-        const blocked = Math.min(target.shield, amount);
-        target.shield -= blocked;
-        amount -= blocked;
-        recordPredictionMitigation(runtime, target.id, 'shield', blocked);
-    }
-    if (
-        amount > 0
-        && predictionEquipmentEntriesTargeting(runtime, target.id, 'MagicCotton', 'jungle:magic_cotton').length > 0
-    ) {
-        const magic = Math.max(0, Number(runtime.magicByPlayer.get(target.id) || 0));
-        if (magic > 0) {
-            const spent = Math.min(magic, Math.ceil(amount / 4));
-            const blocked = Math.min(amount, spent * 4);
-            recordPredictionMagicSpend(runtime, target.id, spent);
-            amount -= blocked;
-            recordPredictionMitigation(runtime, target.id, 'magic_cotton', blocked);
-        }
-    }
-    if (amount > 0 && target.turnDamageTaken >= 10) {
-        const scales = predictionEquipmentEntriesTargeting(runtime, target.id, 'Scales', 'jurassic:scales');
-        scales.forEach(() => {
-            const before = amount;
-            amount = Math.max(0, Math.floor(amount / 2));
-            recordPredictionMitigation(runtime, target.id, 'scales', before - amount);
-        });
-    }
-    if (amount > 0) {
-        target.amberCards.forEach(amber => {
-            if (amount <= 0 || amber.power <= -12) return;
-            const before = amount;
-            amount = Math.max(0, before - Math.floor(before / 5));
-            const prevented = before - amount;
-            if (prevented <= 0) return;
-            amber.power -= prevented * 3;
-            recordPredictionMitigation(runtime, target.id, 'amber', prevented);
-        });
-    }
-    return amount;
-}
-
-function simulatePredictionDirectDamageHit(runtime, sourceId, target, rawDamage, options = {}) {
-    let damage = Math.max(0, Math.ceil(Number(rawDamage || 0)));
-    if (!target || damage <= 0 || target.invincible) return 0;
-    const damageTag = String(options.damageTag || 'direct').toLowerCase();
-    if (target.immune && ['poison', 'fire', 'burn', 'gtn:poison', 'gtn:fire'].includes(damageTag)) return 0;
-    const includeCutter = String(options.damageType || 'physical').toLowerCase() === 'physical'
-        && ['physical', 'gtn:physical'].includes(damageTag);
-    const includeDizzy = !['poison', 'fire', 'fracture', 'bleed', 'gtn:poison', 'gtn:fire', 'gtn:fracture', 'gtn:bleed']
-        .includes(damageTag);
-    damage = predictionOutgoingDamage(runtime, sourceId, damage, { includeCutter, includeDizzy });
-    if (
-        damage > 0
-        && predictionEquipmentEntriesTargeting(runtime, target.id, 'Mask', 'bio:mask', 'MagicMask', 'bio:magic_mask').length > 0
-    ) {
-        recordPredictionMitigation(runtime, target.id, 'mask', damage);
-        return 0;
-    }
-    damage = applyPredictionUniversalDamageShields(runtime, target, damage, options);
-    damage = tryPredictionMagicCopperRod(runtime, target, damage);
-    if (damage > 0) {
-        target.health = Math.max(0, target.health - damage);
-        target.turnDamageTaken += damage;
-    }
-    return damage;
-}
-
-function simulatePredictionAttackRawHits(rawHits, cardDict, attackerState, targetState, runtime = null) {
-    const cardDef = getCardDef((cardDict && cardDict.def_id) || '');
-    const shadow = runtime || createPredictionDamageRuntime(attackerState, targetState);
-    const target = ensurePredictionDamagePlayer(shadow, targetState);
-    const hits = [];
-    const attackerImmune = isPredictionStatusImmune(attackerState);
-    const weakness = attackerImmune ? 0 : Math.max(0, Number(attackerState && attackerState.weakness || 0));
-    const actualCardCostE = getCardDisplayCosts(cardDict || {}, cardDef || {}, attackerState || {}).totalE;
-    const plankBlocks = predictionPlayerHasEquipment(targetState, 'Plank', 'jungle:plank')
-        && String(cardDict && cardDict.card_type || cardDef && cardDef.card_type || '').toLowerCase() === 'thorn'
-        && actualCardCostE <= 1;
-    const precision = cardHasEffectiveFlagForPrediction(cardDict || {}, cardDef || {}, 'precision');
-    const kale = cardMatchesAnyLocalId(cardDict || {}, cardDef, ['Kale', 'garden:kale']);
-    const resolveRawHit = raw => {
-        let dmg = Math.max(0, Math.ceil(Number(raw || 0)));
-        let precisionDodged = false;
-        if (!target) return 0;
-        if (target.dodge > 0) {
-            target.dodge -= 1;
-            if (precision) {
-                precisionDodged = true;
-            } else {
-                hits.push(0);
-                return 0;
-            }
-        }
-        if (target.invincible) {
-            hits.push(0);
-            return 0;
-        }
-        if (shadow.attackDamageMultiplier !== 1) {
-            dmg = Math.ceil(dmg * shadow.attackDamageMultiplier);
-            shadow.attackDamageMultiplier = 1;
-        }
-        if (shadow.puppeteerDamageMultiplier !== 1) {
-            dmg = Math.ceil(dmg * shadow.puppeteerDamageMultiplier);
-        }
-        dmg = predictionOutgoingDamage(shadow, shadow.attackerId, dmg, { includeCutter: true });
-        if (plankBlocks && dmg > 0) {
-            recordPredictionMitigation(shadow, target.id, 'plank', dmg);
-            dmg = 0;
-        }
-        if (dmg > 0 && weakness > 0) {
-            const reduction = Math.min(0.6, 0.2 * weakness);
-            dmg = Math.max(1, Math.floor(dmg * (1 - reduction)));
-        }
-        if (precisionDodged) dmg = Math.ceil(dmg / 2);
-        dmg = Math.max(0, dmg - target.armor - target.rootArmor + target.fragile);
-        if (dmg > 0 && target.nazarStacks > 0) {
-            const original = dmg;
-            dmg = Math.max(1, dmg - 9);
-            if (original >= 10) {
-                target.nazarStacks = Math.max(0, target.nazarStacks - 1);
-            }
-        }
-        if (target.sponge && dmg > 0) {
-            const converted = Math.min(10, Math.floor(dmg / 2));
-            shadow.spongePoisonByPlayer.set(
-                target.id,
-                Number(shadow.spongePoisonByPlayer.get(target.id) || 0) + converted,
-            );
-            dmg = 0;
-        }
-        dmg = applyPredictionUniversalDamageShields(shadow, target, dmg, {
-            sourceKind: 'attack',
-            damageType: 'physical',
-        });
-        dmg = tryPredictionMagicCopperRod(shadow, target, dmg);
-        hits.push(dmg);
-        if (dmg > 0) {
-            target.health = Math.max(0, target.health - dmg);
-            target.turnDamageTaken += dmg;
-            if (target.rootArmor > 0) target.rootArmor -= 1;
-            shadow.attackPositiveHitsByPlayer.set(
-                target.id,
-                Number(shadow.attackPositiveHitsByPlayer.get(target.id) || 0) + 1,
-            );
-        }
-        return dmg;
-    };
-    (Array.isArray(rawHits) ? rawHits : []).forEach(raw => {
-        const dealt = resolveRawHit(raw);
-        if (
-            kale
-            && dealt > 0
-            && target
-            && target.maxHealth > 0
-            && target.health * 5 <= target.maxHealth
-        ) {
-            resolveRawHit(raw);
-        }
-    });
-    hits.spongePoison = target ? Number(shadow.spongePoisonByPlayer.get(target.id) || 0) : 0;
-    hits.predictionRuntime = shadow;
-    return hits;
-}
-
-function simulateNoCounterAttackHits(cardDict, attackerState = {}, targetState = {}, runtime = null) {
-    const rawHits = getActualAttackDamageHits(cardDict || {}, attackerState || {}, targetState || {});
-    return simulatePredictionAttackRawHits(rawHits, cardDict, attackerState, targetState, runtime);
 }
 
 function formatPredictionPart(value, suffix, cls) {
@@ -14373,47 +13871,6 @@ function formatPredictionResourceDelta(value, suffix, cls) {
     return `<span class="card-prediction-part ${cls}">${escapeHtml(`${sign}${amount}${suffix}`)}</span>`;
 }
 
-function predictionMitigationName(kind) {
-    const names = {
-        plank: { zh: '木板', en: 'Plank', fr: 'Planche', ja: '木の板' },
-        shield: { zh: '护盾', en: 'Shield', fr: 'Bouclier', ja: 'シールド' },
-        magic_cotton: { zh: '魔法棉花', en: 'Magic Cotton', fr: 'Coton magique', ja: '魔法の綿' },
-        scales: { zh: '鳞甲', en: 'Scales', fr: 'Écailles', ja: '鱗' },
-        amber: { zh: '琥珀', en: 'Amber', fr: 'Ambre', ja: '琥珀' },
-        magic_copper_rod: { zh: '魔法铜棒', en: 'Magic Copper Rod', fr: 'Tige de cuivre magique', ja: '魔法の銅棒' },
-        mask: { zh: '口罩', en: 'Mask', fr: 'Masque', ja: 'マスク' },
-        relic_transfer: { zh: '遗物', en: 'Relic', fr: 'Relique', ja: '遺物' },
-    };
-    return lt(names[kind] || {}, String(kind || ''));
-}
-
-function formatPredictionMitigations(mitigations) {
-    const grouped = new Map();
-    (Array.isArray(mitigations) ? mitigations : []).forEach(item => {
-        if (!item || !item.kind) return;
-        const toPlayerId = normalizePlayerId(item.toPlayerId);
-        const ownerPlayerId = normalizePlayerId(item.ownerPlayerId);
-        const key = `${item.kind}:${toPlayerId ?? ''}:${ownerPlayerId ?? ''}`;
-        const current = grouped.get(key) || {
-            kind: item.kind,
-            prevented: 0,
-            transferred: 0,
-            toPlayerId,
-            ownerPlayerId,
-        };
-        current.prevented += Math.max(0, Math.floor(Number(item.prevented || 0)));
-        current.transferred += Math.max(0, Math.floor(Number(item.transferred || 0)));
-        grouped.set(key, current);
-    });
-    return Array.from(grouped.values()).map(item => {
-        const name = predictionMitigationName(item.kind);
-        const text = item.kind === 'relic_transfer' && item.toPlayerId != null
-            ? `${name}→${getPlayerNameById(item.toPlayerId)} ${item.transferred}D`
-            : `${name} -${item.prevented}D`;
-        return `<span class="card-prediction-part mitigation">${escapeHtml(text)}</span>`;
-    }).join('');
-}
-
 function createPredictionRecipient(playerId = null) {
     return {
         playerId: normalizePlayerId(playerId),
@@ -14448,605 +13905,98 @@ function ensurePredictionRecipient(prediction, playerId, preferredRole = 'other'
     return recipient;
 }
 
-function applyPredictionDamageRuntime(prediction, runtime, attackerState, targetState) {
-    if (!runtime) return;
-    const attackerId = normalizePlayerId(attackerState && (attackerState.player_id ?? attackerState.id));
-    const targetId = normalizePlayerId(targetState && (targetState.player_id ?? targetState.id));
-    ensurePredictionRecipient(prediction, attackerId, 'self');
-    ensurePredictionRecipient(prediction, targetId, 'target');
-    runtime.redirectedDamage.forEach((hits, playerId) => {
-        const recipient = ensurePredictionRecipient(prediction, playerId);
-        (Array.isArray(hits) ? hits : []).forEach(value => {
-            recipient.damageHits.push(Math.max(0, Math.ceil(Number(value || 0))));
+// ===== 出牌预测数据层（2026-09-29 通用方案） =====
+// 手写伤害镜像管线已删除：预测一律由服务端 deepcopy 引擎模拟，
+// 客户端只做「登记缺失 → 批量预取 → 缓存 → 渲染」。
+const playPredictionCache = new Map();     // `${owner}:${instance}:${target}` → 服务端预测
+const playPredictionPendingKeys = new Set();
+let playPredictionFetchTimer = 0;
+
+function playPredictionKey(ownerId, instanceId, targetId) {
+    return `${ownerId}:${instanceId}:${targetId == null ? -1 : targetId}`;
+}
+
+function getServerPlayPrediction(ownerId, instanceId, targetId) {
+    const key = playPredictionKey(ownerId, instanceId, targetId);
+    if (playPredictionCache.has(key)) return playPredictionCache.get(key);
+    playPredictionPendingKeys.add(key);
+    schedulePlayPredictionFetch();
+    return null;
+}
+
+function schedulePlayPredictionFetch() {
+    if (playPredictionFetchTimer) return;
+    playPredictionFetchTimer = setTimeout(() => {
+        playPredictionFetchTimer = 0;
+        // 观战/回放不在 players 里，服务端会拒；本地直接不清队列省一次往返
+        if (isSpectating || replayMode) { playPredictionPendingKeys.clear(); return; }
+        if (!playPredictionPendingKeys.size) return;
+        const cards = Array.from(playPredictionPendingKeys).slice(0, 24).map(key => {
+            const [ownerId, instanceId, targetId] = key.split(':').map(Number);
+            return { player_id: ownerId, instance_id: instanceId, target_player_id: targetId };
         });
-    });
-    runtime.resourceDeltas.forEach((deltas, playerId) => {
-        const recipient = ensurePredictionRecipient(prediction, playerId);
-        recipient.resourceDeltas.magic += Math.trunc(Number(deltas && deltas.magic || 0));
-    });
-    runtime.mitigations.forEach(item => {
-        const recipient = ensurePredictionRecipient(prediction, item && item.playerId);
-        recipient.mitigations.push({ ...item });
-    });
+        playPredictionPendingKeys.clear();
+        const payload = { cards };
+        if (gameState && gameState.room_id != null) payload.room_id = gameState.room_id;
+        if (gameState && gameState.match_key) payload.match_key = gameState.match_key;
+        if (typeof socket !== 'undefined' && socket && socket.connected) {
+            socket.emit('predict_hand', payload);
+        }
+    }, 120);
 }
 
-function pushPositiveValue(list, value, count = 1) {
-    const amount = Math.max(0, Math.ceil(Number(value || 0)));
-    const rawCount = Number(count);
-    const times = Number.isFinite(rawCount) ? Math.max(0, Math.floor(rawCount)) : 1;
-    if (amount <= 0 || times <= 0) return;
-    for (let i = 0; i < times; i++) list.push(amount);
+function resetPlayPredictionCache() {
+    playPredictionCache.clear();
+    playPredictionPendingKeys.clear();
 }
 
-function pushLifestealPredictionValues(list, damageHits, ratio, recipientState) {
-    const rate = Number(ratio);
-    if (!Array.isArray(damageHits) || !Number.isFinite(rate) || rate <= 0) return;
-    damageHits.forEach(hit => {
-        const healed = Math.floor(Math.max(0, Number(hit || 0)) * rate);
-        pushPositiveValue(list, applyHealBlockToPrediction(healed, recipientState));
-    });
-}
-
-function pushDamageValue(list, value, count = 1) {
-    const amount = Math.max(0, Math.ceil(Number(value || 0)));
-    const rawCount = Number(count);
-    const times = Number.isFinite(rawCount) ? Math.max(0, Math.floor(rawCount)) : 1;
-    if (amount <= 0 || times <= 0) return;
-    for (let i = 0; i < times; i++) list.push(amount);
-}
-
-function appendSelfDirectDamagePrediction(prediction, runtime, selfState, amount, hits = 1, params = {}) {
-    const raw = Math.max(0, Math.ceil(Number(amount || 0)));
-    const count = Math.max(1, Math.floor(Number(hits || 1)));
-    if (raw <= 0) return [];
-    if (!runtime) {
-        const fallback = Array.from({ length: count }, () => raw);
-        fallback.forEach(value => prediction.self.damageHits.push(value));
-        return fallback;
-    }
-    const self = ensurePredictionDamagePlayer(runtime, selfState);
-    const sourceId = normalizePlayerId(selfState && (selfState.player_id ?? selfState.id));
-    const damageTag = getPredictionDirectDamageTag(params);
-    const resolved = Array.from({ length: count }, () => simulatePredictionDirectDamageHit(
-        runtime,
-        sourceId,
-        self,
-        raw,
-        {
-            sourceKind: 'direct',
-            damageType: getPredictionDirectDamageType(params, damageTag),
-            damageTag,
-        },
-    ));
-    resolved.forEach(value => prediction.self.damageHits.push(Math.max(0, Math.ceil(Number(value || 0)))));
-    return resolved;
-}
-
-function collectSelfStatusDamagePrediction(prediction, cardDef, selfState, runtime = null) {
-    if (!prediction || !prediction.self || !cardDef || !selfState || isPredictionStatusImmune(selfState)) return;
-    const fracture = getPredictionStatusMaxValue(selfState, 'fracture', '破损');
-    if (fracture > 0) {
-        appendSelfDirectDamagePrediction(prediction, runtime, selfState, fracture, 1, {
-            damage_type: 'magic',
-            damage_tag: 'fracture',
+function bindPlayPredictionSocket() {
+    bindSocketEvent('play_predictions', (data) => {
+        if (!data || typeof data.predictions !== 'object') return;
+        if (data.room_id != null && gameState && gameState.room_id != null
+            && Number(data.room_id) !== Number(gameState.room_id)) return;
+        Object.entries(data.predictions).forEach(([key, prediction]) => {
+            playPredictionCache.set(key, prediction);
         });
-    }
-    const bleed = getPredictionStatusMaxValue(selfState, 'bleed', '流血');
-    if (bleed > 0 && cardDef.card_type === 'thorn') {
-        appendSelfDirectDamagePrediction(prediction, runtime, selfState, bleed, 1, {
-            damage_type: 'magic',
-            damage_tag: 'bleed',
-        });
-    }
-}
-
-function applyHealBlockToPrediction(value, recipientState) {
-    const amount = Math.max(0, Math.floor(Number(value || 0)));
-    if (amount <= 0 || !recipientState || isPredictionStatusImmune(recipientState)) return amount;
-    const healBlock = Math.max(0, Math.floor(Number(recipientState.heal_block || 0)));
-    if (healBlock <= 0) return amount;
-    const reduction = Math.min(1, 0.5 * healBlock);
-    return Math.max(0, Math.floor(amount * (1 - reduction)));
-}
-
-function effectTargetIsSelf(target) {
-    if (target == null || target === '') return true;
-    if (typeof target === 'string') {
-        return ['self', 'source', 'owner', 'you', 'current_player'].includes(target);
-    }
-    if (target && typeof target === 'object') {
-        const ref = String(target.ref || target.selector || target.type || '').toLowerCase();
-        const value = String(target.value || target.target || '').toLowerCase();
-        return ['self', 'source', 'owner'].includes(ref) || ['self', 'source', 'owner'].includes(value);
-    }
-    return false;
-}
-
-function collectSelfPredictionFromEffects(prediction, cardDict, cardDef, selfState, positiveHitCount, runtime = null) {
-    const effects = Array.isArray(cardDef && cardDef.effects) ? cardDef.effects : [];
-    effects.forEach(effect => {
-        if (!effect || typeof effect !== 'object') return;
-        const type = effect.type || effect.op;
-        const params = effect.params || effect;
-        if (type === 'lifesteal_damage') {
-            if (params.heal_percent != null || params.ratio != null) {
-                pushLifestealPredictionValues(prediction.self.heal, prediction.target.damageHits, Number(params.heal_percent ?? params.ratio ?? 0), selfState);
-            } else {
-                pushPositiveValue(prediction.self.heal, applyHealBlockToPrediction(firstNumericEffectValue(params.heal) || 4, selfState), positiveHitCount);
-            }
-            return;
-        }
-        if (type === 'direct_damage' || type === 'deal_direct_damage') {
-            if (params.target != null && effectTargetIsSelf(params.target)) {
-                appendSelfDirectDamagePrediction(
-                    prediction,
-                    runtime,
-                    selfState,
-                    firstNumericEffectValue(params.amount),
-                    firstNumericEffectValue(params.hits) || 1,
-                    params,
-                );
-            }
-            return;
-        }
-        if (!effectTargetIsSelf(params.target)) return;
-        if (type === 'direct_self_damage') {
-            appendSelfDirectDamagePrediction(
-                prediction,
-                runtime,
-                selfState,
-                firstNumericEffectValue(params.amount),
-                firstNumericEffectValue(params.hits) || 1,
-                params,
-            );
-        } else if (type === 'lose_health' || type === 'self_damage') {
-            pushDamageValue(prediction.self.damageHits, firstNumericEffectValue(params.amount));
-        } else if (type === 'heal') {
-            pushPositiveValue(prediction.self.heal, applyHealBlockToPrediction(firstNumericEffectValue(params.amount), selfState));
-        } else if (type === 'gain_e' || type === 'gain_elixir') {
-            pushPositiveValue(prediction.self.elixir, firstNumericEffectValue(params.amount));
-        } else if (type === 'gain_m' || type === 'gain_magic') {
-            pushPositiveValue(prediction.self.magic, firstNumericEffectValue(params.amount));
-        } else if (type === 'gain_armor' || type === 'add_armor') {
-            pushPositiveValue(prediction.self.armor, firstNumericEffectValue(params.amount));
-        } else if (type === 'coffee_gain_e') {
-            pushPositiveValue(prediction.self.elixir, getCoffeePredictionAmount(selfState));
-        }
+        refreshVisiblePlayPredictions();
     });
 }
 
-function evalPredictionNumberExpr(expr, context = {}) {
-    if (expr == null || expr === '') return 0;
-    if (typeof expr === 'number') return Number.isFinite(expr) ? expr : 0;
-    if (typeof expr === 'string') {
-        const n = Number(expr);
-        return Number.isFinite(n) ? n : 0;
-    }
-    if (!expr || typeof expr !== 'object') return 0;
-    const op = String(expr.op || expr.type || expr.ref || '').toLowerCase();
-    if (op === 'const' || op === 'number') return evalPredictionNumberExpr(expr.value ?? expr.amount ?? 0, context);
-    if (op === 'last_damage') return Number(context.lastDamage || 0);
-    if (op === 'last_positive_hits') return Number(context.lastPositiveHits || 0);
-    if (op === 'player_stat') {
-        const target = String(expr.target || expr.player || 'self').toLowerCase();
-        const stat = String(expr.stat || expr.property || expr.value || '').toLowerCase();
-        const state = target === 'target' || target === 'enemy' || target === 'choice_target'
-            ? (context.targetState || {})
-            : (context.ownerState || context.selfState || context.attackerState || {});
-        const aliases = {
-            h: 'health',
-            hp: 'health',
-            health: 'health',
-            max_h: 'max_health',
-            max_hp: 'max_health',
-            maxhealth: 'max_health',
-            max_health: 'max_health',
-            e: 'elixir',
-            energy: 'elixir',
-            elixir: 'elixir',
-            max_e: 'max_elixir',
-            max_elixir: 'max_elixir',
-            m: 'magic',
-            mana: 'magic',
-            magic: 'magic',
-            max_m: 'max_magic',
-            max_magic: 'max_magic',
-            armor: 'armor',
-        };
-        const key = aliases[stat] || stat;
-        return Number(state && state[key] != null ? state[key] : 0) || 0;
-    }
-    if (['add', 'sub', 'mul', 'div', '+', '-', '*', '/', 'min', 'max'].includes(op)) {
-        const mathOp = { '+': 'add', '-': 'sub', '*': 'mul', '/': 'div' }[op] || op;
-        const values = Array.isArray(expr.values) ? expr.values : [expr.a, expr.b];
-        const nums = values.map(value => evalPredictionNumberExpr(value, context));
-        if (mathOp === 'add') return nums.reduce((sum, value) => sum + value, 0);
-        if (mathOp === 'sub') return nums.length ? nums[0] - nums.slice(1).reduce((sum, value) => sum + value, 0) : 0;
-        if (mathOp === 'mul') return nums.reduce((out, value) => out * value, 1);
-        if (mathOp === 'div') return nums.length >= 2 && nums[1] !== 0 ? nums[0] / nums[1] : 0;
-        if (mathOp === 'min') return nums.length ? Math.min(...nums) : 0;
-        if (mathOp === 'max') return nums.length ? Math.max(...nums) : 0;
-    }
-    if (op === 'floor') return Math.floor(evalPredictionNumberExpr(expr.value, context));
-    if (op === 'ceil') return Math.ceil(evalPredictionNumberExpr(expr.value, context));
-    return firstNumericEffectValue(expr);
-}
-
-function predictionConditionLikelyTrue(cond, context = {}) {
-    if (!cond || typeof cond !== 'object') return false;
-    const op = String(cond.op || cond.type || '').toLowerCase();
-    if (['>', '>=', '<', '<=', '==', '!=', 'gt', 'gte', 'lt', 'lte', 'eq', 'ne'].includes(op)) {
-        const a = evalPredictionNumberExpr(cond.a ?? cond.left, context);
-        const b = evalPredictionNumberExpr(cond.b ?? cond.right, context);
-        if (op === '>' || op === 'gt') return a > b;
-        if (op === '>=' || op === 'gte') return a >= b;
-        if (op === '<' || op === 'lt') return a < b;
-        if (op === '<=' || op === 'lte') return a <= b;
-        if (op === '!=' || op === 'ne') return a !== b;
-        return a === b;
-    }
-    if (op === 'compare' || op === 'comparison') {
-        const a = evalPredictionNumberExpr(cond.a ?? cond.left, context);
-        const b = evalPredictionNumberExpr(cond.b ?? cond.right, context);
-        const operator = String(cond.operator || cond.cmp || cond.compare || '==');
-        if (operator === '>' || operator === 'gt') return a > b;
-        if (operator === '>=' || operator === 'gte') return a >= b;
-        if (operator === '<' || operator === 'lt') return a < b;
-        if (operator === '<=' || operator === 'lte') return a <= b;
-        if (operator === '!=' || operator === 'ne') return a !== b;
-        return a === b;
-    }
-    if (op === 'last_damage') return Number(context.lastDamage || 0) > 0;
-    return false;
-}
-
-function collectSelfPredictionFromV2Steps(prediction, steps, selfState, positiveHitCount, context = null, options = {}) {
-    const localContext = context || {
-        lastDamage: prediction.target.damageHits.reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0),
-        lastPositiveHits: positiveHitCount,
-        ownerState: selfState || {},
-        attackerState: selfState || {},
-        selfState: selfState || {},
-    };
-    (Array.isArray(steps) ? steps : []).forEach(step => {
-        if (!step || typeof step !== 'object') return;
-        const op = step.op || step.type;
-        const params = step.params && typeof step.params === 'object' ? step.params : step;
-        if (op === 'deal_damage' || op === 'damage') {
-            localContext.lastDamage = prediction.target.damageHits.reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0);
-            localContext.lastPositiveHits = prediction.target.damageHits.filter(value => Number(value || 0) > 0).length;
-            return;
-        }
-        if (op === 'if') {
-            const branch = predictionConditionLikelyTrue(step.condition || params.condition, localContext)
-                ? (step.then || params.then || [])
-                : (step.else || params.else || []);
-            collectSelfPredictionFromV2Steps(prediction, branch, selfState, positiveHitCount, localContext, options);
-            return;
-        }
-        if (op === 'lifesteal_damage') {
-            if (params.heal_percent != null || params.ratio != null) {
-                pushLifestealPredictionValues(prediction.self.heal, prediction.target.damageHits, Number(params.heal_percent ?? params.ratio ?? 0), selfState);
-            } else {
-                pushPositiveValue(prediction.self.heal, applyHealBlockToPrediction(firstNumericEffectValue(params.heal) || 4, selfState), positiveHitCount);
-            }
-            return;
-        }
-        if (op === 'direct_damage' || op === 'deal_direct_damage') {
-            if (params.target != null && effectTargetIsSelf(params.target)) {
-                appendSelfDirectDamagePrediction(
-                    prediction,
-                    options.damageRuntime,
-                    selfState,
-                    evalPredictionNumberExpr(params.amount, localContext),
-                    evalPredictionNumberExpr(params.hits ?? 1, localContext),
-                    params,
-                );
-            }
-            return;
-        }
-        if (!effectTargetIsSelf(params.target)) return;
-        if (op === 'direct_self_damage') {
-            appendSelfDirectDamagePrediction(
-                prediction,
-                options.damageRuntime,
-                selfState,
-                evalPredictionNumberExpr(params.amount, localContext),
-                evalPredictionNumberExpr(params.hits ?? 1, localContext),
-                params,
-            );
-        } else if (op === 'lose_health' || op === 'self_damage') {
-            pushDamageValue(prediction.self.damageHits, evalPredictionNumberExpr(params.amount, localContext));
-        } else if (op === 'heal') {
-            pushPositiveValue(prediction.self.heal, applyHealBlockToPrediction(Math.floor(evalPredictionNumberExpr(params.amount, localContext)), selfState));
-        } else if (op === 'gain_e') {
-            pushPositiveValue(prediction.self.elixir, evalPredictionNumberExpr(params.amount, localContext));
-        } else if (op === 'gain_m') {
-            pushPositiveValue(prediction.self.magic, evalPredictionNumberExpr(params.amount, localContext));
-        } else if (op === 'add_armor' || op === 'gain_armor') {
-            pushPositiveValue(prediction.self.armor, evalPredictionNumberExpr(params.amount, localContext));
-        } else if (op === 'coffee_gain_e') {
-            pushPositiveValue(prediction.self.elixir, getCoffeePredictionAmount(selfState));
-        }
+function refreshVisiblePlayPredictions() {
+    document.querySelectorAll('.card-prediction-holder').forEach(holder => {
+        const cardEl = holder.closest('.card');
+        const ctx = cardEl && cardEl.__predictionContext;
+        if (!ctx || !ctx.cardDict || ctx.cardDict.instance_id == null) return;
+        const html = getCardPlayEffectPredictionHtml(ctx.cardDict, ctx.options);
+        if (holder.innerHTML === html) return;
+        holder.innerHTML = html;
+        const zone = holder.closest('.card-bottom-zone');
+        if (zone) zone.classList.toggle('has-prediction', !!html);
+        if (ctx.isThorn) cardEl.classList.toggle('card-effect-fit-prediction', !!html);
+        scheduleCardEffectFit(cardEl);
     });
 }
 
-function effectTargetIsPredictionTarget(target) {
-    if (target == null || target === '') return false;
-    if (typeof target === 'string') {
-        return ['target', 'enemy', 'choice_target', 'selected_target', 'chosen_target', 'event_target'].includes(target);
-    }
-    if (target && typeof target === 'object') {
-        const ref = String(target.ref || target.selector || target.type || '').toLowerCase();
-        const value = String(target.value || target.target || '').toLowerCase();
-        return ['target', 'enemy', 'choice_target', 'selected_target', 'chosen_target', 'event_target'].includes(ref)
-            || ['target', 'enemy', 'choice_target', 'selected_target', 'chosen_target', 'event_target'].includes(value);
-    }
-    return false;
-}
-
-function stepLooksLikeElectricDamage(params = {}) {
-    const tag = String(params.damage_tag || params.tag || params.source || params.source_text || '').toLowerCase();
-    return tag.includes('electric') || tag.includes('battery') || tag.includes('电');
-}
-
-function getPredictionDirectDamageTag(params = {}) {
-    const explicit = String(params.damage_tag || params.tag || '').trim().toLowerCase();
-    if (explicit) return explicit;
-    const source = String(params.source || params.source_text || '').trim().toLowerCase();
-    if (source.includes('poison') || source.includes('中毒')) return 'gtn:poison';
-    if (source.includes('fire') || source.includes('burn') || source.includes('灼烧')) return 'gtn:fire';
-    if (source.includes('fracture') || source.includes('破损')) return 'gtn:fracture';
-    if (source.includes('bleed') || source.includes('流血')) return 'gtn:bleed';
-    if (stepLooksLikeElectricDamage(params)) return 'gtn:battery';
-    return 'gtn:direct';
-}
-
-function getPredictionDirectDamageType(params = {}, damageTag = getPredictionDirectDamageTag(params)) {
-    const explicit = String(params.damage_type || '').trim().toLowerCase();
-    if (explicit) return explicit;
-    return ['gtn:poison', 'gtn:fire', 'gtn:fracture', 'gtn:bleed', 'gtn:battery', 'poison', 'fire', 'fracture', 'bleed', 'battery']
-        .includes(String(damageTag || '').toLowerCase())
-        ? 'magic'
-        : 'physical';
-}
-
-function appendTargetDamagePrediction(prediction, amount, hits, kind, params, options) {
-    const count = Math.max(1, Math.floor(Number(hits || 1)));
-    const raw = Math.max(0, Math.ceil(Number(amount || 0)));
-    if (raw <= 0) return [];
-    const attackerState = options.attackerState || options.ownerState || {};
-    const targetState = options.targetState || {};
-    const runtime = options.damageRuntime || createPredictionDamageRuntime(attackerState, targetState);
-    options.damageRuntime = runtime;
-    let resolved;
-    if (kind === 'direct') {
-        const target = ensurePredictionDamagePlayer(runtime, targetState);
-        const sourceId = normalizePlayerId(attackerState && (attackerState.player_id ?? attackerState.id));
-        const damageTag = getPredictionDirectDamageTag(params);
-        resolved = Array.from({ length: count }, () => simulatePredictionDirectDamageHit(
-            runtime,
-            sourceId,
-            target,
-            raw,
-            {
-                sourceKind: 'direct',
-                damageType: getPredictionDirectDamageType(params, damageTag),
-                damageTag,
-            },
-        ));
-    } else {
-        resolved = simulatePredictionAttackRawHits(
-            Array.from({ length: count }, () => raw),
-            options.cardDict || {},
-            attackerState,
-            targetState,
-            runtime,
-        );
-    }
-    const destination = kind === 'direct' && stepLooksLikeElectricDamage(params)
-        ? prediction.target.electricHits
-        : prediction.target.damageHits;
-    resolved.forEach(value => destination.push(Math.max(0, Math.ceil(Number(value || 0)))));
-    return resolved;
-}
-
-function collectTargetPredictionFromV2Steps(prediction, steps, context = null, options = {}) {
-    const localContext = context || {
-        lastDamage: prediction.target.damageHits.reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0),
-        lastPositiveHits: prediction.target.damageHits.filter(value => Number(value || 0) > 0).length,
-        ownerState: options.ownerState || options.attackerState || {},
-        attackerState: options.attackerState || options.ownerState || {},
-        selfState: options.ownerState || options.attackerState || {},
-        targetState: options.targetState || {},
-    };
-    (Array.isArray(steps) ? steps : []).forEach(step => {
-        if (!step || typeof step !== 'object') return;
-        const op = step.op || step.type;
-        const params = step.params && typeof step.params === 'object' ? step.params : step;
-        if (op === 'if') {
-            const branch = predictionConditionLikelyTrue(step.condition || params.condition, localContext)
-                ? (step.then || params.then || [])
-                : (step.else || params.else || []);
-            collectTargetPredictionFromV2Steps(prediction, branch, localContext, options);
-            return;
-        }
-        if (op === 'void_magic_wing_damage') {
-            if (options.skipPhysicalDamage) return;
-            const base = Math.max(0, Math.ceil(evalPredictionNumberExpr(params.base ?? 4, localContext)));
-            const per = Math.max(0, Math.ceil(evalPredictionNumberExpr(params.per ?? 4, localContext)));
-            const amount = Math.max(0, Math.ceil(evalPredictionNumberExpr(params.amount ?? per ?? base, localContext)));
-            const extraLimit = Math.max(0, Math.floor(evalPredictionNumberExpr(params.extra_limit ?? 4, localContext)));
-            const ownerState = options.ownerState || options.attackerState || {};
-            const cardCostM = Math.max(0, Number(options.cardCostM || 0));
-            const runtime = options.damageRuntime || createPredictionDamageRuntime(
-                ownerState,
-                options.targetState || {},
-                { paidMagic: cardCostM },
-            );
-            options.damageRuntime = runtime;
-            const ownerId = normalizePlayerId(ownerState && (ownerState.player_id ?? ownerState.id));
-            const availableMagic = ownerId == null
-                ? Math.max(0, Number(ownerState.magic || ownerState.m || 0) - cardCostM)
-                : Math.max(0, Number(runtime.magicByPlayer.get(ownerId) || 0));
-            const spend = Math.min(extraLimit, availableMagic);
-            if (ownerId != null && spend > 0) recordPredictionMagicSpend(runtime, ownerId, spend);
-            if (amount > 0) {
-                const resolved = appendTargetDamagePrediction(
-                    prediction,
-                    amount,
-                    1 + spend,
-                    'attack',
-                    params,
-                    options,
-                );
-                localContext.lastDamage = resolved.reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0);
-                localContext.lastPositiveHits = resolved.filter(value => Number(value || 0) > 0).length;
-            }
-            return;
-        }
-        if (op === 'void_antimatter_damage') {
-            if (options.skipPhysicalDamage) return;
-            const amount = Math.max(0, Math.ceil(evalPredictionNumberExpr(params.amount ?? 10, localContext)));
-            if (amount > 0) {
-                const resolved = appendTargetDamagePrediction(prediction, amount, 1, 'attack', params, options);
-                localContext.lastDamage = resolved.reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0);
-                localContext.lastPositiveHits = resolved.filter(value => Number(value || 0) > 0).length;
-            }
-            return;
-        }
-        if (op === 'void_turn_count_damage' || op === 'void_magic_relativity_damage_end') {
-            if (options.skipPhysicalDamage) return;
-            const ownerState = options.ownerState || options.attackerState || {};
-            const playedCount = countCardsPlayedThisTurnForPrediction(ownerState);
-            const base = evalPredictionNumberExpr(params.base ?? (op === 'void_turn_count_damage' ? 6 : 28), localContext);
-            const per = evalPredictionNumberExpr(params.per ?? (op === 'void_turn_count_damage' ? 4 : -5), localContext);
-            const amount = Math.max(0, Math.ceil(base + per * playedCount));
-            const resolved = amount > 0
-                ? appendTargetDamagePrediction(prediction, amount, 1, 'attack', params, options)
-                : [];
-            localContext.lastDamage = resolved.reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0);
-            localContext.lastPositiveHits = resolved.filter(value => Number(value || 0) > 0).length;
-            return;
-        }
-        if (op === 'void_scythe_damage') {
-            if (options.skipPhysicalDamage) return;
-            const ownerState = options.ownerState || options.attackerState || {};
-            const handCount = Array.isArray(ownerState.hand)
-                ? ownerState.hand.length
-                : Math.max(0, Number(ownerState.hand_count) || 0);
-            const base = evalPredictionNumberExpr(params.base ?? 40, localContext);
-            const per = evalPredictionNumberExpr(params.per_hand ?? 5, localContext);
-            const amount = Math.max(0, Math.ceil(base - per * Math.max(0, handCount - 1)));
-            const resolved = amount > 0
-                ? appendTargetDamagePrediction(prediction, amount, 1, 'attack', params, options)
-                : [];
-            localContext.lastDamage = resolved.reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0);
-            localContext.lastPositiveHits = resolved.filter(value => Number(value || 0) > 0).length;
-            return;
-        }
-        if (op === 'arctic_nuke') {
-            if (options.skipPhysicalDamage) return;
-            const ownerState = options.ownerState || options.attackerState || {};
-            const targetState = options.targetState || {};
-            const card = options.cardDict || {};
-            // The actual E cost is part of "consume all E". The server pays
-            // that cost before resolving this effect, then consumes the rest.
-            const spend = Math.max(0, Math.floor(Number(ownerState.elixir || 0)));
-            const percent = Math.max(0, Number(params.health_percent ?? 0.08));
-            const minimum = Math.max(0, Math.ceil(Number(params.minimum ?? 2)));
-            const fission = Math.max(1, Math.floor(Number(card.fission_level || (Number(card.fission_count || 0) + 1) || 1)));
-            const fusion = Math.max(1, Math.floor(Number(card.fusion_level || card.fusion_multiplier || 1)));
-            const repeats = fission + Math.max(0, Math.floor(Number(card.extra_hits || 0)));
-            const bonus = Math.max(0, Math.floor(Number(card.bonus_damage || 0)));
-            const power = Math.floor(Number(card.power_value || 0));
-            const runtime = options.damageRuntime || createPredictionDamageRuntime(ownerState, targetState);
-            options.damageRuntime = runtime;
-            const targetRuntime = ensurePredictionDamagePlayer(runtime, targetState);
-            let firstAttack = true;
-            for (let i = 0; i < spend && targetRuntime && targetRuntime.health > 0; i++) {
-                for (let hit = 0; hit < repeats && targetRuntime.health > 0; hit++) {
-                    const base = Math.max(minimum, Math.ceil(targetRuntime.health * percent));
-                    const amount = Math.max(0, Math.ceil((base + bonus) * fusion / fission) + (firstAttack ? power : 0));
-                    appendTargetDamagePrediction(prediction, amount, 1, 'attack', params, options);
-                    firstAttack = false;
-                }
-            }
-            localContext.lastDamage = prediction.target.damageHits.reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0);
-            localContext.lastPositiveHits = prediction.target.damageHits.filter(value => Number(value || 0) > 0).length;
-            return;
-        }
-        if (op !== 'direct_damage' && op !== 'deal_direct_damage' && op !== 'deal_damage' && op !== 'damage') return;
-        if (!effectTargetIsPredictionTarget(params.target || 'target')) return;
-        const isElectric = stepLooksLikeElectricDamage(params);
-        if (options.skipPhysicalDamage && !isElectric) return;
-        const amount = Math.max(0, Math.ceil(evalPredictionNumberExpr(params.amount, localContext)));
-        if (amount <= 0) return;
-        const hits = Math.max(1, Math.floor(evalPredictionNumberExpr(params.hits ?? 1, localContext)));
-        const resolved = appendTargetDamagePrediction(
-            prediction,
-            amount,
-            hits,
-            op === 'direct_damage' || op === 'deal_direct_damage' ? 'direct' : 'attack',
-            params,
-            options,
-        );
-        localContext.lastDamage = resolved.reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0);
-        localContext.lastPositiveHits = resolved.filter(value => Number(value || 0) > 0).length;
+function fillPredictionFromServerOutcome(result, outcome, attackerId, targetId) {
+    const players = (outcome && outcome.players) || {};
+    Object.keys(players).forEach(pidKey => {
+        const data = players[pidKey] || {};
+        const pid = Number(pidKey);
+        let recipient;
+        if (targetId != null && pid === targetId) recipient = result.target;
+        else if (attackerId != null && pid === attackerId) recipient = result.self;
+        else recipient = ensurePredictionRecipient(result, pid);
+        recipient.damageHits = normalizePredictionHits(data.damage_parts);
+        recipient.poison = Math.max(0, Math.ceil(Number(data.poison) || 0));
+        recipient.fire = Math.max(0, Math.ceil(Number(data.fire) || 0));
+        recipient.heal = Number(data.heal) > 0 ? [Math.ceil(Number(data.heal))] : [];
+        recipient.elixir = Number(data.elixir) > 0 ? [Math.ceil(Number(data.elixir))] : [];
+        recipient.magic = Number(data.magic) > 0 ? [Math.ceil(Number(data.magic))] : [];
     });
-}
-
-function getCoffeePredictionAmount(selfState) {
-    const vars = (selfState && selfState.custom_vars) || {};
-    const marker = Number(vars['咖啡首次使用']);
-    const hasMarker = Number.isFinite(marker);
-    const firstUse = hasMarker ? marker > 0 : !!(selfState && selfState.coffee_first_use);
-    return firstUse ? 2 : 1;
-}
-
-function v2StepsContainSelfDamage(steps) {
-    return (Array.isArray(steps) ? steps : []).some(step => {
-        if (!step || typeof step !== 'object') return false;
-        const op = step.op || step.type;
-        const params = step.params && typeof step.params === 'object' ? step.params : step;
-        if ((op === 'lose_health' || op === 'self_damage' || op === 'direct_self_damage') && effectTargetIsSelf(params.target)) return true;
-        if ((op === 'direct_damage' || op === 'deal_direct_damage') && params.target != null && effectTargetIsSelf(params.target)) return true;
-        if (op === 'if') {
-            return v2StepsContainSelfDamage(step.then || params.then || [])
-                || v2StepsContainSelfDamage(step.else || params.else || []);
-        }
-        return false;
-    });
-}
-
-function addKnownSelfPrediction(prediction, cardDict, cardDef, selfState) {
-    const positiveHitCount = prediction.target.damageHits.filter(v => Number(v) > 0).length;
-    switch (cardDict.def_id) {
-        case 'Fang':
-            if (!prediction.self.heal.length) pushLifestealPredictionValues(prediction.self.heal, prediction.target.damageHits, 0.8, selfState);
-            break;
-        case 'Fries':
-            if (!prediction.self.heal.length) pushPositiveValue(prediction.self.heal, applyHealBlockToPrediction(12, selfState));
-            break;
-        case 'Rose':
-            if (!prediction.self.heal.length) pushPositiveValue(prediction.self.heal, applyHealBlockToPrediction(7, selfState));
-            break;
-        case 'ManaOrb':
-            if (!prediction.self.magic.length) pushPositiveValue(prediction.self.magic, 3);
-            break;
-        case 'Coffee':
-            if (!prediction.self.elixir.length) pushPositiveValue(prediction.self.elixir, getCoffeePredictionAmount(selfState));
-            break;
-        case 'MagicGlass':
-            if (!prediction.self.magic.length) pushPositiveValue(prediction.self.magic, 2);
-            break;
-        default:
-            if (cardMatchesAnyLocalId(cardDict, null, ['BloodCorn', 'blood_corn', 'desert_cards_addition:blood_corn'])
-                && !v2StepsContainSelfDamage((cardDef && cardDef.v2_events && cardDef.v2_events.on_play && (cardDef.v2_events.on_play.steps || cardDef.v2_events.on_play)) || [])) {
-                pushDamageValue(prediction.self.damageHits, 3);
-            }
-            break;
-    }
+    result.damageHits = result.target.damageHits;
+    result.electricHits = [];
+    result.poison = result.target.poison;
+    result.fire = result.target.fire;
 }
 
 function getCardPlayEffectPredictionParts(cardDict, options = {}) {
@@ -15067,64 +14017,22 @@ function getCardPlayEffectPredictionParts(cardDict, options = {}) {
     }
     const attackerState = options.attackerState || options.ownerState || getCardOwnerStateForPrediction(cardDict) || gameState.you || {};
     const targetState = options.targetState || getDefaultPredictionTargetState(cardDict, attackerState);
-    result.self.playerId = normalizePlayerId(attackerState && (attackerState.player_id ?? attackerState.id));
-    result.target.playerId = normalizePlayerId(targetState && (targetState.player_id ?? targetState.id));
-    const hasDamageOverride = Object.prototype.hasOwnProperty.call(options, 'damageHits');
-    const cardCosts = getCardDisplayCosts(cardDict, cardDef, attackerState);
-    const damageRuntime = hasDamageOverride
-        ? null
-        : createPredictionDamageRuntime(attackerState, targetState, { paidMagic: cardCosts.totalM });
-    if (cardDef.card_type === 'thorn') {
-        const simulatedHits = hasDamageOverride
-            ? (Array.isArray(options.damageHits) ? options.damageHits : [])
-            : simulateNoCounterAttackHits(cardDict, attackerState, targetState, damageRuntime);
-        result.target.damageHits = simulatedHits
-            .map(v => Math.max(0, Math.ceil(Number(v || 0))))
-            .filter(v => Number.isFinite(v));
-    } else if (cardDict.def_id === 'Iris') {
-        result.target.poison = 10;
-    } else if (cardDict.def_id === 'Fire') {
-        result.target.fire = 2;
-    }
-    const positiveHitCount = result.target.damageHits.filter(v => Number(v) > 0).length;
-    collectSelfPredictionFromEffects(result, cardDict, cardDef, attackerState, positiveHitCount, damageRuntime);
-    const onPlay = cardDef.v2_events && cardDef.v2_events.on_play;
-    const steps = onPlay && (onPlay.steps || onPlay);
-    const collectorOptions = {
-        skipPhysicalDamage: cardDef.card_type === 'thorn' && result.target.damageHits.length > 0,
-        ownerState: attackerState,
-        attackerState,
-        targetState,
-        cardDict,
-        cardCostE: cardCosts.totalE,
-        cardCostM: cardCosts.totalM,
-        damageRuntime,
-    };
-    collectTargetPredictionFromV2Steps(result, steps, null, collectorOptions);
-    const resolvedRuntime = collectorOptions.damageRuntime || damageRuntime;
-    collectSelfPredictionFromV2Steps(result, steps, attackerState, positiveHitCount, null, {
-        damageRuntime: resolvedRuntime,
-    });
-    addKnownSelfPrediction(result, cardDict, cardDef, attackerState);
-    collectSelfStatusDamagePrediction(result, cardDef, attackerState, resolvedRuntime);
-    applyPredictionDamageRuntime(result, resolvedRuntime, attackerState, targetState);
+    const attackerId = normalizePlayerId(attackerState && (attackerState.player_id ?? attackerState.id));
     const targetId = normalizePlayerId(targetState && (targetState.player_id ?? targetState.id));
-    if (!hasDamageOverride && resolvedRuntime && targetId != null) {
-        result.target.poison += Math.max(0, Math.ceil(Number(resolvedRuntime.spongePoisonByPlayer.get(targetId) || 0)));
-        const targetImmune = isPredictionStatusImmune(targetState);
-        const toxic = targetImmune ? 0 : Math.max(0, Number(targetState && targetState.toxic || 0));
-        const positiveAttackHits = Math.max(0, Number(resolvedRuntime.attackPositiveHitsByPlayer.get(targetId) || 0));
-        if (toxic > 0 && positiveAttackHits > 0) result.target.poison += toxic * positiveAttackHits;
-    } else if (hasDamageOverride) {
-        const targetImmune = isPredictionStatusImmune(targetState);
-        const toxic = targetImmune ? 0 : Math.max(0, Number(targetState && targetState.toxic || 0));
-        const positiveHits = result.target.damageHits.filter(v => Number(v) > 0).length;
-        if (toxic > 0 && positiveHits > 0) result.target.poison += toxic * positiveHits;
+    result.self.playerId = attackerId;
+    result.target.playerId = targetId;
+    // 反制窗口：直接用响应事件里服务端模拟好的无人反制 outcome
+    if (options.serverOutcome) {
+        fillPredictionFromServerOutcome(result, options.serverOutcome, attackerId, targetId);
+        return result;
     }
-    result.damageHits = result.target.damageHits;
-    result.electricHits = result.target.electricHits;
-    result.poison = result.target.poison;
-    result.fire = result.target.fire;
+    const instanceId = cardDict.instance_id;
+    if (instanceId == null && !options.allowDefinitionCard) return result;
+    if (instanceId == null || attackerId == null) return result;
+    const prediction = getServerPlayPrediction(attackerId, instanceId, targetId);
+    if (prediction && prediction.ok) {
+        fillPredictionFromServerOutcome(result, prediction, attackerId, targetId);
+    }
     return result;
 }
 
@@ -15161,7 +14069,6 @@ function getCardPlayEffectPredictionHtml(cardDict, options = {}) {
         parts.push(formatPredictionSelfPart(recipient.magic, 'M', 'magic'));
         parts.push(formatPredictionSelfPart(recipient.armor, 'A', 'armor'));
         parts.push(formatPredictionResourceDelta(recipient.resourceDeltas && recipient.resourceDeltas.magic, 'M', 'magic'));
-        parts.push(formatPredictionMitigations(recipient.mitigations));
         return parts.filter(Boolean).join('');
     };
     const sections = [
@@ -15194,10 +14101,15 @@ function getResponseBaseEffectPrediction(data, cardDict, noCounterPrediction = {
         targetState,
         allowDefinitionCard: true,
     };
-    if (noCounterPrediction && Object.prototype.hasOwnProperty.call(noCounterPrediction, 'parts')) {
-        options.damageHits = normalizePredictionHits(noCounterPrediction.parts);
+    // 服务端在响应事件里带好的「无人反制」完整模拟结果（引擎真值）
+    if (noCounterPrediction && noCounterPrediction.outcome) {
+        options.serverOutcome = noCounterPrediction.outcome;
     }
     const prediction = getCardPlayEffectPredictionParts(cardDict, options);
+    if (noCounterPrediction && Object.prototype.hasOwnProperty.call(noCounterPrediction, 'parts')) {
+        prediction.target.damageHits = normalizePredictionHits(noCounterPrediction.parts);
+        prediction.damageHits = prediction.target.damageHits;
+    }
     if (noCounterPrediction && Object.prototype.hasOwnProperty.call(noCounterPrediction, 'poison')) {
         prediction.target.poison = Math.max(0, Math.ceil(Number(noCounterPrediction.poison || 0)));
         prediction.poison = prediction.target.poison;
@@ -17652,6 +16564,7 @@ function connectSocket(serverUrl) {
                 pendingOptimisticResourceCosts = [];
             }
             queueVisibleHandExileAnimations(previousGameState, data);
+            resetPlayPredictionCache();
             renderGame(data);
             showStateDeltas(previousGameState, data);
             maybeShowGardenInitialDeckReveal(data);
@@ -17726,6 +16639,7 @@ function connectSocket(serverUrl) {
                 pendingOptimisticResourceCosts = [];
             }
             queueVisibleHandExileAnimations(previousGameState, data);
+            resetPlayPredictionCache();
             renderGame(data);
             showStateDeltas(previousGameState, data);
             maybeShowGardenInitialDeckReveal(data);
@@ -17739,6 +16653,7 @@ function connectSocket(serverUrl) {
         setTimeout(updateTutorialOverlay, 80);
     }
     });
+    bindPlayPredictionSocket();
     bindSocketEvent('response_request', (data) => {
         if (!shouldAcceptNetworkMatchPayload(data, 'response_request', { allowSwitch: false })) return;
         debugLog('[RESPONSE] response_request, counter_cards:', (data.counter_cards || []).length);

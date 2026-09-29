@@ -10069,7 +10069,7 @@ class GameEngine:
                 parts.extend(int(v) for v in parsed.get('parts', []) if int(v) > 0)
         return parts
 
-    def _simulate_pending_response_damage(self, responder_id: int, card_instance_id: Optional[int] = None) -> dict:
+    def _simulate_pending_response_damage(self, responder_id: int, card_instance_id: Optional[int] = None, include_outcome: bool = False) -> dict:
         if self.pending_response is None:
             return {'total': 0, 'parts': [], 'display': ''}
         target_id = self._response_prediction_target_id(responder_id)
@@ -10080,6 +10080,8 @@ class GameEngine:
             before_poison = int(getattr(sim.players[sim_target_id], 'poison', 0))
             sim._prediction_capture_target_id = sim_target_id
             sim._prediction_first_attack_damage = 0
+            outcome_before = sim._prediction_outcome_snapshot() if include_outcome else None
+            outcome_names = sim._prediction_name_map() if include_outcome else None
             log_start = len(sim.log)
             if card_instance_id is None and isinstance(sim.pending_response, dict):
                 counter_entries = sim.pending_response.get('counter_cards') or []
@@ -10115,7 +10117,7 @@ class GameEngine:
                 if first_hit <= 0:
                     first_hit = total
             after_poison = int(getattr(sim.players[sim_target_id], 'poison', before_poison))
-            return {
+            result = {
                 'target_player_id': target_id,
                 'total': int(total),
                 'parts': parts,
@@ -10123,11 +10125,220 @@ class GameEngine:
                 'poison': max(0, after_poison - before_poison),
                 'display': self._format_damage_parts(parts) if parts else ('0D' if total == 0 else f'{total}D'),
             }
+            if include_outcome:
+                sim._prediction_drive_pending(int(responder_id))
+                result['outcome'] = sim._prediction_extract_outcome(log_start, outcome_before, outcome_names)
+            return result
         except Exception:
             return {'target_player_id': target_id, 'total': 0, 'parts': [], 'display': ''}
 
+    # ------------------------------------------------------------------
+    # 出牌预测（2026-09-29 通用方案）：与反制窗口预测同一套机制——deepcopy
+    # 引擎、在副本上真实打出这张牌、从日志+状态 diff 取结构化结果。跑的
+    # 就是引擎本身，改卡/改规则不会漂移；客户端手写镜像管线已删除。
+    # ------------------------------------------------------------------
+
+    def _prediction_outcome_snapshot(self) -> dict:
+        snap = {}
+        for pid, ps in enumerate(self.players):
+            snap[pid] = {
+                'health': int(getattr(ps, 'health', 0) or 0),
+                'poison': int(getattr(ps, 'poison', 0) or 0),
+                'fire': int(getattr(ps, 'fire', 0) or 0),
+                'elixir': int(getattr(ps, 'elixir', 0) or 0),
+                'magic': int(getattr(ps, 'magic', 0) or 0),
+            }
+        return snap
+
+    def _prediction_name_map(self) -> dict:
+        names = {}
+        for pid in range(len(self.players)):
+            names[self.pn(pid)] = pid
+        return names
+
+    def _prediction_drive_pending(self, player_id: int, max_steps: int = 40) -> None:
+        """把模拟中的暂停点全部按预测口径推进到底。
+
+        choice → 默认选择（AI 同款）；response → 无人反制（基线）；
+        request_ui → 取消（可选效果默认不触发）。"""
+        for _ in range(max_steps):
+            if getattr(self, 'game_over', False):
+                return
+            pending = getattr(self, 'pending_response', None)
+            if isinstance(pending, dict):
+                if pending.get('forced_wait'):
+                    try:
+                        self.resolve_forced_response()
+                    except Exception:
+                        self.pending_response = None
+                    continue
+                actor = int(pending.get('player_id', -1))
+                for rid in range(len(self.players)):
+                    if not isinstance(getattr(self, 'pending_response', None), dict):
+                        break
+                    if rid == actor or self.players[rid].health <= 0:
+                        continue
+                    try:
+                        self.handle_response(rid, None)
+                    except Exception:
+                        pass
+                if isinstance(getattr(self, 'pending_response', None), dict):
+                    self.pending_response = None
+                continue
+            pending_choice = getattr(self, 'pending_choice', None)
+            if isinstance(pending_choice, dict):
+                try:
+                    chooser = int(pending_choice.get('player_id', player_id))
+                except Exception:
+                    chooser = player_id
+                resolved = False
+                try:
+                    generated = self._default_choice_for_pending(pending_choice)
+                    if isinstance(generated, dict):
+                        result = self.resolve_choice(chooser, generated)
+                        resolved = bool(isinstance(result, dict) and result.get('success'))
+                except Exception:
+                    resolved = False
+                if not resolved:
+                    try:
+                        self.resolve_choice(chooser, {'cancel': True})
+                    except Exception:
+                        self.pending_choice = None
+                continue
+            pending_ui = getattr(self, 'pending_v2_ui', None)
+            if isinstance(pending_ui, dict):
+                try:
+                    chooser = int(pending_ui.get('player_id', player_id))
+                except Exception:
+                    chooser = player_id
+                request_id = pending_ui.get('request_id')
+                try:
+                    self.handle_v2_ui_response(chooser, request_id, {'button': 'cancel', 'values': {}})
+                except Exception:
+                    self.pending_v2_ui = None
+                continue
+            return
+
+    def _prediction_extract_outcome(self, log_start: int, before: dict, name_to_pid: dict, spent: Optional[dict] = None) -> dict:
+        players_out = {}
+        parts_by_pid = {pid: [] for pid in range(len(self.players))}
+        try:
+            for line in list(self.log[log_start:]):
+                parsed = self._parse_damage_taken_log(line)
+                if not parsed:
+                    continue
+                pid = name_to_pid.get(parsed.get('target'))
+                if pid is None:
+                    continue
+                parts_by_pid[pid].extend(int(v) for v in parsed.get('parts', []) if int(v) > 0)
+        except Exception:
+            pass
+        for pid, ps in enumerate(self.players):
+            if pid not in before:
+                continue
+            b = before[pid]
+            damage_total = sum(parts_by_pid.get(pid) or [])
+            # 治疗 = 血量净变化 + 实扣伤害（日志分段是减免后的最终值）
+            heal = int(getattr(ps, 'health', 0) or 0) - b['health'] + damage_total
+            poison = max(0, int(getattr(ps, 'poison', 0) or 0) - b['poison'])
+            fire = max(0, int(getattr(ps, 'fire', 0) or 0) - b['fire'])
+            elixir = int(getattr(ps, 'elixir', 0) or 0) - b['elixir']
+            magic = int(getattr(ps, 'magic', 0) or 0) - b['magic']
+            if spent and pid in spent:
+                # 补回这张牌的费用结算：预测展示「效果给予的资源」而非净值；
+                # 只补卡费（cost+extra），效果性消耗（如吸魔）是引擎真值照常显示
+                elixir += int(spent[pid].get('elixir', 0) or 0)
+                magic += int(spent[pid].get('magic', 0) or 0)
+            players_out[str(pid)] = {
+                'damage_parts': parts_by_pid.get(pid) or [],
+                'damage_total': int(damage_total),
+                'poison': int(poison),
+                'fire': int(fire),
+                'heal': int(max(0, heal)),
+                'elixir': int(elixir),
+                'magic': int(magic),
+                'died': bool(b['health'] > 0 and int(getattr(ps, 'health', 0) or 0) <= 0),
+            }
+        return {'players': players_out}
+
+    def simulate_card_play_prediction(self, player_id: int, card_instance_id: int, choice: Optional[dict] = None) -> dict:
+        """出牌预测：在副本上把这张手牌真实打出（自动选择/无人反制/可选UI取消）。
+
+        返回 {'ok', 'def_id', 'target_player_id', 'players': {pid: {...}}, ...}，
+        与客户端预测行展示的口径一致。"""
+        result = {
+            'ok': False,
+            'player_id': int(player_id),
+            'card_instance_id': int(card_instance_id),
+            'def_id': '',
+            'target_player_id': None,
+            'players': {},
+            'error': '',
+        }
+        try:
+            player_id = int(player_id)
+            card_instance_id = int(card_instance_id)
+            if not (0 <= player_id < len(self.players)):
+                result['error'] = 'invalid-player'
+                return result
+            card = self.players[player_id].find_hand_card(card_instance_id)
+            if card is None:
+                result['error'] = 'card-not-in-hand'
+                return result
+            result['def_id'] = str(getattr(card, 'def_id', '') or '')
+            sim = copy.deepcopy(self)
+            before = sim._prediction_outcome_snapshot()
+            names = sim._prediction_name_map()
+            # 卡费补回口径：只补这张牌本身的 cost+extra（play_card 同式计算），
+            # 效果性资源变化（吸魔/回费等）是引擎真值照常进入 diff
+            sim_card = sim.players[player_id].find_hand_card(card_instance_id)
+            paid_e = max(0, int(getattr(sim_card, 'cost_e', 0) or 0)
+                         + int(sim._get_extra_e_for_card(player_id, sim_card) or 0))
+            paid_m = max(0, int(getattr(sim_card, 'cost_m', 0) or 0))
+            spent = {player_id: {'elixir': paid_e, 'magic': paid_m}}
+            sim._auto_resolve_choices_for = player_id
+            sim._allow_out_of_turn_auto_play_for = player_id
+            log_start = len(sim.log)
+            play_choice = dict(choice or {}) if isinstance(choice, dict) else {}
+            target_id = -1
+            for key in ('target_player_id', 'target_player', 'target_id'):
+                try:
+                    raw = int(play_choice.get(key, -1))
+                except Exception:
+                    raw = -1
+                if raw >= 0:
+                    target_id = raw
+                    break
+            if target_id < 0:
+                target_id = sim._default_auto_target_choice(player_id, allow_self=False)
+            if 0 <= target_id < len(sim.players):
+                play_choice.setdefault('target_player_id', target_id)
+                play_choice.setdefault('target_player', target_id)
+                play_choice.setdefault('target_id', target_id)
+                result['target_player_id'] = int(target_id)
+            try:
+                import inspect
+                accepts_target = 'target_player_id' in inspect.signature(type(sim).play_card).parameters
+            except Exception:
+                accepts_target = False
+            try:
+                if accepts_target:
+                    play_result = sim.play_card(player_id, card_instance_id, target_player_id=target_id, choice=play_choice)
+                else:
+                    play_result = sim.play_card(player_id, card_instance_id, play_choice)
+            except Exception:
+                play_result = {'success': False}
+            result['played'] = bool(isinstance(play_result, dict) and play_result.get('success'))
+            sim._prediction_drive_pending(player_id)
+            result.update(sim._prediction_extract_outcome(log_start, before, names, spent))
+            result['ok'] = True
+            return result
+        except Exception:
+            result['error'] = 'simulate-failed'
+            return result
+
     def build_response_damage_prediction(self, responder_id: int, counter_cards=None) -> dict:
-        baseline = self._simulate_pending_response_damage(responder_id, None)
+        baseline = self._simulate_pending_response_damage(responder_id, None, include_outcome=True)
         base_total = int(baseline.get('total') or 0)
         predictions = {}
         for entry in counter_cards or []:

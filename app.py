@@ -34592,6 +34592,176 @@ def on_solo_pause(data=None):
                 _SOLO_ACTION_LOCKS.pop(sid, None)
 
 
+# ---------------------------------------------------------------------------
+# 出牌预测（2026-09-29 通用方案）：客户端手牌/悬停预测统一走服务端
+# deepcopy 模拟（与反制窗口同一机制），跑真实引擎不漂移。按
+# (房间, 日志长度, 玩家, 卡, 目标) 做 LRU；日志长度随任何操作增长，
+# 即天然的缓存失效版本号。
+# ---------------------------------------------------------------------------
+_PLAY_PREDICTION_CACHE: "OrderedDict[tuple, dict]" = OrderedDict()
+_PLAY_PREDICTION_CACHE_MAX = 512
+_PLAY_PREDICTION_MAX_PER_REQUEST = 12
+
+
+def _play_prediction_cache_key(room, log_len, player_id, instance_id, target_id):
+    return (
+        str(getattr(room, 'room_id', '?')),
+        int(log_len or 0),
+        int(player_id),
+        int(instance_id),
+        int(target_id if target_id is not None else -1),
+    )
+
+
+def _play_prediction_choice_for_target(target_id):
+    if target_id is None or int(target_id) < 0:
+        return None
+    tid = int(target_id)
+    return {'target_player_id': tid, 'target_player': tid, 'target_id': tid}
+
+
+def _visible_hand_instance_ids(engine, viewer_pid: int, owner_pid: int) -> set:
+    try:
+        owner_hand = getattr(engine.players[owner_pid], 'hand', []) or []
+    except Exception:
+        return set()
+    if int(viewer_pid) == int(owner_pid):
+        return {getattr(c, 'instance_id', None) for c in owner_hand}
+    try:
+        visible = engine._visible_card_dicts(owner_hand, int(viewer_pid), int(owner_pid)) or []
+    except Exception:
+        return set()
+    ids = set()
+    for entry in visible:
+        try:
+            ids.add(int(entry.get('instance_id')))
+        except Exception:
+            continue
+    return ids
+
+
+def _requester_prediction_view_pid(room, sid):
+    """预测视角：目前仅支持玩家本人（观战者由 socket_guard 拒绝）。"""
+    try:
+        pidx = room.player_index(sid)
+        if pidx >= 0:
+            return int(pidx)
+    except Exception:
+        pass
+    return None
+
+
+@socketio.on('predict_hand')
+def on_predict_hand(data):
+    sid = request.sid
+    data = socket_guard('predict_hand', data, require_player=False)
+    if data is None:
+        return
+    raw_cards = data.get('cards')
+    if not isinstance(raw_cards, list) or not raw_cards:
+        return
+    entries = []
+    for item in raw_cards[:_PLAY_PREDICTION_MAX_PER_REQUEST]:
+        if not isinstance(item, dict):
+            continue
+        try:
+            instance_id = int(item.get('instance_id'))
+            owner_pid = int(item.get('player_id'))
+        except (TypeError, ValueError):
+            continue
+        try:
+            target_id = int(item.get('target_player_id', -1))
+        except (TypeError, ValueError):
+            target_id = -1
+        entries.append((owner_pid, instance_id, target_id if target_id >= 0 else None))
+    if not entries:
+        return
+    results = {}
+    # solo / AI 训练分支：引擎在 solo_sessions[sid]，人类座位由 _ai_test_human_player 决定
+    with _lock:
+        solo_engine = solo_sessions.get(sid)
+    if solo_engine is not None:
+        solo_lock = _try_acquire_solo_action(sid, 'predict_hand')
+        if solo_lock is None:
+            return
+        try:
+            human_pid = _ai_test_human_player(sid)
+            if human_pid is None:
+                human_pid = 0
+            log_len = len(getattr(solo_engine, 'log', []) or [])
+            for owner_pid, instance_id, target_id in entries:
+                key = (f'solo:{sid}', log_len, owner_pid, instance_id, int(target_id if target_id is not None else -1))
+                cached = _PLAY_PREDICTION_CACHE.get(key)
+                if cached is not None:
+                    _PLAY_PREDICTION_CACHE.move_to_end(key)
+                    prediction = cached
+                elif owner_pid != human_pid:
+                    prediction = {'ok': False, 'error': 'not-visible'}
+                else:
+                    prediction = solo_engine.simulate_card_play_prediction(
+                        owner_pid,
+                        instance_id,
+                        _play_prediction_choice_for_target(target_id),
+                    )
+                    _PLAY_PREDICTION_CACHE[key] = prediction
+                    while len(_PLAY_PREDICTION_CACHE) > _PLAY_PREDICTION_CACHE_MAX:
+                        _PLAY_PREDICTION_CACHE.popitem(last=False)
+                results[f'{owner_pid}:{instance_id}:{target_id if target_id is not None else -1}'] = prediction
+        finally:
+            solo_lock.release()
+        socketio.emit('play_predictions', {'predictions': results, 'log_len': log_len, 'room_id': None}, room=sid)
+        return
+    results = {}
+    with _lock:
+        if sid not in players:
+            return
+        player = players[sid]
+        room = rooms.get(player.get('room_id'))
+        if room is None or getattr(room, 'engine', None) is None:
+            return
+        room_id = getattr(room, 'room_id', '?')
+        log_len = len(getattr(room.engine, 'log', []) or [])
+    for owner_pid, instance_id, target_id in entries:
+        with _lock:
+            if sid not in players or players[sid].get('room_id') != player.get('room_id'):
+                return
+            room = rooms.get(player.get('room_id'))
+            engine = getattr(room, 'engine', None) if room is not None else None
+            if engine is None:
+                return
+            log_len = len(getattr(engine, 'log', []) or [])
+            key = _play_prediction_cache_key(room, log_len, owner_pid, instance_id, target_id)
+            cached = _PLAY_PREDICTION_CACHE.get(key)
+            if cached is not None:
+                _PLAY_PREDICTION_CACHE.move_to_end(key)
+                prediction = cached
+            else:
+                viewer_pid = _requester_prediction_view_pid(room, sid)
+                if viewer_pid is None:
+                    prediction = {'ok': False, 'error': 'no-view'}
+                elif instance_id not in _visible_hand_instance_ids(engine, viewer_pid, owner_pid):
+                    prediction = {'ok': False, 'error': 'not-visible'}
+                else:
+                    prediction = engine.simulate_card_play_prediction(
+                        owner_pid,
+                        instance_id,
+                        _play_prediction_choice_for_target(target_id),
+                    )
+                    _PLAY_PREDICTION_CACHE[key] = prediction
+                    while len(_PLAY_PREDICTION_CACHE) > _PLAY_PREDICTION_CACHE_MAX:
+                        _PLAY_PREDICTION_CACHE.popitem(last=False)
+        results[f'{owner_pid}:{instance_id}:{target_id if target_id is not None else -1}'] = prediction
+    socketio.emit(
+        'play_predictions',
+        {
+            'predictions': results,
+            'log_len': log_len,
+            'room_id': room_id,
+        },
+        room=sid,
+    )
+
+
 @socketio.on('play_card')
 @measure_socket_action('play_card')
 def on_play_card(data):
