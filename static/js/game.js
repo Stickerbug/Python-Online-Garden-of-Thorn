@@ -12464,7 +12464,6 @@ function skinInkStyleFor(luma) {
         return {
             mixTo: 'black',
             mixAmt: 0.26 + 0.26 * t,
-            shadow: `rgba(12, 16, 12, ${(0.40 + 0.24 * t).toFixed(2)})`,
         };
     }
     if (luma <= SKIN_INK_DARK) {
@@ -12472,7 +12471,6 @@ function skinInkStyleFor(luma) {
         return {
             mixTo: 'white',
             mixAmt: 0.28 + 0.30 * t,
-            shadow: `rgba(242, 246, 242, ${(0.34 + 0.24 * t).toFixed(2)})`,
         };
     }
     return null;
@@ -12492,32 +12490,56 @@ function mixRgbTowards(base, target, amount) {
 function applySkinInkToNode(node, skin, cardRect) {
     const rect = node.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
-    const luma = sampleSkinBrightness(skin, {
-        x: rect.left - cardRect.left,
-        y: rect.top - cardRect.top,
-        w: rect.width,
-        h: rect.height,
-    }, cardRect.width, cardRect.height);
-    const style = skinInkStyleFor(luma);
-    node.classList.toggle('skin-ink-live', !!style);
-    if (!style) {
-        node.style.removeProperty('--skin-ink-color');
-        node.style.removeProperty('--skin-ink-shadow');
-        return;
-    }
+    // 字内分区：把文字横向切 2-4 条带，各自采样脚下底色、各自偏移，
+    // 用 background-clip:text 的水平渐变渲染——一个字跨亮/暗底时
+    // 左右两半自动呈现不同深浅
+    const stripes = rect.width > 28 ? 4 : (rect.width > 14 ? 3 : 2);
     let baseRgb = null;
     const cached = node.getAttribute('data-ink-base');
     if (cached) {
         baseRgb = parseRgbColor(cached);
     } else {
         node.style.removeProperty('--skin-ink-color');
+        node.style.removeProperty('--skin-ink-gradient');
         baseRgb = parseRgbColor(getComputedStyle(node).color);
-        if (baseRgb) node.setAttribute('data-ink-base', `rgb(${baseRgb[0]}, ${baseRgb[1]}, ${baseRgb[2]})`);
+        if (baseRgb) {
+            node.setAttribute('data-ink-base', `rgb(${baseRgb[0]}, ${baseRgb[1]}, ${baseRgb[2]})`);
+        }
     }
-    if (baseRgb) {
-        node.style.setProperty('--skin-ink-color', mixRgbTowards(baseRgb, style.mixTo, style.mixAmt));
+    if (!baseRgb) return;
+    const rel = {
+        x: rect.left - cardRect.left,
+        y: rect.top - cardRect.top,
+        w: rect.width,
+        h: rect.height,
+    };
+    const colors = [];
+    let anyShift = false;
+    for (let i = 0; i < stripes; i++) {
+        const luma = sampleSkinBrightness(skin, {
+            x: rel.x + rel.w * (i / stripes),
+            y: rel.y,
+            w: rel.w / stripes,
+            h: rel.h,
+        }, cardRect.width, cardRect.height);
+        const style = skinInkStyleFor(luma);
+        if (style) anyShift = true;
+        colors.push(style
+            ? mixRgbTowards(baseRgb, style.mixTo, style.mixAmt)
+            : `rgb(${baseRgb[0]}, ${baseRgb[1]}, ${baseRgb[2]})`);
     }
-    node.style.setProperty('--skin-ink-shadow', `0 0.5cqi 1.5cqi ${style.shadow}`);
+    node.classList.toggle('skin-ink-live', anyShift);
+    if (!anyShift) {
+        node.style.removeProperty('--skin-ink-color');
+        node.style.removeProperty('--skin-ink-gradient');
+        return;
+    }
+    const stops = colors.map((color, i) => {
+        const pct = colors.length === 1 ? 0 : Math.round((i / (colors.length - 1)) * 100);
+        return `${color} ${pct}%`;
+    });
+    node.style.setProperty('--skin-ink-color', 'transparent');
+    node.style.setProperty('--skin-ink-gradient', `linear-gradient(90deg, ${stops.join(', ')})`);
 }
 
 // 效果文字字符级 wrap：只动 TEXT_NODE（chips/图标/br 不碰），

@@ -22228,11 +22228,13 @@ html[data-ui-style="minimal"] .card.card-skin-no-corner::before,
   user-select: none;
 }
 
-/* 皮肤卡文字对比度自适应：JS 采样皮肤图底色亮度后设变量并打
-   skin-ink-live 类——亮底压暗字+深衬/暗底提亮字+白衬，中间带
-   （.skin-ink-live 未打）保持现状零变化。变量未设时也无副作用。
-   只做字色偏移+柔影（描边会显脏，用户否决）。 */
+/* 皮肤卡文字对比度自适应：JS 采样皮肤图底色亮度后按文字横向条带各自
+   偏移字色，用 background-clip:text 的水平渐变渲染——单个字跨亮/暗
+   底时左右两半自动不同深浅（用户 2026-09-29 要求）。无描边无阴影，
+   只有字色偏移；变量未设时零变化。 */
 .card.card-skin-backed .skin-ink-live {
+  background-image: var(--skin-ink-gradient, none);
+  -webkit-background-clip: text;
+  background-clip: text;
   color: var(--skin-ink-color, inherit);
-  text-shadow: var(--skin-ink-shadow, none);
 }
