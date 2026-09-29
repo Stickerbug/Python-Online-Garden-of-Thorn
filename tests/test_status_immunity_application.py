@@ -118,59 +118,8 @@ class StatusImmunityApplicationTests(unittest.TestCase):
                 player.custom_statuses.clear()
                 self.assertEqual(engine._get_player_property_value(0, "untargetable"), 1)
 
-    def test_triangle_layers_can_change_while_their_effect_is_suppressed(self):
-        for engine_type in ENGINE_TYPES:
-            with self.subTest(engine=engine_type.__name__):
-                engine = engine_type()
-                player = engine.players[0]
-                card = CardInstance("Basic")
-                player.custom_vars["三角形层数"] = 2
-                player.triangle_stacks = 2
-                self.grant_status_immunity(engine)
-
-                self.run_step(
-                    engine, "var_set", card,
-                    {
-                        "target": "self",
-                        "name": "三角形层数",
-                        "value": {
-                            "op": "min",
-                            "a": 4,
-                            "b": {
-                                "op": "add",
-                                "a": {
-                                    "target": "self",
-                                    "name": "三角形层数",
-                                    "op": "var",
-                                },
-                                "b": 1,
-                            },
-                        },
-                    },
-                    "",
-                    None,
-                    "play",
-                )
-
-                self.assertEqual(player.custom_vars["三角形层数"], 3)
-                self.assertEqual(player.triangle_stacks, 3)
-                self.assertEqual(
-                    engine._eval_expr(
-                        0,
-                        {"ref": "var", "target": "self", "name": "三角形层数"},
-                        card,
-                    ),
-                    0,
-                )
-                player.custom_statuses.clear()
-                self.assertEqual(
-                    engine._eval_expr(
-                        0,
-                        {"ref": "var", "target": "self", "name": "三角形层数"},
-                        card,
-                    ),
-                    3,
-                )
+    # 设计 2026-09-29：三角形状态已随改版废弃（原三角形免疫用例随之移除；
+    # triangle_stacks 字段仅为旧回放兼容保留）。
 
     def test_named_builtin_and_custom_statuses_stack_while_suppressed(self):
         for engine_type in ENGINE_TYPES:

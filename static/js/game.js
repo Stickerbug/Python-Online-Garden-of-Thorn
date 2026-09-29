@@ -3802,7 +3802,7 @@ const CARD_TEXT_LOCALIZED_FLAG_SPECS = [
 ];
 
 const CARD_TEXT_LOCALIZED_STATUS_SPECS = [
-    ['toxic', 'toxic'], ['triangle', 'status-triangle'], ['nazar', 'status-nazar'],
+    ['toxic', 'toxic'], ['nazar', 'status-nazar'],
     ['magic_nazar', 'status-magic-nazar'], ['invincible', 'status-invincible'],
     ['dodge', 'status-dodge'], ['status_immune', 'status-immune'], ['stunned', 'status-stunned'],
     ['attack_blocked', 'status-attack-blocked'], ['attack_only', 'status-attack-only'],
@@ -4074,7 +4074,6 @@ function getInlineIconUrl(iconKey) {
         F: 'fire',
         fire: 'fire',
         toxic: 'toxic',
-        triangle: 'triangle',
         nazar: 'nazar',
         magic_nazar: 'magic_nazar',
         equip_protect: 'equip_protect',
@@ -9482,7 +9481,8 @@ function getAllStatusDefs() {
         { key: 'poison', label: UI.status_poison, desc: termLib.P ? termLib.P.desc : '', color: COLORS.poison },
         { key: 'fire', label: UI.status_fire, desc: termLib.F ? termLib.F.desc : '', color: COLORS.fire },
         { key: 'toxic', label: UI.status_toxic, desc: termLib.toxic ? termLib.toxic.desc : '', color: '#6C3483' },
-        { key: 'triangle', label: UI.status_triangle || '三角形', desc: '每层会提高三角形的后续伤害，上限 4 层；裂变三角形时，每一段都会按当时层数重新计算。', color: COLORS.non_stack },
+        /* 三角形状态已随改版废弃（2026-09-29）：图鉴移除，模组变量「三角形层数」
+           不再同步 triangle_stacks（写了也只是普通数值）。 */
         { key: 'nazar', label: UI.status_nazar, desc: '护甲结算后，自己受到的1~9点物理伤害变为1；受到≥10点物理伤害时，伤害-9，且层数-1。', color: COLORS.magic },
         { key: 'magic_nazar', label: '魔法邪眼', desc: '存在时，敌方实际消耗E≤1的技能牌无效，然后减少1层。', color: COLORS.magic },
         { key: 'equip_protect', label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
@@ -9517,7 +9517,7 @@ function getAllStatusDefs() {
         { key: 'jungle:toxic_poison', iconKey: 'toxic_poison', label: '剧毒', desc: '中毒结算后，对自己施加等同于剧毒层数的[[icon:P]]；不自动减少。', color: '#5E8C31', source: 'vanilla' },
     ];
     const statusTermAliases = {
-        poison: 'P', fire: 'F', toxic: 'toxic', triangle: 'triangle', nazar: 'nazar',
+        poison: 'P', fire: 'F', toxic: 'toxic', nazar: 'nazar',
         magic_nazar: 'magic_nazar', equip_protect: 'equip_protect',
         dodge: 'dodge', status_immune: 'status_immune', stunned: 'stunned',
         attack_blocked: 'attack_blocked', attack_only: 'attack_only', untargetable: 'untargetable',
@@ -15875,7 +15875,6 @@ function getStatusIntroItem(statusInfo) {
         fire: { label: UI.status_fire, desc: getTermIntroLibrary().F.desc, color: COLORS.fire },
         toxic: { label: UI.status_toxic, desc: getTermIntroLibrary().toxic.desc, color: '#6C3483' },
         armor: { label: UI.status_armor || '护甲', desc: getTermIntroLibrary().A.desc, color: COLORS.armor_text },
-        triangle: { label: UI.status_triangle, desc: '每层会提高三角形的后续伤害，上限 4 层；裂变三角形时，每一段都会按当时层数重新计算。', color: COLORS.non_stack },
         nazar: { label: UI.status_nazar, desc: '护甲结算后，自己受到的1~9点物理伤害变为1；受到≥10点物理伤害时，伤害-9，且层数-1。', color: COLORS.magic },
         magic_nazar: { label: '魔法邪眼', desc: '存在时，敌方实际消耗E≤1的技能牌无效，然后减少1层。', color: COLORS.magic },
         equip_protect: { label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
@@ -15921,7 +15920,6 @@ function getStatusIntroItem(statusInfo) {
         fire: { label: UI.status_fire, desc: getTermIntroLibrary().F.desc },
         toxic: { label: UI.status_toxic, desc: getTermIntroLibrary().toxic.desc },
         armor: { label: UI.status_armor || 'Armor', desc: getTermIntroLibrary().A.desc },
-        triangle: { label: UI.status_triangle, desc: lt({ zh: builtIns.triangle.desc, en: 'Each stack increases later Triangle damage, up to 4. With Fission, each hit recalculates using the current stack count.', fr: 'Chaque charge augmente les dégâts suivants de Triangle, jusqu’à 4. Avec Fission, chaque coup est recalculé avec les charges actuelles.', ja: '各層が以後の三角形ダメージを増やし、上限は4層です。裂变時は各命中ごとに現在層数で再計算します。' }) },
         nazar: { label: UI.status_nazar || 'Nazar', desc: getTermIntroLibrary().nazar.desc },
         magic_nazar: { label: lt({ zh: '魔法邪眼', en: 'Magic Nazar', fr: 'Nazar magique', ja: '魔法ナザール' }), desc: getTermIntroLibrary().magic_nazar.desc },
         equip_protect: { label: UI.status_equip_protect, desc: lt({ zh: builtIns.equip_protect.desc, en: 'Prevents equipment from being destroyed by destroy effects.', fr: 'Empêche un équipement d’être détruit par les effets de destruction.', ja: '装備が破壊効果で破壊されるのを防ぎます。' }) },

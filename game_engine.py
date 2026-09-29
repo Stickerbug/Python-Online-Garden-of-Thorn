@@ -711,7 +711,6 @@ class PlayerState:
         if 'custom_statuses' in d:
             ps.custom_statuses = d.get('custom_statuses', {})
         ps.custom_vars.setdefault('\u5496\u5561\u9996\u6b21\u4f7f\u7528', 1 if ps.coffee_first_use else 0)
-        ps.custom_vars.setdefault('\u4e09\u89d2\u5f62\u5c42\u6570', int(ps.triangle_stacks))
         ps.custom_vars.setdefault('\u9b54\u6cd5\u7535\u6c60\u672c\u56de\u5408\u56de\u9b54', int(ps.magic_battery_m_this_turn))
         return ps
 
@@ -7310,10 +7309,6 @@ class GameEngine:
             ps.custom_statuses.clear()
         except Exception:
             pass
-        try:
-            ps.custom_vars['三角形层数'] = 0
-        except Exception:
-            pass
 
     def _trigger_yggdrasil_effect(self, target_id: int, card: Optional[CardInstance] = None,
                                   source_player_id: Optional[int] = None,
@@ -12937,7 +12932,8 @@ class GameEngine:
             return False
         if not self._is_status_immune(player_id):
             return False
-        return str(name) in ('三角形层数', '\u4e09\u89d2\u5f62\u5c42\u6570')
+        # 设计 2026-09-29：三角形层数不再是状态变量（状态已废弃）。
+        return False
 
     @contextmanager
     def _read_status_var_for_mutation(self, target_ref, name: str):
@@ -24791,13 +24787,14 @@ class GameEngine:
             ps.custom_statuses[status] = max(0, int(ps.custom_statuses.get(status, 0) or 0) - amount)
 
     def _sync_custom_var_alias(self, ps, name: str):
+        # 设计 2026-09-29：三角形状态已随改版废弃——「三角形层数」不再同步
+        # triangle_stacks（模组写这个变量只是普通数值，无任何效果），
+        # 图鉴/术语/编辑器词表同步移除；字段保留仅为旧回放兼容。
         try:
             value = int(self._scalar_value(ps.custom_vars.get(name, 0), 0))
         except Exception:
             value = 0
-        if name == '\u4e09\u89d2\u5f62\u5c42\u6570':
-            ps.triangle_stacks = max(0, value)
-        elif name == '\u5496\u5561\u9996\u6b21\u4f7f\u7528':
+        if name == '\u5496\u5561\u9996\u6b21\u4f7f\u7528':
             ps.coffee_first_use = bool(value)
 
     def _atomic_player_var_change(self, player_id, card, params, log, choice, context):
