@@ -12535,8 +12535,11 @@ function parseRgbColor(text) {
 // 皮肤图案的真实轮廓（任意形状/斜边）一致，而非竖直条带。
 // 图按 (skinId, 基色) 缓存，160×224 低分辨率足够（颜色映射是低频信息）。
 const skinInkMapCache = new Map();
-const SKIN_INK_MAP_W = 240;
-const SKIN_INK_MAP_H = 336;
+// 高分辨率 + 默认平滑插值：色块边界过渡带仅 1-2px（视觉即瞬间变色），
+// 且边界形状贴合皮肤图案轮廓。低分辨率+pixelated 会产生方块锯齿、
+// 锯齿与图案真实边界错位（边缘处出现错色块）
+const SKIN_INK_MAP_W = 360;
+const SKIN_INK_MAP_H = 504;
 const SKIN_INK_MAP_CACHE_MAX = 48;
 const SKIN_INK_CARD_RATIO = 88 / 63;
 

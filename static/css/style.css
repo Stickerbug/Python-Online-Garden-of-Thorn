@@ -22238,9 +22238,6 @@ html[data-ui-style="minimal"] .card.card-skin-no-corner::before,
   background-size: var(--skin-ink-bg-size, 100% 100%);
   background-position: var(--skin-ink-bg-pos, 0 0);
   background-repeat: no-repeat;
-  /* 最近邻采样：映射图色块边界硬切（跟随皮肤图案轮廓瞬间变色），
-     默认双线性插值会把边界糊成渐变带 */
-  image-rendering: pixelated;
   -webkit-background-clip: text;
   background-clip: text;
   color: var(--skin-ink-color, inherit);
