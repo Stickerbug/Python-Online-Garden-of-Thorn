@@ -9596,6 +9596,15 @@ class GameEngine:
                 return {'success': True, 'needs_v2_ui': True, 'card': card.to_dict()}
         self._prepare_ocean_spikeball_for_play(player_id, card)
         choice = self._prepare_desert_play_state(player_id, card, choice)
+        # 设计 2026-09-29：玩家挂起的「下一张打出的牌视为暂时沉重」（氮气）——
+        # 在费用结算前把层数临时加到这张牌上，reset_card_after_play 会在打完
+        # 自动清掉（只影响这一次出牌）。
+        pending_temp_heavy = max(0, int(ps.custom_vars.get('pending_temp_heavy_next_play', 0) or 0)) if isinstance(ps.custom_vars, dict) else 0
+        if pending_temp_heavy > 0 and not auto_no_cost:
+            card.temp_heavy_value = max(0, int(getattr(card, 'temp_heavy_value', 0) or 0)) + pending_temp_heavy
+            card.instance_flags.add('temp_heavy')
+            ps.custom_vars['pending_temp_heavy_next_play'] = 0
+            self.log_msg(f"{self.pn(player_id)}的下一张牌获得{pending_temp_heavy}层暂时沉重")
         extra_e = self._get_extra_e_for_card(player_id, card)
         total_e = 0 if auto_no_cost else max(0, card.cost_e + extra_e)
         total_m = 0 if auto_no_cost else int(card.cost_m)

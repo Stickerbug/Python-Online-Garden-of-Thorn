@@ -15625,6 +15625,32 @@ function formatSameTypeDrawProbability(cardDef) {
         ? getGallerySameTypeDrawProbability(cardDef)
         : Number(cardDef && cardDef.same_type_draw_probability);
     if (!Number.isFinite(raw) || raw <= 0) {
+        /* 设计 2026-09-29：概率为 0 分两种——卡被临时禁用（真无法抽到）与
+           所属模组在当前配置未启用（启用后即可抽到，别再误报"无法抽到"）。 */
+        if (cardDef && cardDef.temporarily_disabled) {
+            return lt({
+                zh: '无法抽到（临时禁用）',
+                en: 'Cannot be drawn (temporarily disabled)',
+                fr: 'Impossible à piocher (désactivée temporairement)',
+                ja: '抽選されません（一時無効）',
+            });
+        }
+        if (cardDef && cardDef.visible_in_current_loadout === false) {
+            return lt({
+                zh: '模组未启用（启用后可抽到）',
+                en: 'Mod not enabled (drawable once enabled)',
+                fr: 'Mod non activé (piochable une fois activé)',
+                ja: 'Mod未有効（有効化すれば抽選されます）',
+            });
+        }
+        if (phase === 'gallery') {
+            return lt({
+                zh: '当前筛选未勾选所属模组',
+                en: 'Mod not selected in current filter',
+                fr: 'Mod non coché dans le filtre actuel',
+                ja: '現在のフィルターでMod未選択',
+            });
+        }
         return lt({
             zh: '无法抽到',
             en: 'Cannot be drawn',
