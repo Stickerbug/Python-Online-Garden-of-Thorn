@@ -1834,6 +1834,14 @@ def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
         cards = _zone(engine, pid, zone)
         if expr.get("require_selectable"):
             cards = [card for card in cards if _card_selectable_by_action(engine, card)]
+        # 设计 2026-09-29：``exclude_current``（同义 ``exclude_self``）排除
+        # 正在结算的这张牌——出牌效果执行期间牌还在手牌里，"其他手牌数"类
+        # 条件与"弃全部手牌"类费用都需要把它排除。
+        if expr.get("exclude_current", expr.get("exclude_self", False)):
+            current_card = context.get("card")
+            current_iid = getattr(current_card, "instance_id", None)
+            if current_iid is not None:
+                cards = [card for card in cards if getattr(card, "instance_id", None) != current_iid]
         card_type = expr.get("card_type")
         if card_type:
             return sum(1 for c in cards if getattr(c, "card_type", "") == card_type)
@@ -1937,6 +1945,15 @@ def eval_v2_value(engine, context: Dict[str, Any], expr: Any):
         zone = str(expr.get("zone") or "hand")
         count = max(0, _to_int(eval_v2_value(engine, context, expr.get("count", 1))))
         cards = list(_zone(engine, player_id, zone))
+        if expr.get("require_selectable"):
+            cards = [card for card in cards if _card_selectable_by_action(engine, card)]
+        # 设计 2026-09-29：``exclude_current``（同义 ``exclude_self``）排除
+        # 正在结算的这张牌（与 zone_count 同口径）。
+        if expr.get("exclude_current", expr.get("exclude_self", False)):
+            current_card = context.get("card")
+            current_iid = getattr(current_card, "instance_id", None)
+            if current_iid is not None:
+                cards = [card for card in cards if getattr(card, "instance_id", None) != current_iid]
         picked = []
         for _ in range(min(count, len(cards))):
             card = random.choice(cards)

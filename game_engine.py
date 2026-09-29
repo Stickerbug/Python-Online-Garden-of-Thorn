@@ -16494,14 +16494,24 @@ class GameEngine:
                 return self._get_status_count(target_id, expr.get('status', ''))
             if ref == 'zone_count':
                 target_id = self._resolve_target(player_id, expr.get('target', 'self'))
-                if expr.get('require_selectable'):
+                if expr.get('require_selectable') or expr.get('exclude_current', expr.get('exclude_self', False)):
                     if not self._valid_player_id(target_id):
                         return 0
                     zone = str(expr.get('zone', 'hand') or 'hand')
-                    return sum(
-                        1 for zone_card in self._card_zone_cards(target_id, zone)
+                    zone_cards = [
+                        zone_card for zone_card in self._card_zone_cards(target_id, zone)
                         if self._card_selectable_by_action(zone_card)
-                    )
+                    ]
+                    # 设计 2026-09-29：排除正在结算的这张牌（出牌效果执行期间
+                    # 它还在手牌里；与 mod_runtime_v2 同口径）。
+                    if expr.get('exclude_current', expr.get('exclude_self', False)):
+                        current_iid = getattr(card, 'instance_id', None)
+                        if current_iid is not None:
+                            zone_cards = [
+                                zone_card for zone_card in zone_cards
+                                if getattr(zone_card, 'instance_id', None) != current_iid
+                            ]
+                    return len(zone_cards)
                 return self._zone_size(target_id, expr.get('zone', 'hand'))
             if ref in ('turn_damage_taken', 'turn_damage_dealt', 'last_turn_damage_taken',
                        'last_turn_damage_dealt', 'total_damage_taken', 'total_damage_dealt'):
