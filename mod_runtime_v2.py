@@ -3592,6 +3592,25 @@ def _sanitize_ui_control(engine, context: Dict[str, Any], control: Dict[str, Any
                 except Exception:
                     continue
             options = [option for option in options if int(option.get("value", -1)) in allowed]
+        # 设计 2026-09-29：通用排除参数——``exclude_def_ids``（卡定义 id 名单）
+        # 与 ``exclude_instance_flags``（实例标签名单）把选项里的对应牌剔除
+        # （机械触角不能选走世界树之叶这类保护牌）。
+        exclude_def_ids = control.get("exclude_def_ids")
+        if isinstance(exclude_def_ids, list) and exclude_def_ids:
+            blocked_defs = {str(value) for value in exclude_def_ids}
+            options = [
+                option for option in options
+                if str((option.get("card") or {}).get("def_id", "")) not in blocked_defs
+            ]
+        exclude_instance_flags = control.get("exclude_instance_flags")
+        if isinstance(exclude_instance_flags, list) and exclude_instance_flags:
+            blocked_flags = {str(value) for value in exclude_instance_flags}
+            options = [
+                option for option in options
+                if not blocked_flags.intersection(
+                    {str(flag) for flag in (option.get("card") or {}).get("instance_flags", [])}
+                )
+            ]
         out["zone"] = zone
         out["target"] = target_id
         out["options"] = options

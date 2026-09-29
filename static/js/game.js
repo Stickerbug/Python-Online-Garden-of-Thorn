@@ -12282,6 +12282,10 @@ function cardFaceReplacedByBackForViewers(cardDict) {
         // 回放里按当时皮肤：viewpoint 仍是 your_id 指定者
     }
     const ownerKey = cardDict && (cardDict.owner_id ?? cardDict.player_id);
+    // 非对局上下文没有 your_id，视为自己视角（与 createCardElement 同口径）
+    const viewerId = Number(gs.your_id);
+    if (!Number.isFinite(viewerId)) return false;
+    if (Number(ownerKey) === viewerId) return false;
     const skinId = playerCardSkinAt(ownerKey);
     if (!skinId) return false;
     // 需要皮肤目录的 special 标记：皮肤清单在首次加载后缓存于 window
@@ -12644,7 +12648,10 @@ function createCardElement(cardDict, options = {}) {
         const ownerKey = cardDict && (cardDict.owner_id ?? cardDict.player_id ?? cardDict._viewer_offset);
         const viewerId = Number(gameState && gameState.your_id);
         const ownerId = Number(ownerKey);
-        const isOwnView = !Number.isFinite(ownerId) || ownerId === viewerId;
+        // 设计 2026-09-29：非对局上下文（图鉴/牌组编辑器等）没有 your_id——
+        // 视角恒为"自己"，不触发 back_as_front 替换（否则装备「区」后图鉴
+        // 里所有卡的卡图都会变成区的卡背）。
+        const isOwnView = !Number.isFinite(ownerId) || !Number.isFinite(viewerId) || ownerId === viewerId;
         const ownerSkin = playerCardSkinAt(ownerId);
         if (!isOwnView && ownerSkin) {
             const meta = (window.__cardSkinCatalog || {})[ownerSkin];

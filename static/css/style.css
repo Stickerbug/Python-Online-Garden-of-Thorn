@@ -926,6 +926,10 @@ body {
   background: var(--bg-card);
   box-shadow: var(--shadow-lg);
   padding: 20px;
+  /* 设计 2026-09-29：外观页可滚动——卡牌皮肤列表超出屏幕时不再够不到 */
+  max-height: calc(100dvh - 118px);
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 
 .skin-editor-head {
