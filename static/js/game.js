@@ -12513,7 +12513,11 @@ function skinInkTargetLumaFor(baseRgb, bgLuma) {
     if (strength <= 0.001) return null; // 中性带：保持基色
     const raw = side >= 0 ? bgLuma - SKIN_INK_CONTRAST : Math.min(0.9, bgLuma + SKIN_INK_CONTRAST_DARK);
     const clamped = side >= 0 ? Math.min(baseLuma, raw) : Math.max(baseLuma, raw);
-    const target = baseLuma + (clamped - baseLuma) * strength;
+    // 状态涂色字（毒绿/火橙等高饱和识别色）偏移收窄：深底上提亮到近白
+    // 会洗掉识别感，只提一部分保持彩色可读
+    const [, sat] = rgbToHsl(baseRgb);
+    const satScale = sat > 0.25 ? 0.55 : 1;
+    const target = baseLuma + (clamped - baseLuma) * strength * satScale;
     // 与基色差太小就不动（避免整体发灰的多余调整）
     if (Math.abs(target - baseLuma) < 0.02) return null;
     return target;
@@ -12531,8 +12535,8 @@ function parseRgbColor(text) {
 // 皮肤图案的真实轮廓（任意形状/斜边）一致，而非竖直条带。
 // 图按 (skinId, 基色) 缓存，160×224 低分辨率足够（颜色映射是低频信息）。
 const skinInkMapCache = new Map();
-const SKIN_INK_MAP_W = 160;
-const SKIN_INK_MAP_H = 224;
+const SKIN_INK_MAP_W = 240;
+const SKIN_INK_MAP_H = 336;
 const SKIN_INK_MAP_CACHE_MAX = 48;
 const SKIN_INK_CARD_RATIO = 88 / 63;
 
