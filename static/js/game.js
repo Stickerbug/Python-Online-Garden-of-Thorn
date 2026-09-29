@@ -12686,17 +12686,23 @@ window.addEventListener('resize', () => {
 }, { passive: true });
 
 function createCardElement(cardDict, options = {}) {
-    const { faceDown = false, small = false, draggable = false, onClick = null, showAllFlags = false, disableIntro = false } = options;
+    const { faceDown = false, small = false, draggable = false, onClick = null, showAllFlags = false, disableIntro = false, skinOverride = null } = options;
     const el = document.createElement('div');
     el.className = 'card' + (small ? ' card-small' : '') + (faceDown ? ' card-facedown' : '');
     if (faceDown) {
         /* 反面牌的皮肤 = 这摞牌主人的皮肤。单人训练场里对手位也注入了同一皮肤
-           （服务端 solo 注入/回放 meta 都带 player_card_skins），所以按座位取即可。 */
+           （服务端 solo 注入/回放 meta 都带 player_card_skins），所以按座位取即可；
+           皮肤预览弹层传 skinOverride 直接试穿，不查装备。 */
         const ownerKey = cardDict && (cardDict.owner_id ?? cardDict.player_id);
-        const backSkin = (Number.isFinite(Number(ownerKey))
-            && Number(ownerKey) !== Number(gameState && gameState.your_id))
-            ? playerCardSkinAt(Number(ownerKey))
-            : myEquippedCardSkin();
+        let backSkin;
+        if (skinOverride) {
+            backSkin = skinOverride;
+        } else if (Number.isFinite(Number(ownerKey))
+            && Number(ownerKey) !== Number(gameState && gameState.your_id)) {
+            backSkin = playerCardSkinAt(Number(ownerKey));
+        } else {
+            backSkin = myEquippedCardSkin();
+        }
         /* 未装备皮肤时用「初始」默认卡背（替换原来的问号） */
         const skinBack = cardSkinBackUrl(backSkin) || '/static/assets/card-skins/back/初始.svg';
         el.classList.add('card-skin-back-card');
@@ -12718,7 +12724,7 @@ function createCardElement(cardDict, options = {}) {
     let skinUnderHtml = '';
     {
         const ownerKey = cardDict && (cardDict.owner_id ?? cardDict.player_id);
-        const ownerSkin = playerCardSkinAt(Number(ownerKey));
+        const ownerSkin = skinOverride || playerCardSkinAt(Number(ownerKey));
         if (ownerSkin) {
             const frontUrl = cardSkinFrontUrl(ownerSkin);
             if (frontUrl) {
@@ -18512,6 +18518,9 @@ function renderCardSkinShop() {
         const action = owned
             ? `<button type="button" class="title-shop-buy-btn" disabled title="${escapeHtml(lt({ zh: '你已经拥有这个卡牌皮肤了！', en: 'You already own this card skin!', fr: 'Vous possédez déjà ce skin de carte !', ja: 'すでにこのカードスキンを持っています！' }))}">${escapeHtml(lt({ zh: '已拥有', en: 'Owned', fr: 'Possédé', ja: '所持済み' }))}</button>`
             : `<button type="button" class="title-shop-buy-btn" data-card-skin-buy="${offer.slot}">${thornDewAmountHtml(offer.price, 'dew-amount')}</button>`;
+        const previewBtn = offer.skin_id
+            ? `<button type="button" class="mini-btn card-skin-preview-btn" data-card-skin-preview="${escapeHtml(offer.skin_id)}" data-card-skin-name="${escapeHtml(offer.name || '')}">${escapeHtml(lt({ zh: '预览', en: 'Preview', fr: 'Aperçu', ja: 'プレビュー' }))}</button>`
+            : '';
         return `
         <article class="title-shop-item card-skin-shop-item" data-slot="${offer.slot}">
             <div class="card-skin-preview">
@@ -18521,10 +18530,15 @@ function renderCardSkinShop() {
             <div class="card-skin-meta">
                 <strong>${escapeHtml(offer.name)}</strong>
                 ${specialNote}
-                <div class="card-skin-actions">${action}</div>
+                <div class="card-skin-actions">${action}${previewBtn}</div>
             </div>
         </article>`;
     }).join('');
+    grid.querySelectorAll('[data-card-skin-preview]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            openCardSkinPreviewModal(btn.dataset.cardSkinPreview, btn.dataset.cardSkinName);
+        });
+    });
     grid.querySelectorAll('[data-card-skin-buy]').forEach(btn => {
         btn.addEventListener('click', async () => {
             if (!cardSkinShopData || cardSkinShopBusy) return;
@@ -19331,6 +19345,192 @@ function applyLocalCardSkin(skinId) {
     renderCardSkinInventory();
 }
 
+// ===== 卡牌皮肤预览弹层（2026-09-29） =====
+// 放大试穿：大卡卡面 + 卡背 + 样张栏（默认覆盖各卡面形态，可搜索自选一张，
+// localStorage 记忆）+「区」类皮肤（back_as_front）的对手视角开关。
+// 试穿走 createCardElement 的 skinOverride 参数，不碰真实装备数据。
+let skinPreviewState = null;
+
+function getPickedSkinPreviewDefs() {
+    try {
+        const raw = JSON.parse(localStorage.getItem('gtn_skin_preview_picked_v1') || '[]');
+        return Array.isArray(raw)
+            ? raw.filter(id => typeof id === 'string' && getCardDef(id))
+            : [];
+    } catch (_) {
+        return [];
+    }
+}
+
+function rememberPickedSkinPreviewDef(defId) {
+    if (!defId || !getCardDef(defId)) return;
+    const list = getPickedSkinPreviewDefs().filter(id => id !== defId);
+    list.unshift(defId);
+    try {
+        localStorage.setItem('gtn_skin_preview_picked_v1', JSON.stringify(list.slice(0, 6)));
+    } catch (_) {}
+}
+
+function skinPreviewSampleDefs() {
+    const picked = getPickedSkinPreviewDefs();
+    const defaults = ['Bone', 'Sewage', 'Assembler', 'Honey', 'Iris', 'Fire'].filter(id => getCardDef(id));
+    // 类型兜底：root / guard 若默认样张没覆盖到，从 CARD_DEFS 各补一张
+    const haveTypes = new Set(defaults.map(id => (getCardDef(id) || {}).card_type));
+    for (const t of ['root', 'guard']) {
+        if (haveTypes.has(t)) continue;
+        const found = Object.keys(CARD_DEFS).find(id => {
+            const d = CARD_DEFS[id];
+            return d && d.card_type === t && d.id !== 'Error';
+        });
+        if (found) defaults.push(found);
+    }
+    return [...new Set([...picked, ...defaults])].slice(0, 10);
+}
+
+function skinPreviewBackAsFront(skinId) {
+    const meta = (window.__cardSkinCatalog || {})[skinId];
+    if (meta) return meta.special === 'back_as_front';
+    // 目录缓存未就绪时回落到外观页数据
+    const item = (Array.isArray(cardSkinInventory && cardSkinInventory.items) ? cardSkinInventory.items : [])
+        .find(entry => entry && entry.skin_id === skinId);
+    return !!(item && item.special === 'back_as_front');
+}
+
+function createSkinPreviewCardEl(defId, skinId, { faceDown = false, width = 260 } = {}) {
+    const el = createCardElement({ def_id: defId, owner_id: null }, { faceDown, skinOverride: skinId, disableIntro: true });
+    el.style.setProperty('--card-w', width + 'px');
+    return el;
+}
+
+function renderSkinPreviewSearchResults(query) {
+    const resultsEl = $('skin-preview-search-results');
+    if (!resultsEl) return;
+    const q = String(query || '').trim().toLowerCase();
+    if (!q) { resultsEl.innerHTML = ''; return; }
+    const matches = [];
+    for (const id of Object.keys(CARD_DEFS)) {
+        const d = CARD_DEFS[id];
+        if (!d || d.id === 'Error') continue;
+        const nameCn = String(d.name_cn || '').toLowerCase();
+        const nameEn = String(d.name_en || d.id || '').toLowerCase();
+        if (nameCn.includes(q) || nameEn.includes(q) || id.toLowerCase().includes(q)) {
+            matches.push(id);
+            if (matches.length >= 8) break;
+        }
+    }
+    resultsEl.innerHTML = matches.length
+        ? matches.map(id => `<button type="button" class="skin-preview-search-hit" data-def="${escapeHtml(id)}">${escapeHtml((CARD_DEFS[id] && CARD_DEFS[id].name_cn) || id)}</button>`).join('')
+        : `<span class="skin-preview-search-empty">${escapeHtml(lt({ zh: '没有匹配的卡牌', en: 'No matching cards', fr: 'Aucune carte trouvée', ja: '該当するカードがありません' }))}</span>`;
+    resultsEl.querySelectorAll('[data-def]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (!skinPreviewState) return;
+            const defId = btn.dataset.def;
+            skinPreviewState.current = defId;
+            rememberPickedSkinPreviewDef(defId);
+            const searchWrap = $('skin-preview-search');
+            if (searchWrap) searchWrap.classList.add('hidden');
+            renderSkinPreviewContents();
+        });
+    });
+}
+
+function renderSkinPreviewContents() {
+    const st = skinPreviewState;
+    if (!st) return;
+    const faceStage = $('skin-preview-face-stage');
+    const backStage = $('skin-preview-back-stage');
+    const sampleRow = $('skin-preview-samples');
+    if (!faceStage || !backStage || !sampleRow) return;
+    // 卡面：对手视角下「区」类皮肤显示为卡背（别人看到的你的牌面）
+    const replaced = st.oppView && skinPreviewBackAsFront(st.skinId);
+    faceStage.innerHTML = '';
+    faceStage.appendChild(createSkinPreviewCardEl(st.current, st.skinId, { faceDown: replaced }));
+    // 卡背
+    backStage.innerHTML = '';
+    backStage.appendChild(createSkinPreviewCardEl(st.current, st.skinId, { faceDown: true }));
+    // 样张栏（小卡同皮肤渲染，所见即所得）
+    sampleRow.innerHTML = '';
+    skinPreviewSampleDefs().forEach(defId => {
+        const def = getCardDef(defId);
+        const wrap = document.createElement('button');
+        wrap.type = 'button';
+        wrap.className = 'skin-preview-sample' + (defId === st.current ? ' selected' : '');
+        wrap.title = def ? String(def.name_cn || defId) : defId;
+        wrap.appendChild(createSkinPreviewCardEl(defId, st.skinId, { width: 64 }));
+        wrap.addEventListener('click', () => {
+            if (!skinPreviewState) return;
+            skinPreviewState.current = defId;
+            renderSkinPreviewContents();
+        });
+        sampleRow.appendChild(wrap);
+    });
+    const searchBtn = document.createElement('button');
+    searchBtn.type = 'button';
+    searchBtn.className = 'skin-preview-sample skin-preview-search-toggle';
+    searchBtn.textContent = '+';
+    searchBtn.title = lt({ zh: '搜索卡牌预览', en: 'Search a card to preview', fr: 'Rechercher une carte', ja: 'カードを検索してプレビュー' });
+    searchBtn.addEventListener('click', () => {
+        const wrap = $('skin-preview-search');
+        if (!wrap) return;
+        wrap.classList.toggle('hidden');
+        const input = $('skin-preview-search-input');
+        if (!wrap.classList.contains('hidden') && input) {
+            input.value = '';
+            renderSkinPreviewSearchResults('');
+            input.focus();
+        }
+    });
+    sampleRow.appendChild(searchBtn);
+}
+
+function openCardSkinPreviewModal(skinId, skinName) {
+    if (!skinId) return;
+    const samples = skinPreviewSampleDefs();
+    skinPreviewState = {
+        skinId: String(skinId),
+        current: samples[0] || 'Bone',
+        oppView: false,
+    };
+    showModal(`
+        <h3>${escapeHtml(lt({ zh: '卡牌皮肤预览', en: 'Card Skin Preview', fr: 'Aperçu du skin', ja: 'カードスキンプレビュー' }))} · ${escapeHtml(skinName || skinId)}</h3>
+        <div class="skin-preview-layout">
+            <div class="skin-preview-col">
+                <div class="skin-preview-stage-label">${escapeHtml(lt({ zh: '卡面', en: 'Face', fr: 'Face', ja: '表面' }))}</div>
+                <div class="skin-preview-stage" id="skin-preview-face-stage"></div>
+            </div>
+            <div class="skin-preview-col">
+                <div class="skin-preview-stage-label">${escapeHtml(lt({ zh: '卡背', en: 'Back', fr: 'Dos', ja: '裏面' }))}</div>
+                <div class="skin-preview-stage" id="skin-preview-back-stage"></div>
+                <label class="skin-preview-opp-toggle"><input type="checkbox" id="skin-preview-opp-view"> ${escapeHtml(lt({ zh: '对手视角（区类皮肤）', en: "Opponent's view (Zone skins)", fr: 'Vue adverse (skins Zone)', ja: '対戦相手の視点（区系スキン）' }))}</label>
+            </div>
+        </div>
+        <div class="skin-preview-search hidden" id="skin-preview-search">
+            <input type="text" id="skin-preview-search-input" maxlength="40" placeholder="${escapeHtml(lt({ zh: '搜索卡牌名…', en: 'Search card name…', fr: 'Nom de carte…', ja: 'カード名を検索…' }))}">
+            <div class="skin-preview-search-results" id="skin-preview-search-results"></div>
+        </div>
+        <div class="skin-preview-samples" id="skin-preview-samples"></div>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-primary" id="skin-preview-close">${escapeHtml(lt({ zh: '关闭', en: 'Close', fr: 'Fermer', ja: '閉じる' }))}</button>
+        </div>
+    `);
+    const content = $('modal-content');
+    if (content) content.className = 'modal-inner skin-preview-modal';
+    const closeBtn = $('skin-preview-close');
+    if (closeBtn) closeBtn.addEventListener('click', hideModal);
+    const oppToggle = $('skin-preview-opp-view');
+    if (oppToggle) {
+        oppToggle.addEventListener('change', e => {
+            if (skinPreviewState) skinPreviewState.oppView = e.target.checked;
+            renderSkinPreviewContents();
+        });
+    }
+    const searchInput = $('skin-preview-search-input');
+    if (searchInput) {
+        searchInput.addEventListener('input', e => renderSkinPreviewSearchResults(e.target.value));
+    }
+    renderSkinPreviewContents();
+}
+
 function renderCardSkinInventory() {
     const panel = $('card-skins-panel');
     if (!panel || !cardSkinInventory) return;
@@ -19346,6 +19546,9 @@ function renderCardSkinInventory() {
                     ${isEquipped
                         ? `<button class="btn btn-secondary btn-sm" data-card-skin-unequip="${escapeHtml(skinId)}">${escapeHtml(lt({ zh: '卸下', en: 'Unequip', fr: 'Retirer', ja: '解除' }))}</button>`
                         : `<button class="btn btn-primary btn-sm" data-card-skin-equip="${escapeHtml(skinId)}" ${owned ? '' : 'disabled'}>${escapeHtml(lt({ zh: '装备', en: 'Equip', fr: 'Équiper', ja: '装備' }))}</button>`}
+                    ${skinId && owned
+                        ? `<button class="mini-btn card-skin-preview-btn" data-card-skin-preview="${escapeHtml(skinId)}" data-card-skin-name="${escapeHtml(name)}">${escapeHtml(lt({ zh: '预览', en: 'Preview', fr: 'Aperçu', ja: 'プレビュー' }))}</button>`
+                        : ''}
                 </div>
             </div>
         </div>`;
@@ -19364,6 +19567,11 @@ function renderCardSkinInventory() {
             fr: 'Pas encore de skin — voyez la boutique.',
             ja: 'カードスキンがまだありません——ショップをチェック。',
         }))}</div>`}`;
+    panel.querySelectorAll('[data-card-skin-preview]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            openCardSkinPreviewModal(btn.dataset.cardSkinPreview, btn.dataset.cardSkinName);
+        });
+    });
     panel.querySelectorAll('[data-card-skin-equip]').forEach(btn => {
         btn.addEventListener('click', async () => {
             if (cardSkinInventoryBusy) return;

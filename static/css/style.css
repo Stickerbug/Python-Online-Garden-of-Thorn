@@ -22078,6 +22078,106 @@ html[data-ui-style="minimal"][data-theme="dark"] .card,
   margin: 4px 0;
 }
 .card-skin-actions { margin-top: 6px; }
+.card-skin-actions .card-skin-preview-btn { margin-left: 6px; }
+
+/* ===== 皮肤预览弹层（2026-09-29）===== */
+.modal-inner.skin-preview-modal {
+  width: min(94vw, 700px);
+  max-width: 720px;
+}
+.skin-preview-layout {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+}
+.skin-preview-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.skin-preview-stage-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+/* 装饰款（叶框等）沿 overflow:visible 超出卡框约 16px，stage 留足内边距防裁 */
+.skin-preview-stage {
+  padding: 22px 28px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+.skin-preview-stage .card { flex-shrink: 0; }
+.skin-preview-opp-toggle {
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  cursor: pointer;
+}
+.skin-preview-samples {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 10px 2px 6px;
+}
+.skin-preview-sample {
+  background: none;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  padding: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.skin-preview-sample.selected { border-color: var(--accent, #3a7d44); }
+.skin-preview-sample .card { pointer-events: none; }
+.skin-preview-search-toggle {
+  width: 72px;
+  min-height: 96px;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  border: 2px dashed var(--border-light);
+}
+.skin-preview-search {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.skin-preview-search input {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-light);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 14px;
+}
+.skin-preview-search-results {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.skin-preview-search-hit {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-light);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+.skin-preview-search-hit:hover { border-color: var(--accent, #3a7d44); }
+.skin-preview-search-empty {
+  font-size: 13px;
+  color: var(--text-muted, #999);
+}
+@media (max-width: 640px) {
+  .skin-preview-layout {
+    flex-direction: column;
+    align-items: center;
+  }
+}
 .card-skin-refresh-row { display: flex; justify-content: flex-end; padding: 6px 0 2px; }
 .card-skin-inventory { display: grid; gap: 8px; }
 .card-skin-item-meta { flex: 1; }
