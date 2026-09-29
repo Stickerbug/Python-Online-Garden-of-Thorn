@@ -12227,7 +12227,7 @@ function cardSkinById(skinId) {
 
 /* 卡面/卡背美术修订号：换图时 bump（与 GTN_STATIC_VERSION 独立，
    服务端 card_skins.py 的 URL 同步带参，避免旧 SVG 被浏览器缓存） */
-const CARD_SKIN_ART_REVISION = 2;
+const CARD_SKIN_ART_REVISION = 3;
 
 function cardSkinBackUrl(skinId) {
     const id = cardSkinById(skinId);
@@ -12460,6 +12460,8 @@ function sampleSkinBrightness(skin, rel, cardW, cardH) {
 // 中性带（底≈0.5 附近）强度渐变到 0，无死区无跳变。
 // 字色调整走 HSL 只动明度通道——保色相饱和度，不向纯黑/白混（会灰化）。
 const SKIN_INK_CONTRAST = 0.38;
+// 暗底（如蠕虫深色卡面）目标直接接近白：深底白字的感知对比优于浅底深字
+const SKIN_INK_CONTRAST_DARK = 0.66;
 const SKIN_INK_NEUTRAL_HALF = 0.12;
 
 function lumaOfRgb(rgb) {
@@ -12509,7 +12511,7 @@ function skinInkTargetLumaFor(baseRgb, bgLuma) {
     const side = bgLuma - 0.5;
     const strength = Math.min(1, Math.abs(side) / SKIN_INK_NEUTRAL_HALF);
     if (strength <= 0.001) return null; // 中性带：保持基色
-    const raw = side >= 0 ? bgLuma - SKIN_INK_CONTRAST : bgLuma + SKIN_INK_CONTRAST;
+    const raw = side >= 0 ? bgLuma - SKIN_INK_CONTRAST : Math.min(0.9, bgLuma + SKIN_INK_CONTRAST_DARK);
     const clamped = side >= 0 ? Math.min(baseLuma, raw) : Math.max(baseLuma, raw);
     const target = baseLuma + (clamped - baseLuma) * strength;
     // 与基色差太小就不动（避免整体发灰的多余调整）
