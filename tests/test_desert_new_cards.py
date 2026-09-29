@@ -171,7 +171,9 @@ class DesertNewCardsTests(unittest.TestCase):
             )
 
         self.assertTrue(result.get("success"))
-        self.assertEqual(engine.players[1].health, 25)
+        # 设计 2026-09-29：威力只加整次出牌的第一段（裂变后续迭代不带），
+        # 旧口径按裂变份数切分（ceil(P/L)/份）时的期望 25 改为 33。
+        self.assertEqual(engine.players[1].health, 33)
         self.assertEqual(engine.players[0].health, 61)
 
     def test_marble_extra_damage_uses_current_precision(self):
