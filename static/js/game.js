@@ -12392,8 +12392,6 @@ let pendingCardEffectFitFrame = 0;
 // 的皮肤图（静态，按 skinId 缓存），失败静默回落现状。
 const skinInkCanvasCache = new Map();
 const SKIN_INK_CANVAS_SIZE = 288;
-const SKIN_INK_BRIGHT = 0.60;
-const SKIN_INK_DARK = 0.40;
 
 function getSkinInkCanvasData(skinId) {
     if (!skinId) return Promise.resolve(null);
@@ -12457,23 +12455,37 @@ function sampleSkinBrightness(skin, rel, cardW, cardH) {
     return lumas[Math.floor(lumas.length / 2)];
 }
 
-function skinInkStyleFor(luma) {
-    if (luma == null) return null;
-    if (luma >= SKIN_INK_BRIGHT) {
-        const t = Math.min(1, (luma - SKIN_INK_BRIGHT) / (1 - SKIN_INK_BRIGHT));
-        return {
-            mixTo: 'black',
-            mixAmt: 0.26 + 0.26 * t,
-        };
+// 连续映射：文字每个采样位置的底色亮度 → 该处字色亮度。
+// 亮底把字压到比底暗 CONTRAST、暗底提亮到比底亮 CONTRAST；
+// 中性带（底≈0.5 附近）强度渐变到 0，无死区无跳变。
+const SKIN_INK_CONTRAST = 0.38;
+const SKIN_INK_NEUTRAL_HALF = 0.12;
+
+function lumaOfRgb(rgb) {
+    return (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255;
+}
+
+function skinInkColorForLuma(baseRgb, bgLuma) {
+    if (bgLuma == null || !Number.isFinite(bgLuma)) return null;
+    const baseLuma = lumaOfRgb(baseRgb);
+    const side = bgLuma - 0.5;
+    const strength = Math.min(1, Math.abs(side) / SKIN_INK_NEUTRAL_HALF);
+    if (strength <= 0.001) return null; // 中性带：保持基色
+    const raw = side >= 0 ? bgLuma - SKIN_INK_CONTRAST : bgLuma + SKIN_INK_CONTRAST;
+    const clamped = side >= 0 ? Math.min(baseLuma, raw) : Math.max(baseLuma, raw);
+    const target = baseLuma + (clamped - baseLuma) * strength;
+    let mixTo;
+    let amt;
+    if (target <= baseLuma) {
+        mixTo = 'black';
+        amt = baseLuma > 0.01 ? (baseLuma - target) / baseLuma : 0;
+    } else {
+        mixTo = 'white';
+        amt = baseLuma < 0.99 ? (target - baseLuma) / (1 - baseLuma) : 0;
     }
-    if (luma <= SKIN_INK_DARK) {
-        const t = Math.min(1, (SKIN_INK_DARK - luma) / SKIN_INK_DARK);
-        return {
-            mixTo: 'white',
-            mixAmt: 0.28 + 0.30 * t,
-        };
-    }
-    return null;
+    amt = Math.max(0, Math.min(0.8, amt));
+    if (amt < 0.02) return null;
+    return { mixTo, mixAmt: amt };
 }
 
 function parseRgbColor(text) {
@@ -12490,10 +12502,8 @@ function mixRgbTowards(base, target, amount) {
 function applySkinInkToNode(node, skin, cardRect) {
     const rect = node.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
-    // 字内分区：把文字横向切 2-4 条带，各自采样脚下底色、各自偏移，
-    // 用 background-clip:text 的水平渐变渲染——一个字跨亮/暗底时
-    // 左右两半自动呈现不同深浅
-    const stripes = rect.width > 28 ? 4 : (rect.width > 14 ? 3 : 2);
+    // 逐位置染色：沿文字横向每 ~3px 采样一次底色并计算该处字色，
+    // 密 stops 渐变 + background-clip:text——字跟随脚下背景连续变色
     let baseRgb = null;
     const cached = node.getAttribute('data-ink-base');
     if (cached) {
@@ -12513,16 +12523,17 @@ function applySkinInkToNode(node, skin, cardRect) {
         w: rect.width,
         h: rect.height,
     };
+    const stopsCount = Math.max(2, Math.min(24, Math.ceil(rel.w / 3)));
     const colors = [];
     let anyShift = false;
-    for (let i = 0; i < stripes; i++) {
+    for (let i = 0; i < stopsCount; i++) {
         const luma = sampleSkinBrightness(skin, {
-            x: rel.x + rel.w * (i / stripes),
+            x: rel.x + rel.w * (i / (stopsCount - 1)),
             y: rel.y,
-            w: rel.w / stripes,
+            w: Math.max(2, rel.w / stopsCount),
             h: rel.h,
         }, cardRect.width, cardRect.height);
-        const style = skinInkStyleFor(luma);
+        const style = skinInkColorForLuma(baseRgb, luma);
         if (style) anyShift = true;
         colors.push(style
             ? mixRgbTowards(baseRgb, style.mixTo, style.mixAmt)
@@ -12535,7 +12546,7 @@ function applySkinInkToNode(node, skin, cardRect) {
         return;
     }
     const stops = colors.map((color, i) => {
-        const pct = colors.length === 1 ? 0 : Math.round((i / (colors.length - 1)) * 100);
+        const pct = Math.round((i / (colors.length - 1)) * 100);
         return `${color} ${pct}%`;
     });
     node.style.setProperty('--skin-ink-color', 'transparent');
