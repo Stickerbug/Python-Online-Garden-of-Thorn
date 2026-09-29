@@ -18388,17 +18388,6 @@ class GameEngine:
             exclude_id = int(custom_vars.get('cogwheel_exclude_instance_id', -1) or -1)
         except (TypeError, ValueError):
             exclude_id = -1
-        exclude_def_id = ''
-        for zone in (getattr(ps, 'hand', []), getattr(ps, 'discard', []), getattr(ps, 'exile', [])):
-            for c in list(zone or []):
-                try:
-                    if int(getattr(c, 'instance_id', -1) or -1) == exclude_id:
-                        exclude_def_id = str(getattr(c, 'def_id', '') or '')
-                        break
-                except Exception:
-                    continue
-            if exclude_def_id:
-                break
         played_ids = list(getattr(ps, 'cards_played_this_turn_instance_ids', []) or [])
         returned = []
         for instance_id in played_ids:
@@ -18422,9 +18411,10 @@ class GameEngine:
                 continue
             if not self._card_selectable_by_action(found):
                 continue
-            if self._card_has_flag(found, 'excluded_from_cogwheel_return'):
-                continue
-            if exclude_def_id and str(getattr(found, 'def_id', '') or '') == exclude_def_id:
+            # 设计 2026-09-29：过滤口径从「非齿轮牌」改为「非共生牌」——已有共生
+            # （实例或卡定义）的牌不回收；齿轮家族不再特判（家族标签/同名排除
+            # 删除，其他齿轮副本作为普通非共生牌照常回收并获得共生）。
+            if 'symbiosis' in self._effective_card_flags(found):
                 continue
             if not ps.can_add_to_hand():
                 continue
