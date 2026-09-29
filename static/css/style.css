@@ -21992,6 +21992,7 @@ html[data-ui-style="minimal"][data-theme="dark"] .card,
 .card.card-skin-back-card {
   overflow: visible;
   background: transparent;
+  min-height: 0; /* 同 .card-skin-backed：防 overflow:visible 恢复内容最小高度破坏 63:88 */
 }
 .card.card-skin-back-card::after {
   display: none; /* SVG 自带完整卡框描边，去掉通用边框线 */
@@ -22098,6 +22099,10 @@ html[data-ui-style="minimal"][data-theme="dark"] .card,
   background: transparent;
   overflow: visible;
   isolation: isolate;
+  /* overflow:visible 会让 flex 列容器恢复内容最小高度（overflow 非 visible
+     时自动最小尺寸才归零），长文本卡（重构机等）被撑高破坏 63:88 比例、
+     皮肤图盖不住上下边。min-height:0 恢复锁定；装饰物照常溢出显示。 */
+  min-height: 0;
 }
 .card.card-skin-backed::after {
   /* 类型颜色边框不隐藏，垫到皮肤图（z-index:-1）之下：
