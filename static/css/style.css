@@ -22008,9 +22008,8 @@ html[data-ui-style="minimal"][data-theme="dark"] .card,
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 184%;
-  height: 131.3%;
-  object-fit: fill;
+  width: 182.3%;
+  height: auto;
   transform: translate(-50%, -50%);
   pointer-events: none;
   user-select: none;
@@ -22039,7 +22038,7 @@ html[data-ui-style="minimal"][data-theme="dark"] .card,
   gap: 6px;
   flex-shrink: 0;
 }
-/* 缩略图同样把卡框映射到容器矩形（装饰物在小图上裁掉即可） */
+/* 缩略图同样按 182.3% 放大让卡框铺满（装饰物在小图上裁掉即可） */
 .card-skin-preview-face,
 .card-skin-preview-back,
 .card-skin-thumb {
@@ -22064,9 +22063,8 @@ html[data-ui-style="minimal"][data-theme="dark"] .card,
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 184%;
-  height: 131.3%;
-  object-fit: fill;
+  width: 182.3%;
+  height: auto;
   transform: translate(-50%, -50%);
   display: block;
   pointer-events: none;
@@ -22117,14 +22115,8 @@ html[data-ui-style="minimal"] .card.card-skin-no-corner::before,
   position: absolute;
   left: 50%;
   top: 50%;
-  /* 皮肤 SVG 的卡框内容占 viewBox 的 54.85% 宽 × 76.90% 高，按这两个
-     比例把卡框映射到卡面矩形：宽度 184%（≈100/54.85%），高度按卡
-     【实际高度】的 131.3%（≈100/76.90%）+ object-fit:fill——效果文字
-     把卡撑高（重构机等长文本卡）时皮肤跟随拉伸，类型边框不再露出；
-     整体放大 0.9% 覆盖亚像素舍入。装饰物仍在卡框外的边距里照常溢出。 */
-  width: 184%;
-  height: 131.3%;
-  object-fit: fill;
+  width: 182.3%;
+  height: auto;
   transform: translate(-50%, -50%);
   z-index: -1;
   pointer-events: none;
