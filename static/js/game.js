@@ -12455,9 +12455,10 @@ function sampleSkinBrightness(skin, rel, cardW, cardH) {
     return lumas[Math.floor(lumas.length / 2)];
 }
 
-// 连续映射：文字每个采样位置的底色亮度 → 该处字色亮度。
+// 连续映射：文字每个采样位置的底色亮度 → 该处字色明度。
 // 亮底把字压到比底暗 CONTRAST、暗底提亮到比底亮 CONTRAST；
 // 中性带（底≈0.5 附近）强度渐变到 0，无死区无跳变。
+// 字色调整走 HSL 只动明度通道——保色相饱和度，不向纯黑/白混（会灰化）。
 const SKIN_INK_CONTRAST = 0.38;
 const SKIN_INK_NEUTRAL_HALF = 0.12;
 
@@ -12465,7 +12466,51 @@ function lumaOfRgb(rgb) {
     return (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255;
 }
 
-function skinInkColorForLuma(baseRgb, bgLuma) {
+function rgbToHsl(rgb) {
+    const r = rgb[0] / 255, g = rgb[1] / 255, b = rgb[2] / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    const l = (max + min) / 2;
+    if (max === min) return [0, 0, l];
+    const d = max - min;
+    const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    let h;
+    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+    else if (max === g) h = ((b - r) / d + 2) / 6;
+    else h = ((r - g) / d + 4) / 6;
+    return [h, s, l];
+}
+
+function hueToRgb(p, q, t) {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+}
+
+function hslToRgb(h, s, l) {
+    if (s === 0) {
+        const v = Math.round(l * 255);
+        return [v, v, v];
+    }
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    return [
+        Math.round(hueToRgb(p, q, h + 1 / 3) * 255),
+        Math.round(hueToRgb(p, q, h) * 255),
+        Math.round(hueToRgb(p, q, h - 1 / 3) * 255),
+    ];
+}
+
+// 只调明度，色相饱和度原样保留：绿字变深绿/亮绿而不是灰绿
+function adjustRgbTowardsLuma(baseRgb, targetLuma) {
+    const [h, s] = rgbToHsl(baseRgb);
+    const clamped = Math.max(0.06, Math.min(0.94, targetLuma));
+    return hslToRgb(h, s, clamped);
+}
+
+function skinInkTargetLumaFor(baseRgb, bgLuma) {
     if (bgLuma == null || !Number.isFinite(bgLuma)) return null;
     const baseLuma = lumaOfRgb(baseRgb);
     const side = bgLuma - 0.5;
@@ -12474,29 +12519,15 @@ function skinInkColorForLuma(baseRgb, bgLuma) {
     const raw = side >= 0 ? bgLuma - SKIN_INK_CONTRAST : bgLuma + SKIN_INK_CONTRAST;
     const clamped = side >= 0 ? Math.min(baseLuma, raw) : Math.max(baseLuma, raw);
     const target = baseLuma + (clamped - baseLuma) * strength;
-    let mixTo;
-    let amt;
-    if (target <= baseLuma) {
-        mixTo = 'black';
-        amt = baseLuma > 0.01 ? (baseLuma - target) / baseLuma : 0;
-    } else {
-        mixTo = 'white';
-        amt = baseLuma < 0.99 ? (target - baseLuma) / (1 - baseLuma) : 0;
-    }
-    amt = Math.max(0, Math.min(0.8, amt));
-    if (amt < 0.02) return null;
-    return { mixTo, mixAmt: amt };
+    // 与基色差太小就不动（避免整体发灰的多余调整）
+    if (Math.abs(target - baseLuma) < 0.02) return null;
+    return target;
 }
 
 function parseRgbColor(text) {
     const m = /rgba?\((\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s]+([\d.]+))?\)/.exec(String(text || ''));
     if (!m) return null;
     return [Number(m[1]), Number(m[2]), Number(m[3])];
-}
-
-function mixRgbTowards(base, target, amount) {
-    const to = target === 'white' ? 255 : 0;
-    return `rgb(${Math.round(base[0] + (to - base[0]) * amount)}, ${Math.round(base[1] + (to - base[1]) * amount)}, ${Math.round(base[2] + (to - base[2]) * amount)})`;
 }
 
 function applySkinInkToNode(node, skin, cardRect) {
@@ -12524,19 +12555,24 @@ function applySkinInkToNode(node, skin, cardRect) {
         h: rect.height,
     };
     const stopsCount = Math.max(2, Math.min(24, Math.ceil(rel.w / 3)));
+    // 采样收缩到笔画核心区（垂直 25%-85%）：行高含行距空白，骑明暗边界时
+    // 空白侧的深/浅色不该把整行字色拉偏
+    const coreY = rel.y + rel.h * 0.25;
+    const coreH = rel.h * 0.6;
     const colors = [];
     let anyShift = false;
     for (let i = 0; i < stopsCount; i++) {
         const luma = sampleSkinBrightness(skin, {
             x: rel.x + rel.w * (i / (stopsCount - 1)),
-            y: rel.y,
+            y: coreY,
             w: Math.max(2, rel.w / stopsCount),
-            h: rel.h,
+            h: coreH,
         }, cardRect.width, cardRect.height);
-        const style = skinInkColorForLuma(baseRgb, luma);
-        if (style) anyShift = true;
-        colors.push(style
-            ? mixRgbTowards(baseRgb, style.mixTo, style.mixAmt)
+        const target = skinInkTargetLumaFor(baseRgb, luma);
+        const adjusted = target != null ? adjustRgbTowardsLuma(baseRgb, target) : null;
+        if (adjusted) anyShift = true;
+        colors.push(adjusted
+            ? `rgb(${adjusted[0]}, ${adjusted[1]}, ${adjusted[2]})`
             : `rgb(${baseRgb[0]}, ${baseRgb[1]}, ${baseRgb[2]})`);
     }
     node.classList.toggle('skin-ink-live', anyShift);
@@ -12545,9 +12581,13 @@ function applySkinInkToNode(node, skin, cardRect) {
         node.style.removeProperty('--skin-ink-gradient');
         return;
     }
-    const stops = colors.map((color, i) => {
-        const pct = Math.round((i / (colors.length - 1)) * 100);
-        return `${color} ${pct}%`;
+    // 硬边渐变：每采样段纯色、边界锐利——背景哪里变字立刻变，不做平滑过渡
+    const seg = 100 / colors.length;
+    const stops = [];
+    colors.forEach((color, i) => {
+        const start = (i * seg).toFixed(2);
+        const end = ((i + 1) * seg).toFixed(2);
+        stops.push(`${color} ${start}%`, `${color} ${end}%`);
     });
     node.style.setProperty('--skin-ink-color', 'transparent');
     node.style.setProperty('--skin-ink-gradient', `linear-gradient(90deg, ${stops.join(', ')})`);
