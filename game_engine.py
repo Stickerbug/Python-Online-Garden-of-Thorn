@@ -23386,6 +23386,12 @@ class GameEngine:
             self._run_effect_list(owner_id, body_card, body, None, ctx)
         return True
 
+    # batch AM（a17d574）清理类属性时误删了定义，_atomic_on_event 里的
+    # self.ON_EVENT_EFFECTS 引用残留——魔法遗物触发必 AttributeError，
+    # 引擎记为 mod runtime error（2026-09-29 定位，恢复原定义）。
+    ON_EVENT_TRIGGERS = ('play', 'this_play', 'after_all', 'equipment_trigger')
+    ON_EVENT_EFFECTS = ('magic_relic',)
+
     def _atomic_on_event(self, player_id, card, params, log, choice, context):
         # Round 47 / 批次 AK：``response`` 分支——数据声明的伤害响应窗口。
         # 承接两条"管线钩子"原子（旧名见 `REMOVED_ATOMIC_OPS`）：
