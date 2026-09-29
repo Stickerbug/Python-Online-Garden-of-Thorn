@@ -12503,13 +12503,6 @@ function hslToRgb(h, s, l) {
     ];
 }
 
-// 只调明度，色相饱和度原样保留：绿字变深绿/亮绿而不是灰绿
-function adjustRgbTowardsLuma(baseRgb, targetLuma) {
-    const [h, s] = rgbToHsl(baseRgb);
-    const clamped = Math.max(0.06, Math.min(0.94, targetLuma));
-    return hslToRgb(h, s, clamped);
-}
-
 function skinInkTargetLumaFor(baseRgb, bgLuma) {
     if (bgLuma == null || !Number.isFinite(bgLuma)) return null;
     const baseLuma = lumaOfRgb(baseRgb);
@@ -12530,18 +12523,80 @@ function parseRgbColor(text) {
     return [Number(m[1]), Number(m[2]), Number(m[3])];
 }
 
-function applySkinInkToNode(node, skin, cardRect) {
+// 2D 字色映射图：整卡生成一张「位置→字色」图（该处底色亮度映射后的
+// 基色，中性/近透明区写基色），span 用 background-size=卡尺寸 +
+// background-position=-卡内偏移 取到自己脚下那块颜色——颜色边界与
+// 皮肤图案的真实轮廓（任意形状/斜边）一致，而非竖直条带。
+// 图按 (skinId, 基色) 缓存，160×224 低分辨率足够（颜色映射是低频信息）。
+const skinInkMapCache = new Map();
+const SKIN_INK_MAP_W = 160;
+const SKIN_INK_MAP_H = 224;
+const SKIN_INK_MAP_CACHE_MAX = 48;
+const SKIN_INK_CARD_RATIO = 88 / 63;
+
+function getSkinInkMapDataUrl(skinId, skin, baseRgb) {
+    const key = `${skinId}|${baseRgb.join(',')}`;
+    if (skinInkMapCache.has(key)) {
+        return skinInkMapCache.get(key);
+    }
+    const cv = document.createElement('canvas');
+    cv.width = SKIN_INK_MAP_W;
+    cv.height = SKIN_INK_MAP_H;
+    const ctx = cv.getContext('2d');
+    const out = ctx.createImageData(SKIN_INK_MAP_W, SKIN_INK_MAP_H);
+    const px = skin.data.data;
+    const size = skin.size;
+    const imgSize = 1.823; // 皮肤图边长（卡宽单位），与 CSS 同口径
+    const offX = (1 - imgSize) / 2;
+    const offY = (SKIN_INK_CARD_RATIO - imgSize) / 2;
+    const [h, s] = rgbToHsl(baseRgb);
+    const neutralR = baseRgb[0], neutralG = baseRgb[1], neutralB = baseRgb[2];
+    for (let y = 0; y < SKIN_INK_MAP_H; y++) {
+        const cardYu = ((y + 0.5) / SKIN_INK_MAP_H) * SKIN_INK_CARD_RATIO;
+        for (let x = 0; x < SKIN_INK_MAP_W; x++) {
+            const cardXu = (x + 0.5) / SKIN_INK_MAP_W;
+            const sx = ((cardXu - offX) / imgSize) * size;
+            const sy = ((cardYu - offY) / imgSize) * size;
+            const i = (y * SKIN_INK_MAP_W + x) * 4;
+            let r = neutralR, g = neutralG, b = neutralB;
+            if (sx >= 0 && sx < size && sy >= 0 && sy < size) {
+                const si = ((sy | 0) * size + (sx | 0)) * 4;
+                const a = px[si + 3];
+                if (a >= 70) {
+                    const luma = (0.299 * px[si] + 0.587 * px[si + 1] + 0.114 * px[si + 2]) / 255;
+                    const blended = luma * (a / 255) + 0.5 * (1 - a / 255);
+                    const target = skinInkTargetLumaFor(baseRgb, blended);
+                    if (target != null) {
+                        const rgb = hslToRgb(h, s, Math.max(0.06, Math.min(0.94, target)));
+                        r = rgb[0]; g = rgb[1]; b = rgb[2];
+                    }
+                }
+            }
+            out.data[i] = r;
+            out.data[i + 1] = g;
+            out.data[i + 2] = b;
+            out.data[i + 3] = 255;
+        }
+    }
+    ctx.putImageData(out, 0, 0);
+    const url = cv.toDataURL('image/png');
+    skinInkMapCache.set(key, url);
+    while (skinInkMapCache.size > SKIN_INK_MAP_CACHE_MAX) {
+        skinInkMapCache.delete(skinInkMapCache.keys().next().value);
+    }
+    return url;
+}
+
+function applySkinInkToNode(node, skin, cardRect, skinId) {
     const rect = node.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
-    // 逐位置染色：沿文字横向每 ~3px 采样一次底色并计算该处字色，
-    // 密 stops 渐变 + background-clip:text——字跟随脚下背景连续变色
     let baseRgb = null;
     const cached = node.getAttribute('data-ink-base');
     if (cached) {
         baseRgb = parseRgbColor(cached);
     } else {
         node.style.removeProperty('--skin-ink-color');
-        node.style.removeProperty('--skin-ink-gradient');
+        node.style.removeProperty('--skin-ink-bg-image');
         baseRgb = parseRgbColor(getComputedStyle(node).color);
         if (baseRgb) {
             node.setAttribute('data-ink-base', `rgb(${baseRgb[0]}, ${baseRgb[1]}, ${baseRgb[2]})`);
@@ -12554,50 +12609,45 @@ function applySkinInkToNode(node, skin, cardRect) {
         w: rect.width,
         h: rect.height,
     };
-    const stopsCount = Math.max(2, Math.min(24, Math.ceil(rel.w / 3)));
-    // 采样收缩到笔画核心区（垂直 25%-85%）：行高含行距空白，骑明暗边界时
-    // 空白侧的深/浅色不该把整行字色拉偏
+    // 探测（笔画核心区多点）：区域底色全中性则不挂图
     const coreY = rel.y + rel.h * 0.25;
     const coreH = rel.h * 0.6;
-    const colors = [];
-    let anyShift = false;
-    for (let i = 0; i < stopsCount; i++) {
+    let needShift = false;
+    for (const fx of [0.25, 0.5, 0.75]) {
         const luma = sampleSkinBrightness(skin, {
-            x: rel.x + rel.w * (i / (stopsCount - 1)),
+            x: rel.x + rel.w * fx,
             y: coreY,
-            w: Math.max(2, rel.w / stopsCount),
+            w: Math.max(2, rel.w * 0.3),
             h: coreH,
         }, cardRect.width, cardRect.height);
-        const target = skinInkTargetLumaFor(baseRgb, luma);
-        const adjusted = target != null ? adjustRgbTowardsLuma(baseRgb, target) : null;
-        if (adjusted) anyShift = true;
-        colors.push(adjusted
-            ? `rgb(${adjusted[0]}, ${adjusted[1]}, ${adjusted[2]})`
-            : `rgb(${baseRgb[0]}, ${baseRgb[1]}, ${baseRgb[2]})`);
+        if (skinInkTargetLumaFor(baseRgb, luma) != null) {
+            needShift = true;
+            break;
+        }
     }
-    node.classList.toggle('skin-ink-live', anyShift);
-    if (!anyShift) {
+    node.classList.toggle('skin-ink-live', needShift);
+    if (!needShift) {
         node.style.removeProperty('--skin-ink-color');
-        node.style.removeProperty('--skin-ink-gradient');
+        node.style.removeProperty('--skin-ink-bg-image');
         return;
     }
-    // 硬边渐变：每采样段纯色、边界锐利——背景哪里变字立刻变，不做平滑过渡
-    const seg = 100 / colors.length;
-    const stops = [];
-    colors.forEach((color, i) => {
-        const start = (i * seg).toFixed(2);
-        const end = ((i + 1) * seg).toFixed(2);
-        stops.push(`${color} ${start}%`, `${color} ${end}%`);
-    });
+    let url = getSkinInkMapDataUrl(skinId, skin, baseRgb);
     node.style.setProperty('--skin-ink-color', 'transparent');
-    node.style.setProperty('--skin-ink-gradient', `linear-gradient(90deg, ${stops.join(', ')})`);
+    node.style.setProperty('--skin-ink-bg-image', `url("${url}")`);
+    node.style.setProperty('--skin-ink-bg-size', `${cardRect.width.toFixed(1)}px ${cardRect.height.toFixed(1)}px`);
+    node.style.setProperty('--skin-ink-bg-pos', `${(-rel.x).toFixed(1)}px ${(-rel.y).toFixed(1)}px`);
 }
-
-// 效果文字字符级 wrap：只动 TEXT_NODE（chips/图标/br 不碰），
-// 连续 ASCII 数字字母为一组，空白保留裸文本，其余（中日文单字/符号）逐字
+// 效果文字字符级 wrap：只动 TEXT_NODE，内嵌 Chip（inline-card-chip）与
+// 其标签子树、图标/br 不碰；连续 ASCII 数字字母为一组，空白保留裸文本，
+// 其余（中日文单字/符号）逐字
 function wrapSkinInkTextNodes(container) {
     const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
-        acceptNode: n => (n.nodeValue && n.nodeValue.trim() ? 1 : 2),
+        acceptNode: n => {
+            if (!n.nodeValue || !n.nodeValue.trim()) return 2;
+            const parent = n.parentElement;
+            if (parent && parent.closest('.inline-card-chip, .card-flag')) return 2;
+            return 1;
+        },
     });
     const nodes = [];
     while (walker.nextNode()) nodes.push(walker.currentNode);
@@ -12631,14 +12681,14 @@ function applySkinTextContrast(cardEl) {
             const current = cardEl.getBoundingClientRect();
             if (Math.abs(current.width - cardRect.width) > 0.5) return; // 尺寸已变，等下一轮
             cardEl.querySelectorAll(
-                ':scope .card-name, :scope .card-type-label, :scope .card-english-name, :scope .card-bottom-zone .card-flags'
-            ).forEach(node => applySkinInkToNode(node, skin, cardRect));
+                ':scope .card-name, :scope .card-type-label, :scope .card-english-name'
+            ).forEach(node => applySkinInkToNode(node, skin, cardRect, skinId));
             const effectEl = cardEl.querySelector(':scope > .card-effect');
             if (effectEl && cardRect.width >= 100) {
                 if (!effectEl.querySelector(':scope .skin-ink')) {
                     wrapSkinInkTextNodes(effectEl);
                 }
-                effectEl.querySelectorAll('.skin-ink').forEach(span => applySkinInkToNode(span, skin, cardRect));
+                effectEl.querySelectorAll('.skin-ink').forEach(span => applySkinInkToNode(span, skin, cardRect, skinId));
             }
         }).catch(() => {});
     } catch (_) {}

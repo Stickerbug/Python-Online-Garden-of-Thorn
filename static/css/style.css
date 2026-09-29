@@ -22228,12 +22228,16 @@ html[data-ui-style="minimal"] .card.card-skin-no-corner::before,
   user-select: none;
 }
 
-/* 皮肤卡文字对比度自适应：JS 采样皮肤图底色亮度后按文字横向条带各自
-   偏移字色，用 background-clip:text 的水平渐变渲染——单个字跨亮/暗
-   底时左右两半自动不同深浅（用户 2026-09-29 要求）。无描边无阴影，
-   只有字色偏移；变量未设时零变化。 */
+/* 皮肤卡文字对比度自适应（2D 映射图版）：整卡生成一张「位置→字色」图
+   （该处底色亮度→HSL 只调明度，色相饱和度保留），文字元素用
+   background-size=卡尺寸 + background-position=卡内偏移 取到自己脚下
+   那块颜色——字色边界跟随皮肤图案的真实轮廓（任意形状），非竖直条带。
+   内嵌 Chip 及其标签不参与。变量未设时零变化。 */
 .card.card-skin-backed .skin-ink-live {
-  background-image: var(--skin-ink-gradient, none);
+  background-image: var(--skin-ink-bg-image, none);
+  background-size: var(--skin-ink-bg-size, 100% 100%);
+  background-position: var(--skin-ink-bg-pos, 0 0);
+  background-repeat: no-repeat;
   -webkit-background-clip: text;
   background-clip: text;
   color: var(--skin-ink-color, inherit);
