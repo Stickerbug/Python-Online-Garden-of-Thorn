@@ -12465,7 +12465,6 @@ function skinInkStyleFor(luma) {
             mixTo: 'black',
             mixAmt: 0.26 + 0.26 * t,
             shadow: `rgba(12, 16, 12, ${(0.40 + 0.24 * t).toFixed(2)})`,
-            stroke: `rgba(22, 28, 22, ${(0.34 + 0.26 * t).toFixed(2)})`,
         };
     }
     if (luma <= SKIN_INK_DARK) {
@@ -12474,7 +12473,6 @@ function skinInkStyleFor(luma) {
             mixTo: 'white',
             mixAmt: 0.28 + 0.30 * t,
             shadow: `rgba(242, 246, 242, ${(0.34 + 0.24 * t).toFixed(2)})`,
-            stroke: `rgba(238, 242, 238, ${(0.30 + 0.24 * t).toFixed(2)})`,
         };
     }
     return null;
@@ -12505,7 +12503,6 @@ function applySkinInkToNode(node, skin, cardRect) {
     if (!style) {
         node.style.removeProperty('--skin-ink-color');
         node.style.removeProperty('--skin-ink-shadow');
-        node.style.removeProperty('--skin-ink-stroke');
         return;
     }
     let baseRgb = null;
@@ -12521,7 +12518,6 @@ function applySkinInkToNode(node, skin, cardRect) {
         node.style.setProperty('--skin-ink-color', mixRgbTowards(baseRgb, style.mixTo, style.mixAmt));
     }
     node.style.setProperty('--skin-ink-shadow', `0 0.5cqi 1.5cqi ${style.shadow}`);
-    node.style.setProperty('--skin-ink-stroke', `0.24cqi ${style.stroke}`);
 }
 
 // 效果文字字符级 wrap：只动 TEXT_NODE（chips/图标/br 不碰），
