@@ -951,7 +951,7 @@ class GameEngine:
         },
         7: {'id': 7, 'name': '先手压制', 'desc': '必定先手，先手回复7E并抽5张牌', 'position': 3},
         9: {'id': 9, 'name': '多重瓣', 'desc': '多子瓣牌子瓣+1，将3张[[card:Dust|flag=exile]]随机洗入抽牌堆', 'position': 1},
-        10: {'id': 10, 'name': '魔力加速', 'desc': '每打出2张不消耗[[icon:M]]的牌，回复1[[icon:M]]', 'position': 1},
+        10: {'id': 10, 'name': '魔力加速', 'desc': '每回合打出的第奇数张不消耗[[icon:M]]的牌，回复1[[icon:M]]', 'position': 1},
         11: {'id': 11, 'name': '花序编排', 'desc': '调整自己抽牌堆的顺序；本局始终可见抽牌堆顺序', 'position': 2},
         12: {'id': 12, 'name': '众生平等', 'desc': '自己回合结束时，对自己造成5[[icon:D]]，并对每名其他可选中玩家造成8[[icon:D]]', 'position': 3},
     }
@@ -5894,11 +5894,12 @@ class GameEngine:
             custom_vars.pop('setup_magic_acceleration_last_gain', None)
             custom_vars['setup_magic_acceleration_last_instance_id'] = -1
             return
-        previous_count = int(custom_vars.get('setup_magic_acceleration_play_count', 0) or 0) % 2
+        # 设计 2026-09-29：改为「每回合打出的第奇数张不消耗M的牌回1M」——
+        # 计数按本回合的无M费出牌计（回合开始清零），第1/3/5…张回魔。
+        previous_count = int(custom_vars.get('setup_magic_acceleration_play_count', 0) or 0)
         next_count = previous_count + 1
         gained = 0
-        if next_count >= 2:
-            next_count = 0
+        if next_count % 2 == 1:
             before_magic = ps.magic
             ps.gain_magic(1)
             gained = max(0, ps.magic - before_magic)
@@ -5908,6 +5909,18 @@ class GameEngine:
         custom_vars['setup_magic_acceleration_last_before'] = previous_count
         custom_vars['setup_magic_acceleration_last_gain'] = gained
         custom_vars['setup_magic_acceleration_last_instance_id'] = int(getattr(card, 'instance_id', 0) or 0)
+
+    def _reset_magic_acceleration_turn_count(self, player_id: int):
+        """每回合开始清零「本回合无M费出牌」计数（设计 2026-09-29）。"""
+        if not self._valid_player_id(player_id):
+            return
+        custom_vars = self.players[player_id].custom_vars
+        if not isinstance(custom_vars, dict):
+            return
+        custom_vars.pop('setup_magic_acceleration_play_count', None)
+        custom_vars.pop('setup_magic_acceleration_last_before', None)
+        custom_vars.pop('setup_magic_acceleration_last_gain', None)
+        custom_vars.pop('setup_magic_acceleration_last_instance_id', None)
 
     def _is_builtin_opening_event(self, event_id) -> bool:
         return isinstance(event_id, int) or (isinstance(event_id, str) and event_id.isdigit())
@@ -6108,7 +6121,7 @@ class GameEngine:
         elif event_id == 10:
             ps.custom_vars['setup_magic_acceleration'] = 1
             ps.custom_vars['setup_magic_acceleration_play_count'] = 0
-            self.log_msg(f"{self.pn(player_id)}【魔力加速】：每打出2张不消耗M的牌回复1M")
+            self.log_msg(f"{self.pn(player_id)}【魔力加速】：每回合打出的第奇数张不消耗M的牌回复1M")
         elif event_id == 11:
             ordered_def_ids = list(sub.get('deck_order_def_ids') or []) if isinstance(sub, dict) else []
             if ordered_def_ids:
@@ -8789,7 +8802,7 @@ class GameEngine:
             return
         custom_vars['setup_magic_acceleration_play_count'] = int(
             custom_vars.get('setup_magic_acceleration_last_before', 0) or 0
-        ) % 2
+        )
         gained = max(0, int(custom_vars.get('setup_magic_acceleration_last_gain', 0) or 0))
         custom_vars.pop('setup_magic_acceleration_last_before', None)
         custom_vars.pop('setup_magic_acceleration_last_gain', None)
@@ -18527,6 +18540,8 @@ class GameEngine:
             self.players[player_id].custom_vars.pop('jurassic_magic_tooth_damage_this_turn', None)
         except Exception:
             pass
+        # 设计 2026-09-29：魔力加速改为「每回合第奇数张无M费牌回1M」，计数按回合清零。
+        self._reset_magic_acceleration_turn_count(player_id)
         # 设计 9.29：ygg 无敌到「触发玩家下个回合开始」消失——到期的可能是
         # 以当前玩家为触发者的其他玩家，逐个清除。
         for expiring_id in self._expiring_invincible_player_ids_on_turn_start(player_id):

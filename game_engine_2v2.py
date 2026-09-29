@@ -2069,6 +2069,8 @@ class GameEngine2v2(GameEngine):
             self.players[player_id].custom_vars.pop('jurassic_magic_tooth_damage_this_turn', None)
         except Exception:
             pass
+        # 设计 2026-09-29：魔力加速改为「每回合第奇数张无M费牌回1M」，计数按回合清零。
+        self._reset_magic_acceleration_turn_count(player_id)
         # 设计 9.29：ygg 无敌到「触发玩家下个回合开始」消失——到期的可能是
         # 以当前玩家为触发者的其他玩家，逐个清除。
         for expiring_id in self._expiring_invincible_player_ids_on_turn_start(player_id):
