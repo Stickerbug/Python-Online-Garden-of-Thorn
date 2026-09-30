@@ -12227,7 +12227,7 @@ function cardSkinById(skinId) {
 
 /* 卡面/卡背美术修订号：换图时 bump（与 GTN_STATIC_VERSION 独立，
    服务端 card_skins.py 的 URL 同步带参，避免旧 SVG 被浏览器缓存） */
-const CARD_SKIN_ART_REVISION = 4;
+const CARD_SKIN_ART_REVISION = 5;
 
 function cardSkinBackUrl(skinId) {
     const id = cardSkinById(skinId);
@@ -12453,10 +12453,11 @@ function warmSkinInkMaps(skinId, skin) {
 }
 
 // 连续映射：文字每个采样位置的底色亮度 → 该处字色明度。
-// 亮底把字压到比底暗 CONTRAST、暗底提亮到比底亮 CONTRAST；
+// 暗底提亮到比底亮 SKIN_INK_CONTRAST_DARK；亮底压深到「对比度方程解出的
+// 明度差」以下（见 skinInkLightDeltaFor，绿系色会自动更深）。
 // 中性带（底≈0.5 附近）强度渐变到 0，无死区无跳变。
 // 字色调整走 HSL 只动明度通道——保色相饱和度，不向纯黑/白混（会灰化）。
-const SKIN_INK_CONTRAST = 0.38;
+// 淡彩皮肤路线：淡底（0.8+）配接近黑的字，对比 4.6+。
 // 暗底（如蠕虫深色卡面）目标直接接近白：深底白字的感知对比优于浅底深字
 const SKIN_INK_CONTRAST_DARK = 0.66;
 const SKIN_INK_NEUTRAL_HALF = 0.12;
@@ -12502,19 +12503,55 @@ function hslToRgb(h, s, l) {
     ];
 }
 
+function wcagContrastRatio(rgbA, rgbB) {
+    const f = v => {
+        v /= 255;
+        return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    };
+    const la = 0.2126 * f(rgbA[0]) + 0.7152 * f(rgbA[1]) + 0.0722 * f(rgbA[2]);
+    const lb = 0.2126 * f(rgbB[0]) + 0.7152 * f(rgbB[1]) + 0.0722 * f(rgbB[2]);
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+// 亮底所需明度差按基色解对比度方程：绿系（青/薄荷）的 WCAG 亮度偏"热"，
+// 同样明度差换到的对比度更少，固定 0.62 对 Bloom 绿只到 ~3。在锚点底色
+// (1.0 纯白——最亮可能底) 上二分解出「对比度≥4.6」的最大明度取差值：
+// 实际底色 ≤1.0，目标只会比解更深、对比只高不低。按基色缓存。
+const SKIN_INK_LIGHT_BG_REF = 1.0;
+const SKIN_INK_LIGHT_TARGET_RATIO = 4.6;
+const skinInkLightDeltaCache = new Map();
+function skinInkLightDeltaFor(baseRgb) {
+    const key = baseRgb.join(',');
+    if (skinInkLightDeltaCache.has(key)) return skinInkLightDeltaCache.get(key);
+    const [h, s] = rgbToHsl(baseRgb);
+    const refGrey = [Math.round(SKIN_INK_LIGHT_BG_REF * 255), Math.round(SKIN_INK_LIGHT_BG_REF * 255), Math.round(SKIN_INK_LIGHT_BG_REF * 255)];
+    let lo = 0.06, hi = 0.9;
+    for (let i = 0; i < 18; i++) {
+        const mid = (lo + hi) / 2;
+        if (wcagContrastRatio(hslToRgb(h, s, mid), refGrey) >= SKIN_INK_LIGHT_TARGET_RATIO) lo = mid;
+        else hi = mid;
+    }
+    const delta = Math.max(0.3, SKIN_INK_LIGHT_BG_REF - lo);
+    skinInkLightDeltaCache.set(key, delta);
+    return delta;
+}
+
 function skinInkTargetLumaFor(baseRgb, bgLuma, full) {
     if (bgLuma == null || !Number.isFinite(bgLuma)) return null;
     const baseLuma = lumaOfRgb(baseRgb);
     const side = bgLuma - 0.5;
     const strength = Math.min(1, Math.abs(side) / SKIN_INK_NEUTRAL_HALF);
     if (strength <= 0.001) return null; // 中性带：保持基色
-    const raw = side >= 0 ? bgLuma - SKIN_INK_CONTRAST : Math.min(0.9, bgLuma + SKIN_INK_CONTRAST_DARK);
+    const raw = side >= 0
+        ? bgLuma - skinInkLightDeltaFor(baseRgb)
+        : Math.min(0.9, bgLuma + SKIN_INK_CONTRAST_DARK);
     const clamped = side >= 0 ? Math.min(baseLuma, raw) : Math.max(baseLuma, raw);
-    // 状态涂色字（毒绿/火橙等高饱和识别色）偏移收窄：深底上提亮到近白
-    // 会洗掉识别感，只提一部分保持彩色可读。full=true 跳过收窄（消耗
-    // 数字：识别感由圆圈边框承担，数字本身要足够醒目）
+    // 状态涂色字（毒绿/火橙等高饱和识别色）偏移收窄只用于暗底提亮——
+    // 提到近白会洗掉识别感。亮底压深不洗色（深红/深绿色相依然明确），
+    // 且明度差已按对比度方程解出，不再二次打折。full=true 跳过收窄
+    // （消耗数字：识别感由圆圈边框承担）
     const [, sat] = rgbToHsl(baseRgb);
-    const satScale = (sat > 0.25 && !full) ? 0.55 : 1;
+    const satScale = (sat > 0.25 && !full && side < 0) ? 0.55 : 1;
     const target = baseLuma + (clamped - baseLuma) * strength * satScale;
     // 与基色差太小就不动（避免整体发灰的多余调整）
     if (Math.abs(target - baseLuma) < 0.02) return null;
