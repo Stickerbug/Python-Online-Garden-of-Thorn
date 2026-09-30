@@ -12388,14 +12388,13 @@ let pendingCardEffectFitFrame = 0;
 // 自动采样皮肤图在文字区域的底色亮度，向对比度更大的方向偏移：
 // 亮底（金叶）压暗字+深衬，暗底提亮字+白衬，中间带保持现状零变化。
 // 元素级（卡名/英文副名/类型标签/底部队）+ 字符级（效果文字：中文按字、
-// 英文按词 wrap inline span，不改布局）。底色采样用离屏 canvas 光栅化
-// 的皮肤图（静态，按 skinId 缓存），失败静默回落现状。
-const skinInkCanvasCache = new Map();
-const SKIN_INK_CANVAS_SIZE = 288;
+// 英文按词 wrap inline span，不改布局）。皮肤图按 skinId 缓存解码后的
+// Image（映射图直接用它按目标分辨率光栅化），失败静默回落现状。
+const skinInkImageCache = new Map();
 
-function getSkinInkCanvasData(skinId) {
+function getSkinInkImage(skinId) {
     if (!skinId) return Promise.resolve(null);
-    if (skinInkCanvasCache.has(skinId)) return skinInkCanvasCache.get(skinId);
+    if (skinInkImageCache.has(skinId)) return skinInkImageCache.get(skinId);
     const url = cardSkinFrontUrl(skinId);
     const job = (async () => {
         if (!url) return null;
@@ -12404,57 +12403,21 @@ function getSkinInkCanvasData(skinId) {
             img.decoding = 'async';
             img.src = url;
             await img.decode();
-            const cv = document.createElement('canvas');
-            cv.width = SKIN_INK_CANVAS_SIZE;
-            cv.height = SKIN_INK_CANVAS_SIZE;
-            const ctx = cv.getContext('2d', { willReadFrequently: true });
-            ctx.drawImage(img, 0, 0, SKIN_INK_CANVAS_SIZE, SKIN_INK_CANVAS_SIZE);
-            // img 一并缓存：映射图用它直接按目标分辨率光栅化（浏览器矢量抗锯齿，
-            // 与页面皮肤渲染同源，边界无二次采样错位）
-            return { data: ctx.getImageData(0, 0, SKIN_INK_CANVAS_SIZE, SKIN_INK_CANVAS_SIZE), size: SKIN_INK_CANVAS_SIZE, img };
+            return { img };
         } catch (_) {
             return null;
         }
     })();
-    skinInkCanvasCache.set(skinId, job);
+    skinInkImageCache.set(skinId, job);
     return job;
 }
 
-function warmSkinInkCanvasData() {
+function warmSkinInkImages() {
     try {
         const ids = new Set([myEquippedCardSkin(), '初始']);
         (gameState && gameState.player_card_skins || []).forEach(id => { if (id) ids.add(id); });
-        ids.forEach(id => { if (id) getSkinInkCanvasData(id); });
+        ids.forEach(id => { if (id) getSkinInkImage(id); });
     } catch (_) {}
-}
-
-// rel: {x,y,w,h} 相对卡面左上（px）。皮肤 img = 182.3% 卡宽方形居中（与 CSS 同口径）
-function sampleSkinBrightness(skin, rel, cardW, cardH) {
-    const px = skin.data.data;
-    const imgSize = cardW * 1.823;
-    const offX = (cardW - imgSize) / 2;
-    const offY = (cardH - imgSize) / 2;
-    const scale = skin.size / imgSize;
-    const x0 = Math.max(0, Math.floor((rel.x - offX) * scale));
-    const y0 = Math.max(0, Math.floor((rel.y - offY) * scale));
-    const x1 = Math.min(skin.size - 1, Math.ceil((rel.x + rel.w - offX) * scale));
-    const y1 = Math.min(skin.size - 1, Math.ceil((rel.y + rel.h - offY) * scale));
-    if (x1 <= x0 || y1 <= y0) return null;
-    const step = Math.max(1, Math.floor(Math.max(x1 - x0, y1 - y0) / 12));
-    const lumas = [];
-    for (let y = y0; y <= y1; y += step) {
-        for (let x = x0; x <= x1; x += step) {
-            const i = (y * skin.size + x) * 4;
-            const a = px[i + 3];
-            if (a < 70) continue; // 近透明像素（出血/装饰外）跳过
-            // 感知亮度（Rec.601 近似），alpha 低时向 0.5 收敛（卡底未知）
-            const luma = (0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]) / 255;
-            lumas.push(luma * (a / 255) + 0.5 * (1 - a / 255));
-        }
-    }
-    if (lumas.length < 3) return null;
-    lumas.sort((a, b) => a - b);
-    return lumas[Math.floor(lumas.length / 2)];
 }
 
 // 连续映射：文字每个采样位置的底色亮度 → 该处字色明度。
@@ -12622,33 +12585,15 @@ function applySkinInkToNode(node, skin, cardRect, skinId) {
         w: rect.width,
         h: rect.height,
     };
-    // 探测（笔画核心区多点）：区域底色全中性则不挂图
-    const coreY = rel.y + rel.h * 0.25;
-    const coreH = rel.h * 0.6;
-    let needShift = false;
-    for (const fx of [0.25, 0.5, 0.75]) {
-        const luma = sampleSkinBrightness(skin, {
-            x: rel.x + rel.w * fx,
-            y: coreY,
-            w: Math.max(2, rel.w * 0.3),
-            h: coreH,
-        }, cardRect.width, cardRect.height);
-        if (skinInkTargetLumaFor(baseRgb, luma) != null) {
-            needShift = true;
-            break;
-        }
-    }
-    node.classList.toggle('skin-ink-live', needShift);
-    if (!needShift) {
-        node.style.removeProperty('--skin-ink-color');
-        node.style.removeProperty('--skin-ink-bg-image');
-        return;
-    }
+    // 不做"该处是否需要变色"的预探测：探测是采样近似，小面积/笔画边缘外的
+    // 深色块会漏判（整个字不变色的假阴性）。映射图本身逐位置精确——中性区
+    // 像素=基色，挂上也不会改变视觉，只是统一的绘制成本。
     let url = getSkinInkMapDataUrl(skinId, skin, baseRgb);
     if (!url) {
         node.classList.remove('skin-ink-live');
         return;
     }
+    node.classList.add('skin-ink-live');
     node.style.setProperty('--skin-ink-color', 'transparent');
     node.style.setProperty('--skin-ink-bg-image', `url("${url}")`);
     node.style.setProperty('--skin-ink-bg-size', `${cardRect.width.toFixed(1)}px ${cardRect.height.toFixed(1)}px`);
@@ -12693,7 +12638,7 @@ function applySkinTextContrast(cardEl) {
         if (!skinId) return;
         const cardRect = cardEl.getBoundingClientRect();
         if (cardRect.width < 40) return;
-        getSkinInkCanvasData(skinId).then(skin => {
+        getSkinInkImage(skinId).then(skin => {
             if (!skin || !cardEl.isConnected) return;
             const current = cardEl.getBoundingClientRect();
             if (Math.abs(current.width - cardRect.width) > 0.5) return; // 尺寸已变，等下一轮
@@ -16991,8 +16936,8 @@ function connectSocket(serverUrl) {
     });
     bindPlayPredictionSocket();
     try {
-        if (window.requestIdleCallback) requestIdleCallback(() => warmSkinInkCanvasData(), { timeout: 4000 });
-        else setTimeout(warmSkinInkCanvasData, 2500);
+        if (window.requestIdleCallback) requestIdleCallback(() => warmSkinInkImages(), { timeout: 4000 });
+        else setTimeout(warmSkinInkImages, 2500);
     } catch (_) {}
     bindSocketEvent('response_request', (data) => {
         if (!shouldAcceptNetworkMatchPayload(data, 'response_request', { allowSwitch: false })) return;
