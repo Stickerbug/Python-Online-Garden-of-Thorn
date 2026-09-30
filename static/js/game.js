@@ -12453,11 +12453,11 @@ function warmSkinInkMaps(skinId, skin) {
 }
 
 // 连续映射：文字每个采样位置的底色亮度 → 该处字色明度。
-// 暗底提亮到比底亮 SKIN_INK_CONTRAST_DARK；亮底压深到「对比度方程解出的
-// 明度差」以下（见 skinInkLightDeltaFor，绿系色会自动更深）。
+// 暗底提亮到比底亮 SKIN_INK_CONTRAST_DARK；亮底压深的幅度以「不带皮肤
+// 时的默认卡」为基准（见 skinInkLightDeltaFor）——对比度与原版卡持平，
+// 不过度压深，涂色词保持可识别。
 // 中性带（底≈0.5 附近）强度渐变到 0，无死区无跳变。
 // 字色调整走 HSL 只动明度通道——保色相饱和度，不向纯黑/白混（会灰化）。
-// 淡彩皮肤路线：淡底（0.8+）配接近黑的字，对比 4.6+。
 // 暗底（如蠕虫深色卡面）目标直接接近白：深底白字的感知对比优于浅底深字
 const SKIN_INK_CONTRAST_DARK = 0.66;
 const SKIN_INK_NEUTRAL_HALF = 0.12;
@@ -12513,28 +12513,48 @@ function wcagContrastRatio(rgbA, rgbB) {
     return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
 }
 
-// 亮底所需明度差按基色解对比度方程：绿系（青/薄荷）的 WCAG 亮度偏"热"，
-// 同样明度差换到的对比度更少，固定 0.62 对 Bloom 绿只到 ~3。在锚点底色
-// 上二分解出「对比度≥目标值」的最大明度取差值，按基色缓存。
-// 锚点取实际淡彩卡面档位 0.92：锚 1.0 会把绿字压到 0.22 偏黑；锚 0.92
-// 全色系目标浅一档，代价是更亮的斑（0.94-1.0）上对比略低于目标值
-const SKIN_INK_LIGHT_BG_REF = 0.92;
-// 4.0：字不压到近黑（4.6 时灰字≈0.29 偏黑）——对比不足的部分由卡面
-// 提白（文字区 0.90+）补回；4.0 介于 AA 正文 4.5 与大字 3.0 之间
-const SKIN_INK_LIGHT_TARGET_RATIO = 4.0;
+// 亮侧以「不带皮肤的默认卡」为基准：每种字色解出与它在默认卡上相同的
+// 对比度（红绿蓝各色亮度-对比曲线不同，luma 差值平移做不到持平——红会
+// 超到 8+、绿会低于基线）。锚点取淡彩卡面典型档 0.90，在该底上二分出
+// 达标明度取差值；皮肤底在 0.89-0.93 内浮动时对比度≈基线。涂色词
+// （毒绿/火橙）基线本身低（2.1-2.9），解出的目标≈原色，识别度保住
+let skinInkDefaultBgLumaCache = null;
+function skinInkDefaultCardBgLuma() {
+    if (skinInkDefaultBgLumaCache != null) return skinInkDefaultBgLumaCache;
+    let v = 1.0; // 亮色主题 --bg-card 是纯白，取不到时的保守缺省
+    try {
+        for (const scope of [document.documentElement, document.body]) {
+            if (!scope) continue;
+            const raw = String(getComputedStyle(scope).getPropertyValue('--bg-card') || '').trim();
+            const rgb = parseRgbColor(raw);
+            if (rgb) { v = lumaOfRgb(rgb); break; }
+            const m = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.exec(raw);
+            if (m) {
+                const hex = m[1].length === 3 ? m[1].split('').map(c => c + c).join('') : m[1];
+                v = lumaOfRgb([parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16)]);
+                break;
+            }
+        }
+    } catch (_) {}
+    skinInkDefaultBgLumaCache = v;
+    return v;
+}
+const SKIN_INK_LIGHT_ANCHOR = 0.90;
 const skinInkLightDeltaCache = new Map();
 function skinInkLightDeltaFor(baseRgb) {
     const key = baseRgb.join(',');
     if (skinInkLightDeltaCache.has(key)) return skinInkLightDeltaCache.get(key);
     const [h, s] = rgbToHsl(baseRgb);
-    const refGrey = [Math.round(SKIN_INK_LIGHT_BG_REF * 255), Math.round(SKIN_INK_LIGHT_BG_REF * 255), Math.round(SKIN_INK_LIGHT_BG_REF * 255)];
+    const bg = Math.round(skinInkDefaultCardBgLuma() * 255);
+    const baselineRatio = wcagContrastRatio(baseRgb, [bg, bg, bg]);
+    const anchorGrey = [Math.round(SKIN_INK_LIGHT_ANCHOR * 255), Math.round(SKIN_INK_LIGHT_ANCHOR * 255), Math.round(SKIN_INK_LIGHT_ANCHOR * 255)];
     let lo = 0.06, hi = 0.9;
     for (let i = 0; i < 18; i++) {
         const mid = (lo + hi) / 2;
-        if (wcagContrastRatio(hslToRgb(h, s, mid), refGrey) >= SKIN_INK_LIGHT_TARGET_RATIO) lo = mid;
+        if (wcagContrastRatio(hslToRgb(h, s, mid), anchorGrey) >= baselineRatio) lo = mid;
         else hi = mid;
     }
-    const delta = Math.max(0.3, SKIN_INK_LIGHT_BG_REF - lo);
+    const delta = Math.max(0.12, SKIN_INK_LIGHT_ANCHOR - lo);
     skinInkLightDeltaCache.set(key, delta);
     return delta;
 }
