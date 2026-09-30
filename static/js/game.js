@@ -19689,15 +19689,6 @@ function skinPreviewSampleDefs() {
     return [...new Set([...picked, ...defaults])].slice(0, 10);
 }
 
-function skinPreviewBackAsFront(skinId) {
-    const meta = (window.__cardSkinCatalog || {})[skinId];
-    if (meta) return meta.special === 'back_as_front';
-    // 目录缓存未就绪时回落到外观页数据
-    const item = (Array.isArray(cardSkinInventory && cardSkinInventory.items) ? cardSkinInventory.items : [])
-        .find(entry => entry && entry.skin_id === skinId);
-    return !!(item && item.special === 'back_as_front');
-}
-
 function createSkinPreviewCardEl(defId, skinId, { faceDown = false, width = 260 } = {}) {
     const el = createCardElement({ def_id: defId, owner_id: null }, { faceDown, skinOverride: skinId, disableIntro: true });
     el.style.setProperty('--card-w', width + 'px');
@@ -19739,17 +19730,12 @@ function renderSkinPreviewSearchResults(query) {
 function renderSkinPreviewContents() {
     const st = skinPreviewState;
     if (!st) return;
-    const faceStage = $('skin-preview-face-stage');
-    const backStage = $('skin-preview-back-stage');
+    const stage = $('skin-preview-stage');
     const sampleRow = $('skin-preview-samples');
-    if (!faceStage || !backStage || !sampleRow) return;
-    // 卡面：对手视角下「区」类皮肤显示为卡背（别人看到的你的牌面）
-    const replaced = st.oppView && skinPreviewBackAsFront(st.skinId);
-    faceStage.innerHTML = '';
-    faceStage.appendChild(createSkinPreviewCardEl(st.current, st.skinId, { faceDown: replaced }));
-    // 卡背
-    backStage.innerHTML = '';
-    backStage.appendChild(createSkinPreviewCardEl(st.current, st.skinId, { faceDown: true }));
+    if (!stage || !sampleRow) return;
+    // 单视图：side 切换卡面/卡背（「区」类皮肤不再特殊处理，商店已标注）
+    stage.innerHTML = '';
+    stage.appendChild(createSkinPreviewCardEl(st.current, st.skinId, { faceDown: st.side === 'back' }));
     // 样张栏（小卡同皮肤渲染，所见即所得）
     sampleRow.innerHTML = '';
     skinPreviewSampleDefs().forEach(defId => {
@@ -19791,24 +19777,18 @@ function openCardSkinPreviewModal(skinId, skinName) {
     skinPreviewState = {
         skinId: String(skinId),
         current: samples[0] || 'Bone',
-        oppView: false,
+        side: 'face',
     };
     showModal(`
         <div class="skin-preview-head">
             <h3>${escapeHtml(lt({ zh: '卡牌皮肤预览', en: 'Card Skin Preview', fr: 'Aperçu du skin', ja: 'カードスキンプレビュー' }))} · ${escapeHtml(skinName || skinId)}</h3>
             <button type="button" class="modal-close-x" id="skin-preview-close" aria-label="${escapeHtml(lt({ zh: '关闭', en: 'Close', fr: 'Fermer', ja: '閉じる' }))}">×</button>
         </div>
-        <div class="skin-preview-layout">
-            <div class="skin-preview-col">
-                <div class="skin-preview-stage-label">${escapeHtml(lt({ zh: '卡面', en: 'Face', fr: 'Face', ja: '表面' }))}</div>
-                <div class="skin-preview-stage" id="skin-preview-face-stage"></div>
-            </div>
-            <div class="skin-preview-col">
-                <div class="skin-preview-stage-label">${escapeHtml(lt({ zh: '卡背', en: 'Back', fr: 'Dos', ja: '裏面' }))}</div>
-                <div class="skin-preview-stage" id="skin-preview-back-stage"></div>
-                <label class="skin-preview-opp-toggle"><input type="checkbox" id="skin-preview-opp-view"> ${escapeHtml(lt({ zh: '对手视角（区类皮肤）', en: "Opponent's view (Zone skins)", fr: 'Vue adverse (skins Zone)', ja: '対戦相手の視点（区系スキン）' }))}</label>
-            </div>
+        <div class="skin-preview-side-toggle" id="skin-preview-side-toggle">
+            <button type="button" class="skin-preview-side-btn active" data-side="face">${escapeHtml(lt({ zh: '卡面', en: 'Face', fr: 'Face', ja: '表面' }))}</button>
+            <button type="button" class="skin-preview-side-btn" data-side="back">${escapeHtml(lt({ zh: '卡背', en: 'Back', fr: 'Dos', ja: '裏面' }))}</button>
         </div>
+        <div class="skin-preview-stage" id="skin-preview-stage"></div>
         <div class="skin-preview-search hidden" id="skin-preview-search">
             <input type="text" id="skin-preview-search-input" maxlength="40" placeholder="${escapeHtml(lt({ zh: '搜索卡牌名…', en: 'Search card name…', fr: 'Nom de carte…', ja: 'カード名を検索…' }))}">
             <div class="skin-preview-search-results" id="skin-preview-search-results"></div>
@@ -19819,13 +19799,19 @@ function openCardSkinPreviewModal(skinId, skinName) {
     if (content) content.className = 'modal-inner skin-preview-modal';
     const closeBtn = $('skin-preview-close');
     if (closeBtn) closeBtn.addEventListener('click', hideModal);
-    const oppToggle = $('skin-preview-opp-view');
-    if (oppToggle) {
-        oppToggle.addEventListener('change', e => {
-            if (skinPreviewState) skinPreviewState.oppView = e.target.checked;
+    const sideToggle = $('skin-preview-side-toggle');
+    if (sideToggle) sideToggle.querySelectorAll('.skin-preview-side-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (!skinPreviewState) return;
+            const side = btn.dataset.side === 'back' ? 'back' : 'face';
+            if (skinPreviewState.side === side) return;
+            skinPreviewState.side = side;
+            sideToggle.querySelectorAll('.skin-preview-side-btn').forEach(b => {
+                b.classList.toggle('active', b === btn);
+            });
             renderSkinPreviewContents();
         });
-    }
+    });
     const searchInput = $('skin-preview-search-input');
     if (searchInput) {
         searchInput.addEventListener('input', e => renderSkinPreviewSearchResults(e.target.value));

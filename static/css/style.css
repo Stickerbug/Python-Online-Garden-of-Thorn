@@ -22131,20 +22131,25 @@ html[data-ui-style="minimal"][data-theme="dark"] .card,
   color: var(--text-primary);
   border-color: var(--text-secondary);
 }
-.skin-preview-layout {
+.skin-preview-side-toggle {
   display: flex;
-  gap: 20px;
   justify-content: center;
+  gap: 8px;
 }
-.skin-preview-col {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-}
-.skin-preview-stage-label {
-  font-size: 13px;
+.skin-preview-side-btn {
+  padding: 6px 20px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: none;
   color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.skin-preview-side-btn.active {
+  color: var(--text-primary);
+  border-color: var(--accent, #3a7d44);
+  background: rgba(58, 125, 68, 0.12);
 }
 /* 装饰款（叶框等）沿 overflow:visible 超出卡框约 16px，stage 留足内边距防裁 */
 .skin-preview-stage {
@@ -22160,16 +22165,11 @@ html[data-ui-style="minimal"][data-theme="dark"] .card,
 .modal-inner.skin-preview-modal .skin-preview-stage .card {
   width: var(--card-w, 260px);
 }
-/* 手机：双栏改竖排、卡与内边距收窄，整弹层靠上面的 overflow-y 滚动 */
+/* 手机：卡与内边距收窄，整弹层靠上面的 overflow-y 滚动 */
 @media (max-width: 640px) {
   .modal-inner.skin-preview-modal {
     width: calc(100vw - 16px);
     padding: 14px 12px;
-  }
-  .skin-preview-layout {
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
   }
   .skin-preview-stage {
     padding: 12px 14px;
@@ -22177,14 +22177,6 @@ html[data-ui-style="minimal"][data-theme="dark"] .card,
   .modal-inner.skin-preview-modal .skin-preview-stage .card {
     width: min(var(--card-w, 260px), calc(100vw - 72px));
   }
-}
-.skin-preview-opp-toggle {
-  font-size: 12px;
-  color: var(--text-secondary);
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  cursor: pointer;
 }
 .skin-preview-samples {
   display: flex;
@@ -22241,12 +22233,6 @@ html[data-ui-style="minimal"][data-theme="dark"] .card,
 .skin-preview-search-empty {
   font-size: 13px;
   color: var(--text-muted, #999);
-}
-@media (max-width: 640px) {
-  .skin-preview-layout {
-    flex-direction: column;
-    align-items: center;
-  }
 }
 .card-skin-refresh-row { display: flex; justify-content: flex-end; padding: 6px 0 2px; }
 .card-skin-inventory { display: grid; gap: 8px; }
