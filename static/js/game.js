@@ -14003,6 +14003,14 @@ function firstNumericEffectValue(value) {
     return null;
 }
 
+// 72cbfca 删客户端预测管线时误删了本函数，但 getAttackDamageBaseInfo 里
+// 的调用漏删——任何带 extra_hits 的攻击卡渲染/回放加载都会 ReferenceError，
+// 中断整个渲染管线（手牌只剩已渲染部分、战斗日志不刷、结束回合失联）
+function stepLooksLikeElectricDamage(params = {}) {
+    const tag = String(params.damage_tag || params.tag || params.source || params.source_text || '').toLowerCase();
+    return tag.includes('electric') || tag.includes('battery') || tag.includes('电');
+}
+
 function getAttackDamageBaseInfo(cardDict, cardDef) {
     if (!cardDef || cardDef.card_type !== 'thorn') return null;
     const fallback = ATTACK_DAMAGE_FALLBACKS[cardDict.def_id || cardDef.id] || null;
@@ -36044,6 +36052,9 @@ let mulliganTimerId = null;
 let mulliganSelectedIds = new Set();
 let mulliganSubmittedLocal = false;
 let mulliganCountdown = 30;
+// 换牌选择跨局残留：your_pick 为 null（新局未提交）时旧代码回退保留上一局
+// 的选择集——R-28782 实测残留3张+新选2张=提交5张。按对局键切换时清空
+let mulliganMatchKey = '';
 
 function hideMulliganPanel() {
     if (mulliganTimerId) { clearInterval(mulliganTimerId); mulliganTimerId = null; }
@@ -36117,6 +36128,11 @@ function syncMulliganPanel(data) {
         return;
     }
     if (mulliganTimerId) { clearInterval(mulliganTimerId); mulliganTimerId = null; }
+    const mulliganKey = phaseContextMatchKey(data);
+    if (mulliganKey && mulliganMatchKey && mulliganKey !== mulliganMatchKey) {
+        mulliganSelectedIds = new Set();
+    }
+    if (mulliganKey) mulliganMatchKey = mulliganKey;
     mulliganSelectedIds = new Set(
         Array.isArray(m.your_pick) ? m.your_pick : Array.from(mulliganSelectedIds)
     );
