@@ -31764,6 +31764,15 @@ function choosePlayerTargetOnBoard(title, targets) {
             return el;
         };
         const pointerHandler = (event) => {
+            // 简约UI的结束回合一排按钮（.controls-bar）在 .player-section——
+            // 自己的目标区——内部，closest() 会把它命中为选择"自己"。
+            // 这一排统视为取消目标选择（同点空白处），按钮自身的功能照常
+            if (event.target && event.target.closest && event.target.closest('.controls-bar')) {
+                if (!outsideEnabled) return;
+                event.preventDefault();
+                finishCancel();
+                return;
+            }
             const el = pickableFromEvent(event);
             if (el) {
                 const pid = normalizePlayerId(el.dataset.playerId);
