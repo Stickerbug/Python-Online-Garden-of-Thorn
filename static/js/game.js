@@ -12416,7 +12416,39 @@ function warmSkinInkImages() {
     try {
         const ids = new Set([myEquippedCardSkin(), '初始']);
         (gameState && gameState.player_card_skins || []).forEach(id => { if (id) ids.add(id); });
-        ids.forEach(id => { if (id) getSkinInkImage(id); });
+        ids.forEach(id => {
+            if (!id) return;
+            getSkinInkImage(id).then(skin => { if (skin) warmSkinInkMaps(id, skin); }).catch(() => {});
+        });
+    } catch (_) {}
+}
+
+// 空闲期预生成常见基色的映射图（四类型色/消耗色/正文灰，各含满偏移
+// 变体）：否则滚动中首次遇到新基色才生成，会产生一帧 30-100ms 的顿挫
+function warmSkinInkMaps(skinId, skin) {
+    try {
+        const cs = getComputedStyle(document.documentElement);
+        const vars = ['--thorn', '--bloom', '--root', '--guard', '--elixir', '--magic', '--text-main', '--text-secondary'];
+        const colors = [];
+        for (const name of vars) {
+            const rgb = parseRgbColor(cs.getPropertyValue(name) || '');
+            if (rgb) colors.push(rgb);
+        }
+        if (!colors.length) return;
+        let i = 0;
+        const idle = window.requestIdleCallback ? (fn => window.requestIdleCallback(fn, { timeout: 2000 })) : (fn => setTimeout(fn, 30));
+        const step = () => {
+            const deadline = performance.now() + 6;
+            while (i < colors.length && performance.now() < deadline) {
+                try {
+                    getSkinInkMapDataUrl(skinId, skin, colors[i]);
+                    getSkinInkMapDataUrl(skinId, skin, colors[i], { full: true });
+                } catch (_) {}
+                i++;
+            }
+            if (i < colors.length) idle(step);
+        };
+        idle(step);
     } catch (_) {}
 }
 
@@ -12565,50 +12597,10 @@ function getSkinInkMapDataUrl(skinId, skin, baseRgb, opts) {
     return url;
 }
 
-function applySkinInkToNode(node, skin, cardRect, skinId, opts) {
-    const rect = node.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
-    let baseRgb = null;
-    const cached = node.getAttribute('data-ink-base');
-    if (cached) {
-        baseRgb = parseRgbColor(cached);
-    } else {
-        node.style.removeProperty('--skin-ink-color');
-        node.style.removeProperty('--skin-ink-bg-image');
-        baseRgb = parseRgbColor(getComputedStyle(node).color);
-        if (baseRgb) {
-            node.setAttribute('data-ink-base', `rgb(${baseRgb[0]}, ${baseRgb[1]}, ${baseRgb[2]})`);
-        }
-    }
-    if (!baseRgb) return;
-    const rel = {
-        x: rect.left - cardRect.left,
-        y: rect.top - cardRect.top,
-        w: rect.width,
-        h: rect.height,
-    };
-    // 不做"该处是否需要变色"的预探测：探测是采样近似，小面积/笔画边缘外的
-    // 深色块会漏判（整个字不变色的假阴性）。映射图本身逐位置精确——中性区
-    // 像素=基色，挂上也不会改变视觉，只是统一的绘制成本。
-    let url = getSkinInkMapDataUrl(skinId, skin, baseRgb, opts);
-    if (!url) {
-        node.classList.remove('skin-ink-live');
-        node.style.removeProperty('color');
-        return;
-    }
-    node.classList.add('skin-ink-live');
-    node.style.setProperty('--skin-ink-color', 'transparent');
-    node.style.setProperty('--skin-ink-bg-image', `url("${url}")`);
-    node.style.setProperty('--skin-ink-bg-size', `${cardRect.width.toFixed(1)}px ${cardRect.height.toFixed(1)}px`);
-    node.style.setProperty('--skin-ink-bg-pos', `${(-rel.x).toFixed(1)}px ${(-rel.y).toFixed(1)}px`);
-    // 模板给卡名/英文副名写了内联 color:类型色——CSS 规则的
-    // color: var(--skin-ink-color) 压不过内联，贴图会被不透明字形盖住。
-    // 内联对内联：直接把内联 color 也置 transparent（基色已存 data-ink-base）。
-    node.style.color = 'transparent';
-}
-// 效果文字字符级 wrap：只动 TEXT_NODE，内嵌 Chip（inline-card-chip）与
-// 其标签子树、图标/br 不碰；连续 ASCII 数字字母为一组，空白保留裸文本，
-// 其余（中日文单字/符号）逐字
+// 效果文字包裹：只动 TEXT_NODE，内嵌 Chip（inline-card-chip）与标签子树、
+// 图标/br 不碰。每个文本节点整体包一个 span——字色来自 2D 位置映射图，
+// span 内每个字形各自取脚下颜色，无需按字拆分（逐字 span 只会成倍增加
+// background-clip 图层，图鉴全卡列表在低端机上是卡死主因）
 function wrapSkinInkTextNodes(container) {
     const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
         acceptNode: n => {
@@ -12621,20 +12613,162 @@ function wrapSkinInkTextNodes(container) {
     const nodes = [];
     while (walker.nextNode()) nodes.push(walker.currentNode);
     nodes.forEach(node => {
-        const parts = String(node.nodeValue).match(/[A-Za-z0-9'’%]+|\s+|[^\sA-Za-z0-9'’%]/gu) || [];
-        const frag = document.createDocumentFragment();
-        parts.forEach(part => {
-            if (/^\s+$/.test(part)) {
-                frag.appendChild(document.createTextNode(part));
-                return;
-            }
-            const span = document.createElement('span');
-            span.className = 'skin-ink';
-            span.textContent = part;
-            frag.appendChild(span);
-        });
-        node.parentNode.replaceChild(frag, node);
+        const span = document.createElement('span');
+        span.className = 'skin-ink';
+        span.textContent = node.nodeValue;
+        node.parentNode.replaceChild(span, node);
     });
+}
+
+// 摘除一张卡的变色（滚出视口时回收绘制成本；滚回走 data-ink-base/
+// 映射图缓存快速重挂）
+function stripSkinInkFromCard(cardEl) {
+    const nodes = cardEl.__skinInkNodes;
+    if (!nodes) return;
+    for (const node of nodes) {
+        try {
+            node.classList.remove('skin-ink-live');
+            node.style.removeProperty('--skin-ink-color');
+            node.style.removeProperty('--skin-ink-bg-image');
+            node.style.removeProperty('--skin-ink-bg-size');
+            node.style.removeProperty('--skin-ink-bg-pos');
+            node.style.removeProperty('color');
+        } catch (_) {}
+    }
+    cardEl.__skinInkNodes = null;
+}
+
+// 两阶段应用：先集中读（rect/computed color——无写操作=单次布局），
+// 再集中写（class/自定义属性）。读写交错会变成每个 span 一次强制
+// layout（布局抖动），几百卡的图鉴场景是卡死主因之二。
+// 带药丸/圆圈底的（类型标签/消耗圆圈）只能挂内层文字 span——
+// background-clip:text 会把元素自身背景一起裁进字形，药丸外框会整个
+// 消失。底部标签保持原纯白药丸、不参与变色（用户拍板）。
+function applySkinInkToCard(cardEl, skin, cardRect, skinId) {
+    const targets = [];
+    cardEl.querySelectorAll(':scope .card-name, :scope .card-english-name')
+        .forEach(node => targets.push({ node }));
+    cardEl.querySelectorAll(':scope .card-type-label, :scope .card-costs .cost-e, :scope .card-costs .cost-m')
+        .forEach(node => {
+            const full = node.classList.contains('cost-e') || node.classList.contains('cost-m');
+            if (!node.querySelector(':scope .skin-ink')) {
+                wrapSkinInkTextNodes(node);
+            }
+            node.querySelectorAll(':scope .skin-ink').forEach(span => targets.push({ node: span, opts: { full } }));
+        });
+    const effectEl = cardEl.querySelector(':scope > .card-effect');
+    if (effectEl) {
+        if (!effectEl.querySelector(':scope .skin-ink')) {
+            wrapSkinInkTextNodes(effectEl);
+        }
+        effectEl.querySelectorAll('.skin-ink').forEach(span => targets.push({ node: span }));
+    }
+    const entries = [];
+    for (const t of targets) {
+        try {
+            const rect = t.node.getBoundingClientRect();
+            if (!rect.width || !rect.height) continue;
+            let baseRgb = parseRgbColor(t.node.getAttribute('data-ink-base') || '');
+            if (!baseRgb) {
+                baseRgb = parseRgbColor(getComputedStyle(t.node).color);
+                if (baseRgb) t.node.setAttribute('data-ink-base', `rgb(${baseRgb[0]}, ${baseRgb[1]}, ${baseRgb[2]})`);
+            }
+            if (!baseRgb) continue;
+            entries.push({
+                node: t.node, opts: t.opts, baseRgb,
+                rel: { x: rect.left - cardRect.left, y: rect.top - cardRect.top },
+            });
+        } catch (_) {}
+    }
+    const applied = [];
+    for (const e of entries) {
+        try {
+            const url = getSkinInkMapDataUrl(skinId, skin, e.baseRgb, e.opts);
+            if (!url) continue;
+            e.node.classList.add('skin-ink-live');
+            e.node.style.setProperty('--skin-ink-color', 'transparent');
+            e.node.style.setProperty('--skin-ink-bg-image', `url("${url}")`);
+            e.node.style.setProperty('--skin-ink-bg-size', `${cardRect.width.toFixed(1)}px ${cardRect.height.toFixed(1)}px`);
+            e.node.style.setProperty('--skin-ink-bg-pos', `${(-e.rel.x).toFixed(1)}px ${(-e.rel.y).toFixed(1)}px`);
+            // 模板给卡名/英文副名写了内联 color——CSS 的 var 压不过内联声明，
+            // 贴图会被不透明字形盖住。内联对内联直接置 transparent
+            e.node.style.color = 'transparent';
+            applied.push(e.node);
+        } catch (_) {}
+    }
+    cardEl.__skinInkNodes = applied;
+}
+
+// 分帧应用队列：按真实耗时做时间预算（约 10ms/帧，映射图首次生成等
+// 重活计入预算——按张数计数会被 .then 微任务里的重活绕过，低端机
+// 图鉴场景产生成串的长帧）。滚动期间帧率优先，接线逐步补齐。
+const skinInkApplyQueue = new Map();
+let skinInkPumpScheduled = false;
+let skinInkPumpBusy = false;
+function queueSkinInkApply(cardEl, skinId, cardWidth) {
+    skinInkApplyQueue.set(cardEl, { skinId, cardWidth });
+    skinInkSchedulePump();
+}
+function skinInkSchedulePump() {
+    if (skinInkPumpScheduled || skinInkPumpBusy) return;
+    skinInkPumpScheduled = true;
+    requestAnimationFrame(() => {
+        skinInkPumpScheduled = false;
+        skinInkPump();
+    });
+}
+async function skinInkPump() {
+    if (skinInkPumpBusy) return;
+    skinInkPumpBusy = true;
+    try {
+        const frameStart = performance.now();
+        let processed = 0;
+        for (const [cardEl, job] of Array.from(skinInkApplyQueue)) {
+            skinInkApplyQueue.delete(cardEl);
+            if (!cardEl.isConnected || cardEl.__skinInkVisible === false) continue; // 已滚出视口的陈旧任务丢弃
+            try {
+                const skin = await getSkinInkImage(job.skinId);
+                if (!skin || !cardEl.isConnected || cardEl.__skinInkVisible === false) return;
+                const cardRect = cardEl.getBoundingClientRect();
+                if (Math.abs(cardRect.width - job.cardWidth) > 0.5) continue; // 尺寸已变，等下一轮
+                applySkinInkToCard(cardEl, skin, cardRect, job.skinId);
+            } catch (_) {}
+            processed++;
+            if (processed >= 1 && performance.now() - frameStart > 10) break;
+        }
+    } finally {
+        skinInkPumpBusy = false;
+    }
+    if (skinInkApplyQueue.size) skinInkSchedulePump();
+}
+
+// 视口可见性门控：图鉴/收藏列表一次渲染几百张卡，全部常驻
+// background-clip 图层低端机必卡死。只给视口（上下各扩一屏）内的卡
+// 接线，滚远即摘除。手牌/场上/预览弹层恒在视口内，行为不变。
+let skinInkObserver = null;
+function skinInkEnsureObserver() {
+    if (skinInkObserver || typeof IntersectionObserver === 'undefined') return skinInkObserver;
+    skinInkObserver = new IntersectionObserver(entries => {
+        for (const en of entries) {
+            const cardEl = en.target;
+            if (!cardEl.isConnected) {
+                skinInkObserver.unobserve(cardEl);
+                cardEl.__skinInkObserved = false;
+                continue;
+            }
+            if (en.isIntersecting) {
+                cardEl.__skinInkVisible = true;
+                const img = cardEl.querySelector(':scope > .card-skin-under');
+                const skinId = img && img.dataset.skinId;
+                const w = cardEl.getBoundingClientRect().width;
+                if (skinId && w >= 40) queueSkinInkApply(cardEl, skinId, w);
+            } else {
+                cardEl.__skinInkVisible = false;
+                stripSkinInkFromCard(cardEl);
+            }
+        }
+    }, { rootMargin: '100% 0px 100% 0px' });
+    return skinInkObserver;
 }
 
 function applySkinTextContrast(cardEl) {
@@ -12645,36 +12779,15 @@ function applySkinTextContrast(cardEl) {
         if (!skinId) return;
         const cardRect = cardEl.getBoundingClientRect();
         if (cardRect.width < 40) return;
-        getSkinInkImage(skinId).then(skin => {
-            if (!skin || !cardEl.isConnected) return;
-            const current = cardEl.getBoundingClientRect();
-            if (Math.abs(current.width - cardRect.width) > 0.5) return; // 尺寸已变，等下一轮
-            // 无自身背景的元素（卡名/英文副名）直接挂图；
-            // 带药丸/圆圈底的（类型标签/消耗圆圈）只能挂内层文字 span——
-            // background-clip:text 会把元素自身背景一起裁进字形，药丸外框会
-            // 整个消失（类型标签只剩 Bloom 文字的教训）。
-            // 底部标签保持原纯白药丸、不参与变色（用户拍板）。
-            const applyNode = (node, opts) => {
-                try { applySkinInkToNode(node, skin, cardRect, skinId, opts); } catch (_) {}
-            };
-            cardEl.querySelectorAll(':scope .card-name, :scope .card-english-name')
-                .forEach(node => applyNode(node));
-            cardEl.querySelectorAll(':scope .card-type-label, :scope .card-costs .cost-e, :scope .card-costs .cost-m')
-                .forEach(node => {
-                    const full = node.classList.contains('cost-e') || node.classList.contains('cost-m');
-                    if (!node.querySelector(':scope .skin-ink')) {
-                        wrapSkinInkTextNodes(node);
-                    }
-                    node.querySelectorAll(':scope .skin-ink').forEach(span => applyNode(span, { full }));
-                });
-            const effectEl = cardEl.querySelector(':scope > .card-effect');
-            if (effectEl) {
-                if (!effectEl.querySelector(':scope .skin-ink')) {
-                    wrapSkinInkTextNodes(effectEl);
-                }
-                effectEl.querySelectorAll('.skin-ink').forEach(span => applyNode(span));
+        const obs = skinInkEnsureObserver();
+        if (obs && !cardEl.__skinInkVisible) {
+            if (!cardEl.__skinInkObserved) {
+                cardEl.__skinInkObserved = true;
+                obs.observe(cardEl);
             }
-        }).catch(() => {});
+            return; // 首次观察：等 IO 回调按可见性决定是否接线
+        }
+        queueSkinInkApply(cardEl, skinId, cardRect.width);
     } catch (_) {}
 }
 
