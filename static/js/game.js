@@ -12602,12 +12602,16 @@ function applySkinInkToNode(node, skin, cardRect, skinId) {
 // 效果文字字符级 wrap：只动 TEXT_NODE，内嵌 Chip（inline-card-chip）与
 // 其标签子树、图标/br 不碰；连续 ASCII 数字字母为一组，空白保留裸文本，
 // 其余（中日文单字/符号）逐字
-function wrapSkinInkTextNodes(container) {
+// opts.wrapFlags：直接以 .card-flag 为容器包裹其文字（效果文字里仍跳过
+// 标签子树——那是 Chip 排除语义）
+function wrapSkinInkTextNodes(container, opts) {
+    const wrapFlags = !!(opts && opts.wrapFlags);
     const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
         acceptNode: n => {
             if (!n.nodeValue || !n.nodeValue.trim()) return 2;
             const parent = n.parentElement;
-            if (parent && parent.closest('.inline-card-chip, .card-flag')) return 2;
+            if (parent && parent.closest('.inline-card-chip')) return 2;
+            if (!wrapFlags && parent && parent.closest('.card-flag')) return 2;
             return 1;
         },
     });
@@ -12642,9 +12646,20 @@ function applySkinTextContrast(cardEl) {
             if (!skin || !cardEl.isConnected) return;
             const current = cardEl.getBoundingClientRect();
             if (Math.abs(current.width - cardRect.width) > 0.5) return; // 尺寸已变，等下一轮
+            // 无自身背景的元素（卡名/英文副名）直接挂图；
+            // 带药丸底的（类型标签/消耗圆圈/底部标签）只能挂内层文字 span——
+            // background-clip:text 会把元素自身背景一起裁进字形，药丸外框会
+            // 整个消失（类型标签只剩 Bloom 文字的教训）
+            cardEl.querySelectorAll(':scope .card-name, :scope .card-english-name')
+                .forEach(node => applySkinInkToNode(node, skin, cardRect, skinId));
             cardEl.querySelectorAll(
-                ':scope .card-name, :scope .card-type-label, :scope .card-english-name'
-            ).forEach(node => applySkinInkToNode(node, skin, cardRect, skinId));
+                ':scope .card-type-label, :scope .card-costs .cost-e, :scope .card-costs .cost-m, :scope .card-flags .card-flag'
+            ).forEach(node => {
+                if (!node.querySelector(':scope .skin-ink')) {
+                    wrapSkinInkTextNodes(node, { wrapFlags: true });
+                }
+                node.querySelectorAll(':scope .skin-ink').forEach(span => applySkinInkToNode(span, skin, cardRect, skinId));
+            });
             const effectEl = cardEl.querySelector(':scope > .card-effect');
             if (effectEl && cardRect.width >= 100) {
                 if (!effectEl.querySelector(':scope .skin-ink')) {

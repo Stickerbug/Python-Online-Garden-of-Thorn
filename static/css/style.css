@@ -22242,3 +22242,11 @@ html[data-ui-style="minimal"] .card.card-skin-no-corner::before,
   background-clip: text;
   color: var(--skin-ink-color, inherit);
 }
+
+/* 皮肤卡底部标签：原为纯白/纯色药丸，皮肤完全不透出、文字无从随底色变。
+   改近透明+中性细边，皮肤透出，文字走内层 span 的字色映射；
+   少量白色叠层只会把底色轻微推亮，不会翻转明暗判定。 */
+.card.card-skin-backed .card-flag {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(120, 120, 120, 0.45);
+}
