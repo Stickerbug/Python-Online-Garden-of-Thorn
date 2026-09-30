@@ -4,35 +4,44 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="gtn-feedback-handling-csrf" content="{{ csrf_token|default('') }}">
-<title>举报处理</title>
+<title>举报处理 · 荆棘花园</title>
   <link rel="stylesheet" href="/static/css/handling.css?v={{ static_version|default('dev')|urlencode }}">
 </head>
 <body>
-<main id="app" class="app">
-  <header class="topbar">
-    <div>
-      <h1>举报处理</h1>
-      <span id="summary" class="muted">未加载</span>
-    </div>
-    <div class="top-actions">
-      <button id="refresh" class="btn">刷新</button>
-      <button id="handling-exit" class="btn">返回反馈</button>
+<main id="app" class="hd-app hidden">
+  <header class="hd-topbar">
+    <div class="hd-topbar-inner">
+      <a class="hd-brand" href="/feedback-center/bug" target="_blank" rel="noopener">
+        <span class="hd-brand-mark">荆棘</span>
+        <span class="hd-brand-text">
+          <strong>举报处理</strong>
+          <small>Staff Handling</small>
+        </span>
+      </a>
+      <span id="summary" class="hd-muted">未加载</span>
+      <div class="hd-top-actions">
+        <button id="refresh" class="hd-button">刷新</button>
+        <button id="handling-exit" class="hd-button">返回反馈</button>
+      </div>
     </div>
   </header>
-  <div id="action-result" class="result page-result" aria-live="polite"></div>
 
-  <section id="handling-layout" class="layout">
-    <aside class="left panel">
-      <div class="tabs" role="tablist">
-        <button class="tab active" data-tab="reports">举报</button>
-        <button class="tab" data-tab="users">玩家</button>
-        <button class="tab" data-tab="matches">对局</button>
-        <button class="tab" data-tab="risk">风险</button>
-        <button class="tab" data-tab="clusters">关联串</button>
-        <button class="tab" data-tab="moderation">处罚</button>
-        <button class="tab" data-tab="ip">IP封禁</button>
-      </div>
-      <div id="reports-tools" class="tools">
+  <div id="action-result" class="hd-flash" aria-live="polite"></div>
+
+  <nav class="hd-tabs" aria-label="处理视图">
+    <button class="hd-tab is-active" data-tab="reports" type="button">举报</button>
+    <button class="hd-tab" data-tab="users" type="button">玩家</button>
+    <button class="hd-tab" data-tab="matches" type="button">对局</button>
+    <button class="hd-tab" data-tab="risk" type="button">风险</button>
+    <button class="hd-tab" data-tab="clusters" type="button">关联串</button>
+    <button class="hd-tab" data-tab="moderation" type="button">处罚</button>
+    <button class="hd-tab" data-tab="ip" type="button">IP 封禁</button>
+  </nav>
+
+  <div class="hd-toolbar">
+    <div class="hd-toolbar-group" data-tools="reports">
+      <label class="hd-field-inline">
+        <span>状态</span>
         <select id="status-filter">
           <option value="all">全部</option>
           <option value="pending">待处理</option>
@@ -40,14 +49,39 @@
           <option value="rejected">已驳回</option>
           <option value="abusive">恶意举报</option>
         </select>
-      </div>
-      <div id="users-tools" class="tools hidden">
-        <input id="user-query" placeholder="昵称 / ID / 注册顺序">
-        <button id="search-users" class="btn primary">搜索玩家</button>
-        <div class="hint">不自动刷新；默认最多返回 20 个。</div>
-      </div>
-      <div id="matches-tools" class="tools hidden">
-        <input id="match-query" placeholder="R-编号 / 对局ID / 玩家 / IP">
+      </label>
+    </div>
+    <div class="hd-toolbar-group hidden" data-tools="users">
+      <label class="hd-search">
+        <span>搜索</span>
+        <input id="user-query" placeholder="昵称 / 玩家ID / 注册顺序" autocomplete="off">
+      </label>
+      <label class="hd-field-inline">
+        <span>排序</span>
+        <select id="user-sort">
+          <option value="last_login_at">最近登录</option>
+          <option value="reputation">信誉分（低→高）</option>
+          <option value="reputation_desc">信誉分（高→低）</option>
+          <option value="created_at">注册时间</option>
+          <option value="games_played">场次</option>
+          <option value="win_rate">胜率</option>
+        </select>
+      </label>
+      <label class="hd-field-inline">
+        <span>信誉区间</span>
+        <input id="user-rep-min" type="number" min="0" max="100" placeholder="最低" class="hd-num">
+        <span class="hd-muted">~</span>
+        <input id="user-rep-max" type="number" min="0" max="100" placeholder="最高" class="hd-num">
+      </label>
+      <button id="search-users" class="hd-button hd-button-primary">搜索玩家</button>
+    </div>
+    <div class="hd-toolbar-group hidden" data-tools="matches">
+      <label class="hd-search">
+        <span>搜索</span>
+        <input id="match-query" placeholder="R-编号 / 对局ID / 玩家 / IP" autocomplete="off">
+      </label>
+      <label class="hd-field-inline">
+        <span>模式</span>
         <select id="match-mode">
           <option value="all">全部模式</option>
           <option value="1v1">1v1</option>
@@ -55,112 +89,136 @@
           <option value="urf">无限火力</option>
           <option value="random_deck">随机卡组</option>
         </select>
-        <button id="search-matches" class="btn primary">搜索对局</button>
-        <div class="hint">只查摘要和元数据，不读取完整回放。</div>
-      </div>
-      <div id="risk-tools" class="tools hidden">
-        <button id="search-risk" class="btn primary">读取风险对局</button>
-        <div class="hint">自动标记同 IP、早期投降、过短或不计分对局；仅供人工判断。</div>
-      </div>
-      <div id="clusters-tools" class="tools hidden">
-        <button id="search-clusters" class="btn primary">读取关联串</button>
-        <div class="hint">把疑似/较可能/已确认的账号按传递关系合并成串展示。</div>
-      </div>
-      <div id="ip-tools" class="tools hidden">
-        <input id="ip-input" placeholder="IP">
-        <input id="ip-reason" placeholder="原因">
-        <button id="ip-duration" class="btn">时长</button>
-        <button id="ban-ip" class="btn danger">封禁IP</button>
-      </div>
-      <div id="moderation-tools" class="tools hidden">
+      </label>
+      <button id="search-matches" class="hd-button hd-button-primary">搜索对局</button>
+    </div>
+    <div class="hd-toolbar-group hidden" data-tools="risk">
+      <button id="search-risk" class="hd-button hd-button-primary">读取风险对局</button>
+      <span class="hd-muted">自动标记同 IP、早期投降、过短或不计分对局；仅供人工判断。</span>
+    </div>
+    <div class="hd-toolbar-group hidden" data-tools="clusters">
+      <button id="search-clusters" class="hd-button hd-button-primary">读取关联串</button>
+      <span class="hd-muted">按传递关系合并疑似 / 较可能 / 已确认账号。</span>
+    </div>
+    <div class="hd-toolbar-group hidden" data-tools="moderation">
+      <label class="hd-field-inline">
+        <span>类型</span>
         <select id="moderation-filter">
           <option value="all">全部有效处罚</option>
           <option value="account_ban">账号封禁</option>
           <option value="warning">警告</option>
+          <option value="mute">禁言</option>
         </select>
-        <div class="hint">只在打开或手动刷新时读取，最多返回 40 条。</div>
-      </div>
-      <div id="list" class="list"></div>
-    </aside>
+      </label>
+    </div>
+    <div class="hd-toolbar-group hidden" data-tools="ip">
+      <label class="hd-search">
+        <span>搜索</span>
+        <input id="ip-query" placeholder="IP 片段" autocomplete="off">
+      </label>
+      <label class="hd-check">
+        <input type="checkbox" id="ip-include-inactive">
+        <span>含已解除 / 已过期</span>
+      </label>
+      <button id="search-ip" class="hd-button hd-button-primary">搜索</button>
+      <span class="hd-toolbar-divider" aria-hidden="true"></span>
+      <label class="hd-search">
+        <span>新增</span>
+        <input id="ip-input" placeholder="IP" autocomplete="off">
+      </label>
+      <input id="ip-reason" placeholder="封禁原因" autocomplete="off" class="hd-grow">
+      <button id="ban-ip" class="hd-button hd-button-danger">封禁 IP…</button>
+    </div>
+  </div>
 
-    <section class="center panel">
-      <div id="empty" class="empty">选择一条举报、玩家、对局、风险、处罚或 IP 记录。</div>
-      <article id="detail" class="detail hidden"></article>
+  <div class="hd-split">
+    <aside class="hd-list-pane" aria-label="记录列表">
+      <div id="list" class="hd-list" aria-live="polite"></div>
+      <div class="hd-pagination">
+        <button id="page-prev" class="hd-button hd-button-small" type="button">上一页</button>
+        <span id="page-info" class="hd-muted"></span>
+        <button id="page-next" class="hd-button hd-button-small" type="button">下一页</button>
+      </div>
+    </aside>
+    <section class="hd-detail-pane">
+      <div id="empty" class="hd-empty">
+        <div class="hd-empty-kicker">举报处理</div>
+        <h2>选择左侧一条记录查看详情</h2>
+        <p class="hd-muted">列表不会自动轮询，处理前先点「刷新」拿最新状态。</p>
+      </div>
+      <article id="detail" class="hd-detail hidden"></article>
     </section>
+  </div>
 
-    <aside id="handling-actions" class="right panel">
-      <h2>处理</h2>
-      <label>举报结论</label>
-      <select id="resolve-action">
-        <option value="accept">接受举报</option>
-        <option value="reject">驳回举报</option>
-        <option value="abusive">标记恶意举报</option>
-      </select>
-      <div class="split-actions">
-        <div class="action-card">
-          <label>被举报人处理</label>
-          <select id="target-moderation-action">
-            <option value="none">不处罚</option>
-            <option value="warn">警告</option>
-            <option value="mute">禁言</option>
-            <option value="ban">封禁账号</option>
-            <option value="invalidate_match">标记对局异常</option>
-          </select>
-          <div id="target-action-hint" class="hint">作用于被举报人。</div>
-        </div>
-        <div class="action-card">
-          <label>举报人处理</label>
-          <select id="reporter-moderation-action">
-            <option value="none">不处罚</option>
-            <option value="warn">警告</option>
-            <option value="mute">禁言</option>
-            <option value="ban">封禁账号</option>
-          </select>
-          <div id="reporter-action-hint" class="hint">作用于举报提交者。</div>
-        </div>
-      </div>
-      <div class="duration-row">
-        <label>处罚时长</label>
-        <button id="mod-duration" class="btn">选择时长</button>
-        <span id="duration-label" class="mono muted">0秒</span>
-      </div>
-      <div class="quick-row">
-        <button class="btn small quick" data-seconds="600">10分</button>
-        <button class="btn small quick" data-seconds="3600">1时</button>
-        <button class="btn small quick" data-seconds="86400">1天</button>
-        <button class="btn small quick" data-seconds="604800">7天</button>
-        <button class="btn small quick" data-seconds="0">永久</button>
-      </div>
-      <label>备注</label>
-      <textarea id="note" rows="6" placeholder="处理说明"></textarea>
-      <button id="resolve" class="btn primary">提交处理</button>
-    </aside>
-  </section>
+  <footer class="hd-footer">
+    <span>举报处理页在新标签页打开，不影响对局；所有操作都写入管理审计。</span>
+  </footer>
 </main>
 
-<div id="duration-modal" class="modal hidden" aria-hidden="true">
-  <div class="modal-panel">
-    <header>
-      <h2>选择时长</h2>
-      <button id="duration-close" class="btn small">关闭</button>
-    </header>
-    <div class="seconds-line">
-      <label>秒数</label>
-      <input id="duration-seconds" type="number" min="0" max="86400000" value="0">
-      <button id="duration-permanent" class="btn">永久</button>
+<dialog id="hd-duration-dialog" class="hd-dialog">
+  <div class="hd-dialog-head">
+    <div>
+      <h2 id="hd-duration-title">选择时长</h2>
+      <p class="hd-muted">0 秒按永久处理（警告除外，最少 10 分钟）。</p>
     </div>
-    <div class="wheels">
-      <div class="wheel-block"><button data-wheel="days" data-delta="1">▲</button><select id="wheel-days" size="7"></select><button data-wheel="days" data-delta="-1">▼</button><span>天</span></div>
-      <div class="wheel-block"><button data-wheel="hours" data-delta="1">▲</button><select id="wheel-hours" size="7"></select><button data-wheel="hours" data-delta="-1">▼</button><span>时</span></div>
-      <div class="wheel-block"><button data-wheel="minutes" data-delta="1">▲</button><select id="wheel-minutes" size="7"></select><button data-wheel="minutes" data-delta="-1">▼</button><span>分</span></div>
-      <div class="wheel-block"><button data-wheel="seconds" data-delta="1">▲</button><select id="wheel-seconds" size="7"></select><button data-wheel="seconds" data-delta="-1">▼</button><span>秒</span></div>
-    </div>
-    <footer>
-      <button id="duration-apply" class="btn primary">确认</button>
-    </footer>
+    <button class="hd-dialog-close" type="button" data-close-dialog aria-label="关闭">×</button>
   </div>
-</div>
+  <div class="hd-chip-row" id="hd-duration-quick">
+    <button class="hd-chip" data-seconds="600">10 分钟</button>
+    <button class="hd-chip" data-seconds="3600">1 小时</button>
+    <button class="hd-chip" data-seconds="86400">1 天</button>
+    <button class="hd-chip" data-seconds="604800">7 天</button>
+    <button class="hd-chip" data-seconds="2592000">30 天</button>
+    <button class="hd-chip hd-chip-danger" data-seconds="0">永久</button>
+  </div>
+  <label class="hd-field">
+    <span>自定义（天 / 时 / 分）</span>
+    <div class="hd-custom-duration">
+      <input id="hd-duration-days" type="number" min="0" max="1000" value="0"><span>天</span>
+      <input id="hd-duration-hours" type="number" min="0" max="23" value="0"><span>时</span>
+      <input id="hd-duration-minutes" type="number" min="0" max="59" value="0"><span>分</span>
+      <span class="hd-duration-total">合计 <b id="hd-duration-total">0</b> 秒</span>
+    </div>
+  </label>
+  <div class="hd-dialog-actions">
+    <button class="hd-button" type="button" data-close-dialog>取消</button>
+    <button id="hd-duration-apply" class="hd-button hd-button-primary" type="button">确认</button>
+  </div>
+</dialog>
 
-<script src="/static/js/handling.js?v={{ static_version|default('dev')|urlencode }}"></script>
+<dialog id="hd-confirm-dialog" class="hd-dialog">
+  <div class="hd-dialog-head">
+    <div>
+      <h2 id="hd-confirm-title">确认</h2>
+      <p id="hd-confirm-body" class="hd-muted"></p>
+    </div>
+    <button class="hd-dialog-close" type="button" data-close-dialog aria-label="关闭">×</button>
+  </div>
+  <div class="hd-dialog-actions">
+    <button class="hd-button" type="button" data-close-dialog>取消</button>
+    <button id="hd-confirm-apply" class="hd-button hd-button-danger" type="button">确认执行</button>
+  </div>
+</dialog>
+
+<dialog id="hd-prompt-dialog" class="hd-dialog">
+  <div class="hd-dialog-head">
+    <div>
+      <h2 id="hd-prompt-title">填写</h2>
+      <p id="hd-prompt-hint" class="hd-muted"></p>
+    </div>
+    <button class="hd-dialog-close" type="button" data-close-dialog aria-label="关闭">×</button>
+  </div>
+  <label class="hd-field">
+    <span id="hd-prompt-label">内容</span>
+    <input id="hd-prompt-input" autocomplete="off">
+  </label>
+  <p id="hd-prompt-error" class="hd-error" role="alert"></p>
+  <div class="hd-dialog-actions">
+    <button class="hd-button" type="button" data-close-dialog>取消</button>
+    <button id="hd-prompt-apply" class="hd-button hd-button-primary" type="button">确认</button>
+  </div>
+</dialog>
+
+  <script src="/static/js/handling.js?v={{ static_version|default('dev')|urlencode }}"></script>
 </body>
 </html>

@@ -304,6 +304,8 @@ from db import (
     social_unread_counts,
     set_ip_ban,
     set_user_mute,
+    clear_user_mute,
+    list_reputation_ledger_entries,
     set_story_bank,
     spend_user_thorn_dew,
     set_user_equipped_titles,
@@ -838,7 +840,7 @@ GTN_STATIC_VERSION += '-nitro-drawfix-1'
 GTN_STATIC_VERSION += '-antennae-uifix-1'
 GTN_STATIC_VERSION += '-skin-card-ratio-1'
 GTN_STATIC_VERSION += '-server-play-prediction-1'
-GTN_STATIC_VERSION += '-skin-text-contrast-15-inkmap-linesplit-1-gallery-prob-1-preview-modal-mobile-1-preview-side-toggle-1-skin-darkband-1-skin-pale-2-skin-pale-3-skin-parity-4-targetpick-controls-1'
+GTN_STATIC_VERSION += '-skin-text-contrast-15-inkmap-linesplit-1-gallery-prob-1-preview-modal-mobile-1-preview-side-toggle-1-skin-darkband-1-skin-pale-2-skin-pale-3-skin-parity-4-targetpick-controls-1-handling-rebuild-1'
 GTN_STATIC_VERSION += '-skin-preview-modal-1'
 GTN_STATIC_VERSION += '-card-tag-dedup-1'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
@@ -3166,7 +3168,7 @@ def protect_admin_api():
         path.startswith('/api/admin/')
         or path.startswith('/api/adminconsole/')
         or path.startswith('/api/feedback/handling/')
-        or path in {'/admin', '/adminpage', '/admin-stats', '/adminconsole', '/feedback/handling-pane'}
+        or path in {'/admin', '/adminpage', '/admin-stats', '/adminconsole', '/feedback/handling-pane', '/handling'}
     )
     if DB_AVAILABLE and not admin_surface and not path.startswith('/static/') and not path.startswith('/fonts/') and path != '/favicon.ico':
         try:
@@ -22933,8 +22935,9 @@ def feedback_attachment_serve(token):
     return response
 
 
-@app.route('/feedback/handling-pane')
-def feedback_handling_pane():
+@app.route('/handling')
+def feedback_handling_page():
+    # 举报处理独立页（原 /feedback/handling-pane）；权限口径不变：仅 staff/admin
     if not is_feedback_handling_authenticated():
         return 'Forbidden', 403
     return render_template(
@@ -22942,6 +22945,13 @@ def feedback_handling_pane():
         static_version=GTN_STATIC_VERSION,
         csrf_token=feedback_handling_csrf_token(),
     )
+
+
+@app.route('/feedback/handling-pane')
+def feedback_handling_pane():
+    if not is_feedback_handling_authenticated():
+        return 'Forbidden', 403
+    return redirect('/handling')
 
 
 @app.route('/feedback-center')
@@ -23256,12 +23266,16 @@ def handling_users():
     if not DB_AVAILABLE:
         return db_unavailable_response()
     try:
+        rep_min = request.args.get('reputation_min')
+        rep_max = request.args.get('reputation_max')
         data = list_admin_users(
             query=request.args.get('query', ''),
             sort=request.args.get('sort', 'last_login_at'),
             order=request.args.get('order', 'desc'),
             limit=validate_int(request.args.get('limit', 20), default=20, minimum=1, maximum=30, name='limit'),
             offset=validate_int(request.args.get('offset', 0), default=0, minimum=0, maximum=1000000, name='offset'),
+            reputation_min=validate_int(rep_min, default=None, minimum=0, maximum=100, name='reputation_min') if str(rep_min or '').strip() != '' else None,
+            reputation_max=validate_int(rep_max, default=None, minimum=0, maximum=100, name='reputation_max') if str(rep_max or '').strip() != '' else None,
         )
     except Exception as exc:
         admin_event('error', f'handling users query failed: {exc}')
@@ -23443,6 +23457,7 @@ def handling_ip_bans():
             active_only=active_only,
             limit=validate_int(request.args.get('limit', 30), default=30, minimum=1, maximum=50, name='limit'),
             offset=validate_int(request.args.get('offset', 0), default=0, minimum=0, maximum=1000000, name='offset'),
+            query=request.args.get('query', ''),
         )
         log_admin_api_timing('/api/feedback/handling/ip-bans', (time.perf_counter() - started) * 1000, rows=len(data.get('items') or []), total=data.get('total'), limit=data.get('limit'))
         return jsonify({'success': True, **data})
@@ -23506,6 +23521,37 @@ def handling_unban_ip(ip):
     _clear_ip_ban_status_cache()
     admin_event('moderation', f'handling unbanned ip {ip}')
     return jsonify({'success': True, 'ip_ban': row})
+
+
+@app.route('/api/feedback/handling/users/<int:user_id>/reputation')
+def handling_user_reputation(user_id):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    entries = list_reputation_ledger_entries(user_id, limit=20)
+    return jsonify({'success': True, 'entries': entries})
+
+
+@app.route('/api/feedback/handling/mutes/<int:user_id>', methods=['PATCH', 'DELETE'])
+def handling_update_mute(user_id):
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    if request.method == 'PATCH':
+        data = request.get_json(silent=True) or {}
+        try:
+            reason = validate_str(data.get('reason', ''), max_len=300, name='reason', truncate=True)
+            duration_seconds = validate_int(data.get('duration_seconds', 600), default=600, minimum=1, maximum=60 * 60 * 24 * 30, name='duration_seconds')
+        except ValueError as exc:
+            return _json_error(str(exc), 400)
+        row, error = set_user_mute(user_id, '', duration_seconds, reason, session.get('username') or 'handling')
+        if error:
+            return _json_error(error, 400)
+        admin_event('moderation', f'handling updated mute #{user_id}: {reason or "-"} ({duration_seconds}s)')
+        return jsonify({'success': True, 'mute': row})
+    removed = clear_user_mute(user_id)
+    if not removed:
+        return _json_error('该账号当前没有生效中的禁言', 400)
+    admin_event('moderation', f'handling cleared mute #{user_id}')
+    return jsonify({'success': True})
 
 
 @app.route('/api/admin/status')

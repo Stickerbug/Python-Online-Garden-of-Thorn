@@ -3136,35 +3136,6 @@ a.title-shop-afdian-go:hover {
   box-shadow: var(--shadow-lg);
 }
 
-.feedback-inner.handling-open {
-  width: min(1500px, calc(100vw - 20px));
-  height: calc(100vh - 20px);
-  max-width: none;
-  max-height: none;
-  display: block;
-  padding: 0;
-  overflow: hidden;
-}
-
-.feedback-inner.handling-open > .account-popover-head,
-.feedback-inner.handling-open > .feedback-tabs,
-.feedback-inner.handling-open > .feedback-body {
-  display: none;
-}
-
-.feedback-handling-frame {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border: 0;
-  border-radius: inherit;
-  background: var(--bg-primary, #f4f5f7);
-}
-
-.feedback-handling-frame.hidden {
-  display: none;
-}
-
 .feedback-tabs {
   display: flex;
   gap: 8px;

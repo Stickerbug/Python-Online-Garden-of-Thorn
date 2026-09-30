@@ -7875,14 +7875,22 @@ def get_ip_ban_status(ip):
         }
 
 
-def list_ip_bans(active_only=True, limit=100, offset=0):
+def list_ip_bans(active_only=True, limit=100, offset=0, query=''):
     limit = max(1, min(int(limit or 100), 300))
     offset = max(0, int(offset or 0))
-    where = 'WHERE active = 1' if active_only else ''
+    conds = []
+    params = []
+    if active_only:
+        conds.append('active = 1')
+    token = str(query or '').strip()
+    if token:
+        conds.append('ip LIKE ?')
+        params.append(f'%{token}%')
+    where = ('WHERE ' + ' AND '.join(conds)) if conds else ''
     with get_db_connection() as conn:
         rows = conn.execute(
             f'SELECT * FROM ip_bans {where} ORDER BY active DESC, created_at DESC LIMIT ? OFFSET ?',
-            (limit, offset),
+            params + [limit, offset],
         ).fetchall()
         cleaned = []
         for row in rows:
@@ -7890,7 +7898,7 @@ def list_ip_bans(active_only=True, limit=100, offset=0):
             if active_only and (row is None or not bool(row['active'])):
                 continue
             cleaned.append(_row_to_ip_ban(row))
-        total = conn.execute(f'SELECT COUNT(*) FROM ip_bans {where}').fetchone()[0]
+        total = conn.execute(f'SELECT COUNT(*) FROM ip_bans {where}', params).fetchone()[0]
         return {'items': cleaned, 'total': total, 'limit': limit, 'offset': offset}
 
 
@@ -8259,6 +8267,82 @@ def is_user_muted_db(user_id):
             'muted_by': row['muted_by'],
             'checked_at': now,
         }
+
+
+def list_active_mutes(limit=50, offset=0):
+    """举报处理页禁言列表：只列生效中的（过期的就地清理，同读接口口径）。"""
+    limit = max(1, min(int(limit or 50), 100))
+    offset = max(0, int(offset or 0))
+    now = utc_now()
+    with get_db_connection() as conn:
+        rows = conn.execute(
+            '''
+            SELECT * FROM muted_users WHERE muted_until > ?
+            ORDER BY muted_until ASC LIMIT ? OFFSET ?
+            ''',
+            (now, limit, offset),
+        ).fetchall()
+        total = conn.execute(
+            'SELECT COUNT(*) FROM muted_users WHERE muted_until > ?', (now,)
+        ).fetchone()[0]
+        items = []
+        for row in rows:
+            until_dt = _parse_utc(row['muted_until'])
+            remaining = max(0, int((until_dt - utc_now_dt()).total_seconds())) if until_dt else 0
+            items.append({
+                'kind': 'mute',
+                'key': f"mute:{row['user_id']}",
+                'user_id': row['user_id'],
+                'username': row['username'] or '',
+                'reason': row['reason'] or '',
+                'muted_by': row['muted_by'] or '',
+                'created_at': row['created_at'],
+                'muted_until': row['muted_until'],
+                'remaining_seconds': remaining,
+                'permanent': False,
+            })
+        return {'items': items, 'total': total, 'limit': limit, 'offset': offset}
+
+
+def clear_user_mute(user_id):
+    """提前解除禁言（举报处理页）。"""
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return 0
+    with get_db_connection() as conn:
+        cur = conn.execute('DELETE FROM muted_users WHERE user_id = ?', (uid,))
+        conn.commit()
+        return cur.rowcount
+
+
+def list_reputation_ledger_entries(user_id, limit=20):
+    """玩家最近信誉分变动（详情展示用，含原因码和关联对局）。"""
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return []
+    limit = max(1, min(int(limit or 20), 50))
+    with get_db_connection() as conn:
+        rows = conn.execute(
+            '''
+            SELECT id, delta, value_before, value_after, reason_code, match_id,
+                   metadata_json, reputation_date, created_at
+            FROM reputation_ledger WHERE user_id = ?
+            ORDER BY created_at DESC, id DESC LIMIT ?
+            ''',
+            (uid, limit),
+        ).fetchall()
+        return [{
+            'id': row['id'],
+            'delta': int(row['delta'] or 0),
+            'value_before': int(row['value_before'] or 0),
+            'value_after': int(row['value_after'] or 0),
+            'reason_code': row['reason_code'] or '',
+            'match_id': row['match_id'],
+            'metadata': _safe_json_loads(row['metadata_json'], {}),
+            'created_at': row['created_at'],
+        } for row in rows]
 
 
 def _row_to_report(row):
@@ -8634,7 +8718,7 @@ def get_active_user_warnings(user_id, limit=3):
 
 def list_active_moderation_records(kind='all', limit=50, offset=0):
     kind = str(kind or 'all').strip().lower()
-    if kind not in {'all', 'account_ban', 'warning'}:
+    if kind not in {'all', 'account_ban', 'warning', 'mute'}:
         kind = 'all'
     limit = max(1, min(int(limit or 50), 100))
     offset = max(0, int(offset or 0))
@@ -8643,6 +8727,7 @@ def list_active_moderation_records(kind='all', limit=50, offset=0):
     with get_db_connection() as conn:
         total_bans = 0
         total_warnings = 0
+        total_mutes = 0
         if kind in {'all', 'account_ban'}:
             total_bans = int(conn.execute(
                 '''
@@ -8711,12 +8796,40 @@ def list_active_moderation_records(kind='all', limit=50, offset=0):
                     'admin_username': row['admin_username'] or '',
                     'related_report_id': row['related_report_id'],
                 })
+        if kind in {'all', 'mute'}:
+            total_mutes = int(conn.execute(
+                'SELECT COUNT(*) FROM muted_users WHERE muted_until > ?', (now,)
+            ).fetchone()[0])
+            rows = conn.execute(
+                '''
+                SELECT * FROM muted_users WHERE muted_until > ?
+                ORDER BY created_at DESC, user_id DESC
+                LIMIT ?
+                ''',
+                (now, limit + offset),
+            ).fetchall()
+            for row in rows:
+                items.append({
+                    'key': f'mute:{row["user_id"]}',
+                    'kind': 'mute',
+                    'id': int(row['user_id']),
+                    'user_id': int(row['user_id']),
+                    'username': row['username'] or '',
+                    'player_id': '',
+                    'reason': row['reason'] or '',
+                    'created_at': row['created_at'],
+                    'expires_at': row['muted_until'],
+                    'remaining_seconds': _remaining_seconds_until(row['muted_until']),
+                    'permanent': False,
+                    'muted_by': row['muted_by'] or '',
+                    'related_report_id': None,
+                })
     items.sort(key=lambda item: (str(item.get('created_at') or ''), str(item.get('key') or '')), reverse=True)
-    total = total_bans + total_warnings
+    total = total_bans + total_warnings + total_mutes
     return {
         'items': items[offset:offset + limit],
         'total': total,
-        'counts': {'account_ban': total_bans, 'warning': total_warnings},
+        'counts': {'account_ban': total_bans, 'warning': total_warnings, 'mute': total_mutes},
         'limit': limit,
         'offset': offset,
         'has_more': offset + limit < total,
@@ -11064,6 +11177,7 @@ ADMIN_USER_SORTS = {
     'losses': 'losses',
     'draws': 'draws',
     'play_seconds': 'play_seconds',
+    'reputation': 'reputation',
     'win_rate': 'CASE WHEN games_played > 0 THEN CAST(wins AS REAL) / games_played ELSE 0 END',
 }
 
@@ -11950,9 +12064,11 @@ def list_average_round_stats(scope='total', mode='', recent_days=7):
     }
 
 
-def list_admin_users(query='', sort='last_login_at', order='desc', limit=30, offset=0, deleted=None):
+def list_admin_users(query='', sort='last_login_at', order='desc', limit=30, offset=0, deleted=None,
+                     reputation_min=None, reputation_max=None):
     """管理台账号列表/搜索。deleted=None 不过滤（含注销号，输出里带标记）；
-    True 只列注销号（account restore 补全用）；False 只列正常号。"""
+    True 只列注销号（account restore 补全用）；False 只列正常号。
+    reputation_min/max：举报处理页的信誉分范围筛选（0-100）。"""
     sort_key = str(sort or 'last_login_at')
     sort_expr = ADMIN_USER_SORTS.get(sort_key, ADMIN_USER_SORTS['last_login_at'])
     direction = 'ASC' if str(order or '').lower() == 'asc' else 'DESC'
@@ -11971,6 +12087,15 @@ def list_admin_users(query='', sort='last_login_at', order='desc', limit=30, off
     if name:
         conditions.append('(username_lower LIKE ? OR player_id LIKE ?)')
         params.extend([f'%{name.lower()}%', f'%{str(query or "").strip().upper()}%'])
+    for bound, op in ((reputation_min, '>='), (reputation_max, '<=')):
+        if bound is None:
+            continue
+        try:
+            value = max(0, min(100, int(bound)))
+        except (TypeError, ValueError):
+            continue
+        conditions.append(f'reputation {op} ?')
+        params.append(value)
     if deleted is True:
         conditions.append('deleted_at IS NOT NULL')
     elif deleted is False:

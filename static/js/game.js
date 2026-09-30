@@ -5311,7 +5311,6 @@ let activeFeedbackTab = 'send';
 let activeFeedbackThreadId = null;
 let activeFeedbackStaffView = false;
 let feedbackCollapsedGroups = { open: false, pending: false, closed: true };
-let feedbackHandlingOpen = false;
 let activeSocialFriendId = null;
 let activeSocialSection = 'friends';
 let activeSocialRequestId = null;
@@ -24232,7 +24231,6 @@ function renderFeedbackModal() {
     if (staffTab) staffTab.classList.toggle('hidden', !feedbackState.is_staff);
     const handlingTab = $('feedback-tab-handling');
     if (handlingTab) handlingTab.classList.toggle('hidden', !feedbackState.is_staff);
-    if (!feedbackState.is_staff && feedbackHandlingOpen) setFeedbackHandlingView(false);
     document.querySelectorAll('[data-feedback-tab]').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.feedbackTab === activeFeedbackTab);
     });
@@ -24249,33 +24247,7 @@ function renderFeedbackModal() {
     updateFeedbackBadge();
 }
 
-function setFeedbackHandlingView(show) {
-    const modal = $('feedback-modal');
-    const inner = modal?.querySelector('.feedback-inner');
-    const frame = $('feedback-handling-frame');
-    if (!inner || !frame) return;
-    const shouldShow = !!show && !!feedbackState.is_staff;
-    feedbackHandlingOpen = shouldShow;
-    inner.classList.toggle('handling-open', shouldShow);
-    frame.classList.toggle('hidden', !shouldShow);
-    if (shouldShow && !frame.getAttribute('src')) {
-        frame.setAttribute('src', '/feedback/handling-pane');
-    }
-}
-
-function handleFeedbackHandlingMessage(event) {
-    const frame = $('feedback-handling-frame');
-    if (
-        !frame
-        || event.origin !== window.location.origin
-        || event.source !== frame.contentWindow
-        || !event.data
-        || event.data.type !== 'gtn:feedback-handling-exit'
-    ) {
-        return;
-    }
-    setFeedbackHandlingView(false);
-}
+/* 举报处理已独立为 /handling 页（staff 专属入口），此处仅负责新开标签页 */
 
 async function loadFeedbackThreads(staffView = false) {
     if (!currentAccount) {
@@ -24393,10 +24365,8 @@ async function toggleFeedbackModal(show) {
     if (!modal) return;
     modal.classList.toggle('hidden', !show);
     if (!show) {
-        setFeedbackHandlingView(false);
         return;
     }
-    setFeedbackHandlingView(false);
     activeFeedbackTab = feedbackState.is_staff && activeFeedbackTab === 'staff' ? 'staff' : 'send';
     activeFeedbackStaffView = activeFeedbackTab === 'staff';
     if (!currentAccount) {
@@ -39808,12 +39778,12 @@ async function init() {
     if ($('btn-open-feedback')) $('btn-open-feedback').addEventListener('click', () => toggleFeedbackModal(true));
     if ($('btn-feedback-close')) $('btn-feedback-close').addEventListener('click', () => toggleFeedbackModal(false));
     if ($('feedback-tab-handling')) {
-        $('feedback-tab-handling').addEventListener('click', () => setFeedbackHandlingView(true));
+        $('feedback-tab-handling').addEventListener('click', () => {
+            window.open('/handling', '_blank', 'noopener');
+        });
     }
-    window.addEventListener('message', handleFeedbackHandlingMessage);
     document.querySelectorAll('[data-feedback-tab]').forEach(btn => {
         btn.addEventListener('click', async () => {
-            setFeedbackHandlingView(false);
             activeFeedbackTab = btn.dataset.feedbackTab || 'send';
             activeFeedbackThreadId = null;
             feedbackState.messages = [];
