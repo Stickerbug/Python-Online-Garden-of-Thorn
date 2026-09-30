@@ -12409,7 +12409,9 @@ function getSkinInkCanvasData(skinId) {
             cv.height = SKIN_INK_CANVAS_SIZE;
             const ctx = cv.getContext('2d', { willReadFrequently: true });
             ctx.drawImage(img, 0, 0, SKIN_INK_CANVAS_SIZE, SKIN_INK_CANVAS_SIZE);
-            return { data: ctx.getImageData(0, 0, SKIN_INK_CANVAS_SIZE, SKIN_INK_CANVAS_SIZE), size: SKIN_INK_CANVAS_SIZE };
+            // img 一并缓存：映射图用它直接按目标分辨率光栅化（浏览器矢量抗锯齿，
+            // 与页面皮肤渲染同源，边界无二次采样错位）
+            return { data: ctx.getImageData(0, 0, SKIN_INK_CANVAS_SIZE, SKIN_INK_CANVAS_SIZE), size: SKIN_INK_CANVAS_SIZE, img };
         } catch (_) {
             return null;
         }
@@ -12533,13 +12535,14 @@ function parseRgbColor(text) {
 // 基色，中性/近透明区写基色），span 用 background-size=卡尺寸 +
 // background-position=-卡内偏移 取到自己脚下那块颜色——颜色边界与
 // 皮肤图案的真实轮廓（任意形状/斜边）一致，而非竖直条带。
-// 图按 (skinId, 基色) 缓存，160×224 低分辨率足够（颜色映射是低频信息）。
+// 图按 (skinId, 基色) 缓存。
 const skinInkMapCache = new Map();
-// 高分辨率 + 默认平滑插值：色块边界过渡带仅 1-2px（视觉即瞬间变色），
-// 且边界形状贴合皮肤图案轮廓。低分辨率+pixelated 会产生方块锯齿、
-// 锯齿与图案真实边界错位（边缘处出现错色块）
-const SKIN_INK_MAP_W = 360;
-const SKIN_INK_MAP_H = 504;
+// 生成方式：把皮肤 SVG 直接光栅化到映射图分辨率（drawImage 到目标尺寸，
+// 浏览器矢量抗锯齿），再逐像素重映射亮度——与页面上的皮肤渲染同源同相位，
+// 图案边界贴合到亚像素。绝不能用低分辨率光栅+最近邻重采样（边界锯齿
+// 与真实轮廓错位 1-2px，笔画宽度级别肉眼可见）。
+const SKIN_INK_MAP_W = 420;
+const SKIN_INK_MAP_H = 588;
 const SKIN_INK_MAP_CACHE_MAX = 48;
 const SKIN_INK_CARD_RATIO = 88 / 63;
 
@@ -12548,31 +12551,31 @@ function getSkinInkMapDataUrl(skinId, skin, baseRgb) {
     if (skinInkMapCache.has(key)) {
         return skinInkMapCache.get(key);
     }
-    const cv = document.createElement('canvas');
-    cv.width = SKIN_INK_MAP_W;
-    cv.height = SKIN_INK_MAP_H;
-    const ctx = cv.getContext('2d');
-    const out = ctx.createImageData(SKIN_INK_MAP_W, SKIN_INK_MAP_H);
-    const px = skin.data.data;
-    const size = skin.size;
-    const imgSize = 1.823; // 皮肤图边长（卡宽单位），与 CSS 同口径
-    const offX = (1 - imgSize) / 2;
-    const offY = (SKIN_INK_CARD_RATIO - imgSize) / 2;
-    const [h, s] = rgbToHsl(baseRgb);
-    const neutralR = baseRgb[0], neutralG = baseRgb[1], neutralB = baseRgb[2];
-    for (let y = 0; y < SKIN_INK_MAP_H; y++) {
-        const cardYu = ((y + 0.5) / SKIN_INK_MAP_H) * SKIN_INK_CARD_RATIO;
-        for (let x = 0; x < SKIN_INK_MAP_W; x++) {
-            const cardXu = (x + 0.5) / SKIN_INK_MAP_W;
-            const sx = ((cardXu - offX) / imgSize) * size;
-            const sy = ((cardYu - offY) / imgSize) * size;
-            const i = (y * SKIN_INK_MAP_W + x) * 4;
-            let r = neutralR, g = neutralG, b = neutralB;
-            if (sx >= 0 && sx < size && sy >= 0 && sy < size) {
-                const si = ((sy | 0) * size + (sx | 0)) * 4;
-                const a = px[si + 3];
+    const url = (skin.img
+        ? (() => {
+            const cv = document.createElement('canvas');
+            cv.width = SKIN_INK_MAP_W;
+            cv.height = SKIN_INK_MAP_H;
+            const ctx = cv.getContext('2d', { willReadFrequently: true });
+            // 与 CSS 同口径：皮肤图边长 1.823 卡宽、方形、水平垂直居中
+            const imgSize = 1.823;
+            const offX = (1 - imgSize) / 2;
+            const offY = (SKIN_INK_CARD_RATIO - imgSize) / 2;
+            const pxPerCardX = SKIN_INK_MAP_W;
+            const pxPerCardY = SKIN_INK_MAP_H / SKIN_INK_CARD_RATIO;
+            ctx.drawImage(skin.img, offX * pxPerCardX, offY * pxPerCardY, imgSize * pxPerCardX, imgSize * pxPerCardY);
+            const src = ctx.getImageData(0, 0, SKIN_INK_MAP_W, SKIN_INK_MAP_H);
+            const sd = src.data;
+            const out = ctx.createImageData(SKIN_INK_MAP_W, SKIN_INK_MAP_H);
+            const od = out.data;
+            const [h, s] = rgbToHsl(baseRgb);
+            const n = SKIN_INK_MAP_W * SKIN_INK_MAP_H;
+            for (let i = 0; i < n; i++) {
+                const j = i * 4;
+                const a = sd[j + 3];
+                let r = baseRgb[0], g = baseRgb[1], b = baseRgb[2];
                 if (a >= 70) {
-                    const luma = (0.299 * px[si] + 0.587 * px[si + 1] + 0.114 * px[si + 2]) / 255;
+                    const luma = (0.299 * sd[j] + 0.587 * sd[j + 1] + 0.114 * sd[j + 2]) / 255;
                     const blended = luma * (a / 255) + 0.5 * (1 - a / 255);
                     const target = skinInkTargetLumaFor(baseRgb, blended);
                     if (target != null) {
@@ -12580,15 +12583,16 @@ function getSkinInkMapDataUrl(skinId, skin, baseRgb) {
                         r = rgb[0]; g = rgb[1]; b = rgb[2];
                     }
                 }
+                od[j] = r;
+                od[j + 1] = g;
+                od[j + 2] = b;
+                od[j + 3] = 255;
             }
-            out.data[i] = r;
-            out.data[i + 1] = g;
-            out.data[i + 2] = b;
-            out.data[i + 3] = 255;
-        }
-    }
-    ctx.putImageData(out, 0, 0);
-    const url = cv.toDataURL('image/png');
+            ctx.putImageData(out, 0, 0);
+            return cv.toDataURL('image/png');
+        })()
+        : null);
+    if (!url) return null;
     skinInkMapCache.set(key, url);
     while (skinInkMapCache.size > SKIN_INK_MAP_CACHE_MAX) {
         skinInkMapCache.delete(skinInkMapCache.keys().next().value);
@@ -12641,6 +12645,10 @@ function applySkinInkToNode(node, skin, cardRect, skinId) {
         return;
     }
     let url = getSkinInkMapDataUrl(skinId, skin, baseRgb);
+    if (!url) {
+        node.classList.remove('skin-ink-live');
+        return;
+    }
     node.style.setProperty('--skin-ink-color', 'transparent');
     node.style.setProperty('--skin-ink-bg-image', `url("${url}")`);
     node.style.setProperty('--skin-ink-bg-size', `${cardRect.width.toFixed(1)}px ${cardRect.height.toFixed(1)}px`);
