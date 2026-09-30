@@ -11,7 +11,7 @@
       }
 
       .st1 {
-        fill: #f9cec7;
+        fill: #463a38;
       }
 
       .st2 {
@@ -19,7 +19,7 @@
       }
 
       .st2, .st3 {
-        fill: #efefef;
+        fill: #333333;
       }
     </style>
   </defs>
