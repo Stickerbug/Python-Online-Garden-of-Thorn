@@ -838,7 +838,7 @@ GTN_STATIC_VERSION += '-nitro-drawfix-1'
 GTN_STATIC_VERSION += '-antennae-uifix-1'
 GTN_STATIC_VERSION += '-skin-card-ratio-1'
 GTN_STATIC_VERSION += '-server-play-prediction-1'
-GTN_STATIC_VERSION += '-skin-text-contrast-15-inkmap-linesplit-1'
+GTN_STATIC_VERSION += '-skin-text-contrast-15-inkmap-linesplit-1-gallery-prob-1'
 GTN_STATIC_VERSION += '-skin-preview-modal-1'
 GTN_STATIC_VERSION += '-card-tag-dedup-1'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
@@ -8391,8 +8391,14 @@ def get_allowed_card_ids(disabled_mods=None):
     return allowed
 
 
-def get_card_mod_sources(disabled_mods=None):
-    disabled = set(ensure_valid_disabled_mods(disabled_mods))
+def get_card_mod_sources(disabled_mods=None, include_all_installed=False):
+    # include_all_installed（图鉴/导出工具口径）：全部已安装模组的来源都保留。
+    # 无参调用会走 ensure_valid_disabled_mods(None)——其默认把设计锁定包
+    # （数值重做中停用）视为禁用，这些模组的卡会拿不到来源、前端归到 unknown。
+    if include_all_installed:
+        disabled = set()
+    else:
+        disabled = set(ensure_valid_disabled_mods(disabled_mods))
     sources = {}
     for mod in load_all_mods():
         if mod.errors or mod.filename in disabled:
@@ -22682,7 +22688,7 @@ def api_card_exporter_cards():
         reload_mod_card_defs()
     except Exception as exc:
         admin_event('error', f'card exporter failed to reload mod card defs: {exc}')
-    card_mod_sources = get_card_mod_sources([])
+    card_mod_sources = get_card_mod_sources(include_all_installed=True)
     draw_probabilities = same_type_draw_probabilities(set(CARD_DEFS.keys()))
     cards = []
     for def_id, card_def in CARD_DEFS.items():
@@ -27037,7 +27043,7 @@ def api_cards():
     allowed_card_ids = (set(CARD_DEFS.keys()) - hidden_entertainment_cards) if include_all_mods else loadout['allowed_card_ids']
     # 图鉴（include_all_mods）会展示全部已安装模组的卡，即使该娱乐模组在当前模式被停用。
     # 这里必须保留所有模组的来源信息，否则停用的娱乐模组卡会被前端归到 "unknown"。
-    card_mod_sources = get_card_mod_sources()
+    card_mod_sources = get_card_mod_sources(include_all_installed=True)
     shared_card_memberships = get_all_mod_shared_card_memberships()
     if community_mod:
         selected_hashes = {

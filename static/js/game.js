@@ -14977,7 +14977,10 @@ function getGallerySameTypeDrawProbability(cardDef) {
     ensureGalleryCardFilterState();
     const defs = getGalleryCardDefs();
     const eligible = Object.values(defs).filter(candidate => {
-        if (!isPublicCardDef(candidate) || candidate.temporarily_disabled) return false;
+        // 图鉴口径：入池资格只看图鉴筛选勾选的模组，不套娱乐/天梯 loadout
+        // 可见性（isPublicCardDef 带 visible_in_current_loadout 检查，会把
+        // 当前配置停用的娱乐模组卡算成不可抽，概率分母就错了）
+        if (!isGalleryVisibleCardDef(candidate) || candidate.temporarily_disabled) return false;
         const count = Number(candidate.count);
         if (!Number.isFinite(count) || count <= 0) return false;
         return getGalleryCardModMemberships(candidate)
@@ -15030,20 +15033,43 @@ function formatSameTypeDrawProbability(cardDef) {
                 ja: '抽選されません（一時無効）',
             });
         }
+        if (phase === 'gallery') {
+            /* 图鉴口径完全跟随图鉴筛选判定，不套娱乐/天梯 loadout 状态：
+               权重为 0（内置牌/仅能由卡牌生成）= 真不入抽卡池 → 无法抽到；
+               有模组归属且筛选未勾选 → 提示勾选即可。 */
+            ensureGalleryCardFilterState();
+            const count = Math.max(0, Number(cardDef && cardDef.count) || 0);
+            if (!cardDef || !isGalleryVisibleCardDef(cardDef) || count <= 0) {
+                return lt({
+                    zh: '无法抽到',
+                    en: 'Cannot be drawn',
+                    fr: 'Impossible à piocher',
+                    ja: '抽選されません',
+                });
+            }
+            const memberships = getGalleryCardModMemberships(cardDef);
+            if (memberships.length && !(gallerySelectedModKeys instanceof Set
+                && memberships.some(item => gallerySelectedModKeys.has(item.key)))) {
+                return lt({
+                    zh: '当前筛选未勾选所属模组',
+                    en: 'Mod not selected in current filter',
+                    fr: 'Mod non coché dans le filtre actuel',
+                    ja: '現在のフィルターでMod未選択',
+                });
+            }
+            return lt({
+                zh: '无法抽到',
+                en: 'Cannot be drawn',
+                fr: 'Impossible à piocher',
+                ja: '抽選されません',
+            });
+        }
         if (cardDef && cardDef.visible_in_current_loadout === false) {
             return lt({
                 zh: '模组未启用（启用后可抽到）',
                 en: 'Mod not enabled (drawable once enabled)',
                 fr: 'Mod non activé (piochable une fois activé)',
                 ja: 'Mod未有効（有効化すれば抽選されます）',
-            });
-        }
-        if (phase === 'gallery') {
-            return lt({
-                zh: '当前筛选未勾选所属模组',
-                en: 'Mod not selected in current filter',
-                fr: 'Mod non coché dans le filtre actuel',
-                ja: '現在のフィルターでMod未選択',
             });
         }
         return lt({
