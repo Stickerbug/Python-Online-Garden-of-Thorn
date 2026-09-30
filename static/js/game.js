@@ -27136,6 +27136,7 @@ function renderModDrawState(data = {}) {
     if (playersEl) {
         playersEl.innerHTML = '';
         const names = data.player_names || [];
+        const banCounts = data.ban_counts || {};
         names.forEach((name, index) => {
             const row = document.createElement('div');
             row.className = 'mod-draw-player-row' + ((submittedByIndex[String(index)] || submittedByIndex[index]) ? ' submitted' : '');
@@ -27143,11 +27144,20 @@ function renderModDrawState(data = {}) {
             left.textContent = `${index + 1}. ${name || `Player ${index + 1}`}`;
             const right = document.createElement('span');
             right.className = 'mod-draw-player-bans';
-            const bans = (data.bans && (data.bans[String(index)] || data.bans[index])) || [];
             const submitted = !!(submittedByIndex[String(index)] || submittedByIndex[index]);
-            right.textContent = bans.length
-                ? bans.map(getShortModDisplayName).join(' / ') + (submitted ? ` · ${lt({ zh: '已确认', en: 'Ready', fr: 'Prêt', ja: '確定' })}` : '')
-                : (submitted ? lt({ zh: '不禁用 · 已确认', en: 'No bans · Ready', fr: 'Aucun bannissement · Prêt', ja: '禁止なし · 確定' }) : lt({ zh: '选择中…', en: 'Choosing…', fr: 'Choix…', ja: '選択中…' }));
+            const readyText = submitted ? ` · ${lt({ zh: '已确认', en: 'Ready', fr: 'Prêt', ja: '確定' })}` : '';
+            if (index === playerId) {
+                const bans = (data.bans && (data.bans[String(index)] || data.bans[index])) || [];
+                right.textContent = bans.length
+                    ? bans.map(getShortModDisplayName).join(' / ') + readyText
+                    : (submitted ? lt({ zh: '不禁用 · 已确认', en: 'No bans · Ready', fr: 'Aucun bannissement · Prêt', ja: '禁止なし · 確定' }) : lt({ zh: '选择中…', en: 'Choosing…', fr: 'Choix…', ja: '選択中…' }));
+            } else {
+                // 不显示其他玩家的禁用选择，只显示已用数量
+                const count = Number(banCounts[String(index)] ?? banCounts[index] ?? 0);
+                right.textContent = count > 0
+                    ? lt({ zh: `已禁 ${count} 个`, en: `${count} banned`, fr: `${count} banni(s)`, ja: `${count}個禁止` }) + readyText
+                    : (submitted ? lt({ zh: '已确认', en: 'Ready', fr: 'Prêt', ja: '確定' }) : lt({ zh: '选择中…', en: 'Choosing…', fr: 'Choix…', ja: '選択中…' }));
+            }
             row.appendChild(left);
             row.appendChild(right);
             playersEl.appendChild(row);

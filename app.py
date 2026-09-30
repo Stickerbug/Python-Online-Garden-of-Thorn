@@ -407,6 +407,7 @@ RETIRED_OFFICIAL_MOD_FILENAMES = {
     'Arctic Cards DLC.gtnmod',
 }
 # 设计组 2026-09 批量数值重做：生化 / 管道 / 虚空三个模组暂时停用（不可勾选）。
+# 2026-09-30 增补：极地同批停用。
 DESIGN_LOCKED_MOD_FILENAMES = {
     'Bio Cards Addition.gtnmod',
     'Bio Cards DLC.gtnmod',
@@ -414,6 +415,7 @@ DESIGN_LOCKED_MOD_FILENAMES = {
     'Sewers Cards DLC.gtnmod',
     'Void Card Addition.gtnmod',
     'Void Cards DLC.gtnmod',
+    'Arctic Cards Addition.gtnmod',
 }
 DESIGN_LOCKED_MOD_REASON = '数值重做中，暂时停用'
 # 入口隐藏的模式（列表页移除，set_mode 拒绝；进行中的对局不受影响）。
@@ -840,7 +842,7 @@ GTN_STATIC_VERSION += '-nitro-drawfix-1'
 GTN_STATIC_VERSION += '-antennae-uifix-1'
 GTN_STATIC_VERSION += '-skin-card-ratio-1'
 GTN_STATIC_VERSION += '-server-play-prediction-1'
-GTN_STATIC_VERSION += '-skin-text-contrast-15-inkmap-linesplit-1-gallery-prob-1-preview-modal-mobile-1-preview-side-toggle-1-skin-darkband-1-skin-pale-2-skin-pale-3-skin-parity-4-targetpick-controls-1-handling-rebuild-1'
+GTN_STATIC_VERSION += '-skin-text-contrast-15-inkmap-linesplit-1-gallery-prob-1-preview-modal-mobile-1-preview-side-toggle-1-skin-darkband-1-skin-pale-2-skin-pale-3-skin-parity-4-targetpick-controls-1-handling-rebuild-1-poker-moddraw-1'
 GTN_STATIC_VERSION += '-skin-preview-modal-1'
 GTN_STATIC_VERSION += '-card-tag-dedup-1'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
@@ -9142,7 +9144,12 @@ def mod_draw_state_payload(room, pidx, *, skipped=False, only_vanilla=False, now
             for filename in (getattr(room, 'mod_draw_candidates', []) or [])
         ],
         'bans': {
-            str(index): list(values or [])
+            # 只下发自己的禁用清单——不再向对局双方泄露彼此的选择；
+            # 其他玩家只给数量（ban_counts），最终启用清单由服务器结算
+            str(pidx): list(bans.get(pidx, []) or []),
+        },
+        'ban_counts': {
+            str(index): len(list(values or []))
             for index, values in bans.items()
         },
         'submitted': {
@@ -9333,6 +9340,12 @@ def start_casual_room_or_event_select(room, shared_profile=None, *, rematch=Fals
         return
     common_official.discard(mod_unlocks.VANILLA_MOD_FILENAME)
     candidates = [name for name in ordered_official if name in common_official]
+    # 临时停用（数值重做锁定）与已退役的官方包不进入模组抽选池——它们在
+    # 任何 loadout 里都会被强制禁用，出现在候选/可禁用列表里纯属干扰
+    candidates = [
+        name for name in candidates
+        if name not in RETIRED_OFFICIAL_MOD_FILENAMES and name not in DESIGN_LOCKED_MOD_FILENAMES
+    ]
     room.mod_draw_active = False
     room.mod_draw_candidates = []
     room.mod_draw_bans = {}
