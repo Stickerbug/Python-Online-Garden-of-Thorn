@@ -239,3 +239,4 @@ static/audio/music/source-pending/
 
 # Codex 临时调试产物
 .codex-tmp/
+.mimosa/
