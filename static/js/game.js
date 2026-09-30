@@ -12638,6 +12638,55 @@ function stripSkinInkFromCard(cardEl) {
     cardEl.__skinInkNodes = null;
 }
 
+// 按视觉行拆分 span：跨行的 inline span，浏览器按行分片重绘背景，
+// background-position（按并集矩形计算）与分片原点对不齐——第二行起、
+// 以及行内断行后的片段会取错位置的色。拆成每行一个 span、各自定位。
+// 块级元素（卡名/英文副名是 flex item/div）背景定位用自身 border box，
+// 无此问题。快速路径：span 只有一个分片（单行）直接跳过。
+function splitSkinInkSpansByLine(container) {
+    if (!container) return;
+    const spans = Array.from(container.querySelectorAll('.skin-ink'));
+    for (const span of spans) {
+        try {
+            if (span.getClientRects().length <= 1) continue;
+            const textNode = span.firstChild;
+            if (!textNode || textNode.nodeType !== 3 || !textNode.nodeValue.trim()) continue;
+            const value = textNode.nodeValue;
+            if (value.length < 2) continue;
+            const range = document.createRange();
+            let lastTop = null;
+            let lastH = 0;
+            const breaks = [];
+            for (let i = 0; i < value.length; i++) {
+                range.setStart(textNode, i);
+                range.setEnd(textNode, i + 1);
+                const rects = range.getClientRects();
+                if (!rects.length) continue;
+                const r = rects[0];
+                if (lastTop != null && Math.abs(r.top - lastTop) > Math.max(lastH, r.height) * 0.5) {
+                    breaks.push(i);
+                }
+                lastTop = r.top;
+                lastH = r.height;
+            }
+            range.detach && range.detach();
+            if (!breaks.length) continue;
+            const parts = [];
+            let prev = 0;
+            for (const b of breaks) { parts.push(value.slice(prev, b)); prev = b; }
+            parts.push(value.slice(prev));
+            const frag = document.createDocumentFragment();
+            parts.forEach(p => {
+                const s = document.createElement('span');
+                s.className = 'skin-ink';
+                s.textContent = p;
+                frag.appendChild(s);
+            });
+            span.parentNode.replaceChild(frag, span);
+        } catch (_) {}
+    }
+}
+
 // 两阶段应用：先集中读（rect/computed color——无写操作=单次布局），
 // 再集中写（class/自定义属性）。读写交错会变成每个 span 一次强制
 // layout（布局抖动），几百卡的图鉴场景是卡死主因之二。
@@ -12645,22 +12694,24 @@ function stripSkinInkFromCard(cardEl) {
 // background-clip:text 会把元素自身背景一起裁进字形，药丸外框会整个
 // 消失。底部标签保持原纯白药丸、不参与变色（用户拍板）。
 function applySkinInkToCard(cardEl, skin, cardRect, skinId) {
+    const pillNodes = cardEl.querySelectorAll(':scope .card-type-label, :scope .card-costs .cost-e, :scope .card-costs .cost-m');
+    pillNodes.forEach(node => {
+        if (!node.querySelector(':scope .skin-ink')) wrapSkinInkTextNodes(node);
+    });
+    const effectEl = cardEl.querySelector(':scope > .card-effect');
+    if (effectEl && !effectEl.querySelector(':scope .skin-ink')) {
+        wrapSkinInkTextNodes(effectEl);
+    }
+    // 效果文字按视觉行拆分（须在包裹后、量取矩形前）
+    splitSkinInkSpansByLine(effectEl);
     const targets = [];
     cardEl.querySelectorAll(':scope .card-name, :scope .card-english-name')
         .forEach(node => targets.push({ node }));
-    cardEl.querySelectorAll(':scope .card-type-label, :scope .card-costs .cost-e, :scope .card-costs .cost-m')
-        .forEach(node => {
-            const full = node.classList.contains('cost-e') || node.classList.contains('cost-m');
-            if (!node.querySelector(':scope .skin-ink')) {
-                wrapSkinInkTextNodes(node);
-            }
-            node.querySelectorAll(':scope .skin-ink').forEach(span => targets.push({ node: span, opts: { full } }));
-        });
-    const effectEl = cardEl.querySelector(':scope > .card-effect');
+    pillNodes.forEach(node => {
+        const full = node.classList.contains('cost-e') || node.classList.contains('cost-m');
+        node.querySelectorAll(':scope .skin-ink').forEach(span => targets.push({ node: span, opts: { full } }));
+    });
     if (effectEl) {
-        if (!effectEl.querySelector(':scope .skin-ink')) {
-            wrapSkinInkTextNodes(effectEl);
-        }
         effectEl.querySelectorAll('.skin-ink').forEach(span => targets.push({ node: span }));
     }
     const entries = [];
@@ -12716,6 +12767,13 @@ function skinInkSchedulePump() {
         skinInkPumpScheduled = false;
         skinInkPump();
     });
+    // rAF 在后台标签/无渲染帧时会停摆，队列会悬死：timer 兜底再跑一次
+    // （busy 守卫防重入，重复触发无副作用）
+    setTimeout(() => {
+        if (!skinInkPumpScheduled) return;
+        skinInkPumpScheduled = false;
+        skinInkPump();
+    }, 150);
 }
 async function skinInkPump() {
     if (skinInkPumpBusy) return;
@@ -12728,7 +12786,9 @@ async function skinInkPump() {
             if (!cardEl.isConnected || cardEl.__skinInkVisible === false) continue; // 已滚出视口的陈旧任务丢弃
             try {
                 const skin = await getSkinInkImage(job.skinId);
-                if (!skin || !cardEl.isConnected || cardEl.__skinInkVisible === false) return;
+                // continue 而非 return：return 会跳过末尾的重新调度，
+                // 队列里还有活时整条泵链就死了（await 期间卡被移除即触发）
+                if (!skin || !cardEl.isConnected || cardEl.__skinInkVisible === false) continue;
                 const cardRect = cardEl.getBoundingClientRect();
                 if (Math.abs(cardRect.width - job.cardWidth) > 0.5) continue; // 尺寸已变，等下一轮
                 applySkinInkToCard(cardEl, skin, cardRect, job.skinId);
