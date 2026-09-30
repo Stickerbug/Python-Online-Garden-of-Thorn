@@ -436,7 +436,9 @@ PVP_MATCH_MODES = (
     'casual_random_deck',
 )
 RANKED_MATCH_MODES = ('ranked_1v1', 'ranked_2v2')
-CASUAL_MOD_DRAW_MATCH_MODES = ('casual_1v1', 'casual_2v2')
+# 设计 2026-09-30：模组随机抽选（候选+双方禁用）挂到天梯；娱乐改为双方
+# 各自模组设置直开（自选，与旧天梯口径一致）。历史名 CASUAL_MOD_DRAW 已改。
+MOD_DRAW_MATCH_MODES = ('ranked_1v1', 'ranked_2v2')
 MOD_DRAW_CANDIDATE_LIMIT = 5
 MOD_DRAW_TIMEOUT_SECONDS = 40
 MOD_DRAW_BAN_LIMITS = {'1v1': 2, '2v2': 1}
@@ -842,7 +844,7 @@ GTN_STATIC_VERSION += '-nitro-drawfix-1'
 GTN_STATIC_VERSION += '-antennae-uifix-1'
 GTN_STATIC_VERSION += '-skin-card-ratio-1'
 GTN_STATIC_VERSION += '-server-play-prediction-1'
-GTN_STATIC_VERSION += '-skin-text-contrast-15-inkmap-linesplit-1-gallery-prob-1-preview-modal-mobile-1-preview-side-toggle-1-skin-darkband-1-skin-pale-2-skin-pale-3-skin-parity-4-targetpick-controls-1-handling-rebuild-1-poker-moddraw-1-r28782-fix-1-feedback-batch2-1-fc-scroll-1'
+GTN_STATIC_VERSION += '-skin-text-contrast-15-inkmap-linesplit-1-gallery-prob-1-preview-modal-mobile-1-preview-side-toggle-1-skin-darkband-1-skin-pale-2-skin-pale-3-skin-parity-4-targetpick-controls-1-handling-rebuild-1-poker-moddraw-1-r28782-fix-1-feedback-batch2-1-fc-scroll-1-moddraw-swap-1'
 GTN_STATIC_VERSION += '-skin-preview-modal-1'
 GTN_STATIC_VERSION += '-card-tag-dedup-1'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
@@ -8824,7 +8826,7 @@ def player_has_pending_mod_unlock(player):
 
 def mod_unlock_required_for_match_mode(player, match_mode=None):
     canonical = normalize_pvp_match_mode(match_mode or player_match_mode(player))
-    if canonical not in CASUAL_MOD_DRAW_MATCH_MODES:
+    if canonical not in MOD_DRAW_MATCH_MODES:
         return False
     return player_has_pending_mod_unlock(player)
 
@@ -8863,7 +8865,7 @@ def casual_shared_mod_profile(player):
     }
 
 
-def casual_shared_mod_signature(profile_or_player):
+def casual_shared_mod_signature(profile_or_player, include_entertainment=True):
     source = profile_or_player or {}
     if 'entertainment_mods' in source or 'community_mods' in source:
         profile = source
@@ -8874,26 +8876,32 @@ def casual_shared_mod_signature(profile_or_player):
         for entry in (profile.get('community_mods') or [])
         if isinstance(entry, dict) and str(entry.get('sha256') or '').strip()
     ))
-    return (
-        tuple(sorted(str(name) for name in (profile.get('entertainment_mods') or []) if name)),
-        community_hashes,
+    # include_entertainment=False：天梯抽选用——娱乐模组在天梯被自动禁用，
+    # 玩家各自的娱乐选择差异不应挡住天梯匹配，只比对社区模组
+    entertainment = (
+        tuple(sorted(str(name) for name in (profile.get('entertainment_mods') or []) if name))
+        if include_entertainment else ()
     )
+    return (entertainment, community_hashes)
 
 
-def same_casual_shared_mod_preference(players_or_sids):
+def same_casual_shared_mod_preference(players_or_sids, include_entertainment=True):
     signatures = []
     for item in players_or_sids or ():
         player = players.get(item) if isinstance(item, str) else item
         if not player:
             return False
-        signatures.append(casual_shared_mod_signature(player))
+        signatures.append(casual_shared_mod_signature(player, include_entertainment=include_entertainment))
     return bool(signatures) and all(signature == signatures[0] for signature in signatures)
 
 
 def same_match_mod_preference(match_mode, players_or_sids):
     canonical = normalize_pvp_match_mode(match_mode)
-    if canonical in CASUAL_MOD_DRAW_MATCH_MODES:
-        return same_casual_shared_mod_preference(players_or_sids)
+    if canonical in MOD_DRAW_MATCH_MODES:
+        return same_casual_shared_mod_preference(
+            players_or_sids,
+            include_entertainment=not canonical.startswith('ranked_'),
+        )
     hashes = []
     for item in players_or_sids or ():
         player = players.get(item) if isinstance(item, str) else item
@@ -9084,6 +9092,8 @@ def casual_room_shared_profile_for_room(room):
     profile = getattr(room, 'casual_shared_mod_profile', None)
     if isinstance(profile, dict):
         return copy.deepcopy(profile)
+    # 天梯抽选：娱乐模组自动禁用，只比社区模组；娱乐模式仍全量比对
+    include_entertainment = not str(room_match_mode(room) or '').startswith('ranked_')
     shared_profiles = [
         casual_shared_mod_profile(players.get(psid, {}))
         for psid in (getattr(room, 'player_sids', []) or [])
@@ -9091,7 +9101,11 @@ def casual_room_shared_profile_for_room(room):
     if not shared_profiles:
         return {}
     reference = shared_profiles[0]
-    if any(casual_shared_mod_signature(item) != casual_shared_mod_signature(reference) for item in shared_profiles[1:]):
+    if any(
+        casual_shared_mod_signature(item, include_entertainment=include_entertainment)
+        != casual_shared_mod_signature(reference, include_entertainment=include_entertainment)
+        for item in shared_profiles[1:]
+    ):
         raise ValueError('娱乐模组或社区模组选择不一致')
     return reference
 
@@ -9302,7 +9316,7 @@ def _complete_mod_draw_locked(room):
 
 def start_casual_room_or_event_select(room, shared_profile=None, *, rematch=False):
     """Start the official draw phase for casual 1v1/2v2 rooms."""
-    if room_match_mode(room) not in CASUAL_MOD_DRAW_MATCH_MODES:
+    if room_match_mode(room) not in MOD_DRAW_MATCH_MODES:
         _casual_room_begin_event_select(room)
         return
     try:
@@ -9334,7 +9348,7 @@ def start_casual_room_or_event_select(room, shared_profile=None, *, rematch=Fals
             }, room=pending_sid)
         _abort_casual_room_to_lobby_locked(
             room,
-            '需要先选择要解锁的官方模组，才能进入娱乐 1v1/2v2。',
+            '需要先选择要解锁的官方模组，才能进入天梯 1v1/2v2。',
             reason='mod_unlock_choice_required',
         )
         return
@@ -28319,7 +28333,7 @@ def on_login(data):
         login_mod_unlock_state = mod_unlocks.compute_state(0, ())
     try:
         if (
-            preferred_match_mode in CASUAL_MOD_DRAW_MATCH_MODES
+            preferred_match_mode in MOD_DRAW_MATCH_MODES
             and not login_mod_unlock_state.get('community_unlocked')
         ):
             data = {
@@ -28331,7 +28345,7 @@ def on_login(data):
                 'community_mod_name': '',
             }
         community_fields, community_mod = resolve_community_loadout(data)
-        if preferred_match_mode in CASUAL_MOD_DRAW_MATCH_MODES:
+        if preferred_match_mode in MOD_DRAW_MATCH_MODES:
             login_preference = {
                 'user_id': user_id,
                 'is_registered_user': bool(is_registered_user),
@@ -28621,7 +28635,7 @@ def on_form_team(data):
                         **player_mod_unlock_state(blocked_player),
                     }, room=blocked_sid)
             emit('server_error', {
-                'message': '需要先选择要解锁的官方模组，才能组队进入娱乐 2v2。',
+                'message': '需要先选择要解锁的官方模组，才能组队进入天梯 2v2。',
                 'reason': 'mod_unlock_choice_required',
             })
             return
@@ -28662,7 +28676,7 @@ def on_set_mode(data):
         if match_mode not in PVP_MATCH_MODES:
             return
         try:
-            if match_mode in CASUAL_MOD_DRAW_MATCH_MODES:
+            if match_mode in MOD_DRAW_MATCH_MODES:
                 community_fields, mode_loadout, preferred_disabled = build_casual_mode_loadout(
                     players[sid],
                     match_mode=match_mode,
@@ -28804,7 +28818,7 @@ def on_choose_mod_unlock(data):
         if not player:
             return
         player['mod_unlock_state'] = state
-        if player_match_mode(player) in CASUAL_MOD_DRAW_MATCH_MODES:
+        if player_match_mode(player) in MOD_DRAW_MATCH_MODES:
             try:
                 apply_casual_mode_loadout_to_player(
                     player,
@@ -28972,7 +28986,7 @@ def on_update_mod_settings(data):
     data['_runtime_mode'] = runtime_mode
     data['_match_mode'] = match_mode
     try:
-        if match_mode in CASUAL_MOD_DRAW_MATCH_MODES:
+        if match_mode in MOD_DRAW_MATCH_MODES:
             community_fields, loadout, preferred_disabled = build_casual_mode_loadout(
                 player,
                 disabled_mods=requested_disabled_mods,
@@ -29331,7 +29345,7 @@ def on_invite_team(data):
                     **player_mod_unlock_state(players.get(blocked_sid, {})),
                 }, room=blocked_sid)
             emit('server_error', {
-                'message': '需要先选择要解锁的官方模组，才能进入娱乐 1v1/2v2。',
+                'message': '需要先选择要解锁的官方模组，才能进入天梯 1v1/2v2。',
                 'reason': 'mod_unlock_choice_required',
             })
             return
@@ -29434,7 +29448,7 @@ def on_accept_team_match(data):
                 }, room=blocked_sid)
             emit_match_start_failed(
                 all_sids,
-                '需要先选择要解锁的官方模组，才能进入娱乐 1v1/2v2。',
+                '需要先选择要解锁的官方模组，才能进入天梯 1v1/2v2。',
                 reason='mod_unlock_choice_required',
             )
             return
@@ -29452,7 +29466,7 @@ def on_accept_team_match(data):
         room_id = _next_room_id
         _next_room_id += 1
         first_sid = all_sids[0]
-        casual_mod_draw = match_mode in CASUAL_MOD_DRAW_MATCH_MODES
+        casual_mod_draw = match_mode in MOD_DRAW_MATCH_MODES
         allowed = None
         if not casual_mod_draw:
             try:
@@ -30223,7 +30237,7 @@ def on_invite(data):
                     **player_mod_unlock_state(players.get(blocked_sid, {})),
                 }, room=blocked_sid)
             emit('server_error', {
-                'message': '需要先选择要解锁的官方模组，才能进入娱乐 1v1/2v2。',
+                'message': '需要先选择要解锁的官方模组，才能进入天梯 1v1/2v2。',
                 'reason': 'mod_unlock_choice_required',
             })
             return
@@ -30301,7 +30315,7 @@ def on_invite(data):
                         **player_mod_unlock_state(blocked_player),
                     }, room=blocked_sid)
             emit('server_error', {
-                'message': '需要先选择要解锁的官方模组，才能进入娱乐 1v1/2v2。',
+                'message': '需要先选择要解锁的官方模组，才能进入天梯 1v1/2v2。',
                 'reason': 'mod_unlock_choice_required',
             })
             return
@@ -30411,7 +30425,7 @@ def on_accept_invite(data):
                     }, room=blocked_sid)
             emit_match_start_failed(
                 [inviter_sid, sid],
-                '需要先选择要解锁的官方模组，才能进入娱乐 1v1/2v2。',
+                '需要先选择要解锁的官方模组，才能进入天梯 1v1/2v2。',
                 reason='mod_unlock_choice_required',
             )
             return
@@ -30421,7 +30435,7 @@ def on_accept_invite(data):
             return
         room_id = _next_room_id
         _next_room_id += 1
-        casual_mod_draw = canonical_match_mode in CASUAL_MOD_DRAW_MATCH_MODES
+        casual_mod_draw = canonical_match_mode in MOD_DRAW_MATCH_MODES
         allowed_card_ids = None
         if not casual_mod_draw:
             try:
@@ -35852,7 +35866,7 @@ def on_rematch(data=None):
                             **room_event_context(room),
                         }, room=other_sid)
             if len(room._rematch_votes) == len(room.player_sids):
-                casual_rematch = room_match_mode(room) in CASUAL_MOD_DRAW_MATCH_MODES
+                casual_rematch = room_match_mode(room) in MOD_DRAW_MATCH_MODES
                 next_allowed = None
                 match_mod_profile = None
                 if casual_rematch:

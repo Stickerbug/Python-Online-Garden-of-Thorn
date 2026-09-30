@@ -2786,6 +2786,12 @@ function entertainmentModsAvailableInSettings() {
     return !isRankedMatchMode(getSettingsModMatchMode());
 }
 
+/* 设计 2026-09-30：模组随机抽选（候选+双方禁用）挂天梯，娱乐改自选直开。
+   与服务端 MOD_DRAW_MATCH_MODES 同口径。 */
+function isModDrawMatchMode(mode) {
+    return ['ranked_1v1', 'ranked_2v2'].includes(normalizeMatchModeKey(mode || ''));
+}
+
 function isTwoVsTwoMatchMode(mode) {
     return engineModeForMatchMode(mode) === '2v2';
 }
@@ -26998,7 +27004,7 @@ function modUnlockProgressText(state = modUnlockState) {
 function updateOfficialUnlockHint() {
     const hint = $('settings-official-unlock-hint');
     if (!hint) return;
-    const show = ['casual_1v1', 'casual_2v2'].includes(getSettingsModMatchMode()) && !!modUnlockState;
+    const show = isModDrawMatchMode(getSettingsModMatchMode()) && !!modUnlockState;
     hint.classList.toggle('hidden', !show);
     if (show) hint.textContent = modUnlockProgressText(modUnlockState);
 }
@@ -27013,7 +27019,7 @@ function renderModUnlockModal(forceShow = false) {
     const optionsEl = $('mod-unlock-options');
     const progressEl = $('mod-unlock-progress');
     if (!modal || !optionsEl) return;
-    const casualMode = ['casual_1v1', 'casual_2v2'].includes(getSettingsModMatchMode());
+    const casualMode = isModDrawMatchMode(getSettingsModMatchMode());
     const allowedPhase = forceShow || phase === 'lobby' || phase === 'game_over';
     const pending = !!modUnlockState?.has_pending_choice;
     if (!pending || !casualMode || !allowedPhase) {
@@ -38252,7 +38258,7 @@ async function applyPeerModSettings(peerMods = {}) {
 function syncCurrentSettingsModSelectionToLocal() {
     const checkboxes = getBundledModCheckboxes();
     if (!checkboxes.length) return getDisabledMods();
-    if (['casual_1v1', 'casual_2v2'].includes(getSettingsModMatchMode())) {
+    if (isModDrawMatchMode(getSettingsModMatchMode())) {
         let disabled = getDisabledMods().slice();
         const disabledSet = new Set(disabled);
         checkboxes.forEach(cb => {
@@ -38539,7 +38545,7 @@ function renderBundledModList(category) {
     }
     if (noModsEl) noModsEl.style.display = 'none';
     const disabled = getDisabledMods();
-    const casualUnlockMode = ['casual_1v1', 'casual_2v2'].includes(getSettingsModMatchMode());
+    const casualUnlockMode = isModDrawMatchMode(getSettingsModMatchMode());
     const officialUnlocked = new Set(
         (modUnlockState?.unlocked_official || []).map(item => String(item || ''))
     );
@@ -39513,7 +39519,7 @@ async function saveDisabledMods() {
     const renderedFilenames = new Set(
         checkboxes.map(cb => String(cb.dataset.filename || '')).filter(Boolean)
     );
-    if (['casual_1v1', 'casual_2v2'].includes(getSettingsModMatchMode())) {
+    if (isModDrawMatchMode(getSettingsModMatchMode())) {
         const disabledSet = new Set(getDisabledMods());
         checkboxes.forEach(cb => {
             if (cb.dataset.locked === '1') return;

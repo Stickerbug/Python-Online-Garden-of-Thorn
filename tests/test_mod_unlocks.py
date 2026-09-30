@@ -66,7 +66,7 @@ def test_choose_unlock_persists_and_validates(tmp_path, monkeypatch):
     assert 'Void Card Addition.gtnmod' in mod_unlocks.load_state(1)['unlocked_official']
 
 
-def _fake_player(user_id, state, *, match_mode='casual_1v1'):
+def _fake_player(user_id, state, *, match_mode='ranked_1v1'):
     engine_mode, match_type, canonical = gtn.pvp_match_mode_parts(match_mode)
     return {
         'nickname': f'P{user_id}',
@@ -83,7 +83,7 @@ def _fake_player(user_id, state, *, match_mode='casual_1v1'):
     }
 
 
-def test_casual_room_draw_intersects_unlocks_and_applies_bans(monkeypatch):
+def test_ranked_room_draw_intersects_unlocks_and_applies_bans(monkeypatch):
     states = {
         101: mod_unlocks.compute_state(20, ('Void Card Addition.gtnmod',)),
         102: mod_unlocks.compute_state(20, ('Hel Cards Addition.gtnmod',)),
@@ -97,7 +97,7 @@ def test_casual_room_draw_intersects_unlocks_and_applies_bans(monkeypatch):
         player['status'] = 'in_game'
         gtn.players[sid] = player
     monkeypatch.setattr(gtn.mod_unlocks, 'load_state', lambda uid: states[int(uid)])
-    room = gtn.GameRoom(99001, sids, None, mode='1v1', match_mode='casual_1v1')
+    room = gtn.GameRoom(99001, sids, None, mode='1v1', match_mode='ranked_1v1')
     room.engine.player_names = ['A', 'B']
     gtn.rooms[room.room_id] = room
     try:
@@ -120,7 +120,32 @@ def test_casual_room_draw_intersects_unlocks_and_applies_bans(monkeypatch):
             gtn.players.pop(sid, None)
 
 
-def test_guest_casual_room_skips_to_vanilla(monkeypatch):
+def test_casual_room_skips_draw_and_uses_own_selection(monkeypatch):
+    """2026-09-30 对调后：娱乐不走抽选，直接进入选事件（双方自选 loadout 对齐）。"""
+    sid_a, sid_b = 'casual-a', 'casual-b'
+    for sid in (sid_a, sid_b):
+        gtn.players[sid] = _fake_player(
+            201 if sid == sid_a else 202,
+            mod_unlocks.compute_state(20, ()),
+            match_mode='casual_1v1',
+        )
+        gtn.players[sid].update({'room_id': None, 'status': 'in_game', 'loadout_hash': 'same'})
+    room = gtn.GameRoom(99005, [sid_a, sid_b], None, mode='1v1', match_mode='casual_1v1')
+    room.engine.player_names = ['A', 'B']
+    gtn.rooms[room.room_id] = room
+    try:
+        for sid in (sid_a, sid_b):
+            gtn.players[sid]['room_id'] = room.room_id
+        gtn.start_casual_room_or_event_select(room)
+        assert not getattr(room, 'mod_draw_active', False)
+        assert room.engine.phase in ('event_select',)
+    finally:
+        gtn.rooms.pop(room.room_id, None)
+        for sid in (sid_a, sid_b):
+            gtn.players.pop(sid, None)
+
+
+def test_guest_ranked_room_skips_to_vanilla(monkeypatch):
     sid_a, sid_b = 'guest-a', 'guest-b'
     for sid in (sid_a, sid_b):
         gtn.players[sid] = {
@@ -128,8 +153,8 @@ def test_guest_casual_room_skips_to_vanilla(monkeypatch):
             'user_id': None,
             'is_registered_user': False,
             'mode': '1v1',
-            'match_type': 'casual',
-            'match_mode': 'casual_1v1',
+            'match_type': 'ranked',
+            'match_mode': 'ranked_1v1',
             'mod_unlock_state': mod_unlocks.guest_state(),
             'entertainment_mods': [],
             'community_mods': [],
@@ -138,7 +163,7 @@ def test_guest_casual_room_skips_to_vanilla(monkeypatch):
             'room_id': None,
             'status': 'in_game',
         }
-    room = gtn.GameRoom(99002, [sid_a, sid_b], None, mode='1v1', match_mode='casual_1v1')
+    room = gtn.GameRoom(99002, [sid_a, sid_b], None, mode='1v1', match_mode='ranked_1v1')
     room.engine.player_names = ['A', 'B']
     gtn.rooms[room.room_id] = room
     try:
@@ -155,14 +180,15 @@ def test_guest_casual_room_skips_to_vanilla(monkeypatch):
 
 
 def test_ban_limits_and_local_mode_gate():
-    one_v_one = gtn.GameRoom(99003, ['a', 'b'], None, mode='1v1', match_mode='casual_1v1')
-    two_v_two = gtn.GameRoom(99004, ['a', 'b', 'c', 'd'], None, mode='2v2', match_mode='casual_2v2')
+    one_v_one = gtn.GameRoom(99003, ['a', 'b'], None, mode='1v1', match_mode='ranked_1v1')
+    two_v_two = gtn.GameRoom(99004, ['a', 'b', 'c', 'd'], None, mode='2v2', match_mode='ranked_2v2')
     assert gtn.mod_draw_ban_limit(one_v_one) == 2
     assert gtn.mod_draw_ban_limit(two_v_two) == 1
     pending = _fake_player(1, mod_unlocks.compute_state(20, ()))
-    assert gtn.mod_unlock_required_for_match_mode(pending, 'casual_1v1')
-    pending['match_mode'] = 'ranked_1v1'
-    assert not gtn.mod_unlock_required_for_match_mode(pending, 'ranked_1v1')
+    # 2026-09-30 对调：解锁门槛跟抽选走 → 天梯检查、娱乐不检查
+    assert gtn.mod_unlock_required_for_match_mode(pending, 'ranked_1v1')
+    pending['match_mode'] = 'casual_1v1'
+    assert not gtn.mod_unlock_required_for_match_mode(pending, 'casual_1v1')
 
 
 def test_mod_draw_socket_updates_and_submits(monkeypatch):
@@ -181,7 +207,7 @@ def test_mod_draw_socket_updates_and_submits(monkeypatch):
         player = _fake_player(301 + index, states[301 + index])
         player.update({'room_id': None, 'status': 'in_game'})
         gtn.players[sid] = player
-    room = gtn.GameRoom(99101, sids, None, mode='1v1', match_mode='casual_1v1')
+    room = gtn.GameRoom(99101, sids, None, mode='1v1', match_mode='ranked_1v1')
     room.engine.player_names = ['A', 'B']
     gtn.rooms[room.room_id] = room
     try:
@@ -207,7 +233,7 @@ def test_mod_draw_socket_updates_and_submits(monkeypatch):
             client.disconnect()
 
 
-def test_casual_invite_creates_mod_draw_room(monkeypatch):
+def test_ranked_invite_creates_mod_draw_room(monkeypatch):
     clients = [gtn.socketio.test_client(gtn.app), gtn.socketio.test_client(gtn.app)]
     room_map = gtn.socketio.server.manager.rooms["/"][None]
     sids = [
@@ -219,13 +245,13 @@ def test_casual_invite_creates_mod_draw_room(monkeypatch):
         402: mod_unlocks.compute_state(20, ('Hel Cards Addition.gtnmod',)),
     }
     monkeypatch.setattr(gtn.mod_unlocks, 'load_state', lambda uid: states[int(uid)])
+    monkeypatch.setattr(gtn, 'ranked_match_eligibility', lambda participants, check_reputation=True: (True, ''))
     for index, sid in enumerate(sids):
         player = _fake_player(401 + index, states[401 + index])
         player.update({
             'status': 'lobby',
             'room_id': None,
             'beta_mode': False,
-            'loadout_hash': 'casual-shared-preference',
         })
         gtn.players[sid] = player
     gtn.invites[sids[0]] = sids[1]
@@ -240,7 +266,7 @@ def test_casual_invite_creates_mod_draw_room(monkeypatch):
             None,
         )
         assert created_room is not None
-        assert created_room.match_mode == 'casual_1v1'
+        assert created_room.match_mode == 'ranked_1v1'
         assert created_room.mod_draw_active
     finally:
         if created_room is not None:
@@ -252,7 +278,7 @@ def test_casual_invite_creates_mod_draw_room(monkeypatch):
             client.disconnect()
 
 
-def test_casual_2v2_team_match_starts_mod_draw(monkeypatch):
+def test_ranked_2v2_team_match_starts_mod_draw(monkeypatch):
     clients = [gtn.socketio.test_client(gtn.app) for _ in range(4)]
     room_map = gtn.socketio.server.manager.rooms["/"][None]
     sids = [
@@ -264,13 +290,13 @@ def test_casual_2v2_team_match_starts_mod_draw(monkeypatch):
         for index in range(4)
     }
     monkeypatch.setattr(gtn.mod_unlocks, 'load_state', lambda uid: states[int(uid)])
+    monkeypatch.setattr(gtn, 'ranked_match_eligibility', lambda participants, check_reputation=True: (True, ''))
     for index, sid in enumerate(sids):
-        player = _fake_player(501 + index, states[501 + index], match_mode='casual_2v2')
+        player = _fake_player(501 + index, states[501 + index], match_mode='ranked_2v2')
         player.update({
             'status': 'lobby',
             'room_id': None,
             'beta_mode': False,
-            'loadout_hash': 'casual-2v2-shared-preference',
         })
         gtn.players[sid] = player
     gtn.teams[sids[0]] = {'leader': sids[0], 'members': [sids[0], sids[1]]}
@@ -288,7 +314,7 @@ def test_casual_2v2_team_match_starts_mod_draw(monkeypatch):
             None,
         )
         assert created_room is not None
-        assert created_room.match_mode == 'casual_2v2'
+        assert created_room.match_mode == 'ranked_2v2'
         assert created_room.mod_draw_active
         assert len(created_room.mod_draw_candidates) == 5
     finally:
@@ -301,7 +327,7 @@ def test_casual_2v2_team_match_starts_mod_draw(monkeypatch):
             client.disconnect()
 
 
-def test_casual_rematch_redraws_and_blocks_on_pending_choice(monkeypatch):
+def test_ranked_rematch_redraws_and_blocks_on_pending_choice(monkeypatch):
     clients = [gtn.socketio.test_client(gtn.app), gtn.socketio.test_client(gtn.app)]
     room_map = gtn.socketio.server.manager.rooms["/"][None]
     sids = [
@@ -317,7 +343,7 @@ def test_casual_rematch_redraws_and_blocks_on_pending_choice(monkeypatch):
         player = _fake_player(601 + index, ready_states[601 + index])
         player.update({'status': 'in_game', 'room_id': None})
         gtn.players[sid] = player
-    room = gtn.GameRoom(99102, sids, None, mode='1v1', match_mode='casual_1v1')
+    room = gtn.GameRoom(99102, sids, None, mode='1v1', match_mode='ranked_1v1')
     room.engine.player_names = ['A', 'B']
     room.engine.phase = 'game_over'
     room.engine.game_over = True
