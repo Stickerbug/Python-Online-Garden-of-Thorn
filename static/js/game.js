@@ -12227,7 +12227,7 @@ function cardSkinById(skinId) {
 
 /* 卡面/卡背美术修订号：换图时 bump（与 GTN_STATIC_VERSION 独立，
    服务端 card_skins.py 的 URL 同步带参，避免旧 SVG 被浏览器缓存） */
-const CARD_SKIN_ART_REVISION = 5;
+const CARD_SKIN_ART_REVISION = 6;
 
 function cardSkinBackUrl(skinId) {
     const id = cardSkinById(skinId);
@@ -12515,10 +12515,13 @@ function wcagContrastRatio(rgbA, rgbB) {
 
 // 亮底所需明度差按基色解对比度方程：绿系（青/薄荷）的 WCAG 亮度偏"热"，
 // 同样明度差换到的对比度更少，固定 0.62 对 Bloom 绿只到 ~3。在锚点底色
-// (1.0 纯白——最亮可能底) 上二分解出「对比度≥4.6」的最大明度取差值：
-// 实际底色 ≤1.0，目标只会比解更深、对比只高不低。按基色缓存。
-const SKIN_INK_LIGHT_BG_REF = 1.0;
-const SKIN_INK_LIGHT_TARGET_RATIO = 4.6;
+// 上二分解出「对比度≥目标值」的最大明度取差值，按基色缓存。
+// 锚点取实际淡彩卡面档位 0.92：锚 1.0 会把绿字压到 0.22 偏黑；锚 0.92
+// 全色系目标浅一档，代价是更亮的斑（0.94-1.0）上对比略低于目标值
+const SKIN_INK_LIGHT_BG_REF = 0.92;
+// 4.0：字不压到近黑（4.6 时灰字≈0.29 偏黑）——对比不足的部分由卡面
+// 提白（文字区 0.90+）补回；4.0 介于 AA 正文 4.5 与大字 3.0 之间
+const SKIN_INK_LIGHT_TARGET_RATIO = 4.0;
 const skinInkLightDeltaCache = new Map();
 function skinInkLightDeltaFor(baseRgb) {
     const key = baseRgb.join(',');
