@@ -19794,7 +19794,10 @@ function openCardSkinPreviewModal(skinId, skinName) {
         oppView: false,
     };
     showModal(`
-        <h3>${escapeHtml(lt({ zh: '卡牌皮肤预览', en: 'Card Skin Preview', fr: 'Aperçu du skin', ja: 'カードスキンプレビュー' }))} · ${escapeHtml(skinName || skinId)}</h3>
+        <div class="skin-preview-head">
+            <h3>${escapeHtml(lt({ zh: '卡牌皮肤预览', en: 'Card Skin Preview', fr: 'Aperçu du skin', ja: 'カードスキンプレビュー' }))} · ${escapeHtml(skinName || skinId)}</h3>
+            <button type="button" class="modal-close-x" id="skin-preview-close" aria-label="${escapeHtml(lt({ zh: '关闭', en: 'Close', fr: 'Fermer', ja: '閉じる' }))}">×</button>
+        </div>
         <div class="skin-preview-layout">
             <div class="skin-preview-col">
                 <div class="skin-preview-stage-label">${escapeHtml(lt({ zh: '卡面', en: 'Face', fr: 'Face', ja: '表面' }))}</div>
@@ -19811,9 +19814,6 @@ function openCardSkinPreviewModal(skinId, skinName) {
             <div class="skin-preview-search-results" id="skin-preview-search-results"></div>
         </div>
         <div class="skin-preview-samples" id="skin-preview-samples"></div>
-        <div class="modal-actions">
-            <button type="button" class="btn btn-primary" id="skin-preview-close">${escapeHtml(lt({ zh: '关闭', en: 'Close', fr: 'Fermer', ja: '閉じる' }))}</button>
-        </div>
     `);
     const content = $('modal-content');
     if (content) content.className = 'modal-inner skin-preview-modal';

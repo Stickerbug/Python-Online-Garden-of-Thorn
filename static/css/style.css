@@ -12380,7 +12380,9 @@ html.blind-level-4 .card-prediction-part.magic {
   display: none;
   align-items: center;
   justify-content: center;
-  z-index: 2000;
+  /* 2570：盖过标题栏弹层（账户/商店 popover 2501、浮动提示 2520/2550），
+     仍低于 2600+ 的对局内系统浮层——从商店打开的对话框不该被 popover 压住 */
+  z-index: 2570;
 }
 
 #modal.active {
@@ -22084,6 +22086,50 @@ html[data-ui-style="minimal"][data-theme="dark"] .card,
 .modal-inner.skin-preview-modal {
   width: min(94vw, 700px);
   max-width: 720px;
+  /* 基类是 max-height:80vh + overflow:hidden——手机上竖排内容超高会被
+     直接裁掉且无法滚动。弹层自身可滚。
+     min-width:0：#modal 是 flex 容器，flex 子项默认 min-width:auto会被
+     样张横条的 min-content 顶破设定宽度（手机上弹层被撑出屏外） */
+  min-width: 0;
+  max-height: 92vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.skin-preview-samples,
+.skin-preview-search-results {
+  min-width: 0;
+}
+.skin-preview-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.skin-preview-head h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: clamp(18px, 2.4vw, 24px);
+  overflow-wrap: anywhere;
+}
+.modal-close-x {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.modal-close-x:hover {
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
 }
 .skin-preview-layout {
   display: flex;
@@ -22113,6 +22159,24 @@ html[data-ui-style="minimal"][data-theme="dark"] .card,
    就失去意义了。高特异性压过所有单类 .card 规则。 */
 .modal-inner.skin-preview-modal .skin-preview-stage .card {
   width: var(--card-w, 260px);
+}
+/* 手机：双栏改竖排、卡与内边距收窄，整弹层靠上面的 overflow-y 滚动 */
+@media (max-width: 640px) {
+  .modal-inner.skin-preview-modal {
+    width: calc(100vw - 16px);
+    padding: 14px 12px;
+  }
+  .skin-preview-layout {
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .skin-preview-stage {
+    padding: 12px 14px;
+  }
+  .modal-inner.skin-preview-modal .skin-preview-stage .card {
+    width: min(var(--card-w, 260px), calc(100vw - 72px));
+  }
 }
 .skin-preview-opp-toggle {
   font-size: 12px;
