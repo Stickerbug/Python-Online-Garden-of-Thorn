@@ -22108,6 +22108,12 @@ html[data-ui-style="minimal"][data-theme="dark"] .card,
   align-items: flex-start;
 }
 .skin-preview-stage .card { flex-shrink: 0; }
+/* 预览样张必须按 --card-w 渲染：短窗口/窄屏媒体查询里有多条 .card 宽度
+   覆盖（无视 --card-w 的视口 clamp），会把弹层样张压到 55-67px——预览
+   就失去意义了。高特异性压过所有单类 .card 规则。 */
+.modal-inner.skin-preview-modal .skin-preview-stage .card {
+  width: var(--card-w, 260px);
+}
 .skin-preview-opp-toggle {
   font-size: 12px;
   color: var(--text-secondary);
@@ -22241,12 +22247,4 @@ html[data-ui-style="minimal"] .card.card-skin-no-corner::before,
   -webkit-background-clip: text;
   background-clip: text;
   color: var(--skin-ink-color, inherit);
-}
-
-/* 皮肤卡底部标签：原为纯白/纯色药丸，皮肤完全不透出、文字无从随底色变。
-   改近透明+中性细边，皮肤透出，文字走内层 span 的字色映射；
-   少量白色叠层只会把底色轻微推亮，不会翻转明暗判定。 */
-.card.card-skin-backed .card-flag {
-  background: rgba(255, 255, 255, 0.22);
-  border-color: rgba(120, 120, 120, 0.45);
 }

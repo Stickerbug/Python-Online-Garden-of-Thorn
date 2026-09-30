@@ -12470,7 +12470,7 @@ function hslToRgb(h, s, l) {
     ];
 }
 
-function skinInkTargetLumaFor(baseRgb, bgLuma) {
+function skinInkTargetLumaFor(baseRgb, bgLuma, full) {
     if (bgLuma == null || !Number.isFinite(bgLuma)) return null;
     const baseLuma = lumaOfRgb(baseRgb);
     const side = bgLuma - 0.5;
@@ -12479,9 +12479,10 @@ function skinInkTargetLumaFor(baseRgb, bgLuma) {
     const raw = side >= 0 ? bgLuma - SKIN_INK_CONTRAST : Math.min(0.9, bgLuma + SKIN_INK_CONTRAST_DARK);
     const clamped = side >= 0 ? Math.min(baseLuma, raw) : Math.max(baseLuma, raw);
     // 状态涂色字（毒绿/火橙等高饱和识别色）偏移收窄：深底上提亮到近白
-    // 会洗掉识别感，只提一部分保持彩色可读
+    // 会洗掉识别感，只提一部分保持彩色可读。full=true 跳过收窄（消耗
+    // 数字：识别感由圆圈边框承担，数字本身要足够醒目）
     const [, sat] = rgbToHsl(baseRgb);
-    const satScale = sat > 0.25 ? 0.55 : 1;
+    const satScale = (sat > 0.25 && !full) ? 0.55 : 1;
     const target = baseLuma + (clamped - baseLuma) * strength * satScale;
     // 与基色差太小就不动（避免整体发灰的多余调整）
     if (Math.abs(target - baseLuma) < 0.02) return null;
@@ -12509,8 +12510,9 @@ const SKIN_INK_MAP_H = 588;
 const SKIN_INK_MAP_CACHE_MAX = 48;
 const SKIN_INK_CARD_RATIO = 88 / 63;
 
-function getSkinInkMapDataUrl(skinId, skin, baseRgb) {
-    const key = `${skinId}|${baseRgb.join(',')}`;
+function getSkinInkMapDataUrl(skinId, skin, baseRgb, opts) {
+    const full = !!(opts && opts.full);
+    const key = `${skinId}|${baseRgb.join(',')}|${full ? 'f' : 's'}`;
     if (skinInkMapCache.has(key)) {
         return skinInkMapCache.get(key);
     }
@@ -12540,7 +12542,7 @@ function getSkinInkMapDataUrl(skinId, skin, baseRgb) {
                 if (a >= 70) {
                     const luma = (0.299 * sd[j] + 0.587 * sd[j + 1] + 0.114 * sd[j + 2]) / 255;
                     const blended = luma * (a / 255) + 0.5 * (1 - a / 255);
-                    const target = skinInkTargetLumaFor(baseRgb, blended);
+                    const target = skinInkTargetLumaFor(baseRgb, blended, full);
                     if (target != null) {
                         const rgb = hslToRgb(h, s, Math.max(0.06, Math.min(0.94, target)));
                         r = rgb[0]; g = rgb[1]; b = rgb[2];
@@ -12563,7 +12565,7 @@ function getSkinInkMapDataUrl(skinId, skin, baseRgb) {
     return url;
 }
 
-function applySkinInkToNode(node, skin, cardRect, skinId) {
+function applySkinInkToNode(node, skin, cardRect, skinId, opts) {
     const rect = node.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
     let baseRgb = null;
@@ -12588,9 +12590,10 @@ function applySkinInkToNode(node, skin, cardRect, skinId) {
     // 不做"该处是否需要变色"的预探测：探测是采样近似，小面积/笔画边缘外的
     // 深色块会漏判（整个字不变色的假阴性）。映射图本身逐位置精确——中性区
     // 像素=基色，挂上也不会改变视觉，只是统一的绘制成本。
-    let url = getSkinInkMapDataUrl(skinId, skin, baseRgb);
+    let url = getSkinInkMapDataUrl(skinId, skin, baseRgb, opts);
     if (!url) {
         node.classList.remove('skin-ink-live');
+        node.style.removeProperty('color');
         return;
     }
     node.classList.add('skin-ink-live');
@@ -12598,20 +12601,20 @@ function applySkinInkToNode(node, skin, cardRect, skinId) {
     node.style.setProperty('--skin-ink-bg-image', `url("${url}")`);
     node.style.setProperty('--skin-ink-bg-size', `${cardRect.width.toFixed(1)}px ${cardRect.height.toFixed(1)}px`);
     node.style.setProperty('--skin-ink-bg-pos', `${(-rel.x).toFixed(1)}px ${(-rel.y).toFixed(1)}px`);
+    // 模板给卡名/英文副名写了内联 color:类型色——CSS 规则的
+    // color: var(--skin-ink-color) 压不过内联，贴图会被不透明字形盖住。
+    // 内联对内联：直接把内联 color 也置 transparent（基色已存 data-ink-base）。
+    node.style.color = 'transparent';
 }
 // 效果文字字符级 wrap：只动 TEXT_NODE，内嵌 Chip（inline-card-chip）与
 // 其标签子树、图标/br 不碰；连续 ASCII 数字字母为一组，空白保留裸文本，
 // 其余（中日文单字/符号）逐字
-// opts.wrapFlags：直接以 .card-flag 为容器包裹其文字（效果文字里仍跳过
-// 标签子树——那是 Chip 排除语义）
-function wrapSkinInkTextNodes(container, opts) {
-    const wrapFlags = !!(opts && opts.wrapFlags);
+function wrapSkinInkTextNodes(container) {
     const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
         acceptNode: n => {
             if (!n.nodeValue || !n.nodeValue.trim()) return 2;
             const parent = n.parentElement;
-            if (parent && parent.closest('.inline-card-chip')) return 2;
-            if (!wrapFlags && parent && parent.closest('.card-flag')) return 2;
+            if (parent && parent.closest('.inline-card-chip, .card-flag')) return 2;
             return 1;
         },
     });
@@ -12647,25 +12650,29 @@ function applySkinTextContrast(cardEl) {
             const current = cardEl.getBoundingClientRect();
             if (Math.abs(current.width - cardRect.width) > 0.5) return; // 尺寸已变，等下一轮
             // 无自身背景的元素（卡名/英文副名）直接挂图；
-            // 带药丸底的（类型标签/消耗圆圈/底部标签）只能挂内层文字 span——
+            // 带药丸/圆圈底的（类型标签/消耗圆圈）只能挂内层文字 span——
             // background-clip:text 会把元素自身背景一起裁进字形，药丸外框会
-            // 整个消失（类型标签只剩 Bloom 文字的教训）
+            // 整个消失（类型标签只剩 Bloom 文字的教训）。
+            // 底部标签保持原纯白药丸、不参与变色（用户拍板）。
+            const applyNode = (node, opts) => {
+                try { applySkinInkToNode(node, skin, cardRect, skinId, opts); } catch (_) {}
+            };
             cardEl.querySelectorAll(':scope .card-name, :scope .card-english-name')
-                .forEach(node => applySkinInkToNode(node, skin, cardRect, skinId));
-            cardEl.querySelectorAll(
-                ':scope .card-type-label, :scope .card-costs .cost-e, :scope .card-costs .cost-m, :scope .card-flags .card-flag'
-            ).forEach(node => {
-                if (!node.querySelector(':scope .skin-ink')) {
-                    wrapSkinInkTextNodes(node, { wrapFlags: true });
-                }
-                node.querySelectorAll(':scope .skin-ink').forEach(span => applySkinInkToNode(span, skin, cardRect, skinId));
-            });
+                .forEach(node => applyNode(node));
+            cardEl.querySelectorAll(':scope .card-type-label, :scope .card-costs .cost-e, :scope .card-costs .cost-m')
+                .forEach(node => {
+                    const full = node.classList.contains('cost-e') || node.classList.contains('cost-m');
+                    if (!node.querySelector(':scope .skin-ink')) {
+                        wrapSkinInkTextNodes(node);
+                    }
+                    node.querySelectorAll(':scope .skin-ink').forEach(span => applyNode(span, { full }));
+                });
             const effectEl = cardEl.querySelector(':scope > .card-effect');
-            if (effectEl && cardRect.width >= 100) {
+            if (effectEl) {
                 if (!effectEl.querySelector(':scope .skin-ink')) {
                     wrapSkinInkTextNodes(effectEl);
                 }
-                effectEl.querySelectorAll('.skin-ink').forEach(span => applySkinInkToNode(span, skin, cardRect, skinId));
+                effectEl.querySelectorAll('.skin-ink').forEach(span => applyNode(span));
             }
         }).catch(() => {});
     } catch (_) {}
