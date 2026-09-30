@@ -1357,13 +1357,14 @@ html.fc-scroll-locked body {
 .fc-split {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
+  /* 行轨必须约束（minmax(0,1fr) + 容器定高）：auto 行会按内容撑高，
+     容器 max-height 只能把溢出裁掉——右面板被拉到和内容一样高，
+     overflow:auto 永不触发，裁掉的部分滚不到（GB-227 全设备右侧滑不动）。
+     高度定为 max(420px, 100vh-140px)：常规视口内两栏各自滚动，
+     矮视口整页滚动。 */
+  grid-template-rows: minmax(0, 1fr);
   width: 100%;
-  /* 固定视口高度：此前 min-height 会随右侧长内容把左列表一起撑长（GB-208），
-     两栏各自内部滚动。GB-222：140px 偏差导致 tabs 与列表标题在部分视口高度碰撞，
-     改为自适应剩余空间（max-height 保底 + 最低高度），跳转按钮不再重叠 */
-  height: auto;
-  max-height: calc(100vh - 140px);
-  min-height: 420px;
+  height: max(420px, calc(100vh - 140px));
   overflow: hidden;
   align-items: stretch;
 }
@@ -1595,7 +1596,9 @@ html.fc-scroll-locked body {
 
 .fc-detail-pane {
   min-width: 0;
-  min-height: calc(100vh - 140px);
+  /* min-height:0 让行轨能约束面板高度（配合 .fc-split 的 grid-template-rows）；
+     面板高度=行高，内容超出时 overflow:auto 生效 */
+  min-height: 0;
   overflow: auto;
   background: transparent;
   padding: 0;
@@ -1709,8 +1712,12 @@ html.fc-scroll-locked body {
 @media (max-width: 900px) {
   .fc-split {
     grid-template-columns: 1fr;
-    /* 移动端恢复纵向堆叠自然高度，两段各自滚动由 pane 的 max-height 控制 */
+    grid-template-rows: auto;
+    /* 移动端纵向堆叠自然高度：解除桌面端的定高与裁剪，
+       左列表自身限高内滚，右详情随页面滚动（GB-227） */
     height: auto;
+    max-height: none;
+    overflow: visible;
   }
 
   .fc-issue-pane {
@@ -1721,6 +1728,8 @@ html.fc-scroll-locked body {
 
   .fc-detail-pane {
     min-height: 54vh;
+    max-height: none;
+    overflow: visible;
     padding: 12px;
   }
 
