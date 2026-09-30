@@ -3191,12 +3191,19 @@ def _build_ui_pause(engine, context: Dict[str, Any], params: Dict[str, Any]) -> 
     component = _resolve_ui_component(engine, context, params.get("component") or params.get("component_id"))
     component = _sanitize_ui_component(engine, context, component)
     target_player = _player_id(engine, resolve_v2_target(engine, context, params.get("target_player", "source")))
+    timeout_ms = max(0, _to_int(eval_v2_value(engine, context, params.get("timeout_ms", 0))))
+    if timeout_ms <= 0 and target_player != _player_id(engine, getattr(engine, "current_player", 0)):
+        # 设计 2026-09-30（GS-261/262）：request_ui 不带 timeout_ms 时窗口永不
+        # 关闭——对方回合里挂起的反应型弹窗（魔法盐受击触发等）可以无限拖
+        # 时间。反应型暂停（决策者≠当前行动玩家）缺省 5 秒，超时按"取消"
+        # 处理（可选效果默认不触发）；自己回合的决策不受影响；卡仍可自定义
+        timeout_ms = 5000
     return {
         "request_id": str(uuid.uuid4()),
         "component": component,
         "target_player": target_player,
         "save_as": str(params.get("save_as") or "ui_result"),
-        "timeout_ms": max(0, _to_int(eval_v2_value(engine, context, params.get("timeout_ms", 0)))),
+        "timeout_ms": timeout_ms,
         # Round 85 / 批次 CG：非法回应（越界/必填/文本格式）怎么处理——
         #   ``close``（默认，旧行为）：关掉窗口、按流程继续；
         #   ``keep``：保持窗口开着让玩家改（上层会把同一个窗口重新推给他）。
