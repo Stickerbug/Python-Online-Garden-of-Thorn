@@ -30460,7 +30460,7 @@ function finishClassicHandMotion(vm, container, oldRects, prev) {
                 trailColor: frameColor,
                 z: 4180,
             }).catch(() => {});
-        }, i * 110);
+        }, i * 55);
     });
 }
 
@@ -35164,7 +35164,7 @@ function animateCardShatterFromElement(cardEl, delay = 0) {
         shard.style.setProperty('--shard-x', `${piece.x}px`);
         shard.style.setProperty('--shard-y', `${piece.y}px`);
         shard.style.setProperty('--shard-rot', `${piece.r}deg`);
-        shard.style.animationDelay = `${delay + index * 18}ms`;
+        shard.style.animationDelay = `${delay + index * 9}ms`;
         wrap.appendChild(shard);
     });
     const crack = document.createElement('div');
@@ -35172,11 +35172,11 @@ function animateCardShatterFromElement(cardEl, delay = 0) {
     crack.style.animationDelay = `${delay}ms`;
     wrap.appendChild(crack);
     document.body.appendChild(wrap);
-    lockCardAnimation(delay + 560);
+    lockCardAnimation(delay + 280);
     setTimeout(() => {
         wrap.remove();
         scheduleTutorialOverlayRefresh(30);
-    }, delay + 680);
+    }, delay + 340);
 }
 
 function queueVisibleHandExileAnimations(previous, next) {
@@ -35332,7 +35332,7 @@ function animatePlayedCard(cardInstanceId, options = {}) {
             arcLaunch = () => {
                 STS2.flyElement(flash, {
                     to: { left: targetPoint.x - 1, top: targetPoint.y - 1, width: 2, height: 2 },
-                    duration: 500 * durationScale,
+                    duration: 250 * durationScale,
                     arcHeight: Math.min(180, Math.abs(dy) * 0.55 + 60),
                     scaleTo: 0.5,
                     rotate: (dx >= 0 ? 1 : -1) * 14,
@@ -35351,10 +35351,10 @@ function animatePlayedCard(cardInstanceId, options = {}) {
             burst.style.left = `${targetPoint.x}px`;
             burst.style.top = `${targetPoint.y}px`;
             document.body.appendChild(burst);
-            setTimeout(() => burst.remove(), 520);
-        }, 310 * durationScale);
+            setTimeout(() => burst.remove(), 260);
+        }, 155 * durationScale);
     }
-    flash.style.animationDuration = `${(targeted ? 500 : 380) * durationScale}ms`;
+    flash.style.animationDuration = `${(targeted ? 250 : 190) * durationScale}ms`;
     const startDelay = Math.max(0, Number(options.startDelay || 0));
     const appendFlash = () => {
         document.body.appendChild(flash);
@@ -35363,11 +35363,11 @@ function animatePlayedCard(cardInstanceId, options = {}) {
     if (startDelay > 0) setTimeout(appendFlash, startDelay);
     else appendFlash();
     if (options.shatterAfter) {
-        lockCardAnimation(startDelay + (targeted ? 980 : 900) * durationScale);
+        lockCardAnimation(startDelay + (targeted ? 490 : 450) * durationScale);
         setTimeout(() => {
             animateCardShatterFromElement(flash);
             flash.remove();
-        }, startDelay + (targeted ? 420 : 340) * durationScale);
+        }, startDelay + (targeted ? 210 : 170) * durationScale);
         setTimeout(() => flash.remove(), startDelay + (targeted ? 900 : 760) * durationScale);
     } else {
         lockCardAnimation(startDelay + (targeted ? 500 : 360) * durationScale);

@@ -1,10 +1,10 @@
 /*
  * sts2_motion.js — 杀戮尖塔2风格手牌动画引擎（独立模块，零依赖）
  *
- * 参数来自 STS2动画拆解.md（60fps 实测）：
- *   抽牌飞行 350ms / 错峰 200ms（批量 60ms）；出牌飞行 400ms，本体缩到 35%；
- *   弃牌飞行 420ms / 错峰 120ms；洗牌单张 700ms / 错峰 30ms，多流并行；
- *   悬停 120ms；重排 180ms。
+ * 参数来自 STS2动画拆解.md（60fps 实测），2026-10-01 整体提速 2 倍（原值 ÷ 2）：
+ *   抽牌飞行 175ms / 错峰 100ms（批量 30ms）；出牌飞行 200ms，本体缩到 35%；
+ *   弃牌飞行 210ms / 错峰 60ms；洗牌单张 350ms / 错峰 15ms，多流并行；
+ *   悬停 60ms；重排 90ms。
  *
  * 视觉原则（反“AI 粒子风”）：
  *   - 拖尾不是发光圆点，而是「卡牌剪影残影」：63:88 圆角矩形、细边框、
@@ -175,7 +175,7 @@
         const toRect = rectOf(opts.to);
         // 目标元素隐藏或尚未布局时（宽/高为 0）不飞——避免牌冲向 (0,0)
         if (!fromRect || !toRect || fromRect.width < 2 || fromRect.height < 2 || toRect.width < 2 || toRect.height < 2) return;
-        const duration = opts.duration ?? 400;
+        const duration = opts.duration ?? 200;
         const arcHeight = opts.arcHeight ?? 140;
         const scaleFrom = opts.scaleFrom ?? 1;
         const scaleTo = opts.scaleTo ?? 1;
@@ -227,7 +227,7 @@
             : easeName === 'linear' ? linear
             : easeOutCubic;
         await runArcFlight(el, p0, p1, p2, {
-            duration: opts.duration ?? 400,
+            duration: opts.duration ?? 200,
             easing,
             scaleFrom: opts.scaleFrom ?? 1,
             scaleTo: opts.scaleTo ?? 1,
@@ -242,17 +242,30 @@
         });
     }
 
-    // 弧线飞行的公共主体：位移沿贝塞尔，残影撒在身后并跟随航向
+    // 弧线飞行的公共主体：WAAPI 关键帧预采样驱动。
+    // 位置/缩放/旋转沿贝塞尔与缓动曲线预先采样成关键帧，交给浏览器合成器线程
+    // 插值执行——出牌/抽牌伴随的大批量重渲染挤占主线程时，飞行依然逐帧平滑
+    // （旧版 rAF 逐帧写 transform 在主线程繁忙时会跳帧，视觉上"只有几个过程"）。
     async function runArcFlight(el, p0, p1, p2, cfg) {
+        const frames = Math.max(24, Math.min(64, Math.round(cfg.duration / 16.7)));
+        const easing = cfg.easing || linear;
+        const keyframes = [];
+        const trailSpawns = []; // { atMs, x, y, w, h, angle }
+        const trailStep = cfg.trailStep ?? Math.max(16, cfg.duration / 10);
+        const wantTrail = cfg.trail && cfg.trailColor;
         let prev = p0;
-        let trailAccum = Infinity; // 第一帧就撒一枚，保证起手有残影
-        const trailStep = cfg.trailStep ?? Math.max(28, cfg.duration / 10);
-        await rafLoop(cfg.duration, (e, rawT, stepMs) => {
-            const pos = pointOnArc(p0, p1, p2, e);
+        let trailAccum = Infinity;
+        const stepMs = cfg.duration / frames;
+        for (let i = 0; i <= frames; i += 1) {
+            const rawT = i / frames;
+            const pos = pointOnArc(p0, p1, p2, easing(rawT));
             const scale = cfg.scaleFrom + (cfg.scaleTo - cfg.scaleFrom) * rawT;
-            el.style.transform = `${cfg.baseTransform || ''}translate(${pos.x - p0.x}px, ${pos.y - p0.y}px)`
-                + ` rotate(${cfg.rotate * rawT}deg) scale(${scale})`;
-            if (cfg.trail && cfg.trailColor) {
+            keyframes.push({
+                transform: `${cfg.baseTransform || ''}translate(${pos.x - p0.x}px, ${pos.y - p0.y}px)`
+                    + ` rotate(${cfg.rotate * rawT}deg) scale(${scale})`,
+                offset: rawT,
+            });
+            if (wantTrail) {
                 trailAccum += stepMs;
                 if (trailAccum >= trailStep) {
                     trailAccum = 0;
@@ -260,19 +273,40 @@
                     const dy = pos.y - prev.y;
                     const angle = (dx || dy) ? Math.atan2(dy, dx) * 180 / Math.PI - 90 : 0;
                     const s = cfg.sliverScale * scale;
-                    spawnTrailSliver(
-                        pos.x,
-                        pos.y,
-                        Math.max(10, cfg.width * s),
-                        Math.max(14, cfg.height * s),
-                        cfg.trailColor,
-                        340,
+                    trailSpawns.push({
+                        atMs: Math.round(rawT * cfg.duration),
+                        x: pos.x,
+                        y: pos.y,
+                        w: Math.max(10, cfg.width * s),
+                        h: Math.max(14, cfg.height * s),
                         angle,
-                    );
+                    });
                     prev = pos;
                 }
             }
-        }, cfg.easing);
+        }
+        el.style.willChange = 'transform';
+        const anim = el.animate(keyframes, { duration: cfg.duration, easing: 'linear', fill: 'forwards' });
+        const timers = trailSpawns.map((spawn) => setTimeout(
+            () => spawnTrailSliver(spawn.x, spawn.y, spawn.w, spawn.h, cfg.trailColor, 240, spawn.angle),
+            spawn.atMs,
+        ));
+        // 超时兜底：个别环境下动画时钟不推进（无头截图、渲染进程异常等），
+        // 不能让 await 链路永久挂起（否则抽牌的真身停留在隐藏态）。
+        let timedOut = false;
+        const guardId = setTimeout(() => {
+            timedOut = true;
+            try { anim.cancel(); } catch (err) { /* 已结束则忽略 */ }
+        }, cfg.duration + 400);
+        try {
+            await anim.finished;
+        } catch (err) { /* cancel / 页面隐藏等中断：按完成处理 */ }
+        clearTimeout(guardId);
+        timers.forEach(clearTimeout);
+        if (timedOut) {
+            const last = keyframes[keyframes.length - 1];
+            el.style.transform = last.transform;
+        }
     }
 
     /*
@@ -284,8 +318,8 @@
         const pileRect = rectOf(opts.pileEl);
         if (!pileRect) return;
         const slots = opts.slots || [];
-        const stagger = opts.stagger ?? 200;
-        const duration = opts.duration ?? 350;
+        const stagger = opts.stagger ?? 100;
+        const duration = opts.duration ?? 175;
         const jobs = slots.map((slotRect, i) => (async () => {
             await delay(i * stagger);
             await flyCard({
@@ -322,7 +356,7 @@
     }
     function playFan(container, before, opts) {
         if (!before || !before.size) return;
-        const duration = (opts && opts.duration) ?? 180;
+        const duration = (opts && opts.duration) ?? 90;
         const skipNew = (opts && opts.skipNew) || null;
         container.querySelectorAll('[data-instance-id]').forEach((el) => {
             const old = before.get(el.dataset.instanceId);
@@ -361,8 +395,8 @@
         const pileRect = rectOf(opts.pileEl);
         if (!pileRect) return;
         const cards = opts.cardEls || [];
-        const stagger = opts.stagger ?? 120;
-        const duration = opts.duration ?? 420;
+        const stagger = opts.stagger ?? 60;
+        const duration = opts.duration ?? 210;
         const color = opts.trailColor;
         const jobs = cards.map((el, i) => (async () => {
             const rect = el.getBoundingClientRect();
@@ -397,8 +431,8 @@
         if (!fromRect || !toRect) return;
         const count = opts.count ?? 10;
         const streams = opts.streams ?? 3;
-        const stagger = opts.stagger ?? 30;
-        const duration = opts.duration ?? 700;
+        const stagger = opts.stagger ?? 15;
+        const duration = opts.duration ?? 350;
         const jobs = [];
         for (let i = 0; i < count; i += 1) {
             jobs.push((async () => {
@@ -472,19 +506,19 @@
         popText,
         shake,
         sampleFrameColor,
-        // 节奏常量表：实现侧直接引用，保证与拆解文档一致
+        // 节奏常量表（2026-10-01：整体提速 2 倍，基础值 = 原拆解值 ÷ 2）
         TIMING: {
-            DRAW_FLY: 350,
-            DRAW_STAGGER: 200,
-            DRAW_STAGGER_BATCH: 60,
-            PLAY_FLY: 400,
-            DISCARD_FLY: 420,
-            DISCARD_STAGGER: 120,
-            SHUFFLE_FLY: 700,
-            SHUFFLE_STAGGER: 30,
-            HOVER: 120,
-            FAN_RELAYOUT: 180,
-            BANNER_HOLD: 1800,
+            DRAW_FLY: 175,
+            DRAW_STAGGER: 100,
+            DRAW_STAGGER_BATCH: 30,
+            PLAY_FLY: 200,
+            DISCARD_FLY: 210,
+            DISCARD_STAGGER: 60,
+            SHUFFLE_FLY: 350,
+            SHUFFLE_STAGGER: 15,
+            HOVER: 60,
+            FAN_RELAYOUT: 90,
+            BANNER_HOLD: 900,
         },
     };
 

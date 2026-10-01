@@ -5928,7 +5928,7 @@
             ghost.style.animation = 'none';
             await STS2.flyElement(ghost, {
                 to: target,
-                duration: 400,
+                duration: 200,
                 arcHeight: destination === 'draw' ? 150 : 120,
                 scaleTo: 0.55,
                 rotate: 16,
@@ -6015,7 +6015,7 @@
             ghost.style.animation = 'none';
             await STS2.flyElement(ghost, {
                 to: target,
-                duration: 430,
+                duration: 215,
                 arcHeight: 150,
                 scaleFrom: 1,
                 scaleTo: 0.5,
@@ -6030,7 +6030,7 @@
             ghost.style.animation = 'none';
             await STS2.flyElement(ghost, {
                 to: target,
-                duration: 400,
+                duration: 200,
                 arcHeight: 100,
                 scaleFrom: 0.9,
                 scaleTo: 0.6,

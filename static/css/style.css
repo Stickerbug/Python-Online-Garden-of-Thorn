@@ -8206,7 +8206,7 @@ a.title-shop-afdian-go:hover {
   background: rgba(255, 255, 255, 0.12);
   box-shadow: 0 0 18px rgba(244, 143, 177, 0.32);
   transform: translate(-50%, -50%) scale(0.28);
-  animation: cardImpactBurst 480ms cubic-bezier(.17,.82,.2,1) forwards;
+  animation: cardImpactBurst 240ms cubic-bezier(.17,.82,.2,1) forwards;
 }
 
 .card-shatter-wrap {
@@ -8224,7 +8224,7 @@ a.title-shop-afdian-go:hover {
   height: 100%;
   margin: 0;
   transform-origin: 50% 50%;
-  animation: cardShatterPiece 520ms cubic-bezier(.18,.78,.2,1) forwards;
+  animation: cardShatterPiece 260ms cubic-bezier(.18,.78,.2,1) forwards;
   will-change: transform, opacity, filter;
 }
 
@@ -8237,7 +8237,7 @@ a.title-shop-afdian-go:hover {
     linear-gradient(22deg, transparent 0 50%, rgba(255,255,255,0.82) 51% 52%, transparent 53% 100%),
     linear-gradient(152deg, transparent 0 56%, rgba(255,255,255,0.68) 57% 58%, transparent 59% 100%);
   opacity: 0;
-  animation: cardShatterCrack 260ms ease-out forwards;
+  animation: cardShatterCrack 130ms ease-out forwards;
 }
 
 @keyframes cardPlayFlash {
