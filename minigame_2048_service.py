@@ -387,7 +387,8 @@ def _checkpoint_after_append(conn, state: Dict[str, object], board: Dict[str, ob
 
 
 def _record_progress(conn, state: Dict[str, object], board: Dict[str, object],
-                     *, source: str, now=None, game_key: str = "2048") -> Optional[Dict[str, object]]:
+                     *, source: str, now=None, game_key: str = "2048",
+                     play_mode: str = "normal") -> Optional[Dict[str, object]]:
     """得分相对已验证进度真实增长时写一条新的已验证记录（刷新窗口）。
 
     ``game_key`` 让同一套记录表给多个小游戏共用（默认 2048，老调用行为不变）。
@@ -400,8 +401,8 @@ def _record_progress(conn, state: Dict[str, object], board: Dict[str, object],
     stamp = now_iso(now)
     cursor = conn.execute(
         """INSERT OR IGNORE INTO minigame_2048_records
-           (user_id, game_id, score, max_tile, op_index, rules_version, verified_at, source, created_at, game_key)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           (user_id, game_id, score, max_tile, op_index, rules_version, verified_at, source, created_at, game_key, play_mode)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (int(state["user_id"]), int(state["game_id"]), score, int(board["max_tile"]),
          int(state["op_index"]), int(state["rules_version"]), stamp,
          source if source in SYNC_SOURCES else "online", stamp, str(game_key or "2048"),
@@ -491,11 +492,20 @@ def sync_progress(conn, user_id: int, game_uid: str, from_index: int, ops,
         # 断网补传大批操作会因时间不够而被拒——客户端按同样规则本地限速，正常玩不受影响）。
         first_op_raw = row["first_op_at"] if "first_op_at" in row.keys() else None
         if first_op_raw is None:
+            # 首批操作（含离线开局补传）按操作数回拨起点：这批操作至少需要
+            # op_count/rate 秒的游玩时长才合法——保留速率约束语义，同时不再
+            # 把"服务端见到的第一批"误判为瞬时爆发（否则离线补传必然被拒）。
+            reference_dt = parse_iso(now_iso(now))
+            needed = int(state["op_index"]) + len(text)
+            if reference_dt is not None and needed > OPS_RATE_BURST_ALLOWANCE:
+                backdated = reference_dt - timedelta(seconds=needed / OPS_RATE_LIMIT_PER_SECOND)
+                first_op_raw = backdated.strftime("%Y-%m-%dT%H:%M:%SZ")
+            else:
+                first_op_raw = now_iso(now)
             conn.execute(
                 "UPDATE minigame_2048_games SET first_op_at = ? WHERE id = ?",
-                (now_iso(now), int(state["game_id"])),
+                (first_op_raw, int(state["game_id"])),
             )
-            first_op_raw = now_iso(now)
         first_op = parse_iso(first_op_raw)
         if first_op is not None:
             reference = parse_iso(now_iso(now)) or first_op

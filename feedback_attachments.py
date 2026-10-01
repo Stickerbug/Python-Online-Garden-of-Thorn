@@ -117,8 +117,27 @@ def attach_to_issue(attachment_id, issue_id):
         conn.commit()
 
 
+def ensure_schema(conn):
+    """只读路径也可能先于任何上传发生（全新库上浏览反馈列表），统一建表。"""
+    conn.execute(
+        '''
+        CREATE TABLE IF NOT EXISTS feedback_attachments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            token TEXT NOT NULL UNIQUE,
+            filename TEXT NOT NULL,
+            mime TEXT NOT NULL,
+            size_bytes INTEGER NOT NULL,
+            uploader_user_id INTEGER,
+            issue_id INTEGER,
+            created_at TEXT NOT NULL
+        )
+        '''
+    )
+
+
 def attachments_for_issue(issue_id):
     with closing(db.get_db_connection()) as conn:
+        ensure_schema(conn)
         rows = conn.execute(
             'SELECT token, mime, size_bytes FROM feedback_attachments WHERE issue_id = ? ORDER BY id',
             (int(issue_id),),
@@ -135,6 +154,7 @@ def attachments_for_issue(issue_id):
 
 def count_issue_attachments(issue_id):
     with closing(db.get_db_connection()) as conn:
+        ensure_schema(conn)
         row = conn.execute(
             'SELECT COUNT(*) AS c FROM feedback_attachments WHERE issue_id = ?',
             (int(issue_id),),

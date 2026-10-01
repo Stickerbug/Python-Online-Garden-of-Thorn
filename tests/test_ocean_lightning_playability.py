@@ -84,6 +84,8 @@ def test_magic_lightning_plays_in_2v2_and_charges_the_selected_players_hand(ocea
     choice = _target_choice(2)
 
     result = engine.play_card(0, lightning.instance_id, 2, choice)
+    if isinstance(engine.pending_response, dict) and engine.pending_response.get('forced_wait'):
+        engine.resolve_forced_response()
 
     assert result.get('success'), result
     assert engine.players[0].health == 96

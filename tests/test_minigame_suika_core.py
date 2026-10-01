@@ -246,8 +246,10 @@ class SuikaRouteTests(unittest.TestCase):
     def tearDown(self):
         svc.db_module = self.original_db
 
-    def test_anonymous_is_rejected(self):
-        self.assertEqual(self.client.get("/minigame/suika").status_code, 401)
+    def test_anonymous_gets_the_guest_shell(self):
+        # 页面守卫后来改为「游客可进」（_minigame_guest_guard：未登录渲染外壳，
+        # 成绩同步等 API 才 401）——匿名访问页面应为 200。
+        self.assertEqual(self.client.get("/minigame/suika").status_code, 200)
 
     def test_logged_in_account_gets_the_shell(self):
         class _Roles:

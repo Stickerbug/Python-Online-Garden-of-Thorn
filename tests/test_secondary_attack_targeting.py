@@ -103,6 +103,8 @@ class SecondaryAttackTargetingTests(unittest.TestCase):
         }
 
         result = engine.play_card(0, marble.instance_id, 2, choice)
+        if isinstance(engine.pending_response, dict) and engine.pending_response.get('forced_wait'):
+            engine.resolve_forced_response()
 
         self.assertTrue(result.get('success'))
         self.assertEqual(engine.players[2].health, 90)

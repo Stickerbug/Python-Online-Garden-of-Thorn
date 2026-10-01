@@ -67,6 +67,8 @@ class HelDominoPrecisionTests(unittest.TestCase):
         choice = self.target_choice(target_id)
         if isinstance(engine, GameEngine2v2):
             result = engine.play_card(0, domino.instance_id, target_id, choice)
+            if isinstance(engine.pending_response, dict) and engine.pending_response.get('forced_wait'):
+                engine.resolve_forced_response()
         else:
             result = engine.play_card(0, domino.instance_id, choice)
         return domino, result

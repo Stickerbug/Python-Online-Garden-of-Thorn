@@ -66,7 +66,10 @@ def _play(engine, engine_class, card, target_id):
         "target_id": target_id,
     }
     if engine_class is GameEngine2v2:
-        return engine.play_card(0, card.instance_id, target_id, choice)
+        result = engine.play_card(0, card.instance_id, target_id, choice)
+        if isinstance(engine.pending_response, dict) and engine.pending_response.get('forced_wait'):
+            engine.resolve_forced_response()
+        return result
     return engine.play_card(0, card.instance_id, choice)
 
 

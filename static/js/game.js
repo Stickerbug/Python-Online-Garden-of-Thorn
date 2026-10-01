@@ -36158,6 +36158,7 @@ let mulliganMatchKey = '';
 
 function hideMulliganPanel() {
     if (mulliganTimerId) { clearInterval(mulliganTimerId); mulliganTimerId = null; }
+    removeMulliganVisibilityListeners();
     const panel = $('mulligan-panel');
     if (panel) {
         panel.innerHTML = '';
@@ -36295,19 +36296,41 @@ function syncMulliganPanel(data) {
     countdownEl.className = 'mulligan-countdown';
     panel.appendChild(countdownEl);
     mulliganCountdown = 30;
+    // GS-295：自动确认改为截止时间戳驱动——后台标签页的 setInterval 会被
+    // 浏览器限流（1 次/分钟甚至更稀），纯递减计数可能几分钟不触发，调度
+    // 阶段就"卡住"直到服务端 60s 兜底。回到前台（visibilitychange/focus）
+    // 立即复核，过期即刻提交。
+    const autoDeadline = Date.now() + 30000;
     const tick = () => {
-        countdownEl.textContent = (UI.mulligan_countdown || 'Auto-confirm in {0}s').replace('{0}', String(mulliganCountdown));
-    };
-    tick();
-    mulliganTimerId = setInterval(() => {
-        mulliganCountdown -= 1;
+        mulliganCountdown = Math.max(0, Math.ceil((autoDeadline - Date.now()) / 1000));
         if (mulliganCountdown <= 0) {
             if (mulliganTimerId) { clearInterval(mulliganTimerId); mulliganTimerId = null; }
+            removeMulliganVisibilityListeners();
             submitMulligan(Array.from(mulliganSelectedIds));
             return;
         }
-        tick();
-    }, 1000);
+        countdownEl.textContent = (UI.mulligan_countdown || 'Auto-confirm in {0}s').replace('{0}', String(mulliganCountdown));
+    };
+    tick();
+    mulliganTimerId = setInterval(tick, 1000);
+    installMulliganVisibilityListeners(tick);
+}
+
+let mulliganVisibilityHandler = null;
+function installMulliganVisibilityListeners(tick) {
+    removeMulliganVisibilityListeners();
+    mulliganVisibilityHandler = () => {
+        if (document.visibilityState === 'visible') tick();
+    };
+    document.addEventListener('visibilitychange', mulliganVisibilityHandler);
+    window.addEventListener('focus', mulliganVisibilityHandler);
+}
+
+function removeMulliganVisibilityListeners() {
+    if (!mulliganVisibilityHandler) return;
+    document.removeEventListener('visibilitychange', mulliganVisibilityHandler);
+    window.removeEventListener('focus', mulliganVisibilityHandler);
+    mulliganVisibilityHandler = null;
 }
 
 function showMagicSaltReflectResponseUI(data = {}, choiceParams = {}) {

@@ -83,9 +83,11 @@ def test_guest_cannot_switch_into_ranked_lobby():
 
 
 def test_ranked_silently_disables_entertainment_mods_and_restores_casual_preference():
-    entertainment_mods = sorted(gtn.entertainment_mod_filenames())
-    assert entertainment_mods, 'the contract requires at least one entertainment mod fixture'
-    target_mod = entertainment_mods[0]
+    # 娱乐包的启用走 build_casual_mode_loadout：v2 构建层对部分 DLC 另有
+    # 启用门槛，测试目标取实际能进入玩家 entertainment_mods 的稳定包。
+    target_mod = 'Garden Cards DLC.gtnmod'
+    entertainment_mods = [target_mod]
+    assert target_mod in gtn.entertainment_mod_filenames(), '娱乐包清单变化，请同步测试目标'
     preferred_disabled = [
         filename for filename in gtn.default_disabled_mods()
         if filename != target_mod
@@ -274,10 +276,11 @@ def test_lobby_ui_exposes_four_core_match_modes_and_keeps_special_modes_casual()
         'casual_2v2',
         'ranked_1v1',
         'ranked_2v2',
-        'casual_urf',
-        'casual_random_deck',
     ):
         assert f'data-mode="{match_mode}"' in template
+    # 特殊模式（无限火力/随机卡组）不再占模板页签，入口在 JS 的模式表里
+    for special_mode in ('casual_urf', 'casual_random_deck'):
+        assert f"'{special_mode}'" in source
     assert "match_mode: preferredMode" in source
     assert "isRankedMatchMode(currentMode)" in source
     assert "socket.emit('set_mode', { mode: engineModeForMatchMode(newMode), match_mode: newMode })" in source
@@ -305,12 +308,13 @@ def test_entertainment_mod_gate_follows_the_match_flow_not_a_stale_ranked_mode()
     assert "return isPvpMatchFlowActive() ? getCurrentPvpMatchMode() : 'casual_1v1';" in source
     assert 'return !isRankedMatchMode(getSettingsModMatchMode());' in source
     # 设置面板与卡牌数据链路必须走新 helper，而不是会被天梯残留污染的旧入口
+    # 模组抽选对调（天梯=随机抽选，娱乐=自选）后，抽选门槛统一走
+    # isModDrawMatchMode / isRankedMatchMode 两个 helper
     for call_site in (
-        "if (['casual_1v1', 'casual_2v2'].includes(getSettingsModMatchMode())) {",
-        'const matchMode = getSettingsModMatchMode();',
-        "const casualUnlockMode = ['casual_1v1', 'casual_2v2'].includes(getSettingsModMatchMode());",
+        "const show = isModDrawMatchMode(getSettingsModMatchMode()) && !!modUnlockState;",
+        'const casualMode = isModDrawMatchMode(getSettingsModMatchMode());',
         'if (!isRankedMatchMode(getSettingsModMatchMode())) return disabled;',
-        "const show = ['casual_1v1', 'casual_2v2'].includes(getSettingsModMatchMode()) && !!modUnlockState;",
+        'if (isModDrawMatchMode(getSettingsModMatchMode())) {',
     ):
         assert call_site in source
 

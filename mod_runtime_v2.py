@@ -3031,8 +3031,25 @@ def validate_v2_ui_response(engine, context: Dict[str, Any], component: Dict[str
     allowed_buttons = [str(btn.get("id")) for btn in buttons if isinstance(btn, dict) and btn.get("id")]
     if not button and allowed_buttons:
         button = allowed_buttons[0]
-    if allowed_buttons and button not in allowed_buttons:
+    # GS-296：'cancel' 永远放行——超时看门狗、回合超时自动结束、断线清理
+    # 都统一用 button='cancel' 关窗，组件没声明 cancel 按钮时旧校验直接抛
+    # V2RuntimeError，自动结束回合随之失败并每 tick 重试（invalid v2 ui
+    # button 刷屏），玩家被永久卡在模组窗口。引擎侧 _v2_button_role 对
+    # 未声明的 'cancel' 本就按取消语义走 on_cancel/跳过剩余步骤。
+    if allowed_buttons and button not in allowed_buttons and button != "cancel":
         raise V2RuntimeError("invalid v2 ui button")
+
+    # GS-296：取消意图（'cancel' 或声明为 cancel 角色的按钮）不做取值校验——
+    # 选择器的 min/max、文本必填对取消无意义，旧校验会让"超时视为取消"
+    # 的兜底路径也抛错卡死。
+    cancel_intent = button == "cancel" or any(
+        isinstance(btn, dict)
+        and str(btn.get("id")) == button
+        and str(btn.get("role") or "") == "cancel"
+        for btn in buttons
+    )
+    if cancel_intent:
+        return {"button": button or "cancel", "values": {}, "cancelled": True}
 
     values_in = response.get("values") if isinstance(response.get("values"), dict) else {}
     values_out: Dict[str, Any] = {}

@@ -1,6 +1,7 @@
-import os
 import gc
+import os
 import tempfile
+import time
 import unittest
 
 import app
@@ -31,7 +32,13 @@ class PublicFeedbackConsoleCommandTests(unittest.TestCase):
         app.DB_AVAILABLE = self.old_db_available
         db.DB_PATH = self.old_db_path
         gc.collect()
-        self.temp_dir.cleanup()
+        # Windows 上 sqlite/WAL 句柄可能延迟释放，清理临时目录需要重试
+        for _ in range(10):
+            try:
+                self.temp_dir.cleanup()
+                return
+            except PermissionError:
+                time.sleep(0.05)
 
     def run_command(self, line):
         return app.execute_admin_command(line, actor='test-console')

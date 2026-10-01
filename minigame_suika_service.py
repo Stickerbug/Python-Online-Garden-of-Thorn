@@ -283,8 +283,8 @@ def sync_progress(conn, user_id: int, game_uid: str, from_index: int, drops,
         if int(score) > best:
             conn.execute(
                 """INSERT OR IGNORE INTO minigame_2048_records
-                   (user_id, game_id, score, max_tile, op_index, rules_version, verified_at, source, created_at, game_key)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   (user_id, game_id, score, max_tile, op_index, rules_version, verified_at, source, created_at, game_key, play_mode)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (int(user_id), int(state["game_id"]), int(score), max_tier, len(merged),
                  RULES_VERSION, stamp, source if source in base.SYNC_SOURCES else "online", stamp, GAME_KEY,
                  play_mode if play_mode in base.PLAY_MODES else "normal"),

@@ -87,6 +87,8 @@ def test_pvp_yin_yang_draws_trigger_electric_web(
     # 卡数据，老测试改成真实出牌路径。
     if engine_class is GameEngine2v2:
         engine.play_card(0, yin.instance_id, target_id, choice)
+        if isinstance(engine.pending_response, dict) and engine.pending_response.get('forced_wait'):
+            engine.resolve_forced_response()
     else:
         engine.play_card(0, yin.instance_id, choice)
 

@@ -67,7 +67,11 @@ def _play_card(engine, engine_class, player_id, card, target_id, extra_choice=No
     if extra_choice:
         choice.update(extra_choice)
     if engine_class is GameEngine2v2:
-        return engine.play_card(player_id, card.instance_id, target_id, choice)
+        result = engine.play_card(player_id, card.instance_id, target_id, choice)
+        # 2v2 纯等待窗（#282 设计）到点结算：测试直调时手动放行
+        if isinstance(engine.pending_response, dict) and engine.pending_response.get('forced_wait'):
+            engine.resolve_forced_response()
+        return result
     return engine.play_card(player_id, card.instance_id, choice)
 
 

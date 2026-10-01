@@ -339,6 +339,8 @@ def _watching_conn(conn, issue_id, user_id):
 
 def _issue_attachments_conn(conn, issue_id):
     """#235：反馈配图列表（含外链 comment 图片由各端按 URL 渲染）。"""
+    import feedback_attachments as _fa
+    _fa.ensure_schema(conn)
     rows = conn.execute(
         'SELECT token, mime, size_bytes FROM feedback_attachments WHERE issue_id = ? ORDER BY id',
         (int(issue_id),),
