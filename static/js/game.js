@@ -14665,6 +14665,10 @@ function shouldShowCardPlayEffectPrediction(cardDict, options = {}) {
             if (!hand.some(card => String(card && card.instance_id) === id)) return false;
         }
     }
+    // GS-291：机械导弹伤害与对手隐藏手牌挂钩——预测整块不显示
+    // （服务端同样以 hidden-info 拒绝模拟，双层保险）。
+    const suppressDef = getCardDef(cardDict.def_id);
+    if (suppressDef && cardMatchesAnyLocalId(cardDict, suppressDef, ['MechaMissile'])) return false;
     return true;
 }
 
