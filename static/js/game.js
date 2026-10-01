@@ -3781,10 +3781,10 @@ const CARD_TEXT_TOKEN_RULES = [
     { cls: 'tag-uncancellable', re: /^(?:不可取消|Uncancellable)/i },
     { cls: 'tag-self-only', re: /^(?:不选择目标|No target)/i },
     { cls: 'tag-magic-swift', re: /^(?:魔力迅捷|Magic Swift)(?::[+-]?\d+)?/i },
-    { cls: 'tag-heavy', re: /^(?:沉重|Heavy)(?::[+-]?\d+)?/i },
-    { cls: 'tag-temp-swift', re: /^(?:暂时迅捷|Temporary Swift)(?::[+-]?\d+)?/i },
-    { cls: 'tag-temp-heavy', re: /^(?:暂时沉重|Temporary Heavy)(?::[+-]?\d+)?/i },
-    { cls: 'tag-temp-magic-heavy', re: /^(?:暂时魔力沉重|Temporary Magic Heavy)(?::[+-]?\d+)?/i },
+    // 「暂时X」整体染 X 的颜色（2026-10-01：暂时前缀与属性同色）
+    { cls: 'tag-magic-heavy', re: /^(?:暂时魔力沉重|魔力沉重|Temporary Magic Heavy|Magic Heavy)(?::[+-]?\d+)?/i },
+    { cls: 'tag-heavy', re: /^(?:暂时沉重|Temporary Heavy|沉重|Heavy)(?::[+-]?\d+)?/i },
+    { cls: 'tag-swift', re: /^(?:暂时迅捷|Temporary Swift|迅捷|Swift)(?::[+-]?\d+)?/i },
     { cls: 'tag-precision', re: /^(?:精准|Precision)/i },
     { cls: 'tag-exile', re: /^(?:放逐|Exile)/i },
     { cls: 'tag-sprout', re: /^(?:萌芽|Sprout)/i },
@@ -3794,11 +3794,10 @@ const CARD_TEXT_TOKEN_RULES = [
     { cls: 'tag-rebound', re: /^(?:回转|Rebound)/i },
     { cls: 'tag-copy', re: /^(?:副本|Copy)(?::[+-]?\d+)?/i },
     { cls: 'tag-unique', re: /^(?:唯一|Unique)/i },
-    { cls: 'tag-swift', re: /^(?:迅捷|Swift)(?::[+-]?\d+)?/i },
     { cls: 'tag-stealth', re: /^(?:隐匿|Stealth)/i },
     { cls: 'tag-revealed', re: /^(?:被揭示|Revealed)/i },
     { cls: 'tag-sublime', re: /^(?:崇高|Sublime)/i },
-    { cls: 'tag-power', re: /^(?:威力|Power)(?::[+-]?\d+)?/i },
+    { cls: 'tag-power', re: /^(?:暂时威力|Temporary Power|威力|Power)(?::[+-]?\d+)?/i },
     { cls: 'tag-charge', re: /^(?:电荷|Charge)(?::[+-]?\d+)?/i },
     { cls: 'tag-floating', re: /^(?:漂浮|Floating)/i },
     { cls: 'tag-ocean-blinded', re: /^(?:蒙蔽|Obscured)/i },
@@ -4666,6 +4665,7 @@ function getCardTextTokenTermKey(cls, text = '') {
         'tag-stealth': 'flag:stealth',
         'tag-revealed': 'flag:revealed',
         'tag-power': 'flag:power',
+        'tag-magic-heavy': 'flag:magic_heavy',
         'tag-charge': 'flag:charge',
         'tag-floating': 'flag:floating',
         'tag-ocean-blinded': 'flag:ocean_blinded',
@@ -15075,6 +15075,10 @@ function addFlagIntroItem(items, seen, flag) {
         addFlagIntroItem(items, seen, normalized === 'unfading_power' ? 'power' : 'fission_layer');
         return;
     }
+    // 「暂时X」的术语介绍就是 X 的词条（其中已说明暂时位），不单独成文
+    if (normalized === 'temp_swift') { addFlagIntroItem(items, seen, 'swift'); return; }
+    if (normalized === 'temp_heavy') { addFlagIntroItem(items, seen, 'heavy'); return; }
+    if (normalized === 'temp_magic_heavy') { addFlagIntroItem(items, seen, 'magic_heavy'); return; }
     if (!normalized || seen.has(`flag:${normalized}`)) return;
     const custom = getCustomTagDef(normalized);
     const label = custom ? getRegistryText(custom, 'name', normalized) : getFlagLabel(normalized);

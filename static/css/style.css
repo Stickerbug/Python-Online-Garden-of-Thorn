@@ -9029,8 +9029,13 @@ html.blind-level-4 .card-prediction-part.magic {
   color: #0EA5E9;
 }
 
+.card-token.tag-heavy,
 .card-token.tag-temp-heavy {
   color: #795548;
+}
+
+.card-token.tag-magic-heavy {
+  color: #7A5CFF;
 }
 
 .card-token.tag-stealth {
@@ -21482,7 +21487,9 @@ html[data-ui-style="minimal"][data-theme="dark"] .card,
 [data-theme="dark"] .card-token.tag-copy { color: #D6A6E8; }
 [data-theme="dark"] .card-token.tag-swift,
 [data-theme="dark"] .card-token.tag-temp-swift { color: #70D1F5; }
+[data-theme="dark"] .card-token.tag-heavy,
 [data-theme="dark"] .card-token.tag-temp-heavy { color: #D0AAA0; }
+[data-theme="dark"] .card-token.tag-magic-heavy { color: #B3A8FF; }
 [data-theme="dark"] .card-token.tag-stealth,
 [data-theme="dark"] .card-token.tag-ocean-blinded { color: #BBC5CF; }
 [data-theme="dark"] .card-token.tag-revealed { color: var(--color-revealed); }

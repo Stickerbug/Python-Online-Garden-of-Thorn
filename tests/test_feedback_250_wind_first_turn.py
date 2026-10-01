@@ -34,23 +34,23 @@ class WindFirstTurnTests(unittest.TestCase):
         return engine
 
     def test_wind_fires_on_target_round_one_turn_start(self):
-        """首回合：玩家0对玩家1出风（花费1E），玩家1的首回合开始即应弃掉
-        手牌中 E 费 ≤2（花费+1）的牌，3E 的仙人掌保留。"""
+        """首回合：玩家0对玩家1出风（2026-10-01 平衡后 2E），玩家1的首回合
+        开始即应弃掉手牌中 E 费 ≤3（花费+1）的牌——仙人掌（3E）也被吹走。"""
         engine = self.build_engine()
         light = CardInstance('Light')      # 0E → 应被吹走
         basic = CardInstance('Basic')      # 1E → 应被吹走
         cactus = CardInstance('Cactus')    # 3E > 2 → 保留
         engine.players[1].hand = [light, basic, cactus]
-        wind = CardInstance('Wind')        # 1E，阈值 = 1+1 = 2
+        wind = CardInstance('Wind')        # 2E，阈值 = 2+1 = 3
         engine.players[0].hand = [wind]
         engine.play_card(0, wind.instance_id, target_choice(1))
         if getattr(engine, 'pending_response', None):
             engine.handle_response(1, None)
         engine.end_turn(0)
         remaining = [c.card_def.name_cn for c in engine.players[1].hand]
-        self.assertEqual(['仙人掌'], remaining)
+        self.assertEqual([], remaining)
         discarded = sorted(c.card_def.name_cn for c in engine.players[1].discard)
-        self.assertEqual(['基本', '轻'], discarded)
+        self.assertEqual(['仙人掌', '基本', '轻'], discarded)
 
     def test_bugatti_equipment_still_waits_for_normal_draw(self):
         """布加迪文案是「正常抽牌后」：首回合（无正常抽牌）装备事件不触发。"""
