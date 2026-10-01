@@ -18562,7 +18562,7 @@ function renderAchievementCenter() {
         return;
     }
     if ((achievementLoading || !achievementCenter) && !items.length) {
-        list.innerHTML = `<div class="account-replay-sub">${escapeHtml(UI.leaderboard_loading || '正在加载...')}</div>`;
+        list.innerHTML = `<div class="account-replay-sub">${escapeHtml(UI.game_loading || '加载中...')}</div>`;
         return;
     }
     if (!items.length) {
@@ -18723,7 +18723,7 @@ function renderTitleShop() {
     updateTitleShopCountdown();
 
     if (titleShopLoading && !titleShop) {
-        status.textContent = UI.leaderboard_loading || '正在加载...';
+        status.textContent = UI.game_loading || '加载中...';
         grid.innerHTML = '';
         return;
     }
@@ -19812,7 +19812,7 @@ async function loadCardSkinInventory() {
     }
     if (cardSkinInventoryBusy) return;
     cardSkinInventoryBusy = true;
-    panel.innerHTML = `<div class="account-replay-sub">${escapeHtml(UI.leaderboard_loading || '正在加载...')}</div>`;
+    panel.innerHTML = `<div class="account-replay-sub">${escapeHtml(UI.game_loading || '加载中...')}</div>`;
     try {
         const response = await fetch('/api/card-skins', { credentials: 'same-origin' });
         const data = await response.json().catch(() => ({}));
