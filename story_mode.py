@@ -224,6 +224,10 @@ def generate_story_map(seed, stage=1, biome='garden', difficulty='normal'):
     room_rng = random.Random(_seed_int(seed, f'map-rooms:{stage}:{biome}:{map_difficulty}'))
     floor_count = story_floor_count(stage, difficulty)
     widths = _floor_widths(rng, floor_count)
+    # GS-276：仅第一阶段第一层是赐福房（宽1）；后续阶段第一层改为 5 个
+    # 普通房间、全部可选，玩家任选一个开始（对齐塔1的阶段开局）
+    if stage > 1:
+        widths[0] = 5
     floors = []
     room_weights = (
         _HARD_ROOM_WEIGHTS
@@ -233,7 +237,7 @@ def generate_story_map(seed, stage=1, biome='garden', difficulty='normal'):
 
     for floor, width in enumerate(widths, start=1):
         if floor == 1:
-            room_types = ['blessing'] * width
+            room_types = ['blessing'] * width if stage == 1 else [None] * width
         elif floor == 2:
             room_types = ['combat'] * width
         elif floor == 9:

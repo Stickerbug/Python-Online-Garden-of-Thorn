@@ -561,10 +561,12 @@ class PlayerState:
             'custom_statuses': dict(self.custom_statuses),
         }
         if include_private:
-            d['hand'] = [c.to_dict() for c in self.hand]
+            # 手牌卡带 owner_id：客户端按卡归属解析装备皮肤（GS-272 自己
+            # 手牌此前缺 owner_id，playerCardSkinAt 解析不到→无皮肤）
+            d['hand'] = [{**c.to_dict(), 'owner_id': self.player_id} for c in self.hand]
             d['deck'] = [c.to_dict() for c in self.deck]
-            d['discard'] = [c.to_dict() for c in self.discard]
-            d['exile'] = [c.to_dict() for c in self.exile]
+            d['discard'] = [{**c.to_dict(), 'owner_id': self.player_id} for c in self.discard]
+            d['exile'] = [{**c.to_dict(), 'owner_id': self.player_id} for c in self.exile]
             d['cards_played_this_turn'] = dict(self.cards_played_this_turn)
             d['cards_played_this_turn_instance_ids'] = list(self.cards_played_this_turn_instance_ids)
             d['custom_vars'] = dict(self.custom_vars)
@@ -9463,10 +9465,19 @@ class GameEngine:
             # 反制窗口节奏（真实对局，response_pacing 由房间层开启）：装备牌
             # （root）与隐匿直接结算；其余牌开 2s 纯等待窗——不管对手有没有
             # 反制都停 2s，不泄露时序信息，到点由 app 层结算。
+            # GS-282：对手 0E 且 0M 时付不出任何反制牌（资源是公开信息，
+            # 跳过不泄露时序），纯等待窗直接免除；仅 0E 仍等（可能有纯 M
+            # 消耗的反制牌）。
+            opponent = self.players[1 - player_id]
+            opp_no_resources = (
+                int(getattr(opponent, 'elixir', 0) or 0) <= 0
+                and int(getattr(opponent, 'magic', 0) or 0) <= 0
+            )
             if (
                 getattr(self, 'response_pacing', False)
                 and getattr(card, 'card_type', '') != 'root'
                 and not self._card_blocks_response(card)
+                and not opp_no_resources
             ):
                 self.pending_response = {
                     'card': card.to_dict(),

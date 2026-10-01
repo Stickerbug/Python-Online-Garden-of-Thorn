@@ -32,9 +32,11 @@ import story_events_12 as events12
 
 _NEGATIVE_STATUSES = frozenset({
     'attack_blocked', 'blind', 'bleed', 'blockade', 'broken', 'entangle',
-    'fire', 'fragile', 'poison', 'stagnation', 'toxic_poison', 'vulnerable',
-    'weak',
+    'fire', 'fragile', 'poison', 'stagnation', 'stun', 'toxic_poison',
+    'vulnerable', 'weak',
 })
+# GS-277：眩晕补入负面向表——敌人施加的眩晕此前不在表内，药丸拦不住，
+# 实战观感是"什么都不免疫"（其余敌人负面 12 种本就能拦，单测验证）
 
 # The story workbook defines these as start-of-turn decay. Keep the smaller
 # end-of-turn list explicit so unrelated statuses never decay by default.
@@ -7153,6 +7155,18 @@ def _finish_enemy_turn_effects(state, enemy, seed, events):
             'before': disc,
             'after': int(enemy['disc']),
         })
+    # GS-279：灯泡在其拥有者的回合结束时-1（灯泡是怪物标签，从怪物
+    # 技能施加；之前引擎只加不衰减，永续锁定目标规则）
+    bulb = max(0, int(enemy.get('bulb') or 0))
+    if bulb:
+        enemy['bulb'] = bulb - 1
+        events.append({
+            'type': 'status_decay',
+            'target_id': enemy['id'],
+            'status': 'bulb',
+            'before': bulb,
+            'after': int(enemy['bulb']),
+        })
     if STORY_ENEMIES.get(enemy.get('def_id'), {}).get('script') == 'mechanical_rat':
         covers = [
             item for item in _living_enemies(state['combat'])
@@ -8685,6 +8699,9 @@ def _complete_current_node(state, events, seed=None):
         else:
             state['phase'] = 'room'
             state['completed'] = False
+            # GS-280：伤害数字在生成房间时就算出来填进文案（结局事件无
+            # 中间状态变化，生成与结算时得分一致），不再写"等同于战果"
+            ending_damage = _mysterious_person_damage(state)
             state['room'] = _story_event_room(
                 'mysterious_person',
                 {'zh': '神秘人物', 'en': 'Mysterious Person'},
@@ -8699,8 +8716,8 @@ def _complete_current_node(state, events, seed=None):
                         'mysterious_battle',
                         '战斗！',
                         'Fight!',
-                        '你倾尽全力对这朵腐化的花花造成了等同于本次旅程战果的伤害，它依旧屹立不倒，你被杀死了。',
-                        'You deal damage equal to the fruits of this entire journey to the corrupted flower. It remains standing and kills you.',
+                        f'你倾尽全力对这朵腐化的花花造成了{ending_damage}点伤害，它依旧屹立不倒，你被杀死了。',
+                        f'You deal {ending_damage} damage to the corrupted flower. It remains standing and kills you.',
                     ),
                 ],
                 ending_event=True,
@@ -9834,10 +9851,18 @@ def _resolve_stage_choice(state, payload, seed, events):
     else:
         state['map'] = generate_story_map(seed, stage, biome, _difficulty(state))
         _prepare_boss_node_encounters(state, seed)
-        first = state['map']['floors'][0]['nodes'][0]
+        first_floor = state['map']['floors'][0]
+        first = first_floor['nodes'][0]
         state['current_floor'] = 1
         state['current_node_id'] = first['id']
-        _prepare_blessing(state, seed, f'stage:{stage}')
+        if stage == 1:
+            _prepare_blessing(state, seed, f'stage:{stage}')
+        else:
+            # GS-276：后续阶段不再赐福，首层 5 房全部开放任选其一进入
+            for node in first_floor['nodes']:
+                node['status'] = 'available'
+            state['phase'] = 'map'
+            state['room'] = None
     events.append({
         'type': 'stage_started',
         'stage': stage,

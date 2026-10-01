@@ -7090,8 +7090,10 @@ def _award_gr_season_activity_reward_for_conn(
 
 def ensure_current_gr_season_for_conn(conn, user_ids=None):
     season = current_gr_season()
-    params = []
-    where = ''
+    # 已注销账号不参与赛季迁移/发奖：发奖链路的 account_integrity 对
+    # deleted_at 账号抛 USER_NOT_FOUND，会让排行榜等全量触发点整体 500
+    # （GS-281/GS-273：93 个注销号卡死 /api/leaderboard）
+    conditions = ['deleted_at IS NULL']
     if user_ids:
         safe_ids = []
         for value in user_ids:
@@ -7100,8 +7102,9 @@ def ensure_current_gr_season_for_conn(conn, user_ids=None):
             except (TypeError, ValueError):
                 pass
         if safe_ids:
-            where = f"WHERE id IN ({','.join(['?'] * len(safe_ids))})"
+            conditions.append(f"id IN ({','.join(['?'] * len(safe_ids))})")
             params = safe_ids
+    where = f"WHERE {' AND '.join(conditions)}"
     rows = conn.execute(
         f'''
         SELECT id, season_gr, total_gr, highest_gr,

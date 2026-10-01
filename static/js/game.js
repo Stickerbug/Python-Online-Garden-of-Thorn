@@ -13765,7 +13765,15 @@ function createClassicCardTile(cardDict, options = {}) {
     if (!cardDef || options.faceDown) {
         tile.classList.add('classic-card-tile-back');
         tile.setAttribute('aria-label', UI.card || 'Card');
-        tile.innerHTML = `<span class="classic-card-tile-inner"><span class="classic-card-tile-back-face"></span></span>`;
+        // GS-272：经典UI对方手牌瓦片也解析装备皮肤卡背（此前固定 CSS
+        // 通用背，经典UI看不到对方皮肤；简约UI走 createCardElement 正常）
+        const ownerKey = cardDict && (cardDict.owner_id ?? cardDict.player_id);
+        const backUrl = Number.isFinite(Number(ownerKey))
+            ? cardSkinBackUrl(playerCardSkinAt(Number(ownerKey)))
+            : '';
+        tile.innerHTML = backUrl
+            ? `<span class="classic-card-tile-inner"><img class="classic-card-tile-back-skin" src="${escapeHtml(backUrl)}" alt="" draggable="false"></span>`
+            : `<span class="classic-card-tile-inner"><span class="classic-card-tile-back-face"></span></span>`;
         return tile;
     }
     if (cardDef.__unknown_card_def) tile.classList.add('classic-card-tile-unknown');
@@ -13848,8 +13856,13 @@ function createClassicHandTilesRow(player, side) {
         mark.textContent = '?';
         row.appendChild(mark);
     } else {
+        // 隐藏手牌瓦片带上归属座位，faceDown 分支才能解析对方皮肤卡背
+        const tileOwnerId = Number(player.raw && player.raw.player_id);
         for (let i = 0; i < hiddenCount; i += 1) {
-            row.appendChild(createClassicCardTile({}, { faceDown: true }));
+            row.appendChild(createClassicCardTile(
+                Number.isFinite(tileOwnerId) ? { owner_id: tileOwnerId } : {},
+                { faceDown: true },
+            ));
         }
     }
     visible.forEach(({ card, hideFlags }) => {
@@ -24714,10 +24727,13 @@ function topmostShortcutBlockingRoot() {
 }
 
 function getHomeShortcutButtons() {
+    // GS-283：休闲花园入口纳入主页快捷键槽位（服务端按功能开关渲染，
+    // 不可见时被 isShortcutElementVisible 过滤，不影响现有循环）
     return [
         $('btn-connect'),
         $('btn-story-mode'),
         $('btn-solo-training'),
+        $('btn-minigame-2048'),
     ].filter(isShortcutElementVisible);
 }
 

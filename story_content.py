@@ -2374,11 +2374,11 @@ STORY_CARDS = {
     ),
     'puppeteer': _card(
         'Puppeteer', '傀儡架台', 'Puppeteer', 0, 'bloom', 'rare',
-        '抽3张牌；获得2层下回合抽牌。',
-        description_en='Draw 3; gain 2 Next Turn Draw.',
+        '抽3张牌；下回合少抽2张牌。',
+        description_en='Draw 3; draw 2 fewer cards next turn.',
         effects=(_effect('draw', 3), _effect('next_turn_draw', -2)),
         upgrade={
-            'description': {'zh': '抽3张牌；获得1层下回合抽牌。', 'en': 'Draw 3; gain 1 Next Turn Draw.'},
+            'description': {'zh': '抽3张牌；下回合少抽1张牌。', 'en': 'Draw 3; draw 1 fewer card next turn.'},
             'effects': (_effect('draw', 3), _effect('next_turn_draw', -1)),
         },
     ),
@@ -2766,7 +2766,7 @@ STORY_RELICS = {
     'consolation': _relic('安慰', 'Consolation', '获得时H上限+1。', rarity='special', script='gain_max_health_only', amount=1, stackable=True),
     'training': _relic('练起来', 'Training', '你可以在休息处锻炼：失去3点H上限，每场战斗开始时多抽1张牌。', rarity='special', script='training', amount=3),
     'rigid': _relic('死板', 'Rigid', '每回合多回复2E；你永久获得5层封锁。', rarity='special', script='boss_locked', amount=2),
-    'story_pill': _relic('药丸', 'Pill', '你免疫大部分效果（当前为所有负面效果）。', rarity='special', script='boss_effect_immune', amount=1),
+    'story_pill': _relic('药丸', 'Pill', '你免疫敌人的负面效果。', rarity='special', script='boss_effect_immune', amount=1),
     'nimble': _relic('灵巧', 'Nimble', '每回合开始时，随机1张手牌获得1层暂时迅捷，回合结束时移除。', rarity='special', script='boss_temporary_swift', amount=1),
     'blessing_rest': _relic('保佑', 'Blessing', '随机事件若是战斗，则改为休息处。', rarity='common', script='event_to_rest'),
     'book_slots': _relic('负载', 'Loadout', '额外获得2个附魔书槽位。', rarity='common', script='extra_book_slots', amount=2),
