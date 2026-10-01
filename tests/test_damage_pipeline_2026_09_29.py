@@ -89,6 +89,25 @@ class DamagePipelineTests(unittest.TestCase):
             engine.handle_response(1, None)
         self.assertEqual(28, 100 - engine.players[1].health)
 
+    def test_needle_on_hit_reads_event_value(self):
+        """GS-256：针（ocean:needle）4D → floor(4/3)=1 层无法反制。
+
+        on_hit 子上下文此前复制到 deal_damage 写入前的旧 event_value（恒 0），
+        与毒刺这类"兄弟步骤读 event_value"不同路径。"""
+        engine = self.build_engine()
+        self.play(engine, CardInstance('Needle'))
+        self.assertEqual(4, 100 - engine.players[1].health)
+        self.assertEqual(1, engine._unable_counter_value(1))
+
+    def test_needle_on_hit_event_value_scales_with_power(self):
+        """GS-256：威力8的针 12D → floor(12/3)=4 层。"""
+        engine = self.build_engine()
+        needle = CardInstance('Needle')
+        needle.power_value = 8
+        self.play(engine, needle)
+        self.assertEqual(12, 100 - engine.players[1].health)
+        self.assertEqual(4, engine._unable_counter_value(1))
+
 
 if __name__ == '__main__':
     unittest.main()

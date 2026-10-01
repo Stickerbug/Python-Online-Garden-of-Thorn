@@ -546,6 +546,9 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
                     positive_hits += 1
             on_hit = params.get("on_hit")
             on_hit_once = params.get("on_hit_once")
+            # GS-256：on_hit 子上下文此前复制到的是本次 deal_damage 写入前的
+            # 旧 event_value（恒 0）——"每造成X点伤害"类 on_hit（如针）必须拿到
+            # 本目标本次实伤，与父级循环后的总额写入（见下文 event_value=total）互补。
             if int(dealt or 0) > 0 and isinstance(on_hit_once, list):
                 child_context = dict(context)
                 child_vars = dict(context.get("vars") if isinstance(context.get("vars"), dict) else {})
@@ -558,6 +561,7 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
                     "damage": int(dealt or 0),
                     "damage_amount": int(dealt or 0),
                     "last_damage": int(dealt or 0),
+                    "event_value": int(dealt or 0),
                     "hit_count": max(1, int(target_positive_hits or 1)),
                     "vars": child_vars,
                 })
@@ -566,6 +570,7 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
                     "target_id": target_id,
                     "damage": int(dealt or 0),
                     "last_damage": int(dealt or 0),
+                    "event_value": int(dealt or 0),
                 })
                 # The callback belongs to one damaged player: a wide-strike play
                 # must not fan the hit effect back out to the whole target set.
@@ -585,6 +590,7 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
                         "damage": int(dealt or 0),
                         "damage_amount": int(dealt or 0),
                         "last_damage": int(dealt or 0),
+                        "event_value": int(dealt or 0),
                         "hit_index": hit_index,
                         "vars": child_vars,
                     })
@@ -593,6 +599,7 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
                         "target_id": target_id,
                         "damage": int(dealt or 0),
                         "last_damage": int(dealt or 0),
+                        "event_value": int(dealt or 0),
                         "hit_index": hit_index,
                     })
                     _narrow_wide_targets(child_context, child_vars, target_id)
@@ -714,6 +721,7 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
                     "target_id": target_id,
                     "damage": int(target_total),
                     "last_damage": int(target_total),
+                    "event_value": int(target_total),
                     "hit_count": max(1, int(target_hits or 1)),
                     "vars": child_vars,
                 })
@@ -721,6 +729,7 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
                     "target_id": target_id,
                     "damage": int(target_total),
                     "last_damage": int(target_total),
+                    "event_value": int(target_total),
                 })
                 _narrow_wide_targets(child_context, child_vars, target_id)
                 run_v2_steps(engine, child_context, on_hit_once)
@@ -734,6 +743,7 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
                         "target_id": target_id,
                         "damage": int(target_total),
                         "last_damage": int(target_total),
+                        "event_value": int(target_total),
                         "hit_index": hit_index,
                         "vars": child_vars,
                     })
@@ -741,6 +751,7 @@ def run_v2_step(engine, context: Dict[str, Any], step: Any):
                         "target_id": target_id,
                         "damage": int(target_total),
                         "last_damage": int(target_total),
+                        "event_value": int(target_total),
                         "hit_index": hit_index,
                     })
                     _narrow_wide_targets(child_context, child_vars, target_id)

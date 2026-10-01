@@ -27,10 +27,10 @@ def test_leaf_and_magic_leaf_locales_match_current_trigger_costs():
 
 def test_balance_locales_do_not_keep_old_blood_knife_avocado_or_kale_rules():
     physical_markers = {
-        "zh": "实际物理伤害",
-        "en": "actual physical damage",
-        "fr": "dégâts physiques réels",
-        "ja": "実際の物理ダメージ",
+        "zh": "受到物理伤害时",
+        "en": "takes physical damage",
+        "fr": "subit des dégâts physiques",
+        "ja": "物理ダメージを受けるたび",
     }
     for language, marker in physical_markers.items():
         blood_knife = localized_card(

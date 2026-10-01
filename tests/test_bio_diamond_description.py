@@ -99,7 +99,7 @@ class BioDiamondDescriptionTests(unittest.TestCase):
         )
         self.assertEqual(
             diamond["effect_text"],
-            f"对目标造成10[[icon:D]]；造成实际伤害时，额外打出1张{DIAMOND_CHIP}",
+            f"对目标造成10[[icon:D]]；造成伤害时，额外打出1张{DIAMOND_CHIP}",
         )
         self.assertEqual(
             zh_data["cards"]["bio:diamond"]["effect_text"],

@@ -3689,7 +3689,7 @@ class GameEngine:
         # Per-player ready state: True when draft done AND sub-choice done (if any)
         self.player_ready: List[bool] = [False, False]
         self.player_draft_started: List[bool] = [False, False]
-        # 新开局规则（调度）：初始手牌后可把任意手牌塞入抽牌堆底部、洗牌、
+        # 新开局规则（调度）：初始手牌后可把任意手牌塞入抽牌堆、洗牌、
         # 抽取等量；mulligan_picks[player] 为 None 表示尚未提交。
         self.mulligan_enabled: bool = True
         self.mulligan_picks: List[Optional[List[int]]] = [None, None]
@@ -5596,12 +5596,12 @@ class GameEngine:
         self._apply_deferred_opening_events_after_initial_draw()
         if self.mulligan_enabled:
             # 新开局规则：初始手牌就绪后进入调度阶段——玩家可把任意手牌
-            # 塞入抽牌堆底部并洗牌、再抽取等量（首次抽牌不触发「到手牌时」
+            # 塞入抽牌堆并洗牌、再抽取等量（首次抽牌不触发「到手牌时」
             # 效果，详见 _resolve_mulligans）。全员提交后由 _finish_game_start
             # 继续开局流程。
             self.mulligan_picks = [None] * len(self.players)
             self.phase = 'mulligan'
-            self.log_msg("调度阶段：可将任意手牌塞入抽牌堆底部，洗牌后抽取等量")
+            self.log_msg("调度阶段：可将任意手牌塞入抽牌堆，洗牌后抽取等量")
             return True
         return self._finish_game_start()
 
@@ -9483,9 +9483,14 @@ class GameEngine:
         prev_preview = getattr(self, '_pending_response_preview', None)
         if isinstance(choice, dict):
             self._active_choice = choice
-        response_target_id = self._choice_target_from_choice(choice, 1 - player_id)
+        # GS-292：无目标选择的出牌（如装备地雷）此前被默认记成"以对手为
+        # 目标"，targeted/hand_charge 反制（黄瓜："自己被作为牌目标"）凭空
+        # 拿到响应窗。只有 thorn 攻击卡的隐式目标仍是对手，其余记 -1（无人
+        # 被作为目标）。
+        implicit_target = 1 - player_id if card.card_type == 'thorn' else -1
+        response_target_id = self._choice_target_from_choice(choice, implicit_target)
         if not (0 <= response_target_id < len(self.players)):
-            response_target_id = 1 - player_id
+            response_target_id = implicit_target
         secondary_targets = self._secondary_attack_target_ids(card, choice)
         if response_target_id == player_id and 1 - player_id in secondary_targets:
             response_target_id = 1 - player_id
@@ -9704,7 +9709,10 @@ class GameEngine:
             return False
         if self._card_blocks_response(card):
             return False
-        target_id = self._choice_target_from_choice(getattr(self, '_active_choice', None), 1 - player_id)
+        # GS-292：与 _check_card_response_after_choice 同口径——无目标选择的
+        # 出牌不再默认视为以对手为目标（装备类 root 的 targeted 反制窗来源）。
+        implicit_target = 1 - player_id if card.card_type == 'thorn' else -1
+        target_id = self._choice_target_from_choice(getattr(self, '_active_choice', None), implicit_target)
         secondary_targets = self._secondary_attack_target_ids(card, getattr(self, '_active_choice', None))
         targets_opponent = target_id == 1 - player_id or 1 - player_id in secondary_targets
         from engine_runtime_support import card_applies_hand_charge
@@ -18911,6 +18919,15 @@ class GameEngine:
             self._clear_sluggish_after_draw(player_id)
             self._run_timed_effects_for_turn(player_id, 'after_turn_start_draw')
             self._run_target_turn_start_after_draw_equipment(player_id)
+            if self.game_over or getattr(self, 'pending_v2_ui', None) or self.pending_choice is not None:
+                self._defer_turn_start_death_checks = False
+                return
+        elif not skip_draw_recovery:
+            # GS-250/252：首回合没有抽牌，但「抽牌结算后」的**延时效果**（风：
+            # 下回合开始弃牌）不能因此晚一整个轮次——目标的首回合也是"下回
+            # 合"。装备类事件（布加迪）文案明确是"正常抽牌后"，首回合无正常
+            # 抽牌，维持不触发。
+            self._run_timed_effects_for_turn(player_id, 'after_turn_start_draw')
             if self.game_over or getattr(self, 'pending_v2_ui', None) or self.pending_choice is not None:
                 self._defer_turn_start_death_checks = False
                 return

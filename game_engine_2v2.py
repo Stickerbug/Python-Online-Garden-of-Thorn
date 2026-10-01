@@ -459,7 +459,7 @@ class GameEngine2v2(GameEngine):
             # 新开局规则（调度）：与 1v1 相同，进入 mulligan 阶段等待全员提交。
             self.mulligan_picks = [None] * 4
             self.phase = 'mulligan'
-            self.log_msg("调度阶段：可将任意手牌塞入抽牌堆底部，洗牌后抽取等量")
+            self.log_msg("调度阶段：可将任意手牌塞入抽牌堆，洗牌后抽取等量")
             return True
         return self._finish_game_start()
 
