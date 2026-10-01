@@ -2504,6 +2504,12 @@ a.title-shop-afdian-go:hover {
   stroke: rgba(112, 132, 167, 0.72);
 }
 
+/* GS-285：折线图每个采样点的悬停热区（透明、可命中，title 提示数值） */
+.account-gr-chart-svg rect.account-gr-chart-hover {
+  fill: transparent;
+  pointer-events: all;
+}
+
 .account-gr-chart-legend {
   display: flex;
   gap: 12px;

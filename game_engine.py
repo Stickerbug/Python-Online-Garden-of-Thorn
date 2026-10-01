@@ -10322,6 +10322,42 @@ class GameEngine:
             }
         return {'players': players_out}
 
+    _PREDICTION_HIDDEN_ZONES = frozenset({'hand', 'deck'})
+    _PREDICTION_SAFE_ZONE_TARGETS = frozenset({'self', 'source', 'owner', 'me'})
+
+    def _prediction_reads_hidden_filtered_zone(self, player_id: int, card: CardInstance) -> bool:
+        """出牌预测的信息泄露检测（GS-291）。
+
+        带卡牌过滤的 zone_count（如机械导弹数对手手牌里的反制牌）在真实
+        引擎模拟里会拿到确切数字，等于把隐藏手牌构成提前泄露给预测方。
+        仅匹配「隐藏区 + 有过滤 + 目标可能不是出牌者自己」的计数；普通
+        手牌数（无过滤，公开信息）与自己区域的计数不受影响。
+        """
+        events = getattr(getattr(card, 'card_def', None), 'v2_events', None)
+        if not isinstance(events, dict):
+            return False
+
+        def walk(node):
+            if isinstance(node, dict):
+                if (
+                    str(node.get('op') or '') == 'zone_count'
+                    and str(node.get('zone') or '') in self._PREDICTION_HIDDEN_ZONES
+                    and any(
+                        key in node
+                        for key in ('card_type', 'quality', 'tags', 'flag', 'flags', 'name')
+                    )
+                ):
+                    target = node.get('target')
+                    target_text = target if isinstance(target, str) else json.dumps(target, ensure_ascii=False)
+                    if target_text.strip().lower() not in self._PREDICTION_SAFE_ZONE_TARGETS:
+                        return True
+                return any(walk(value) for value in node.values())
+            if isinstance(node, list):
+                return any(walk(item) for item in node)
+            return False
+
+        return any(walk(event_def) for event_def in events.values())
+
     def simulate_card_play_prediction(self, player_id: int, card_instance_id: int, choice: Optional[dict] = None) -> dict:
         """出牌预测：在副本上把这张手牌真实打出（自动选择/无人反制/可选UI取消）。
 
@@ -10345,6 +10381,12 @@ class GameEngine:
             card = self.players[player_id].find_hand_card(card_instance_id)
             if card is None:
                 result['error'] = 'card-not-in-hand'
+                return result
+            # GS-291：效果读取他人手牌的「带过滤计数」（如机械导弹按对手
+            # 反制牌数量加伤）时，真实模拟会把隐藏信息提前写进预测值，
+            # 悬停即可免费探出对手手牌构成——这类卡不提供出牌预测。
+            if self._prediction_reads_hidden_filtered_zone(player_id, card):
+                result['error'] = 'hidden-info'
                 return result
             result['def_id'] = str(getattr(card, 'def_id', '') or '')
             sim = copy.deepcopy(self)

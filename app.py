@@ -14136,7 +14136,8 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
             'new': '待确认', 'needs_info': '需补充', 'confirmed': '已确认',
             'in_progress': '修复中', 'fixed': '已修复', 'duplicate': '重复',
             'unreproducible': '无法复现', 'by_design': '设计如此', 'invalid': '不予处理',
-            'under_review': '审核中', 'accepted': '已采纳', 'planned': '已规划',
+            'under_review': '审核中', 'accepted': '已采纳', 'partially_accepted': '采纳一半',
+            'planned': '已规划',
             'rejected': '已拒绝',
         }
         try:
@@ -16535,7 +16536,7 @@ def admin_completions(line):
         if sub in ('status', 'priority', 'note', 'audit') and position == 3:
             return filtered(public_feedback_issue_values())
         if sub == 'list' and position == 3:
-            return filtered(['all', 'new', 'needs_info', 'confirmed', 'in_progress', 'fixed', 'duplicate', 'unreproducible', 'by_design', 'invalid', 'under_review', 'accepted', 'planned', 'rejected'])
+            return filtered(['all', 'new', 'needs_info', 'confirmed', 'in_progress', 'fixed', 'duplicate', 'unreproducible', 'by_design', 'invalid', 'under_review', 'accepted', 'partially_accepted', 'planned', 'rejected'])
 
     if cmd == 'player' and position == 2:
         values = online_values(include_all=sub == 'afkcheck')

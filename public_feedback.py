@@ -26,7 +26,8 @@ PUBLIC_ISSUE_STATUSES = {
         'fixed', 'duplicate', 'unreproducible', 'by_design', 'invalid',
     }),
     'suggestion': frozenset({
-        'new', 'under_review', 'accepted', 'planned', 'rejected', 'duplicate',
+        'new', 'under_review', 'accepted', 'partially_accepted', 'planned',
+        'rejected', 'duplicate',
     }),
     'internal': frozenset({
         'new', 'needs_info', 'in_progress', 'fixed', 'duplicate', 'invalid',
@@ -41,7 +42,10 @@ PUBLIC_ISSUE_CLOSED_STATUSES = {
     'bug': frozenset({
         'fixed', 'duplicate', 'unreproducible', 'by_design', 'invalid',
     }),
-    'suggestion': frozenset({'accepted', 'planned', 'rejected', 'duplicate'}),
+    # GS-287：「采纳一半」是已拍板的结论状态，与 accepted/planned 同属终态。
+    'suggestion': frozenset({
+        'accepted', 'partially_accepted', 'planned', 'rejected', 'duplicate',
+    }),
     'internal': frozenset({'fixed', 'duplicate', 'invalid'}),
 }
 PUBLIC_ISSUE_SORTS = {'recent', 'updated', 'votes', 'priority'}

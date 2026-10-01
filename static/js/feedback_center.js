@@ -39,7 +39,7 @@
       report_cat_harassment: '骚扰', report_cat_misleading: '误导/虚假',
       report_cat_duplicate: '重复/已存在', report_cat_other: '其他',
       bug_status: { new: '待确认', needs_info: '需补充', confirmed: '已确认', in_progress: '修复中', fixed: '已修复', duplicate: '重复', unreproducible: '无法复现', by_design: '设计如此', invalid: '不予处理' },
-      suggestion_status: { new: '待审核', under_review: '审核中', accepted: '已采纳', planned: '已规划', rejected: '已拒绝', duplicate: '重复' },
+      suggestion_status: { new: '待审核', under_review: '审核中', accepted: '已采纳', partially_accepted: '采纳一半', planned: '已规划', rejected: '已拒绝', duplicate: '重复' },
       internal_status: { new: '待处理', needs_info: '需补充', in_progress: '处理中', fixed: '已完成', duplicate: '重复', invalid: '无效' },
     },
     en: {
@@ -80,7 +80,7 @@
       report_cat_harassment: 'Harassment', report_cat_misleading: 'Misleading',
       report_cat_duplicate: 'Duplicate / already reported', report_cat_other: 'Other',
       bug_status: { new: 'New', needs_info: 'Needs info', confirmed: 'Confirmed', in_progress: 'Fixing', fixed: 'Fixed', duplicate: 'Duplicate', unreproducible: 'Cannot reproduce', by_design: 'Works as intended', invalid: 'Invalid' },
-      suggestion_status: { new: 'New', under_review: 'Under review', accepted: 'Accepted', planned: 'Planned', rejected: 'Declined', duplicate: 'Duplicate' },
+      suggestion_status: { new: 'New', under_review: 'Under review', accepted: 'Accepted', partially_accepted: 'Partially adopted', planned: 'Planned', rejected: 'Declined', duplicate: 'Duplicate' },
       internal_status: { new: 'New', needs_info: 'Needs info', in_progress: 'In progress', fixed: 'Done', duplicate: 'Duplicate', invalid: 'Invalid' },
     },
     fr: {
@@ -118,7 +118,7 @@
       report_cat_spam: 'Spam', report_cat_privacy_leak: 'Vie privée', report_cat_harassment: 'Harcèlement',
       report_cat_misleading: 'Trompeur', report_cat_duplicate: 'Doublon', report_cat_other: 'Autre',
       bug_status: { new: 'Nouveau', needs_info: 'Infos requises', confirmed: 'Confirmé', in_progress: 'Correction', fixed: 'Corrigé', duplicate: 'Doublon', unreproducible: 'Non reproduit', by_design: 'Prévu', invalid: 'Invalide' },
-      suggestion_status: { new: 'Nouveau', under_review: 'À l’étude', accepted: 'Accepté', planned: 'Planifié', rejected: 'Refusé', duplicate: 'Doublon' },
+      suggestion_status: { new: 'Nouveau', under_review: 'À l’étude', accepted: 'Accepté', partially_accepted: 'Partiellement adopté', planned: 'Planifié', rejected: 'Refusé', duplicate: 'Doublon' },
       internal_status: { new: 'Nouveau', needs_info: 'Infos requises', in_progress: 'En cours', fixed: 'Terminé', duplicate: 'Doublon', invalid: 'Invalide' },
     },
     ja: {
@@ -157,7 +157,7 @@
       report_cat_harassment: '嫌がらせ', report_cat_misleading: '誤解を招く',
       report_cat_duplicate: '重複', report_cat_other: 'その他',
       bug_status: { new: '未確認', needs_info: '情報不足', confirmed: '確認済み', in_progress: '修正中', fixed: '修正済み', duplicate: '重複', unreproducible: '再現不可', by_design: '仕様', invalid: '無効' },
-      suggestion_status: { new: '未審査', under_review: '審査中', accepted: '採用', planned: '計画済み', rejected: '却下', duplicate: '重複' },
+      suggestion_status: { new: '未審査', under_review: '審査中', accepted: '採用', partially_accepted: '一部採用', planned: '計画済み', rejected: '却下', duplicate: '重複' },
       internal_status: { new: '未処理', needs_info: '情報待ち', in_progress: '処理中', fixed: '完了', duplicate: '重複', invalid: '無効' },
     },
   };
@@ -483,7 +483,7 @@
 
   function statusOptions(kind, selected) {
     const keys = kind === 'suggestion'
-      ? ['new', 'under_review', 'accepted', 'planned', 'rejected', 'duplicate']
+      ? ['new', 'under_review', 'accepted', 'partially_accepted', 'planned', 'rejected', 'duplicate']
       : kind === 'internal'
         ? ['new', 'needs_info', 'in_progress', 'fixed', 'duplicate', 'invalid']
         : ['new', 'needs_info', 'confirmed', 'in_progress', 'fixed', 'duplicate', 'unreproducible', 'by_design', 'invalid'];

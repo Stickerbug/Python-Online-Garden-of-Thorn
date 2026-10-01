@@ -675,6 +675,9 @@ button.fc-account-popover-link:focus-visible {
 [data-fc-status='fixed'],
 [data-fc-status='accepted'],
 [data-fc-status='planned'] { --fc-status-color: #1f845a; }
+/* GS-287：采纳一半——介于采纳与规划之间的青绿色 */
+.fc-status-partially_accepted,
+[data-fc-status='partially_accepted'] { --fc-status-color: #00786f; }
 .fc-status-duplicate,
 [data-fc-status='duplicate'] { --fc-status-color: #6b778c; }
 .fc-status-unreproducible,

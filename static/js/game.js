@@ -17873,10 +17873,22 @@ function renderGrMiniChart(history) {
     const yFor = (value) => h - pad - ((value - min) / span) * (h - pad * 2);
     const lineFor = (key) => points.map((item, idx) => `${xFor(idx).toFixed(1)},${yFor(Number.isFinite(item[key]) ? item[key] : item.season).toFixed(1)}`).join(' ');
     const last = points[points.length - 1] || {};
+    // GS-285：悬停查看每个采样点的具体数值——每个点一条全高透明热区，
+    // 原生 <title> 展示「日期 · 赛季 X · 总分 Y」。
+    const seasonLabel = lt({ zh: '赛季', en: 'Season', fr: 'Saison', ja: 'シーズン' });
+    const totalLabel = lt({ zh: '总分', en: 'Total', fr: 'Total', ja: 'トータル' });
+    const stripWidth = Math.max(8, (w - pad * 2) / points.length);
+    const hoverStrips = points.map((item, idx) => {
+        const center = Math.min(Math.max(xFor(idx), stripWidth / 2), w - stripWidth / 2);
+        const total = Number.isFinite(item.total) ? item.total : item.season;
+        const title = `${item.date} · ${seasonLabel} ${formatGrValue(item.season)} · ${totalLabel} ${formatGrValue(total)}`;
+        return `<rect class="account-gr-chart-hover" x="${(center - stripWidth / 2).toFixed(1)}" y="0" width="${stripWidth.toFixed(1)}" height="${h}"><title>${escapeHtml(title)}</title></rect>`;
+    }).join('');
     return `
         <svg class="account-gr-chart-svg" viewBox="0 0 ${w} ${h}" role="img" aria-label="GR">
             <polyline class="account-gr-chart-total" points="${escapeHtml(lineFor('total'))}"></polyline>
             <polyline class="account-gr-chart-season" points="${escapeHtml(lineFor('season'))}"></polyline>
+            ${hoverStrips}
         </svg>
         <div class="account-gr-chart-legend">
             <span><i class="season"></i>${escapeHtml(currentLang === 'zh' ? '赛季' : 'Season')} ${escapeHtml(formatGrValue(last.season))}</span>
