@@ -24785,7 +24785,10 @@ def api_auth_register():
         return _rate_limit_response('注册过于频繁，请稍后再试', retry_after=300)
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
-        return jsonify({'success': False, 'error': '请求格式无效'}), 400
+        # 同登录：兼容丢失 Content-Type 的国产 WebView（QQ 浏览器等）
+        data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'success': False, 'error': '请求格式无效，请更换浏览器重试'}), 400
     username = data.get('username', '')
     password = data.get('password', '')
     if not isinstance(username, str) or len(username) > 128:
@@ -24818,7 +24821,11 @@ def api_auth_login():
         return _rate_limit_response('登录过于频繁，请稍后再试', retry_after=300)
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
-        return jsonify({'success': False, 'error': '请求格式无效'}), 400
+        # 部分国产浏览器 WebView（如 QQ 浏览器）发送登录请求时会丢失
+        # Content-Type——头缺失但请求体仍是 JSON 时强制解析兜底。
+        data = request.get_json(force=True, silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'success': False, 'error': '请求格式无效，请更换浏览器重试'}), 400
     username = data.get('username', '')
     password = data.get('password', '')
     if not isinstance(username, str) or len(username) > 128:
