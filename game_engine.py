@@ -116,6 +116,7 @@ CARD_FLAG_LABELS_ZH = {
     'temp_magic_heavy': '暂时魔力沉重',
     'unfading_power': '不灭:威力',
     'unfading_fission': '不灭:裂变',
+    'stand_ready': '蓄势待发',
     'floating': '漂浮',
     'stealth': '隐匿',
     'revealed': '被揭示',

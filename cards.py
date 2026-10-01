@@ -160,7 +160,7 @@ _VANILLA_FLAGS = {
     'swift', 'stealth', 'revealed', 'rebound', 'nothingness',
     'team_limited', 'team_unique', 'power', 'magic_swift',
     'temp_swift', 'temp_heavy', 'temp_magic_heavy', 'heavy', 'wide_strike', 'self_target',
-    'floating', 'charge', 'ocean_blinded', 'sublime', 'unfading_power', 'unfading_fission',
+    'floating', 'charge', 'ocean_blinded', 'sublime', 'unfading_power', 'unfading_fission', 'stand_ready',
 }
 
 

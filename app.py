@@ -20395,28 +20395,9 @@ def emit_or_resolve_pending_response(room, reason='emit'):
 
 
 def _auto_fire_stand_ready_counters(room):
-    """蓄势待发（导弹词条）：符合条件的反制牌立即自动使用，不等玩家点击。
-    反制窗口 2s 保底期间推迟到整 2s 触发（返回 'deferred'，由后台任务接管）。"""
-    engine = getattr(room, 'engine', None)
-    pending = getattr(engine, 'pending_response', None) if engine is not None else None
-    if not isinstance(pending, dict) or getattr(engine, 'game_over', False):
-        return False
-    hold_seconds = _response_window_hold_seconds(pending)
-    if hold_seconds > 0:
-        def _fire_later():
-            socketio.sleep(hold_seconds)
-            engine_now = getattr(room, 'engine', None)
-            if getattr(engine_now, 'pending_response', None) is not pending:
-                return
-            if not _fire_stand_ready_counters_now(room):
-                return
-            with _lock:
-                _sync_room_action_timer_after_state_change(room)
-            emit_turn_timer_update(room)
-            broadcast_game_state(room)
-            emit_pending_interaction_after_state_change(room, reason='stand_ready_held')
-        _start_socket_background_task(_fire_later)
-        return 'deferred'
+    """蓄势待发（导弹词条）：满足消耗与响应条件（如被作为牌目标）的反制牌
+    立即自动使用——不进反制窗口、不等 2s 保底（设计 2026-10-01：自动打出
+    不需要玩家决策时间，即时结算）。"""
     return _fire_stand_ready_counters_now(room)
 
 
@@ -20448,7 +20429,9 @@ def _fire_stand_ready_counters_now(room):
                 responder_id = 1 - int(pending.get('player_id', 0))
             except Exception:
                 return False
-            played_card = CardInstance.from_dict(pending.get('card') or {})
+            # _response_trigger_types_for_card 期待 dict 载荷（读 def_id 等），
+            # 此前误传 CardInstance 导致 AttributeError 被吞、自动打出从未触发。
+            played_card = pending.get('card') or {}
             for trigger_type in _response_trigger_types_for_card(engine, played_card):
                 for counter_card in engine.get_counter_cards(responder_id, trigger_type):
                     card_def = counter_card.card_def
@@ -20472,9 +20455,6 @@ def emit_pending_interaction_after_state_change(room, reason='state_change'):
         if fired is True:
             broadcast_game_state(room)
             emit_pending_interaction_after_state_change(room, reason=f'{reason}:stand_ready')
-            return
-        if fired == 'deferred':
-            # 2s 保底期间延迟触发；窗口本身由后台任务在触发后广播
             return
         emit_or_resolve_pending_response(room, reason=reason)
         return
