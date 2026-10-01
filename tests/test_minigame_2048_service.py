@@ -86,6 +86,16 @@ class SyncTests(unittest.TestCase):
         self.assertEqual(record["score"], truth["score"])
         self.assertEqual(record["verified_at"], "2026-09-20T01:00:00Z")
 
+    def test_ticket_mode_sync_labels_records_as_ticket(self):
+        """限时（门票）模式的同步必须把 play_mode 写进记录——此前最后一跳
+        没有转发，门票局的分数被记成 normal，门票榜永远为空。"""
+        result = svc.sync_progress(self.conn, 1, self.game["game_uid"], 0, self.ops,
+                                   now="2026-09-20T01:00:00Z", play_mode="ticket")
+        self.assertEqual(result["status"], "ok", result)
+        record = self.conn.execute("SELECT * FROM minigame_2048_records").fetchone()
+        self.assertIsNotNone(record)
+        self.assertEqual("ticket", record["play_mode"])
+
     def test_repeat_batch_is_idempotent(self):
         first = svc.sync_progress(self.conn, 1, self.game["game_uid"], 0, self.ops,
                                   now="2026-09-20T01:00:00Z")

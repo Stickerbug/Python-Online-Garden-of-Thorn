@@ -553,7 +553,9 @@ def sync_progress(conn, user_id: int, game_uid: str, from_index: int, ops,
         state["score"] = int(board["score"])
         state["max_tile"] = int(board["max_tile"])
         _checkpoint_after_append(conn, state, board)
-    record = _record_progress(conn, state, board, source=source, now=now)
+    # 限时（门票）模式：play_mode 必须一路传到记录写入，否则门票局的分数
+    # 会被记成 normal，门票榜（r.play_mode='ticket'）永远为空。
+    record = _record_progress(conn, state, board, source=source, now=now, play_mode=play_mode)
     conn.commit()
     verified_index, verified_score = _progress_at(conn, state["game_id"])
     return {
