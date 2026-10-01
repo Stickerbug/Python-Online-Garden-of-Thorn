@@ -1399,10 +1399,10 @@ I18N.ja.tutorial_victory_message = 'おめでとうございます。チュー�
 I18N.ja.tutorial_defeat_message = 'チュートリアルの対局に敗北しました。大丈夫です。次の対局ではもっと動きが見えてきます。';
 I18N.ja.tutorial_retry = 'チュートリアルをやり直す';
 I18N.ja.target_pick_hint = '強調表示されたプレイヤー欄を押してください。';
-Object.assign(I18N.en, { flag_unfading_power: 'Unfading:Power', tag_unfading_power: 'Unfading:Power', flag_unfading_fission: 'Unfading:Fission', tag_unfading_fission: 'Unfading:Fission', tag_magic_heavy: 'Magic Heavy' });
-Object.assign(I18N.zh, { flag_unfading_power: '不灭:威力', tag_unfading_power: '不灭:威力', flag_unfading_fission: '不灭:裂变', tag_unfading_fission: '不灭:裂变', tag_magic_heavy: '魔力沉重' });
-Object.assign(I18N.fr, { flag_unfading_power: 'Indélébile:Puissance', tag_unfading_power: 'Indélébile:Puissance', flag_unfading_fission: 'Indélébile:Fission', tag_unfading_fission: 'Indélébile:Fission', tag_magic_heavy: 'Lourdeur magique' });
-Object.assign(I18N.ja, { flag_unfading_power: '不滅:威力', tag_unfading_power: '不滅:威力', flag_unfading_fission: '不滅:裂変', tag_unfading_fission: '不滅:裂変', tag_magic_heavy: '魔力重化' });
+Object.assign(I18N.en, { flag_unfading: 'Unfading', tag_unfading: 'Unfading', flag_unfading_power: 'Unfading:Power', tag_unfading_power: 'Unfading:Power', flag_unfading_fission: 'Unfading:Fission', tag_unfading_fission: 'Unfading:Fission', tag_magic_heavy: 'Magic Heavy' });
+Object.assign(I18N.zh, { flag_unfading: '不灭', tag_unfading: '不灭', flag_unfading_power: '不灭:威力', tag_unfading_power: '不灭:威力', flag_unfading_fission: '不灭:裂变', tag_unfading_fission: '不灭:裂变', tag_magic_heavy: '魔力沉重' });
+Object.assign(I18N.fr, { flag_unfading: 'Indélébile', tag_unfading: 'Indélébile', flag_unfading_power: 'Indélébile:Puissance', tag_unfading_power: 'Indélébile:Puissance', flag_unfading_fission: 'Indélébile:Fission', tag_unfading_fission: 'Indélébile:Fission', tag_magic_heavy: 'Lourdeur magique' });
+Object.assign(I18N.ja, { flag_unfading: '不滅', tag_unfading: '不滅', flag_unfading_power: '不滅:威力', tag_unfading_power: '不滅:威力', flag_unfading_fission: '不滅:裂変', tag_unfading_fission: '不滅:裂変', tag_magic_heavy: '魔力重化' });
 I18N.en.tutorial_intro = 'Now, let’s begin the tutorial.';
 I18N.en.tutorial_hint_ui = 'First read the interface: your hand is at the bottom, H/E/M and states are near each player, and the battle log is on the side. Press View Draw Deck to inspect upcoming cards.';
 I18N.en.tutorial_hint_play = 'Now play a Thorn attack. In 1v1, attacks target the opponent; if the target cannot be selected, the card cannot be played.';
@@ -3476,8 +3476,9 @@ const CARD_FLAG_STYLES = {
     floating: { label: '', fg: '#1687B8', bg: 'rgba(22,135,184,0.15)', cls: 'floating' },
     magic_swift: { label: '', fg: '#6C5CE7', bg: 'rgba(108,92,231,0.15)', cls: 'magic-swift' },
     power: { label: '', fg: '#C0392B', bg: 'rgba(192,57,43,0.14)', cls: 'power' },
-    unfading_power: { label: '', fg: '#B54708', bg: 'rgba(181,71,8,0.14)', cls: 'unfading-power' },
-    unfading_fission: { label: '', fg: '#0B6E4F', bg: 'rgba(11,110,79,0.14)', cls: 'unfading-fission' },
+    unfading: { label: '', fg: '#B54708', bg: 'rgba(181,71,8,0.14)', cls: 'unfading' },
+    unfading_power: { label: '', fg: '#B54708', bg: 'rgba(181,71,8,0.14)', cls: 'unfading' },
+    unfading_fission: { label: '', fg: '#B54708', bg: 'rgba(181,71,8,0.14)', cls: 'unfading' },
     team_limited: { label: '', fg: '#607D3B', bg: 'rgba(96,125,59,0.15)', cls: 'team-limited' },
     team_unique: { label: '', fg: '#8D6E63', bg: 'rgba(141,110,99,0.15)', cls: 'team-unique' },
     charge: { label: '', fg: '#4BA3FF', bg: 'rgba(75,163,255,0.15)', cls: 'charge' },
@@ -3514,8 +3515,9 @@ const CARD_FLAG_TERM_COLORS = {
     floating: '#1687B8',
     magic_swift: '#6C5CE7',
     power: '#C0392B',
+    unfading: '#B54708',
     unfading_power: '#B54708',
-    unfading_fission: '#0B6E4F',
+    unfading_fission: '#B54708',
     team_limited: '#607D3B',
     team_unique: '#8D6E63',
     charge: '#4BA3FF',
@@ -8854,6 +8856,13 @@ function getGalleryFlagUsers(flag) {
     const defs = Object.values(getGalleryCardDefs()).filter(isGalleryVisibleCardDef);
     if (normalized === 'fusion_layer') return defs.filter(cd => cd && cd.id === 'Fusion');
     if (normalized === 'fission_layer') return defs.filter(cd => cd && cd.id === 'Fission');
+    if (normalized === 'unfading') {
+        const merged = new Set([
+            ...getGalleryFlagUsers('unfading_power'),
+            ...getGalleryFlagUsers('unfading_fission'),
+        ]);
+        return [...merged];
+    }
     return defs.filter(cd => {
         const allFlags = [...normalizeFlagList(cd.flags || []), ...normalizeFlagList(cd.tags || [])];
         return allFlags.includes(normalized);
@@ -9177,6 +9186,10 @@ function getAllGalleryFlags() {
         const normalized = normalizeCardFlag(flag);
         if (normalized && shouldDisplayCardFlag(normalized, { showSystemFlags: false })) flags.add(normalized);
     }));
+    // 「不灭:威力 / 不灭:裂变」在图鉴里合并为一条「不灭」（色块与描述统一）。
+    flags.delete('unfading_power');
+    flags.delete('unfading_fission');
+    flags.add('unfading');
     return [...flags].sort((a, b) => getFlagLabel(a).localeCompare(getFlagLabel(b)));
 }
 
@@ -13323,7 +13336,7 @@ function createCardElement(cardDict, options = {}) {
         specialEffectEntries.push(['magic_swift', `<span class="card-flag magic-swift">${escapeHtml(UI.tag_magic_swift || 'Magic Swift')}:${dual.magicSwiftN}</span>`]);
     }
     if (dual.tempMagicHeavyM > 0) {
-        specialEffectEntries.push(['temp_magic_heavy', `<span class="card-flag temp-magic-heavy">${escapeHtml(UI.tag_magic_heavy || lt({ zh: '魔力沉重', en: 'Magic Heavy', fr: 'Lourdeur magique', ja: '魔力重化' }))}:${formatDualAddendValue(0, dual.tempMagicHeavyM)}</span>`]);
+        specialEffectEntries.push(['magic_heavy', `<span class="card-flag temp-magic-heavy">${escapeHtml(UI.tag_magic_heavy || lt({ zh: '魔力沉重', en: 'Magic Heavy', fr: 'Lourdeur magique', ja: '魔力重化' }))}:${formatDualAddendValue(0, dual.tempMagicHeavyM)}</span>`]);
     }
     if (dual.powerN !== 0 || dual.powerM !== 0) {
         specialEffectEntries.push(['power', `<span class="card-flag power">${escapeHtml(UI.tag_power || 'Power')}:${formatDualAddendValue(dual.powerN, dual.powerM)}</span>`]);
@@ -13550,6 +13563,9 @@ function shouldDisplayCardFlag(flag, options = {}) {
     if (normalized === 'ocean_no_auto') return false;
     if (normalized === 'infinite_exclude') return false;
     if (normalized === 'multi_petal_fission') return false;
+    // 双加数体系：暂时迅捷/沉重/魔沉已并入迅捷/沉重/魔力沉重的暂时位显示，
+    // 不再作为独立标签出现（图鉴、卡面兜底列表一并隐藏）。
+    if (normalized === 'temp_swift' || normalized === 'temp_heavy' || normalized === 'temp_magic_heavy') return false;
     if (isInternalCardFlag(normalized)) return false;
     return true;
 }
@@ -13653,7 +13669,7 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
         parts.push(cardFlagHtml('magic_swift', `${UI.tag_magic_swift || 'Magic Swift'}:${dual.magicSwiftN}`));
     }
     if (dual.tempMagicHeavyM > 0) {
-        parts.push(cardFlagHtml('temp_magic_heavy', `${UI.tag_magic_heavy || lt({ zh: '魔力沉重', en: 'Magic Heavy', fr: 'Lourdeur magique', ja: '魔力重化' })}:${formatDualAddendValue(0, dual.tempMagicHeavyM)}`));
+        parts.push(cardFlagHtml('magic_heavy', `${UI.tag_magic_heavy || lt({ zh: '魔力沉重', en: 'Magic Heavy', fr: 'Lourdeur magique', ja: '魔力重化' })}:${formatDualAddendValue(0, dual.tempMagicHeavyM)}`));
     }
     if (dual.powerN !== 0 || dual.powerM !== 0) {
         parts.push(cardFlagHtml('power', `${UI.tag_power || 'Power'}:${formatDualAddendValue(dual.powerN, dual.powerM)}`));
@@ -14944,6 +14960,10 @@ function getTermIntroLibrary() {
         power: { label: UI.tag_power || 'Power', desc: lt({ zh: '此牌造成的物理伤害增加对应层数；多段伤害的每段增加向上取整(威力/段数)D。获得的威力写入暂时位（威力:0+N 中加号后的数字），打出后清除。', en: 'Increases each D segment this card deals. For multi-hit damage, Power is distributed across hits rounded up. Gained Power is written to the temp slot (the number after the plus sign in Power:0+N) and clears after being played.', fr: 'Augmente chaque segment de D infligé par cette carte. Pour plusieurs segments, la Puissance est répartie en arrondissant au supérieur. La Puissance gagnée est inscrite dans l’emplacement temporaire (le nombre après le signe plus dans Puissance:0+N) et disparaît après utilisation.', ja: 'このカードの各 D を増やします。多段の場合、威力は各段へ切り上げで配分されます。獲得した威力は一時枠（威力:0+N のプラス記号の後の数字）に書き込まれ、使用後に消えます。' }), color: '#C0392B' },
         magic_swift: { label: UI.tag_magic_swift || 'Magic Swift', desc: lt({ zh: 'M 花费减少对应层数，最低为 0M。', en: 'Reduces M cost by its value, minimum 0M.', fr: 'Réduit le coût M de sa valeur, minimum 0M.', ja: 'M コストを値だけ減らします。最低0M。' }), color: '#6C5CE7' },
         swift: { label: UI.tag_swift || 'Swift', desc: lt({ zh: '此牌 E 花费减少对应层数，最低为 0E。获得的迅捷写入留存位（迅捷:N+M 中冒号前的数字），打出后保留。', en: 'Reduces this card’s E cost by its value, minimum 0E. Gained Swift is written to the retain slot (the number before the colon in Swift:N+M) and survives being played.', fr: 'Réduit le coût E de cette carte de sa valeur, minimum 0E. La Rapidité gagnée est inscrite dans l’emplacement de rétention (le nombre avant les deux-points dans Rapidité:N+M) et survit à l’utilisation.', ja: 'このカードの E コストを層数分減らします。最低 0E。獲得した迅捷は保持枠（迅捷:N+M のコロン前の数字）に書き込まれ、使用後も残ります。' }), color: '#0EA5E9' },
+        unfading: { label: UI.tag_unfading || lt({ zh: '不灭', en: 'Unfading', fr: 'Indélébile', ja: '不滅' }), desc: lt({ zh: '带「不灭:属性」的卡，对该属性暂时位的一切操作改为对留存位——获得的层数写入留存位（名:N+M 中加号前的数字），打出后保留。', en: 'A card with Unfading:Property applies all operations on that property’s temp slot to its retain slot instead — gained stacks are written to the retain slot (the number before the plus sign in Name:N+M) and survive being played.', fr: 'Une carte avec Indélébile:Propriété applique toutes les opérations sur l’emplacement temporaire de cette propriété à son emplacement de rétention — les charges gagnées sont inscrites dans l’emplacement de rétention (le nombre avant le signe plus dans Nom:N+M) et survivent à l’utilisation.', ja: '「不滅:属性」を持つカードは、その属性の一時枠への操作をすべて保持枠に対して行います。獲得した層数は保持枠（名:N+M のプラス記号の前の数字）に書き込まれ、使用後も残ります。' }), color: '#B54708' },
+        unfading_power: { label: UI.tag_unfading_power || 'Unfading:Power', desc: lt({ zh: '此牌对威力暂时位的一切操作改为对留存位：获得的威力写入留存位（威力:N+M 中加号前的数字），打出后保留。', en: 'All operations on this card’s Power temp slot apply to its retain slot instead: gained Power is written to the retain slot (the number before the plus sign in Power:N+M) and survives being played.', fr: 'Toutes les opérations sur l’emplacement temporaire de Puissance s’appliquent à son emplacement de rétention : la Puissance gagnée est inscrite dans l’emplacement de rétention (le nombre avant le signe plus dans Puissance:N+M) et survit à l’utilisation.', ja: 'このカードの威力・一時枠への操作はすべて保持枠に対して行われます。獲得した威力は保持枠（威力:N+M のプラス記号の前の数字）に書き込まれ、使用後も残ります。' }), color: '#B54708' },
+        unfading_fission: { label: UI.tag_unfading_fission || 'Unfading:Fission', desc: lt({ zh: '此牌对裂变暂时位的一切操作改为对留存位：获得的裂变层数写入留存位（裂变:N+M 中加号前的数字），打出后保留。', en: 'All operations on this card’s Fission temp slot apply to its retain slot instead: gained Fission stacks are written to the retain slot (the number before the plus sign in Fission:N+M) and survive being played.', fr: 'Toutes les opérations sur l’emplacement temporaire de Fission s’appliquent à son emplacement de rétention : les couches de Fission gagnées sont inscrites dans l’emplacement de rétention (le nombre avant le signe plus dans Fission:N+M) et survivent à l’utilisation.', ja: 'このカードの裂変・一時枠への操作はすべて保持枠に対して行われます。獲得した裂変の層数は保持枠（裂変:N+M のプラス記号の前の数字）に書き込まれ、使用後も残ります。' }), color: '#B54708' },
+        magic_heavy: { label: UI.tag_magic_heavy || lt({ zh: '魔力沉重', en: 'Magic Heavy', fr: 'Lourdeur magique', ja: '魔力重化' }), desc: lt({ zh: '此牌 M 花费增加对应层数。获得的层数写入暂时位（魔力沉重:0+N 中加号后的数字），打出后清除。', en: 'Increases this card’s M cost by its value. Gained stacks are written to the temp slot (the number after the plus sign in Magic Heavy:0+N) and clear after being played.', fr: 'Augmente le coût M de cette carte de sa valeur. Les charges gagnées sont inscrites dans l’emplacement temporaire (le nombre après le signe plus dans Lourdeur magique:0+N) et disparaissent après utilisation.', ja: 'このカードの M コストを層数分増やします。獲得した層数は一時枠（魔力重化:0+N のプラス記号の後の数字）に書き込まれ、使用後に消えます。' }), color: '#7A5CFF' },
         heavy: { label: UI.tag_heavy || 'Heavy', desc: lt({ zh: '此牌 E 花费增加对应层数。获得的沉重写入留存位（沉重:N+M 中冒号前的数字），打出后保留。', en: 'Increases this card’s E cost by its value. Gained Heavy is written to the retain slot (the number before the colon in Heavy:N+M) and survives being played.', fr: 'Augmente le coût E de cette carte de sa valeur. La Lourdeur gagnée est inscrite dans l’emplacement de rétention (le nombre avant les deux-points dans Lourdeur:N+M) et survit à l’utilisation.', ja: 'このカードの E コストを層数分増やします。獲得した沉重は保持枠（沉重:N+M のコロン前の数字）に書き込まれ、使用後も残ります。' }), color: '#8D6E63' },
         floating: { label: UI.tag_floating || 'Floating', desc: lt({ zh: '打出后若本应进入弃牌堆，则洗入抽牌堆随机位置。', en: 'After being played, if it would enter discard, it is shuffled into the deck instead.', fr: 'Après utilisation, si elle devait aller dans la défausse, elle est mélangée dans le deck à la place.', ja: '使用後、本来捨て札に行く場合、代わりに山札へランダムに戻ります。' }), color: '#1687B8' },
         nazar: { label: UI.status_nazar || lt({ zh: '邪眼', en: 'Nazar', fr: 'Nazar', ja: 'ナザール' }), desc: lt({ zh: '护甲结算后，自己受到的1~9点物理伤害变为1；受到≥10点物理伤害时，伤害-9，且层数-1。', en: 'After armor resolves, 1-9 physical damage you would take becomes 1. At 10 or more, reduce it by 9 and remove 1 stack.', fr: 'Après l’armure, les dégâts physiques subis de 1 à 9 deviennent 1. À partir de 10, ils sont réduits de 9 et cet effet perd 1 charge.', ja: '護甲の計算後、受ける物理ダメージが1～9なら1になります。10以上なら9減少し、1層減ります。' }), color: COLORS.magic },
@@ -15015,8 +15035,11 @@ function getIntroFlagDescription(flag, custom = null) {
         unique: lt({ zh: '通常只能获得1张同名唯一牌；已拥有时不再出现在选牌中。强制复制会保留副本，但每个多余副本会向牌组加入1张虚空。', en: 'Normally only one copy can be obtained; once owned, it no longer appears in draft choices. Forced copies remain, but each extra copy adds 1 Void to the deck.', fr: 'Un seul exemplaire peut normalement être obtenu et disparaît ensuite des choix. Les copies forcées restent, mais chacune ajoute 1 Vide au deck.', ja: '通常は同名を1枚だけ獲得でき、所持後は選択肢に出ません。強制複製は残りますが、余分な1枚ごとに虚空を1枚デッキへ加えます。' }),
         swift: lt({ zh: 'E花费减少X，最少为0。', en: 'E cost is reduced by X, minimum 0.', fr: 'Le coût E est réduit de X, minimum 0.', ja: 'E コストをX減らします。最低0。' }),
         magic_swift: lt({ zh: 'M花费减少X，最少为0。', en: 'M cost is reduced by X, minimum 0.', fr: 'Le coût M est réduit de X, minimum 0.', ja: 'M コストをX減らします。最低0。' }),
-        temp_swift: lt({ zh: '本次打出时E花费减少X，打出后清除。', en: 'For this play only, E cost is reduced by X; clears after being played.', fr: 'Pour ce jeu seulement, le coût E est réduit de X ; disparaît après avoir été jouée.', ja: '今回の使用時だけ E コストをX減らし、使用後に消えます。' }),
         heavy: lt({ zh: 'E花费增加X。', en: 'E cost is increased by X.', fr: 'Le coût E est augmenté de X.', ja: 'E コストをX増やします。' }),
+        unfading: lt({ zh: '带「不灭:属性」的卡，对该属性暂时位的一切操作改为对留存位，获得的层数打出后保留。', en: 'A card with Unfading:Property applies all operations on that property’s temp slot to its retain slot; gained stacks survive being played.', fr: 'Une carte avec Indélébile:Propriété applique les opérations de l’emplacement temporaire à l’emplacement de rétention ; les charges gagnées survivent à l’utilisation.', ja: '「不滅:属性」を持つカードは一時枠への操作を保持枠に対して行い、獲得した層数は使用後も残ります。' }),
+        unfading_power: lt({ zh: '此牌对威力暂时位的一切操作改为对留存位：获得的威力写入留存位，打出后保留。', en: 'All operations on this card’s Power temp slot apply to its retain slot instead: gained Power is kept after being played.', fr: 'Toutes les opérations sur l’emplacement temporaire de Puissance s’appliquent à son emplacement de rétention : la Puissance gagnée est conservée après utilisation.', ja: 'このカードの威力・一時枠への操作はすべて保持枠に対して行われ、獲得した威力は使用後も残ります。' }),
+        unfading_fission: lt({ zh: '此牌对裂变暂时位的一切操作改为对留存位：获得的裂变层数写入留存位，打出后保留。', en: 'All operations on this card’s Fission temp slot apply to its retain slot instead: gained Fission stacks are kept after being played.', fr: 'Toutes les opérations sur l’emplacement temporaire de Fission s’appliquent à son emplacement de rétention : les couches gagnées sont conservées après utilisation.', ja: 'このカードの裂変・一時枠への操作はすべて保持枠に対して行われ、獲得した層数は使用後も残ります。' }),
+        magic_heavy: lt({ zh: 'M花费增加X。获得的层数写入暂时位（魔力沉重:0+N），打出后清除。', en: 'M cost is increased by X. Gained stacks are written to the temp slot (Magic Heavy:0+N) and clear after being played.', fr: 'Le coût M est augmenté de X. Les charges gagnées sont inscrites dans l’emplacement temporaire (Lourdeur magique:0+N) et disparaissent après utilisation.', ja: 'M コストをX増やします。獲得した層数は一時枠（魔力重化:0+N）に書き込まれ、使用後に消えます。' }),
         floating: getTermIntroLibrary().floating.desc,
         power: lt({ zh: '此牌造成的每段D增加。多段D会按段数把威力向上分配。', en: 'Increases each D segment this card deals. For multi-hit damage, Power is distributed across hits rounded up.', fr: 'Augmente chaque segment de D infligé par cette carte. Pour plusieurs segments, la Puissance est répartie en arrondissant au supérieur.', ja: 'このカードの各 D を増やします。多段の場合、威力は各段へ切り上げで配分されます。' }),
         team_limited: lt({ zh: '只在一队至少2名玩家的模式出现；单人训练场可选，但没有实际意义。', en: 'Appears only in modes where a team has at least 2 players. In training it can appear but has no practical effect.', fr: 'N’apparaît que dans les modes où une équipe a au moins 2 joueurs. En entraînement, elle peut apparaître mais sans effet pratique.', ja: '1チーム2人以上のモードでのみ出ます。訓練場では出ても実質効果はありません。' }),
@@ -15378,6 +15401,8 @@ function collectCardIntroTerms(cardDict) {
     const effectFlagProbes = [
         [/(精准|precision|add_tag["']?\s*[:=]\s*["']?precision|tag["']?\s*[:=]\s*["']?precision)/i, 'precision'],
         [/(魔力迅捷|magic swift|magic_swift|magic_swift_value)/i, 'magic_swift'],
+        // 「暂时魔力沉重」识别为魔力沉重（给魔力沉重的暂时位加层），不落回沉重
+        [/(魔力沉重|magic heavy|magic_heavy)/i, 'magic_heavy'],
         [/(沉重|(^|\W)heavy($|\W)|heavy_value)/i, 'heavy'],
         [/(威力|power|power_value)/i, 'power'],
         [/(隐匿|stealth|tag["']?\s*[:=]\s*["']?stealth)/i, 'stealth'],
@@ -15390,7 +15415,9 @@ function collectCardIntroTerms(cardDict) {
         [/(队伍独一|team unique|team_unique)/i, 'team_unique'],
     ];
     effectFlagProbes.forEach(([re, flag]) => {
-        if (re.test(rawText)) addFlagIntroItem(items, seen, flag);
+        // 沉重探测先剥「魔力沉重」，避免「暂时魔力沉重」同时命中沉重
+        const text = flag === 'heavy' ? rawText.replace(/魔力沉重/g, '') : rawText;
+        if (re.test(text)) addFlagIntroItem(items, seen, flag);
     });
     if (/(迅捷(?![：:]?魔)|(^|[^a-z_])swift($|[^a-z_])|(^|[^a-z_])swift_value($|[^a-z_]))/i.test(rawText.replace(/魔力迅捷/g, ''))) {
         addFlagIntroItem(items, seen, 'swift');
