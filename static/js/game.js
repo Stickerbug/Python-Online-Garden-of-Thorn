@@ -18292,6 +18292,12 @@ async function saveEquippedTitleOrder(orderedIds) {
         titleEquipSaving = false;
         renderAccountState();
         renderAchievementCenter();
+        // GS-294：从外观页操作时成就弹层并不存在，皮肤页的称号面板也要
+        // 用最新数据重渲，否则成功了也看不出任何变化。
+        const skinPanel = $('skin-titles-panel');
+        if (skinPanel && achievementCenter) {
+            renderTitleCenter(skinPanel, achievementCenter.titles || { items: [], equipped: [], max_equipped: 3 });
+        }
     }
 }
 
@@ -18335,6 +18341,11 @@ async function saveTitleNameStyle(titleId = '', segmentId = '') {
         titleNameStyleSaving = false;
         renderAccountState();
         renderAchievementCenter();
+        // GS-294：与 saveEquippedTitleOrder 同理，外观页的称号面板同步重渲。
+        const skinPanel = $('skin-titles-panel');
+        if (skinPanel && achievementCenter) {
+            renderTitleCenter(skinPanel, achievementCenter.titles || { items: [], equipped: [], max_equipped: 3 });
+        }
     }
 }
 
@@ -19768,6 +19779,15 @@ async function loadSkinPageTitles() {
         const response = await fetch('/api/achievements', { credentials: 'same-origin' });
         const data = await response.json().catch(() => ({}));
         if (!response.ok || !data.success) throw new Error(data.error || '读取失败');
+        // GS-294：佩戴/卸下/排序/昵称颜色都走 saveEquippedTitleOrder /
+        // saveTitleNameStyle，两者依赖全局 achievementCenter——之前只有成就
+        // 弹窗会赋值，从外观页进称号面板时它是 null，所有操作静默无效
+        // （按钮有按压反馈但什么都不发生）。
+        achievementCenter = {
+            ...(achievementCenter || {}),
+            ...data,
+            titles: data.titles || (achievementCenter && achievementCenter.titles),
+        };
         renderTitleCenter(panel, data.titles || { items: [], equipped: [], max_equipped: 3 });
     } catch (err) {
         panel.innerHTML = `<div class="account-replay-sub">${escapeHtml(err.message || '读取失败')}</div>`;

@@ -6663,6 +6663,12 @@ class GameEngine:
             # Batteries intentionally react only to attack-card hits in deal_attack_damage.
             if self._card_has_flag(eq.card_instance, 'attack_hits_only'):
                 continue
+            # GS-297：``physical_damage_only`` 装备（电池）对**任意来源**的物理
+            # 伤害触发（盐反伤、众生平等自伤、其他卡的物理直伤……），攻击牌
+            # 命中仍走 deal_attack_damage 的 retaliate 分支；电池电击本身是
+            # 魔法伤害，不会互相连锁。
+            if self._card_has_flag(eq.card_instance, 'physical_damage_only') and str(damage_type) != DAMAGE_TYPE_PHYSICAL:
+                continue
             if not self._has_card_event(eq.card_def, 'damage_taken'):
                 continue
             self._run_card_event(
