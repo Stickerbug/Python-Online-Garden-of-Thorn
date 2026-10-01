@@ -13883,7 +13883,10 @@ class GameEngine:
             return
         ps = self.players[target_id]
         for _, eq in list(self._active_equipment_targeting_flag(target_id, 'damage_hit_temp_swift')):
-            candidates = [card for card in ps.hand if int(getattr(card, 'cost_e', 0) or 0) > 0]
+            candidates = [
+                card for card in ps.hand
+                if int(getattr(card, 'cost_e', 0) or 0) > 0 and self._card_selectable_by_action(card)
+            ]
             if not candidates:
                 continue
             selected = random.choice(candidates)
@@ -13892,7 +13895,10 @@ class GameEngine:
             self.log_msg(
                 f"{self.pn(target_id)}的{self._equipment_card_label(eq)}使{selected.name_cn}获得1层暂时迅捷")
         for _, eq in list(self._active_equipment_targeting_flag(target_id, 'damage_hit_magic_swift')):
-            candidates = [card for card in ps.hand if int(getattr(card, 'cost_m', 0) or 0) > 0]
+            candidates = [
+                card for card in ps.hand
+                if int(getattr(card, 'cost_m', 0) or 0) > 0 and self._card_selectable_by_action(card)
+            ]
             if not candidates:
                 continue
             selected = random.choice(candidates)
