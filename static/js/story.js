@@ -69,7 +69,9 @@
     let storyCardTermPointerStart = null;
     let storyCombatEntranceAnimating = false;
     let storyMapPreviewOpen = false;
-    let storyPlaybackRate = document.documentElement.classList.contains('story-speed-2x') ? 2 : 1;
+    let storyPlaybackRate = document.documentElement.classList.contains('story-speed-5x') ? 5
+        : document.documentElement.classList.contains('story-speed-3x') ? 3
+        : 2;
     let storyShowHandOrder = (window.GTN_STORAGE || window.localStorage)?.getItem('gtn_show_hand_order') === '1';
     let pendingStorySaveId = 0;
     let pendingStoryDiscardBook = null;
@@ -5706,6 +5708,12 @@
         return `story-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     }
 
+    // STS2 飞行动画时长（出牌/抽牌/回堆等）：基准值为未提速的原始节奏，
+    // 按演出速度档位（2/3/5）等比缩短——速度选项覆盖 StS2 版飞行动画。
+    function storyMotionDuration(baseMs) {
+        return Math.max(40, Math.round(Number(baseMs) / storyPlaybackRate));
+    }
+
     function waitForStoryAnimation(element, className, duration) {
         if (!element) return Promise.resolve();
         element.classList.remove(className);
@@ -5928,7 +5936,7 @@
             ghost.style.animation = 'none';
             await STS2.flyElement(ghost, {
                 to: target,
-                duration: 200,
+                duration: storyMotionDuration(400),
                 arcHeight: destination === 'draw' ? 150 : 120,
                 scaleTo: 0.55,
                 rotate: 16,
@@ -6015,7 +6023,7 @@
             ghost.style.animation = 'none';
             await STS2.flyElement(ghost, {
                 to: target,
-                duration: 215,
+                duration: storyMotionDuration(430),
                 arcHeight: 150,
                 scaleFrom: 1,
                 scaleTo: 0.5,
@@ -6030,7 +6038,7 @@
             ghost.style.animation = 'none';
             await STS2.flyElement(ghost, {
                 to: target,
-                duration: 200,
+                duration: storyMotionDuration(400),
                 arcHeight: 100,
                 scaleFrom: 0.9,
                 scaleTo: 0.6,
@@ -6090,7 +6098,7 @@
             ghost.style.animation = 'none';
             await STS2.flyElement(ghost, {
                 to: target,
-                duration: STS2.TIMING.DRAW_FLY,
+                duration: storyMotionDuration(350),
                 arcHeight: 90,
                 scaleFrom: 0.8,
                 scaleTo: 1,
@@ -13950,22 +13958,22 @@
             zh: {
                 title: '旅程设置', copy: '界面偏好仅影响当前设备。',
                 fullscreenEnter: '进入全屏', fullscreenExit: '退出全屏',
-                hideBorders: '隐藏界面与卡牌边框', handOrder: '显示手牌序数', speed: '2倍演出速度',
+                hideBorders: '隐藏界面与卡牌边框', handOrder: '显示手牌序数', speed: '演出速度',
             },
             en: {
                 title: 'Journey Settings', copy: 'Display preferences only affect this device.',
                 fullscreenEnter: 'Enter Fullscreen', fullscreenExit: 'Exit Fullscreen',
-                hideBorders: 'Hide UI and Card Borders', handOrder: 'Show Hand Card Order', speed: '2× Presentation Speed',
+                hideBorders: 'Hide UI and Card Borders', handOrder: 'Show Hand Card Order', speed: 'Presentation Speed',
             },
             fr: {
                 title: 'Réglages du voyage', copy: "Les préférences d'affichage ne concernent que cet appareil.",
                 fullscreenEnter: 'Plein écran', fullscreenExit: 'Quitter le plein écran',
-                hideBorders: "Masquer les bordures de l'interface et des cartes", handOrder: "Afficher l'ordre des cartes en main", speed: 'Vitesse de présentation ×2',
+                hideBorders: "Masquer les bordures de l'interface et des cartes", handOrder: "Afficher l'ordre des cartes en main", speed: 'Vitesse de présentation',
             },
             ja: {
                 title: '旅の設定', copy: '表示設定はこの端末にのみ適用されます。',
                 fullscreenEnter: '全画面表示', fullscreenExit: '全画面を終了',
-                hideBorders: 'UIとカードの枠を隠す', handOrder: '手札の順番を表示', speed: '演出速度2倍',
+                hideBorders: 'UIとカードの枠を隠す', handOrder: '手札の順番を表示', speed: '演出速度',
             },
         })[lang] || null;
     }
@@ -13992,8 +14000,9 @@
         }
         const handOrder = $('story-settings-hand-order');
         if (handOrder) handOrder.checked = storyShowHandOrder;
-        const speed = $('story-settings-speed');
-        if (speed) speed.checked = storyPlaybackRate === 2;
+        document.querySelectorAll('#story-settings-speed-options input[type="radio"]').forEach((radio) => {
+            radio.checked = Number(radio.value) === storyPlaybackRate;
+        });
     }
 
     function openStorySettings() {
@@ -14023,10 +14032,13 @@
         storyStorePreference('gtn_story_hide_card_borders', hidden ? '1' : '0');
     }
 
-    function setStoryPlaybackRate(fast) {
-        storyPlaybackRate = fast ? 2 : 1;
-        document.documentElement.classList.toggle('story-speed-2x', fast);
-        storyStorePreference('gtn_story_speed_2x', fast ? '1' : '0');
+    function setStoryPlaybackRate(rate) {
+        const value = rate === 5 ? 5 : rate === 3 ? 3 : 2;
+        storyPlaybackRate = value;
+        document.documentElement.classList.toggle('story-speed-2x', value === 2);
+        document.documentElement.classList.toggle('story-speed-3x', value === 3);
+        document.documentElement.classList.toggle('story-speed-5x', value === 5);
+        storyStorePreference('gtn_story_speed', String(value));
     }
 
     function setStoryHandOrder(enabled) {
@@ -14038,7 +14050,8 @@
     function commitStorySettingsDraft() {
         setStoryBordersHidden(Boolean($('story-settings-hide-borders')?.checked));
         setStoryHandOrder(Boolean($('story-settings-hand-order')?.checked));
-        setStoryPlaybackRate(Boolean($('story-settings-speed')?.checked));
+        const speedRadio = document.querySelector('#story-settings-speed-options input[type="radio"]:checked');
+        setStoryPlaybackRate(Number(speedRadio?.value || 2));
     }
 
     function storyManualSaveOperationBlocked(run = activeRun) {

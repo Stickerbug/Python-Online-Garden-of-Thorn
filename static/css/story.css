@@ -476,7 +476,7 @@ a { font: inherit; }
   background: #b64035;
   box-shadow: var(--shadow-sm);
   cursor: pointer;
-  font: 700 14px/1 var(--font-ui);
+  font: 700 14px/1 var(--font-main);
   letter-spacing: 0;
 }
 
@@ -2191,7 +2191,7 @@ body[data-story-biome='factory'] .story-map-edge.is-traversed {
   border-radius: 7px;
   color: var(--story-text);
   background: var(--story-surface-muted);
-  font: 700 13px/1.25 var(--font-ui);
+  font: 700 13px/1.25 var(--font-main);
   text-align: left;
 }
 button.story-settings-row { cursor: pointer; }
@@ -2209,10 +2209,55 @@ button.story-settings-row:hover:not(:disabled) { border-color: var(--story-green
   box-shadow: none !important;
 }
 
+/* 演出速度档位（2×/3×/5×）：UI 过渡随档位等比缩短 */
 .story-speed-2x .story-app *,
 .story-speed-2x .story-app *::before,
 .story-speed-2x .story-app *::after {
   transition-duration: 80ms !important;
+}
+
+.story-speed-3x .story-app *,
+.story-speed-3x .story-app *::before,
+.story-speed-3x .story-app *::after {
+  transition-duration: 54ms !important;
+}
+
+.story-speed-5x .story-app *,
+.story-speed-5x .story-app *::before,
+.story-speed-5x .story-app *::after {
+  transition-duration: 32ms !important;
+}
+
+/* 设置面板：演出速度三档单选 */
+.story-settings-speed-options {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.story-speed-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border: 1px solid var(--story-line-soft);
+  border-radius: 6px;
+  font: 700 12px/1 var(--font-main);
+  color: var(--story-text);
+  cursor: pointer;
+}
+
+.story-speed-option:has(input:checked) {
+  border-color: var(--story-green);
+  color: var(--story-green);
+  background: color-mix(in srgb, var(--story-green) 10%, transparent);
+}
+
+.story-speed-option input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--story-green);
+  margin: 0;
 }
 
 .story-combat {
@@ -4326,7 +4371,7 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   border-radius: 5px;
   color: var(--story-text);
   background: var(--story-surface-muted);
-  font: 700 12px/1.2 var(--font-ui);
+  font: 700 12px/1.2 var(--font-main);
 }
 
 .story-enchantment-book-actions select { min-width: 0; flex: 1; }

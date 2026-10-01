@@ -946,7 +946,10 @@ def test_story_persistent_hud_keeps_player_map_deck_and_settings_available():
     assert 'manual_load_count' in STORY_JS
     assert 'id="story-settings-fullscreen"' in STORY_TEMPLATE
     assert 'id="story-settings-hide-borders"' in STORY_TEMPLATE
-    assert 'id="story-settings-speed"' in STORY_TEMPLATE
+    assert 'id="story-settings-speed-options"' in STORY_TEMPLATE
+    assert 'value="2"' in STORY_TEMPLATE
+    assert 'value="3"' in STORY_TEMPLATE
+    assert 'value="5"' in STORY_TEMPLATE
     assert 'if (!storyMapPreviewOpen || !activeRun?.state) return;' in STORY_JS
     assert '.story-persistent-hud {' in STORY_CSS
     assert '.story-persistent-actions {' in STORY_CSS
@@ -968,7 +971,8 @@ def test_story_settings_only_commits_display_preferences_after_confirmation():
     assert 'function commitStorySettingsDraft()' in STORY_JS
     assert "event.target.returnValue === 'confirm'" in STORY_JS
     assert "$('story-settings-hide-borders')?.addEventListener('change'" not in STORY_JS
-    assert "$('story-settings-speed')?.addEventListener('change'" not in STORY_JS
+    assert 'function storyMotionDuration(baseMs)' in STORY_JS
+    assert 'setStoryPlaybackRate(Number(speedRadio?.value || 2))' in STORY_JS
 
 
 def test_story_settings_dialog_is_not_gated_behind_coop_access():
