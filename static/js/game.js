@@ -18430,6 +18430,8 @@ function renderAchievementCenter() {
     const dailyPanel = $('achievements-daily-panel');
     const tasksPanel = $('achievements-tasks-panel');
     if (!summary || !list || !dewPanel || !dailyPanel || !tasksPanel) return;
+    // 称号中心由外观页（skin-titles-panel）自己渲染，成就弹层不再触碰；
+    // 此前残留的未声明 titlesPanel 引用会 ReferenceError 中断整个渲染（GS-273）
     document.querySelectorAll('[data-achievement-tab]').forEach(btn => {
         btn.classList.toggle('active', (btn.dataset.achievementTab || 'dew') === achievementActiveTab);
     });
@@ -18442,7 +18444,6 @@ function renderAchievementCenter() {
         dewPanel.innerHTML = '';
         dailyPanel.innerHTML = '';
         list.innerHTML = `<div class="account-replay-sub">${escapeHtml(UI.account_need_login || '请先登录账号')}</div>`;
-        titlesPanel.innerHTML = '';
         tasksPanel.innerHTML = '';
         return;
     }
@@ -18459,7 +18460,7 @@ function renderAchievementCenter() {
     }
     dailyPanel.innerHTML = thornDewCheckinHtml();
     tasksPanel.innerHTML = thornDewDailyTasksHtml();
-    renderTitleCenter(titlesPanel, data.titles || { items: [], equipped: [], max_equipped: 3 });
+    // 称号中心由外观页（skin-titles-panel）自己渲染，成就弹层不再触碰
     const dailyCheckinBtn = dailyPanel.querySelector('#btn-thorn-dew-checkin-daily');
     if (dailyCheckinBtn) dailyCheckinBtn.onclick = onThornDewCheckin;
     // 荆露页「赞助」按钮：打开完整兑换页（绑定码/档位/补单都在那）
