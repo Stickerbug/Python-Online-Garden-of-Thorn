@@ -131,6 +131,25 @@ CARD_FLAG_ALIASES = {
     'tag_heavy': 'heavy',
     '沉重': 'heavy',
     '吸附': 'attract',
+    # 双加数体系（设计 2026-10-01）：「不灭:属性」写入路由标签——该属性对
+    # 暂时位的一切写操作改为对留存位。规范名 unfading_power / unfading_fission；
+    # 旧名 amplify / preserve_fission 仅作为输入别名保留（存量卡数据与旧回放兼容）。
+    'unfading_power': 'unfading_power',
+    'unfading:power': 'unfading_power',
+    'tag_unfading_power': 'unfading_power',
+    '不灭：威力': 'unfading_power',
+    '不灭:威力': 'unfading_power',
+    'amplify': 'unfading_power',
+    'tag_amplify': 'unfading_power',
+    'unfading_fission': 'unfading_fission',
+    'unfading:fission': 'unfading_fission',
+    'tag_unfading_fission': 'unfading_fission',
+    '不灭：裂变': 'unfading_fission',
+    '不灭:裂变': 'unfading_fission',
+    'preserve_fission': 'unfading_fission',
+    'tag_preserve_fission': 'unfading_fission',
+    'ocean:preserve_fission': 'unfading_fission',
+    'flag_ocean:preserve_fission': 'unfading_fission',
 }
 
 # Known vanilla flags that can be referenced by namespace-prefixed tags
@@ -141,7 +160,7 @@ _VANILLA_FLAGS = {
     'swift', 'stealth', 'revealed', 'rebound', 'nothingness',
     'team_limited', 'team_unique', 'power', 'magic_swift',
     'temp_swift', 'temp_heavy', 'temp_magic_heavy', 'heavy', 'wide_strike', 'self_target',
-    'floating', 'charge', 'ocean_blinded', 'sublime', 'amplify',
+    'floating', 'charge', 'ocean_blinded', 'sublime', 'unfading_power', 'unfading_fission',
 }
 
 
@@ -245,6 +264,8 @@ class CardInstance:
     fusion_multiplier: float = 1.0
     fission_level: int = 1
     fusion_level: int = 1
+    fission_base: Optional[int] = None
+    fusion_base: Optional[int] = None
     mimic_discount: int = 0
     fission_hit: int = 0
     bonus_damage: int = 0
@@ -256,6 +277,7 @@ class CardInstance:
     magic_swift_value: int = 0
     heavy_value: int = 0
     power_value: int = 0
+    power_base: Optional[int] = None
     temp_swift_value: int = 0
     temp_heavy_value: int = 0
     temp_magic_heavy_value: int = 0
@@ -271,9 +293,13 @@ class CardInstance:
         if not self.def_id:
             self.def_id = ERROR_CARD_ID
             self.charge_value = max(0, int(self.charge_value or 0))
+            self.power_base = 0 if self.power_base is None else clamp_card_power(self.power_base)
+            self.fission_base = 1 if self.fission_base is None else clamp_card_layer(self.fission_base)
+            self.fusion_base = 1 if self.fusion_base is None else clamp_card_layer(self.fusion_base)
             return
         self.fission_level = clamp_card_layer(self.fission_level)
         self.fusion_level = clamp_card_layer(self.fusion_level)
+        card_def = None
         try:
             card_def = CARD_DEFS.get(self.def_id)
             if card_def:
@@ -288,6 +314,15 @@ class CardInstance:
             self.charge_value = base_charge_value
         else:
             self.charge_value = max(0, int(self.charge_value or 0))
+        # 双加数体系（2026-10-01）：威力/裂变/聚变各带永久基线 N（打出后保留），层数增量默认写 M（打出后清零）。
+        # 基线为 None 表示老快照/回放数据，回退卡面定义值。
+        self.power_base = 0 if self.power_base is None else clamp_card_power(self.power_base)
+        self.fission_base = clamp_card_layer(
+            self.fission_base if self.fission_base is not None else getattr(card_def, 'fission_level', 1) or 1
+        )
+        self.fusion_base = clamp_card_layer(
+            self.fusion_base if self.fusion_base is not None else getattr(card_def, 'fusion_level', 1) or 1
+        )
         self.fission_count = max(0, self.fission_level - 1)
         self.extra_hits = clamp_card_extra_hits(self.extra_hits)
         defs = globals().get('CARD_DEFS')
@@ -372,6 +407,9 @@ class CardInstance:
             'magic_swift_value': self.magic_swift_value,
             'heavy_value': self.heavy_value,
             'power_value': clamp_card_power(self.power_value),
+            'power_base': clamp_card_power(self.power_base if self.power_base is not None else 0),
+            'fission_base': clamp_card_layer(self.fission_base if self.fission_base is not None else 1),
+            'fusion_base': clamp_card_layer(self.fusion_base if self.fusion_base is not None else 1),
             'temp_swift_value': self.temp_swift_value,
             'temp_heavy_value': self.temp_heavy_value,
             'temp_magic_heavy_value': self.temp_magic_heavy_value,
@@ -404,6 +442,9 @@ class CardInstance:
             magic_swift_value=max(0, int(d.get('magic_swift_value', 0))),
             heavy_value=max(0, int(d.get('heavy_value', 0))),
             power_value=clamp_card_power(d.get('power_value', 0)),
+            power_base=(clamp_card_power(d['power_base']) if 'power_base' in d else None),
+            fission_base=(clamp_card_layer(d['fission_base']) if 'fission_base' in d else None),
+            fusion_base=(clamp_card_layer(d['fusion_base']) if 'fusion_base' in d else None),
             temp_swift_value=max(0, int(d.get('temp_swift_value', 0))),
             temp_heavy_value=max(0, int(d.get('temp_heavy_value', 0))),
             temp_magic_heavy_value=max(0, int(d.get('temp_magic_heavy_value', 0))),
@@ -434,6 +475,9 @@ class CardInstance:
             magic_swift_value=self.magic_swift_value,
             heavy_value=self.heavy_value,
             power_value=self.power_value,
+            power_base=self.power_base,
+            fission_base=self.fission_base,
+            fusion_base=self.fusion_base,
             temp_swift_value=self.temp_swift_value,
             temp_heavy_value=self.temp_heavy_value,
             temp_magic_heavy_value=self.temp_magic_heavy_value,

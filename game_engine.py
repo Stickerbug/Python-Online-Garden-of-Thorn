@@ -114,7 +114,8 @@ CARD_FLAG_LABELS_ZH = {
     'temp_swift': '暂时迅捷',
     'temp_heavy': '暂时沉重',
     'temp_magic_heavy': '暂时魔力沉重',
-    'amplify': '增幅',
+    'unfading_power': '不灭:威力',
+    'unfading_fission': '不灭:裂变',
     'floating': '漂浮',
     'stealth': '隐匿',
     'revealed': '被揭示',
@@ -234,29 +235,66 @@ def clear_spikeball_play_flags(card: CardInstance):
     flags.discard(SPIKEBALL_ADDED_WIDE_STRIKE_FLAG)
 
 
+def card_flag_active(card: Optional[CardInstance], flag: str) -> bool:
+    """卡级 flag 判定（卡面 flags ∪ 实例获得 − 禁用）。"""
+    if card is None:
+        return False
+    return (
+        flag in normalize_card_flags(getattr(card, 'instance_flags', set()) or set())
+        or flag in normalize_card_flags(getattr(getattr(card, 'card_def', None), 'flags', set()) or set())
+    )
+
+
+def apply_card_power_value(card: Optional[CardInstance], new_value, *, sync_flag: bool = True):
+    """双加数体系（设计 2026-10-01）威力写入路由。
+
+    威力增量默认写暂时位（打出后清零）；带「不灭:威力」（unfading_power，
+    旧名 amplify 仅作输入别名）的卡对威力暂时位的一切写操作改为对留存位——
+    增量在同一写入里记入永久基线 power_base，因此打出后由 reset_card_after_play
+    回落基线时天然保留——与旧版 "amplify 在 reset 时豁免清零"对外行为一致
+    （任何来源的威力增量都保留）。一切"威力获得/设置"写入必须经过本函数。
+    """
+    if card is None:
+        return
+    prev = int(getattr(card, 'power_value', 0) or 0)
+    card.power_value = clamp_card_power(new_value)
+    if sync_flag:
+        card.instance_flags.add('power')
+        card.disabled_flags.discard('power')
+    if card_flag_active(card, 'unfading_power'):
+        card.power_base = clamp_card_power(int(getattr(card, 'power_base', 0) or 0) + (card.power_value - prev))
+
+
+def apply_card_fission_level(card: Optional[CardInstance], new_value):
+    """裂变写入路由：「不灭:裂变」（preserve_fission，别名 unfading_fission）卡对裂变
+    暂时位的一切写操作改为对留存位——层数增量记入永久基线 fission_base。"""
+    if card is None:
+        return
+    prev = int(getattr(card, 'fission_level', 1) or 1)
+    card.fission_level = clamp_card_layer(new_value)
+    card.fission_count = max(0, card.fission_level - 1)
+    if card_flag_active(card, 'unfading_fission'):
+        card.fission_base = clamp_card_layer(int(getattr(card, 'fission_base', 1) or 1) + (card.fission_level - prev))
+
+
 def reset_card_after_play(card: CardInstance):
-    preserve_fission = 'preserve_fission' in normalize_card_flags(getattr(card, 'instance_flags', set()) or set()) or 'preserve_fission' in normalize_card_flags(getattr(card.card_def, 'flags', set()) or set())
-    if preserve_fission:
-        preserved_fission_level = clamp_card_layer(getattr(card, 'fission_level', 1))
-    else:
-        # 设计 9.27：初始具裂变的卡打出后裂变层数恢复**原卡数值**（此前错重置为 1）。
-        try:
-            card_def = card.card_def
-            default_fission = int(getattr(card_def, 'fission_level', 1) or 1)
-        except Exception:
-            default_fission = 1
-        preserved_fission_level = clamp_card_layer(default_fission)
+    # 双加数体系（设计 2026-10-01）：打出后各属性只保留留存位 N——
+    # 威力回落 power_base、裂变/聚变回落 fission_base / fusion_base（留存位 = 卡面
+    # 数值，或经「不灭:属性」写入路由累积的量，见 apply_card_power_value /
+    # apply_card_fission_level）。「不灭」标签（unfading_power / unfading_fission，
+    # 旧名 amplify / preserve_fission 仅作输入别名）不再在 reset 里做卡级豁免：
+    # 它们的增量已在写入时进留存位。
+    # 注：此前普通裂变卡打出后被重置为 1（9.27 的"回落原卡数值"从未生效），
+    # 现统一回落留存位——锯片类卡打出后回到卡面 2 层。
     card.cost_e_override = None
     card.cost_m_override = None
     card.mimic_discount = 0
-    preserve_power = 'amplify' in normalize_card_flags(getattr(card, 'instance_flags', set()) or set()) or 'amplify' in normalize_card_flags(getattr(card.card_def, 'flags', set()) or set())
-    if not preserve_power:
-        card.power_value = 0
+    card.power_value = clamp_card_power(getattr(card, 'power_base', 0) or 0)
     card.temp_swift_value = 0
     card.temp_heavy_value = 0
     card.temp_magic_heavy_value = 0
     card.hand_blind_turns = 0
-    if not preserve_power:
+    if (getattr(card, 'power_base', 0) or 0) <= 0:
         card.instance_flags.discard('power')
     card.instance_flags.discard('temp_swift')
     card.instance_flags.discard('temp_heavy')
@@ -281,10 +319,14 @@ def reset_card_after_play(card: CardInstance):
         card.custom_vars.pop('_ocean_charge_resolved_this_play', None)
         card.custom_vars.pop('_once_per_play', None)
     if card.card_type == 'thorn':
-        card.fission_level = preserved_fission_level if preserve_fission else 1
-        card.fusion_level = 1
+        card.fission_level = clamp_card_layer(
+            getattr(card, 'fission_base', None) or getattr(card.card_def, 'fission_level', 1) or 1
+        )
+        card.fusion_level = clamp_card_layer(
+            getattr(card, 'fusion_base', None) or getattr(card.card_def, 'fusion_level', 1) or 1
+        )
         card.fission_count = max(0, card.fission_level - 1)
-        card.fusion_multiplier = 1.0
+        card.fusion_multiplier = float(card.fission_level)
         card.fission_hit = 0
         # Round 10: the properties zeroed on leaving play come from the card data
         # (``reset_properties``); the built-in fallback in engine_runtime_support
@@ -2249,11 +2291,10 @@ class GameEngine:
             pending -= steps * 6
             applied = min(steps, max(0, 18 - gained))
             if applied > 0:
-                hand_card.power_value = clamp_card_power(
-                    max(0, int(getattr(hand_card, 'power_value', 0) or 0)) + applied
+                apply_card_power_value(
+                    hand_card,
+                    max(0, int(getattr(hand_card, 'power_value', 0) or 0)) + applied,
                 )
-                hand_card.instance_flags.add('power')
-                hand_card.disabled_flags.discard('power')
                 vars_dict['sewers_clay_power_gained'] = gained + applied
             vars_dict['sewers_clay_damage_progress'] = pending
             hand_card.custom_vars = vars_dict
@@ -4777,8 +4818,7 @@ class GameEngine:
                 getattr(card, 'def_id', ''),
             )
         if self._card_has_flag(card, 'enter_hand_power_2'):
-            card.power_value = clamp_card_power(max(0, int(getattr(card, 'power_value', 0) or 0)) + 2)
-            card.instance_flags.add('power')
+            apply_card_power_value(card, max(0, int(getattr(card, 'power_value', 0) or 0)) + 2)
         if self._run_declared_card_enter_hand(player_id, card):
             return
         # Copy: create exile copies when entering hand
@@ -4858,10 +4898,7 @@ class GameEngine:
             return
         for hand_card in list(getattr(self.players[player_id], 'hand', []) or []):
             if self._card_has_flag(hand_card, 'grows_on_draw'):
-                hand_card.power_value = clamp_card_power(
-                    max(0, int(getattr(hand_card, 'power_value', 0) or 0)) + 1
-                )
-                hand_card.instance_flags.add('power')
+                apply_card_power_value(hand_card, max(0, int(getattr(hand_card, 'power_value', 0) or 0)) + 1)
         self._run_v2_event_hooks('after_draw', {
             'source_player': player_id,
             'target_player': player_id,
@@ -7124,9 +7161,8 @@ class GameEngine:
                 if prevented <= 0:
                     continue
                 damage = after_amber
-                hand_card.power_value = power - prevented * 3
-                hand_card.instance_flags.add('power')
-                self.log_msg(f"{self.pn(target_id)}的琥珀减免{prevented}点伤害，威力变为{hand_card.power_value}")
+                apply_card_power_value(hand_card, power - prevented * 3)
+                self.log_msg(f"{self.pn(target_id)}的琥珀减免{prevented}点伤害，暂时威力变为{hand_card.power_value}")
         return max(0, int(damage))
 
     def _has_equipment(self, player_id: int, *marks: str) -> bool:
@@ -8613,6 +8649,12 @@ class GameEngine:
         copy_card.fusion_multiplier = float(copy_card.fusion_level)
         copy_card.fission_level = clamp_card_layer(half_layer(getattr(target, 'fission_level', 1)))
         copy_card.fission_count = max(0, copy_card.fission_level - 1)
+        # 双加数体系：复制件的减半层数即其基线（复制件打出后回落到减半值）。
+        copy_card.fission_base = copy_card.fission_level
+        copy_card.fusion_base = copy_card.fusion_level
+        copy_card.power_base = clamp_card_power(
+            int(math.ceil(int(getattr(target, 'power_base', 0) or 0) / 2))
+        )
         for attr in ('swift_value', 'magic_swift_value', 'power_value', 'bonus_damage', 'temp_swift_value', 'temp_heavy_value', 'temp_magic_heavy_value'):
             try:
                 source_value = int(getattr(target, attr, 0) or 0)
@@ -13287,8 +13329,7 @@ class GameEngine:
         if choice and 'target_instance_id' in choice:
             target = ps.find_hand_card(choice['target_instance_id'])
             if target and self._card_selectable_by_action(target) and target.card_type == 'thorn':
-                target.fission_level = clamp_card_layer(max(1, int(getattr(target, 'fission_level', 1))) + 2)
-                target.fission_count = target.fission_level - 1
+                apply_card_fission_level(target, max(1, int(getattr(target, 'fission_level', 1))) + 2)
                 self.log_msg(f"{self.pn(player_id)}使用裂变")
             else:
                 self.log_msg(f"{self.pn(player_id)}使用裂变，但目标无效")
@@ -20070,6 +20111,8 @@ class GameEngine:
             copied.fission_level = clamp_card_layer(self._eval_int(player_id, params['fission_level'], card, 1))
             copied.fission_count = max(0, copied.fission_level - 1)
             copied.fission_hit = 0
+            # 造卡指定的裂变层数即该复制件的卡面基线。
+            copied.fission_base = copied.fission_level
         if params.get('swift_value') is not None:
             copied.swift_value = max(0, self._eval_int(player_id, params['swift_value'], card, 0))
         if params.get('unique_copy_penalty'):
@@ -20422,7 +20465,7 @@ class GameEngine:
             # The Arctic Nuke spends its Power on the first segment only.
             try:
                 if clamp_card_power(getattr(card, 'power_value', 0) or 0) > 0:
-                    card.power_value = 0
+                    apply_card_power_value(card, 0, sync_flag=False)
                     card.instance_flags.discard('power')
             except Exception:
                 pass
@@ -21677,11 +21720,21 @@ class GameEngine:
                     'power_value', 'temp_swift_value', 'temp_heavy_value', 'temp_magic_heavy_value',
                     'charge_value', 'hand_blind_turns', 'blind_level', 'durability',
                     'play_count', 'equip_turns'):
-            setattr(target_card, prop, value)
+            # 双加数体系：威力/裂变写入走路由（不灭标签的增量进基线），其余属性直写。
+            if prop == 'power_value':
+                apply_card_power_value(target_card, value, sync_flag=False)
+                if value != 0:
+                    target_card.instance_flags.add('power')
+                    target_card.disabled_flags.discard('power')
+                else:
+                    target_card.instance_flags.discard('power')
+                    target_card.disabled_flags.add('power')
+            elif prop == 'fission_level':
+                apply_card_fission_level(target_card, value)
+            else:
+                setattr(target_card, prop, value)
             if prop == 'fusion_level':
                 target_card.fusion_multiplier = float(value)
-            elif prop == 'fission_level':
-                target_card.fission_count = max(0, int(value) - 1)
             elif prop == 'charge_value':
                 if value > 0:
                     target_card.instance_flags.add('charge')
@@ -21710,13 +21763,6 @@ class GameEngine:
                 else:
                     target_card.instance_flags.discard('heavy')
                     target_card.disabled_flags.add('heavy')
-            elif prop == 'power_value':
-                if value != 0:
-                    target_card.instance_flags.add('power')
-                    target_card.disabled_flags.discard('power')
-                else:
-                    target_card.instance_flags.discard('power')
-                    target_card.disabled_flags.add('power')
             elif prop == 'temp_swift_value':
                 if value > 0:
                     target_card.instance_flags.add('temp_swift')

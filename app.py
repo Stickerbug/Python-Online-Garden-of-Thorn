@@ -13129,6 +13129,9 @@ def make_admin_card_instance(card_id, options):
     card.fission_level = max(1, fission)
     card.fusion_multiplier = float(card.fusion_level)
     card.fission_count = max(0, card.fission_level - 1)
+    # 管理台指定的裂变/聚变层数即该实例的卡面基线（双加数体系）。
+    card.fission_base = card.fission_level
+    card.fusion_base = card.fusion_level
     return card
 
 

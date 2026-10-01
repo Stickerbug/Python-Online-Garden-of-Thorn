@@ -30,7 +30,7 @@ BUILTIN_TAG_CN = {
     "stealth": "隐匿", "revealed": "被揭示", "sublime": "崇高",
     "team_limited": "队伍限定", "team_unique": "队伍独一", "power": "威力",
     "magic_swift": "魔力迅捷", "wide_strike": "广域打击", "self_target": "自刃",
-    "charge": "电荷", "ocean_blinded": "蒙蔽", "amplify": "增幅",
+    "charge": "电荷", "ocean_blinded": "蒙蔽", "unfading_power": "不灭:威力", "unfading_fission": "不灭:裂变",
     "fusion_layer": "聚变", "fission_layer": "裂变",
 }
 

@@ -291,6 +291,48 @@ function clampClientCardLayer(value) {
     return Math.min(MAX_CLIENT_CARD_LAYER, Math.max(1, n));
 }
 
+// ===== 双加数体系（设计 2026-10-01）=====
+// 每个数值属性显示为「名:N+M」：N=留存位（打出后保留），M=暂时位（打出后清零）。
+// M=0 时省略 M；N、M 均为零时整个芯片隐藏；负数 N 直接带符号，负 M 的加号改减号。
+// 裂变/聚变特例：N=1 且 M=0 时整个隐藏；M≠0 时 N 必须显示（裂变:1+1）。
+// 「不灭:属性」标签把该属性对暂时位的一切写操作改为对留存位。
+function formatDualAddendValue(baseValue, extraValue) {
+    const n = Math.trunc(Number(baseValue || 0));
+    const m = Math.trunc(Number(extraValue || 0));
+    if (!m) return `${n}`;
+    return `${n}${m < 0 ? '-' : '+'}${Math.abs(m)}`;
+}
+
+function getDualAddendCardValues(cardDict, cardDef) {
+    const dict = cardDict || {};
+    const def = cardDef || {};
+    // 迅捷/沉重是永久成长状态：实例值即 N（沿用「卡面优先」的既有显示口径），暂时值即 M。
+    const swiftN = Number(def.swift_value || dict.swift_value || 0);
+    const heavyN = Number(dict.heavy_value || 0);
+    const magicSwiftN = Number(def.magic_swift_value || dict.magic_swift_value || 0);
+    // 威力/裂变/聚变的 N 来自服务端 *_base 字段；旧快照/回放没有时回退 0 / 卡面值。
+    const powerN = Math.trunc(Number(dict.power_base ?? 0) || 0);
+    const powerTotal = Math.trunc(Number(dict.power_value || 0));
+    const fissionN = clampClientCardLayer(dict.fission_base || def.fission_level || 1);
+    const fissionTotal = clampClientCardLayer(dict.fission_level || def.fission_level || 1);
+    const fusionN = clampClientCardLayer(dict.fusion_base || def.fusion_level || 1);
+    const fusionTotal = clampClientCardLayer(dict.fusion_level || def.fusion_level || 1);
+    return {
+        swiftN,
+        swiftM: Number(dict.temp_swift_value || 0),
+        heavyN,
+        heavyM: Number(dict.temp_heavy_value || 0),
+        magicSwiftN,
+        tempMagicHeavyM: Number(dict.temp_magic_heavy_value || 0),
+        powerN,
+        powerM: powerTotal - powerN,
+        fissionN,
+        fissionM: fissionTotal - fissionN,
+        fusionN,
+        fusionM: fusionTotal - fusionN,
+    };
+}
+
 function fusionAdjustedCost(cost, fusionLevel) {
     const normalizedCost = Math.max(0, Math.floor(Number(cost) || 0));
     const level = clampClientCardLayer(fusionLevel);
@@ -1357,10 +1399,10 @@ I18N.ja.tutorial_victory_message = 'おめでとうございます。チュー�
 I18N.ja.tutorial_defeat_message = 'チュートリアルの対局に敗北しました。大丈夫です。次の対局ではもっと動きが見えてきます。';
 I18N.ja.tutorial_retry = 'チュートリアルをやり直す';
 I18N.ja.target_pick_hint = '強調表示されたプレイヤー欄を押してください。';
-Object.assign(I18N.en, { flag_amplify: 'Amplify', tag_amplify: 'Amplify' });
-Object.assign(I18N.zh, { flag_amplify: '增幅', tag_amplify: '增幅' });
-Object.assign(I18N.fr, { flag_amplify: 'Amplification', tag_amplify: 'Amplification' });
-Object.assign(I18N.ja, { flag_amplify: '増幅', tag_amplify: '増幅' });
+Object.assign(I18N.en, { flag_unfading_power: 'Unfading:Power', tag_unfading_power: 'Unfading:Power', flag_unfading_fission: 'Unfading:Fission', tag_unfading_fission: 'Unfading:Fission', tag_magic_heavy: 'Magic Heavy' });
+Object.assign(I18N.zh, { flag_unfading_power: '不灭:威力', tag_unfading_power: '不灭:威力', flag_unfading_fission: '不灭:裂变', tag_unfading_fission: '不灭:裂变', tag_magic_heavy: '魔力沉重' });
+Object.assign(I18N.fr, { flag_unfading_power: 'Indélébile:Puissance', tag_unfading_power: 'Indélébile:Puissance', flag_unfading_fission: 'Indélébile:Fission', tag_unfading_fission: 'Indélébile:Fission', tag_magic_heavy: 'Lourdeur magique' });
+Object.assign(I18N.ja, { flag_unfading_power: '不滅:威力', tag_unfading_power: '不滅:威力', flag_unfading_fission: '不滅:裂変', tag_unfading_fission: '不滅:裂変', tag_magic_heavy: '魔力重化' });
 I18N.en.tutorial_intro = 'Now, let’s begin the tutorial.';
 I18N.en.tutorial_hint_ui = 'First read the interface: your hand is at the bottom, H/E/M and states are near each player, and the battle log is on the side. Press View Draw Deck to inspect upcoming cards.';
 I18N.en.tutorial_hint_play = 'Now play a Thorn attack. In 1v1, attacks target the opponent; if the target cannot be selected, the card cannot be played.';
@@ -3434,7 +3476,8 @@ const CARD_FLAG_STYLES = {
     floating: { label: '', fg: '#1687B8', bg: 'rgba(22,135,184,0.15)', cls: 'floating' },
     magic_swift: { label: '', fg: '#6C5CE7', bg: 'rgba(108,92,231,0.15)', cls: 'magic-swift' },
     power: { label: '', fg: '#C0392B', bg: 'rgba(192,57,43,0.14)', cls: 'power' },
-    amplify: { label: '', fg: '#B54708', bg: 'rgba(181,71,8,0.14)', cls: 'amplify' },
+    unfading_power: { label: '', fg: '#B54708', bg: 'rgba(181,71,8,0.14)', cls: 'unfading-power' },
+    unfading_fission: { label: '', fg: '#0B6E4F', bg: 'rgba(11,110,79,0.14)', cls: 'unfading-fission' },
     team_limited: { label: '', fg: '#607D3B', bg: 'rgba(96,125,59,0.15)', cls: 'team-limited' },
     team_unique: { label: '', fg: '#8D6E63', bg: 'rgba(141,110,99,0.15)', cls: 'team-unique' },
     charge: { label: '', fg: '#4BA3FF', bg: 'rgba(75,163,255,0.15)', cls: 'charge' },
@@ -3471,7 +3514,8 @@ const CARD_FLAG_TERM_COLORS = {
     floating: '#1687B8',
     magic_swift: '#6C5CE7',
     power: '#C0392B',
-    amplify: '#B54708',
+    unfading_power: '#B54708',
+    unfading_fission: '#0B6E4F',
     team_limited: '#607D3B',
     team_unique: '#8D6E63',
     charge: '#4BA3FF',
@@ -3487,6 +3531,21 @@ const CARD_FLAG_TERM_COLORS = {
 };
 
 const CARD_FLAG_ALIASES = {
+    // 双加数体系（设计 2026-10-01）：「不灭:属性」写入路由标签。规范名
+    // unfading_power / unfading_fission；旧名 amplify / preserve_fission 仅作
+    // 输入别名（存量卡数据与旧回放兼容，归一后按新词条显示）。
+    'unfading:power': 'unfading_power',
+    tag_unfading_power: 'unfading_power',
+    '不灭：威力': 'unfading_power',
+    '不灭:威力': 'unfading_power',
+    amplify: 'unfading_power',
+    tag_amplify: 'unfading_power',
+    'unfading:fission': 'unfading_fission',
+    tag_unfading_fission: 'unfading_fission',
+    '不灭：裂变': 'unfading_fission',
+    '不灭:裂变': 'unfading_fission',
+    preserve_fission: 'unfading_fission',
+    tag_preserve_fission: 'unfading_fission',
     'tag_troll_cards:exile': 'exile',
     'troll_cards:exile': 'exile',
     'tag_troll_cards_exile': 'exile',
@@ -3578,11 +3637,8 @@ const CARD_FLAG_ALIASES = {
     tag_preserve_ocean: '',
     'ocean:preserve_ocean': '',
     'tag_ocean:preserve_ocean': '',
-    preserve_fission: '',
-    flag_preserve_fission: '',
-    tag_preserve_fission: '',
-    'ocean:preserve_fission': '',
-    'tag_ocean:preserve_fission': '',
+    'ocean:preserve_fission': 'unfading_fission',
+    'tag_ocean:preserve_fission': 'unfading_fission',
     'tag_arctic:ready': 'arctic:ready',
     'flag_arctic:ready': 'arctic:ready',
     'tag-arctic:ready': 'arctic:ready',
@@ -3608,7 +3664,7 @@ const _VANILLA_FLAGS = new Set([
     'symbiosis', 'attract', 'void', 'self_only', 'uncancellable',
     'infinite_exclude', 'rebound', 'copy', 'unique',
     'swift', 'heavy', 'temp_swift', 'temp_heavy', 'temp_magic_heavy', 'floating', 'stealth', 'revealed', 'sublime', 'team_limited', 'team_unique',
-    'power', 'magic_swift', 'amplify',
+    'power', 'magic_swift', 'unfading_power', 'unfading_fission',
     'charge', 'ocean_blinded', 'wide_strike', 'self_target',
 ]);
 
@@ -3800,7 +3856,7 @@ const CARD_TEXT_LOCALIZED_FLAG_SPECS = [
     ['attract', 'tag-attract'], ['void', 'tag-void'], ['rebound', 'tag-rebound'],
     ['copy', 'tag-copy'], ['unique', 'tag-unique'], ['swift', 'tag-swift'],
     ['stealth', 'tag-stealth'], ['revealed', 'tag-revealed'], ['sublime', 'tag-sublime'],
-    ['power', 'tag-power'], ['amplify', 'tag-amplify'], ['charge', 'tag-charge'], ['floating', 'tag-floating'],
+    ['power', 'tag-power'], ['unfading_power', 'tag-unfading-power'], ['unfading_fission', 'tag-unfading-fission'], ['charge', 'tag-charge'], ['floating', 'tag-floating'],
     ['ocean_blinded', 'tag-ocean-blinded'], ['wide_strike', 'tag-wide-strike'],
     ['self_target', 'tag-self-target'], ['sewers:confusion', 'tag-sewers-confusion'],
     ['arctic:ready', 'tag-arctic-ready'], ['arctic:ricochet_3', 'tag-arctic-ricochet'],
@@ -13218,12 +13274,12 @@ function createCardElement(cardDict, options = {}) {
     const swiftValue = Number(cardDef.swift_value || cardDict.swift_value || 0);
     const magicSwiftValue = Number(cardDef.magic_swift_value || cardDict.magic_swift_value || 0);
     const heavyValue = Number(cardDict.heavy_value || 0);
-    const powerValue = Number(cardDef.power_value || cardDict.power_value || 0);
     const tempSwiftValue = Number(cardDict.temp_swift_value || 0);
     const tempHeavyValue = Number(cardDict.temp_heavy_value || 0);
     const tempMagicHeavyValue = Number(cardDict.temp_magic_heavy_value || 0);
     const chargeValue = Number(cardDict.charge_value ?? cardDef.charge_value ?? 0);
     const copyCount = Number(cardDef.copy_count || 0);
+    const dual = getDualAddendCardValues(cardDict, cardDef);
     el.style.setProperty('--card-frame-color', displayTypeColor);
     el.dataset.instanceId = cardDict.instance_id;
     el.dataset.defId = defId;
@@ -13231,11 +13287,9 @@ function createCardElement(cardDict, options = {}) {
     if (!blinded) for (const flag of sortCardFlagIds(flags)) {
         if (flag === 'swift' && swiftValue > 0) continue;
         if (flag === 'heavy' && heavyValue > 0) continue;
-        if (flag === 'temp_swift' && tempSwiftValue > 0) continue;
-        if (flag === 'temp_heavy' && tempHeavyValue > 0) continue;
+        if (flag === 'temp_swift' || flag === 'temp_heavy' || flag === 'temp_magic_heavy') continue;
         if (flag === 'magic_swift' && magicSwiftValue > 0) continue;
-        if (flag === 'temp_magic_heavy' && tempMagicHeavyValue > 0) continue;
-        if (flag === 'power' && powerValue !== 0) continue;
+        if (flag === 'power' && (dual.powerN !== 0 || dual.powerM !== 0)) continue;
         if (flag === 'copy' && copyCount > 0) continue;
         if (flag === 'charge' && chargeValue > 0) continue;
         if (!shouldDisplayCardFlag(flag, { showSystemFlags: showAllFlags })) continue;
@@ -13250,43 +13304,35 @@ function createCardElement(cardDict, options = {}) {
             flagsHtml += `<span class="card-flag ${style.cls}">${escapeHtml(label)}</span>`;
         }
     }
-    const fusionLevel = clampClientCardLayer(cardDict.fusion_level || cardDef.fusion_level || 1);
-    const fissionLevel = clampClientCardLayer(cardDict.fission_level || cardDef.fission_level || 1);
     // Special effects always follow the plain tags and are ordered by their raw
     // internal id, matching the card description規範.
     const specialEffectEntries = [];
-    if (fusionLevel > 1) {
-        specialEffectEntries.push(['fusion_layer', `<span class="card-flag fusion-layer">${escapeHtml(UI.fusion_layer || 'Fusion')}: ${fusionLevel}</span>`]);
+    if (dual.fusionN > 1 || dual.fusionM !== 0) {
+        specialEffectEntries.push(['fusion_layer', `<span class="card-flag fusion-layer">${escapeHtml(UI.fusion_layer || 'Fusion')}:${formatDualAddendValue(dual.fusionN, dual.fusionM)}</span>`]);
     }
-    if (fissionLevel > 1) {
-        specialEffectEntries.push(['fission_layer', `<span class="card-flag fission-layer">${escapeHtml(UI.fission_layer || 'Fission')}: ${fissionLevel}</span>`]);
+    if (dual.fissionN > 1 || dual.fissionM !== 0) {
+        specialEffectEntries.push(['fission_layer', `<span class="card-flag fission-layer">${escapeHtml(UI.fission_layer || 'Fission')}:${formatDualAddendValue(dual.fissionN, dual.fissionM)}</span>`]);
     }
-    if (swiftValue > 0) {
-        specialEffectEntries.push(['swift', `<span class="card-flag swift">${escapeHtml(UI.tag_swift || 'Swift')}: ${swiftValue}</span>`]);
+    if (dual.swiftN > 0 || dual.swiftM > 0) {
+        specialEffectEntries.push(['swift', `<span class="card-flag swift">${escapeHtml(UI.tag_swift || 'Swift')}:${formatDualAddendValue(dual.swiftN, dual.swiftM)}</span>`]);
     }
-    if (heavyValue > 0) {
-        specialEffectEntries.push(['heavy', `<span class="card-flag heavy">${escapeHtml(UI.tag_heavy || lt({ zh: '沉重', en: 'Heavy', fr: 'Lourdeur', ja: '重化' }))}: ${heavyValue}</span>`]);
+    if (dual.heavyN > 0 || dual.heavyM > 0) {
+        specialEffectEntries.push(['heavy', `<span class="card-flag heavy">${escapeHtml(UI.tag_heavy || lt({ zh: '沉重', en: 'Heavy', fr: 'Lourdeur', ja: '重化' }))}:${formatDualAddendValue(dual.heavyN, dual.heavyM)}</span>`]);
     }
-    if (tempSwiftValue > 0) {
-        specialEffectEntries.push(['temp_swift', `<span class="card-flag temp-swift">${escapeHtml(UI.tag_temp_swift || '暂时迅捷')}: ${tempSwiftValue}</span>`]);
+    if (dual.magicSwiftN > 0) {
+        specialEffectEntries.push(['magic_swift', `<span class="card-flag magic-swift">${escapeHtml(UI.tag_magic_swift || 'Magic Swift')}:${dual.magicSwiftN}</span>`]);
     }
-    if (tempHeavyValue > 0) {
-        specialEffectEntries.push(['temp_heavy', `<span class="card-flag temp-heavy">${escapeHtml(UI.tag_temp_heavy || '暂时沉重')}: ${tempHeavyValue}</span>`]);
+    if (dual.tempMagicHeavyM > 0) {
+        specialEffectEntries.push(['temp_magic_heavy', `<span class="card-flag temp-magic-heavy">${escapeHtml(UI.tag_magic_heavy || lt({ zh: '魔力沉重', en: 'Magic Heavy', fr: 'Lourdeur magique', ja: '魔力重化' }))}:${formatDualAddendValue(0, dual.tempMagicHeavyM)}</span>`]);
     }
-    if (magicSwiftValue > 0) {
-        specialEffectEntries.push(['magic_swift', `<span class="card-flag magic-swift">${escapeHtml(UI.tag_magic_swift || 'Magic Swift')}: ${magicSwiftValue}</span>`]);
-    }
-    if (tempMagicHeavyValue > 0) {
-        specialEffectEntries.push(['temp_magic_heavy', `<span class="card-flag temp-magic-heavy">${escapeHtml(UI.tag_temp_magic_heavy || '暂时魔力沉重')}: ${tempMagicHeavyValue}</span>`]);
-    }
-    if (powerValue !== 0) {
-        specialEffectEntries.push(['power', `<span class="card-flag power">${escapeHtml(UI.tag_power || 'Power')}: ${powerValue}</span>`]);
+    if (dual.powerN !== 0 || dual.powerM !== 0) {
+        specialEffectEntries.push(['power', `<span class="card-flag power">${escapeHtml(UI.tag_power || 'Power')}:${formatDualAddendValue(dual.powerN, dual.powerM)}</span>`]);
     }
     if (copyCount > 0) {
-        specialEffectEntries.push(['copy', `<span class="card-flag copy">${escapeHtml(UI.tag_copy || 'Copy')}: ${copyCount}</span>`]);
+        specialEffectEntries.push(['copy', `<span class="card-flag copy">${escapeHtml(UI.tag_copy || 'Copy')}:${copyCount}</span>`]);
     }
     if (chargeValue > 0) {
-        specialEffectEntries.push(['charge', cardFlagHtml('charge', `${UI.tag_charge || '电荷'}: ${chargeValue}`)]);
+        specialEffectEntries.push(['charge', cardFlagHtml('charge', `${UI.tag_charge || '电荷'}:${chargeValue}`)]);
     }
     if (!blinded) {
         flagsHtml += sortSpecialEffectEntries(specialEffectEntries);
@@ -13471,7 +13517,6 @@ const INTERNAL_CARD_FLAG_SET = new Set([
     'applies_hand_charge',
     'blocks_special_effect_damage',
     'blocks_special_effect_interference',
-    'preserve_fission',
     'destroys_equipment',
     'skip_legacy_snowball_replay',
     'dna_turn_transform',
@@ -13562,7 +13607,7 @@ function equipmentCounterFlagHtml(cardDict) {
     return Object.entries(counters)
         .map(([key, value]) => [equipmentCounterLabel(key), Math.floor(Number(value || 0))])
         .filter(([label, value]) => label && value > 0)
-        .map(([label, value]) => `<span class="card-flag custom">${escapeHtml(label)}: ${value}</span>`)
+        .map(([label, value]) => `<span class="card-flag custom">${escapeHtml(label)}:${value}</span>`)
         .join('');
 }
 
@@ -13576,19 +13621,17 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
     const swiftValue = Number(cardDef.swift_value || cardDict.swift_value || 0);
     const magicSwiftValue = Number(cardDef.magic_swift_value || cardDict.magic_swift_value || 0);
     const heavyValue = Number(cardDict.heavy_value || 0);
-    const powerValue = Number(cardDef.power_value || cardDict.power_value || 0);
     const tempSwiftValue = Number(cardDict.temp_swift_value || 0);
     const tempHeavyValue = Number(cardDict.temp_heavy_value || 0);
     const tempMagicHeavyValue = Number(cardDict.temp_magic_heavy_value || 0);
     const chargeValue = Number(cardDict.charge_value ?? cardDef.charge_value ?? 0);
+    const dual = getDualAddendCardValues(cardDict, cardDef);
     effective.forEach(flag => {
         if (flag === 'swift' && swiftValue > 0) return;
         if (flag === 'heavy' && heavyValue > 0) return;
-        if (flag === 'temp_swift' && tempSwiftValue > 0) return;
-        if (flag === 'temp_heavy' && tempHeavyValue > 0) return;
+        if (flag === 'temp_swift' || flag === 'temp_heavy' || flag === 'temp_magic_heavy') return;
         if (flag === 'magic_swift' && magicSwiftValue > 0) return;
-        if (flag === 'temp_magic_heavy' && tempMagicHeavyValue > 0) return;
-        if (flag === 'power' && powerValue !== 0) return;
+        if (flag === 'power' && (dual.powerN !== 0 || dual.powerM !== 0)) return;
         if (flag === 'copy' && copyCount > 0) return;
         if (flag === 'charge' && chargeValue > 0) return;
         if (base.has(flag)) return;
@@ -13597,37 +13640,29 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
         parts.push(cardFlagHtml(flag));
     });
     if (includeLayers) {
-        const fusionLevel = clampClientCardLayer(cardDict.fusion_level || cardDef.fusion_level || 1);
-        const fissionLevel = clampClientCardLayer(cardDict.fission_level || cardDef.fission_level || 1);
-        if (fusionLevel > 1) parts.push(cardFlagHtml('fusion_layer', `${UI.fusion_layer || 'Fusion'}: ${fusionLevel}`));
-        if (fissionLevel > 1) parts.push(cardFlagHtml('fission_layer', `${UI.fission_layer || 'Fission'}: ${fissionLevel}`));
+        if (dual.fusionN > 1 || dual.fusionM !== 0) parts.push(cardFlagHtml('fusion_layer', `${UI.fusion_layer || 'Fusion'}:${formatDualAddendValue(dual.fusionN, dual.fusionM)}`));
+        if (dual.fissionN > 1 || dual.fissionM !== 0) parts.push(cardFlagHtml('fission_layer', `${UI.fission_layer || 'Fission'}:${formatDualAddendValue(dual.fissionN, dual.fissionM)}`));
     }
-    if (swiftValue > 0) {
-        parts.push(cardFlagHtml('swift', `${UI.tag_swift || 'Swift'}: ${swiftValue}`));
+    if (dual.swiftN > 0 || dual.swiftM > 0) {
+        parts.push(cardFlagHtml('swift', `${UI.tag_swift || 'Swift'}:${formatDualAddendValue(dual.swiftN, dual.swiftM)}`));
     }
-    if (heavyValue > 0) {
-        parts.push(cardFlagHtml('heavy', `${UI.tag_heavy || lt({ zh: '沉重', en: 'Heavy', fr: 'Lourdeur', ja: '重化' })}: ${heavyValue}`));
+    if (dual.heavyN > 0 || dual.heavyM > 0) {
+        parts.push(cardFlagHtml('heavy', `${UI.tag_heavy || lt({ zh: '沉重', en: 'Heavy', fr: 'Lourdeur', ja: '重化' })}:${formatDualAddendValue(dual.heavyN, dual.heavyM)}`));
     }
-    if (tempSwiftValue > 0) {
-        parts.push(cardFlagHtml('temp_swift', `${UI.tag_temp_swift || '暂时迅捷'}: ${tempSwiftValue}`));
+    if (dual.magicSwiftN > 0) {
+        parts.push(cardFlagHtml('magic_swift', `${UI.tag_magic_swift || 'Magic Swift'}:${dual.magicSwiftN}`));
     }
-    if (tempHeavyValue > 0) {
-        parts.push(cardFlagHtml('temp_heavy', `${UI.tag_temp_heavy || '暂时沉重'}: ${tempHeavyValue}`));
+    if (dual.tempMagicHeavyM > 0) {
+        parts.push(cardFlagHtml('temp_magic_heavy', `${UI.tag_magic_heavy || lt({ zh: '魔力沉重', en: 'Magic Heavy', fr: 'Lourdeur magique', ja: '魔力重化' })}:${formatDualAddendValue(0, dual.tempMagicHeavyM)}`));
     }
-    if (magicSwiftValue > 0) {
-        parts.push(cardFlagHtml('magic_swift', `${UI.tag_magic_swift || 'Magic Swift'}: ${magicSwiftValue}`));
-    }
-    if (tempMagicHeavyValue > 0) {
-        parts.push(cardFlagHtml('temp_magic_heavy', `${UI.tag_temp_magic_heavy || '暂时魔力沉重'}: ${tempMagicHeavyValue}`));
-    }
-    if (powerValue !== 0) {
-        parts.push(cardFlagHtml('power', `${UI.tag_power || 'Power'}: ${powerValue}`));
+    if (dual.powerN !== 0 || dual.powerM !== 0) {
+        parts.push(cardFlagHtml('power', `${UI.tag_power || 'Power'}:${formatDualAddendValue(dual.powerN, dual.powerM)}`));
     }
     if (copyCount > 0) {
-        parts.push(cardFlagHtml('copy', `${UI.tag_copy || 'Copy'}: ${copyCount}`));
+        parts.push(cardFlagHtml('copy', `${UI.tag_copy || 'Copy'}:${copyCount}`));
     }
     if (chargeValue > 0) {
-        parts.push(cardFlagHtml('charge', `${UI.tag_charge || '电荷'}: ${chargeValue}`));
+        parts.push(cardFlagHtml('charge', `${UI.tag_charge || '电荷'}:${chargeValue}`));
     }
     const equipmentCountersHtml = equipmentCounterFlagHtml(cardDict);
     if (equipmentCountersHtml) parts.push(equipmentCountersHtml);
@@ -14906,21 +14941,17 @@ function getTermIntroLibrary() {
         self_target: { label: UI.tag_self_target || lt({ zh: '自刃', en: 'Self-cut', fr: 'Auto-ciblage', ja: '自刃' }), desc: lt({ zh: '这张攻击牌可以选择自己为目标。', en: 'This Thorn card can choose its owner as a target.', fr: 'Cette carte Thorn peut choisir son propriétaire comme cible.', ja: 'この攻撃カードは自分を対象にできます。' }), color: '#B02A37' },
         team_limited: { label: UI.tag_team_limited || 'Team Limited', desc: lt({ zh: '只在每队至少2名玩家的模式出现；单人训练场可出现但不生效。', en: 'Appears only in modes where a team has at least 2 players. It can be selected in training but has no practical effect there.', fr: 'N’apparaît que dans les modes où une équipe a au moins 2 joueurs. Sélectionnable en entraînement, mais sans effet pratique.', ja: '1チーム2人以上のモードでのみ意味があります。訓練場では選べますが実質効果はありません。' }), color: '#607D3B' },
         team_unique: { label: UI.tag_team_unique || 'Team Unique', desc: lt({ zh: '同队若多人选择同名队伍独一牌，随机保留1张，其余放逐。', en: 'If multiple teammates choose this card, one copy is kept at random and the extras are exiled.', fr: 'Si plusieurs coéquipiers choisissent cette carte, une copie est gardée au hasard et les autres sont exilées.', ja: '同じチームで複数人が選ぶと、ランダムに1枚だけ残り、余分は放逐されます。' }), color: '#8D6E63' },
-        power: { label: UI.tag_power || 'Power', desc: lt({ zh: '此牌造成的物理伤害增加对应层数；多段伤害的每段增加向上取整(威力/段数)D。', en: 'Increases each D segment this card deals. For multi-hit damage, Power is distributed across hits rounded up.', fr: 'Augmente chaque segment de D infligé par cette carte. Pour plusieurs segments, la Puissance est répartie en arrondissant au supérieur.', ja: 'このカードの各 D を増やします。多段の場合、威力は各段へ切り上げで配分されます。' }), color: '#C0392B' },
-        amplify: { label: UI.tag_amplify || 'Amplify', desc: lt({ zh: '此卡的威力不会因为打出而降低。', en: 'This card’s Power does not decrease when it is played.', fr: 'La Puissance de cette carte ne diminue pas lorsqu’elle est jouée.', ja: 'このカードは使用しても威力が減少しません。' }), color: '#B54708' },
+        power: { label: UI.tag_power || 'Power', desc: lt({ zh: '此牌造成的物理伤害增加对应层数；多段伤害的每段增加向上取整(威力/段数)D。获得的威力写入暂时位（威力:0+N 中加号后的数字），打出后清除。', en: 'Increases each D segment this card deals. For multi-hit damage, Power is distributed across hits rounded up. Gained Power is written to the temp slot (the number after the plus sign in Power:0+N) and clears after being played.', fr: 'Augmente chaque segment de D infligé par cette carte. Pour plusieurs segments, la Puissance est répartie en arrondissant au supérieur. La Puissance gagnée est inscrite dans l’emplacement temporaire (le nombre après le signe plus dans Puissance:0+N) et disparaît après utilisation.', ja: 'このカードの各 D を増やします。多段の場合、威力は各段へ切り上げで配分されます。獲得した威力は一時枠（威力:0+N のプラス記号の後の数字）に書き込まれ、使用後に消えます。' }), color: '#C0392B' },
         magic_swift: { label: UI.tag_magic_swift || 'Magic Swift', desc: lt({ zh: 'M 花费减少对应层数，最低为 0M。', en: 'Reduces M cost by its value, minimum 0M.', fr: 'Réduit le coût M de sa valeur, minimum 0M.', ja: 'M コストを値だけ減らします。最低0M。' }), color: '#6C5CE7' },
-        temp_swift: { label: UI.tag_temp_swift || 'Temporary Swift', desc: lt({ zh: '本次打出时 E 花费减少对应层数，打出后清除。', en: 'Reduces E cost for this play only, then clears after being played.', fr: 'Réduit le coût E pour ce jeu seulement, puis disparaît après avoir été jouée.', ja: '今回の使用時だけ E コストを減らし、使用後に消えます。' }), color: '#0EA5E9' },
-        temp_heavy: { label: UI.tag_temp_heavy || 'Temporary Heavy', desc: lt({ zh: '本次打出时 E 花费增加对应层数，打出后清除。', en: 'Increases E cost for this play only, then clears after being played.', fr: 'Augmente le coût E pour ce jeu seulement, puis disparaît après avoir été jouée.', ja: '今回の使用時だけ E コストを増やし、使用後に消えます。' }), color: '#795548' },
-        swift: { label: UI.tag_swift || 'Swift', desc: lt({ zh: '此牌 E 花费减少对应层数，最低为 0E。', en: 'Reduces this card’s E cost by its value, minimum 0E.', fr: 'Réduit le coût E de cette carte de sa valeur, minimum 0E.', ja: 'このカードの E コストを層数分減らします。最低 0E。' }), color: '#0EA5E9' },
-        heavy: { label: UI.tag_heavy || 'Heavy', desc: lt({ zh: '此牌 E 花费增加对应层数。', en: 'Increases this card’s E cost by its value.', fr: 'Augmente le coût E de cette carte de sa valeur.', ja: 'このカードの E コストを層数分増やします。' }), color: '#8D6E63' },
-        temp_magic_heavy: { label: UI.tag_temp_magic_heavy || 'Temporary Magic Heavy', desc: lt({ zh: '本次打出时 M 花费增加对应层数，打出后清除。', en: 'Increases M cost for this play only, then clears after being played.', fr: 'Augmente le coût M pour ce jeu seulement, puis disparaît après avoir été jouée.', ja: '今回の使用時だけ M コストを増やし、使用後に消えます。' }), color: '#7A5CFF' },
+        swift: { label: UI.tag_swift || 'Swift', desc: lt({ zh: '此牌 E 花费减少对应层数，最低为 0E。获得的迅捷写入留存位（迅捷:N+M 中冒号前的数字），打出后保留。', en: 'Reduces this card’s E cost by its value, minimum 0E. Gained Swift is written to the retain slot (the number before the colon in Swift:N+M) and survives being played.', fr: 'Réduit le coût E de cette carte de sa valeur, minimum 0E. La Rapidité gagnée est inscrite dans l’emplacement de rétention (le nombre avant les deux-points dans Rapidité:N+M) et survit à l’utilisation.', ja: 'このカードの E コストを層数分減らします。最低 0E。獲得した迅捷は保持枠（迅捷:N+M のコロン前の数字）に書き込まれ、使用後も残ります。' }), color: '#0EA5E9' },
+        heavy: { label: UI.tag_heavy || 'Heavy', desc: lt({ zh: '此牌 E 花费增加对应层数。获得的沉重写入留存位（沉重:N+M 中冒号前的数字），打出后保留。', en: 'Increases this card’s E cost by its value. Gained Heavy is written to the retain slot (the number before the colon in Heavy:N+M) and survives being played.', fr: 'Augmente le coût E de cette carte de sa valeur. La Lourdeur gagnée est inscrite dans l’emplacement de rétention (le nombre avant les deux-points dans Lourdeur:N+M) et survit à l’utilisation.', ja: 'このカードの E コストを層数分増やします。獲得した沉重は保持枠（沉重:N+M のコロン前の数字）に書き込まれ、使用後も残ります。' }), color: '#8D6E63' },
         floating: { label: UI.tag_floating || 'Floating', desc: lt({ zh: '打出后若本应进入弃牌堆，则洗入抽牌堆随机位置。', en: 'After being played, if it would enter discard, it is shuffled into the deck instead.', fr: 'Après utilisation, si elle devait aller dans la défausse, elle est mélangée dans le deck à la place.', ja: '使用後、本来捨て札に行く場合、代わりに山札へランダムに戻ります。' }), color: '#1687B8' },
         nazar: { label: UI.status_nazar || lt({ zh: '邪眼', en: 'Nazar', fr: 'Nazar', ja: 'ナザール' }), desc: lt({ zh: '护甲结算后，自己受到的1~9点物理伤害变为1；受到≥10点物理伤害时，伤害-9，且层数-1。', en: 'After armor resolves, 1-9 physical damage you would take becomes 1. At 10 or more, reduce it by 9 and remove 1 stack.', fr: 'Après l’armure, les dégâts physiques subis de 1 à 9 deviennent 1. À partir de 10, ils sont réduits de 9 et cet effet perd 1 charge.', ja: '護甲の計算後、受ける物理ダメージが1～9なら1になります。10以上なら9減少し、1層減ります。' }), color: COLORS.magic },
         magic_nazar: { label: lt({ zh: '魔法邪眼', en: 'Magic Nazar', fr: 'Nazar magique', ja: '魔法ナザール' }), desc: lt({ zh: '存在时，敌方实际消耗E≤1的技能牌无效，然后减少1层。', en: 'While present, an enemy skill card that actually costs 1E or less is negated, then this loses 1 stack.', fr: 'Tant qu’il existe, une compétence ennemie coûtant réellement 1E ou moins est annulée, puis perd 1 charge.', ja: '存在中、敵が実際に1E以下消費する技能カードを無効にし、その後1層減ります。' }), color: COLORS.magic },
         dodge: { label: UI.status_dodge || lt({ zh: '闪避', en: 'Dodge', fr: 'Esquive', ja: '回避' }), desc: lt({ zh: '受到物理伤害时，减少1层，免除本次伤害。若伤害的来源牌带有精准标签，则免除一半伤害。自己回合开始时清空层数。状态免疫存在时，闪避可以叠层，但不会生效或被消耗。', en: 'When physical damage would be taken, lose 1 stack to prevent that hit. If the source card has Precision, prevent only half of the damage. Clear all stacks at the start of your turn. While Status Immune is active, Dodge can stack but does not trigger or get consumed.', fr: 'Quand des dégâts physiques devraient être subis, perdez 1 charge pour annuler ce coup. Si la carte source a Précision, seule la moitié des dégâts est annulée. Retirez toutes les charges au début de votre tour. Sous Immunité statut, Esquive peut s’accumuler mais ne se déclenche pas et n’est pas consommée.', ja: '物理ダメージを受ける時、1層減らしてそのダメージを防ぎます。発生源カードがPrecisionを持つ場合、防ぐのは半分だけです。自分のターン開始時に全層を消去します。状態免疫中は蓄積できますが発動も消費もされません。' }), color: COLORS.guard },
         equipment_armor: { label: lt({ zh: '装备护甲', en: 'Equipment Armor', fr: 'Armure d’équipement', ja: '装備護甲' }), desc: lt({ zh: '存在时，若装备将被摧毁，则使该装备不被摧毁，并消耗1层装备护甲。玩家回合结束时，该玩家所有装备的装备护甲-1。', en: 'If the equipment would be destroyed, prevent that destruction and consume 1 Equipment Armor. At the end of a player turn, all that player’s equipment loses 1 Equipment Armor.', fr: 'Si l’équipement devait être détruit, empêche cette destruction et consomme 1 Armure d’équipement. À la fin du tour d’un joueur, tout son équipement perd 1 Armure d’équipement.', ja: '装備が破壊される時、それを防ぎ装備護甲を1層消費します。プレイヤーのターン終了時、そのプレイヤーの全装備の装備護甲が1層減ります。' }), color: COLORS.indestructible },
-        fusion_layer: { label: UI.fusion_layer || 'Fusion', desc: lt({ zh: '攻击牌的伤害会被放大。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。打出后恢复为 1。', en: 'Amplifies attack damage. Each hit is ceil(base damage × Fusion / Fission). Resets to 1 after being played.', fr: 'Amplifie les dégâts d’attaque. Chaque coup vaut arrondi supérieur(dégâts de base × Fusion / Fission). Revient à 1 après avoir été jouée.', ja: '攻撃ダメージを増やします。各命中は切り上げ(基礎ダメージ×聚变/裂变)。使用後に1へ戻ります。' }), color: '#8E44AD' },
-        fission_layer: { label: UI.fission_layer || 'Fission', desc: lt({ zh: '攻击牌会被拆成多次命中。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。打出后恢复为 1。', en: 'Splits an attack into multiple hits. Each hit is ceil(base damage × Fusion / Fission). Resets to 1 after being played.', fr: 'Divise une attaque en plusieurs coups. Chaque coup vaut arrondi supérieur(dégâts de base × Fusion / Fission). Revient à 1 après avoir été jouée.', ja: '攻撃を複数回命中に分けます。各命中は切り上げ(基礎ダメージ×聚变/裂变)。使用後に1へ戻ります。' }), color: '#2874A6' },
+        fusion_layer: { label: UI.fusion_layer || 'Fusion', desc: lt({ zh: '攻击牌的伤害会被放大。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。显示为「聚变:N+M」：加号前是留存位，打出后保留；加号后是暂时位，打出后消失。', en: 'Amplifies attack damage. Each hit is ceil(base damage × Fusion / Fission). Shown as Fusion:N+M: before the plus sign is the retain slot, kept after being played; after it is the temp slot, cleared after being played.', fr: 'Amplifie les dégâts d’attaque. Chaque coup vaut arrondi supérieur(dégâts de base × Fusion / Fission). Affichée en Fusion:N+M : avant le signe plus se trouve l’emplacement de rétention, conservé après utilisation ; après lui, l’emplacement temporaire, effacé après utilisation.', ja: '攻撃ダメージを増やします。各命中は切り上げ(基礎ダメージ×聚变/裂变)。「聚变:N+M」形式で表示され、プラス記号の前は保持枠（使用後も残り）、後は一時枠（使用後に消える）です。' }), color: '#8E44AD' },
+        fission_layer: { label: UI.fission_layer || 'Fission', desc: lt({ zh: '攻击牌会被拆成多次命中。每次伤害按 向上取整(原始伤害×聚变/裂变) 计算。显示为「裂变:N+M」：加号前是留存位，打出后保留；加号后是暂时位，打出后消失。', en: 'Splits an attack into multiple hits. Each hit is ceil(base damage × Fusion / Fission). Shown as Fission:N+M: before the plus sign is the retain slot, kept after being played; after it is the temp slot, cleared after being played.', fr: 'Divise une attaque en plusieurs coups. Chaque coup vaut arrondi supérieur(dégâts de base × Fusion / Fission). Affichée en Fission:N+M : avant le signe plus se trouve l’emplacement de rétention, conservé après utilisation ; après lui, l’emplacement temporaire, effacé après utilisation.', ja: '攻撃を複数回命中に分けます。各命中は切り上げ(基礎ダメージ×聚变/裂变)。「裂变:N+M」形式で表示され、プラス記号の前は保持枠（使用後も残り）、後は一時枠（使用後に消える）です。' }), color: '#2874A6' },
         layers: { label: lt({ zh: '层数', en: 'Stacks', fr: 'Charges', ja: '層数' }), desc: lt({ zh: '状态或特殊属性的数量。层数越高效果会越强，或持续越久。', en: 'The quantity of a state or special property. More stacks usually mean stronger or longer-lasting effects.', fr: 'Quantité d’un état ou d’une propriété spéciale. Plus de charges signifie souvent un effet plus fort ou plus long.', ja: '状態や特殊属性の数量です。多いほど効果が強い、または長く続きます。' }), color: COLORS.text_primary },
     };
 }
@@ -14986,11 +15017,8 @@ function getIntroFlagDescription(flag, custom = null) {
         magic_swift: lt({ zh: 'M花费减少X，最少为0。', en: 'M cost is reduced by X, minimum 0.', fr: 'Le coût M est réduit de X, minimum 0.', ja: 'M コストをX減らします。最低0。' }),
         temp_swift: lt({ zh: '本次打出时E花费减少X，打出后清除。', en: 'For this play only, E cost is reduced by X; clears after being played.', fr: 'Pour ce jeu seulement, le coût E est réduit de X ; disparaît après avoir été jouée.', ja: '今回の使用時だけ E コストをX減らし、使用後に消えます。' }),
         heavy: lt({ zh: 'E花费增加X。', en: 'E cost is increased by X.', fr: 'Le coût E est augmenté de X.', ja: 'E コストをX増やします。' }),
-        temp_heavy: lt({ zh: '本次打出时E花费增加X，打出后清除。', en: 'For this play only, E cost is increased by X; clears after being played.', fr: 'Pour ce jeu seulement, le coût E augmente de X ; disparaît après avoir été jouée.', ja: '今回の使用時だけ E コストをX増やし、使用後に消えます。' }),
-        temp_magic_heavy: getTermIntroLibrary().temp_magic_heavy.desc,
         floating: getTermIntroLibrary().floating.desc,
         power: lt({ zh: '此牌造成的每段D增加。多段D会按段数把威力向上分配。', en: 'Increases each D segment this card deals. For multi-hit damage, Power is distributed across hits rounded up.', fr: 'Augmente chaque segment de D infligé par cette carte. Pour plusieurs segments, la Puissance est répartie en arrondissant au supérieur.', ja: 'このカードの各 D を増やします。多段の場合、威力は各段へ切り上げで配分されます。' }),
-        amplify: lt({ zh: '此卡的威力不会因为打出而降低。', en: 'This card’s Power does not decrease when it is played.', fr: 'La Puissance de cette carte ne diminue pas lorsqu’elle est jouée.', ja: 'このカードは使用しても威力が減少しません。' }),
         team_limited: lt({ zh: '只在一队至少2名玩家的模式出现；单人训练场可选，但没有实际意义。', en: 'Appears only in modes where a team has at least 2 players. In training it can appear but has no practical effect.', fr: 'N’apparaît que dans les modes où une équipe a au moins 2 joueurs. En entraînement, elle peut apparaître mais sans effet pratique.', ja: '1チーム2人以上のモードでのみ出ます。訓練場では出ても実質効果はありません。' }),
         team_unique: lt({ zh: '同一队伍中若多人选择此牌，随机保留一张，多余的会被放逐。', en: 'If multiple teammates choose it, one copy is kept at random and extras are exiled.', fr: 'Si plusieurs coéquipiers la choisissent, une copie est gardée au hasard et les autres sont exilées.', ja: '同じチームで複数人が選ぶと、ランダムに1枚だけ残り、余分は放逐されます。' }),
         stealth: lt({ zh: '不会触发对手的响应窗口。', en: 'Does not open the opponent’s response window.', fr: 'N’ouvre pas la fenêtre de réponse adverse.', ja: '相手の応答ウィンドウを開きません。' }),
@@ -15350,10 +15378,7 @@ function collectCardIntroTerms(cardDict) {
     const effectFlagProbes = [
         [/(精准|precision|add_tag["']?\s*[:=]\s*["']?precision|tag["']?\s*[:=]\s*["']?precision)/i, 'precision'],
         [/(魔力迅捷|magic swift|magic_swift|magic_swift_value)/i, 'magic_swift'],
-        [/(暂时迅捷|temporary swift|temp_swift|temp_swift_value)/i, 'temp_swift'],
         [/(沉重|(^|\W)heavy($|\W)|heavy_value)/i, 'heavy'],
-        [/(暂时沉重|temporary heavy|temp_heavy|temp_heavy_value)/i, 'temp_heavy'],
-        [/(暂时魔力沉重|temporary magic heavy|temp_magic_heavy|temp_magic_heavy_value)/i, 'temp_magic_heavy'],
         [/(威力|power|power_value)/i, 'power'],
         [/(隐匿|stealth|tag["']?\s*[:=]\s*["']?stealth)/i, 'stealth'],
         [/(萌芽|sprout|tag["']?\s*[:=]\s*["']?sprout)/i, 'sprout'],
@@ -30242,11 +30267,11 @@ function renderClassicFighter(container, player, side, selectedCard = null, mask
                 <div class="classic-hp-track"><div class="classic-hp-fill" style="width:${hpPct}%"></div></div>
                 <div class="classic-hp-text">${player.hp}/${player.maxHp}</div>
             </div>
-            <button class="armor-meter classic-armor-meter${armorVisible ? '' : ' hidden'}" type="button" data-term-key="A" data-term-label="${escapeHtml(UI.status_armor || '护甲')}" data-term-color="${escapeHtml(COLORS.armor_text)}" data-status-value="${armorValue}" title="${escapeHtml(UI.status_armor || '护甲')}: ${armorValue}">
+            <button class="armor-meter classic-armor-meter${armorVisible ? '' : ' hidden'}" type="button" data-term-key="A" data-term-label="${escapeHtml(UI.status_armor || '护甲')}" data-term-color="${escapeHtml(COLORS.armor_text)}" data-status-value="${armorValue}" title="${escapeHtml(UI.status_armor || '护甲')}:${armorValue}">
                 <img class="armor-meter-icon" src="/static/assets/status-icons/armor.svg" alt="" aria-hidden="true">
                 <span class="armor-meter-value">${escapeHtml(String(armorValue))}</span>
             </button>
-            <button class="crit-meter classic-crit-meter${critVisible ? '' : ' hidden'}" style="left:calc(100% + ${critOffset}px)" type="button" data-term-key="term:crit" data-term-label="${escapeHtml(critLabel)}" data-term-color="#D4AC0D" title="${escapeHtml(critLabel)}: ${escapeHtml(formatCritMultiplier(critMultiplier))}">
+            <button class="crit-meter classic-crit-meter${critVisible ? '' : ' hidden'}" style="left:calc(100% + ${critOffset}px)" type="button" data-term-key="term:crit" data-term-label="${escapeHtml(critLabel)}" data-term-color="#D4AC0D" title="${escapeHtml(critLabel)}:${escapeHtml(formatCritMultiplier(critMultiplier))}">
                 <img class="crit-meter-icon" src="/static/assets/ui-icons/critical.svg" alt="" aria-hidden="true">
                 <span class="crit-meter-value">${escapeHtml(formatCritMultiplier(critMultiplier))}</span>
             </button>
@@ -30946,7 +30971,7 @@ function renderPlayerBars(containerId, playerData) {
         const shown = armorValue > 0 && !masked;
         armorMeter.classList.toggle('hidden', !shown);
         armorMeter.dataset.statusValue = String(armorValue);
-        armorMeter.title = `${UI.status_armor || '护甲'}: ${armorValue}`;
+        armorMeter.title = `${UI.status_armor || '护甲'}:${armorValue}`;
         const valueEl = armorMeter.querySelector('.armor-meter-value');
         if (valueEl) valueEl.textContent = String(armorValue);
         delete armorMeter.dataset.termIntroBound;
@@ -30959,7 +30984,7 @@ function renderPlayerBars(containerId, playerData) {
         const critLabel = (getTermIntroLibrary().crit || {}).label || (currentLang === 'zh' ? '暴击' : 'Critical');
         const formatted = formatCritMultiplier(critMultiplier);
         critMeter.classList.toggle('hidden', !shown);
-        critMeter.title = `${critLabel}: ${formatted}`;
+        critMeter.title = `${critLabel}:${formatted}`;
         const valueEl = critMeter.querySelector('.crit-meter-value');
         if (valueEl) valueEl.textContent = formatted;
         delete critMeter.dataset.termIntroBound;
@@ -30986,7 +31011,7 @@ function renderPlayerBars(containerId, playerData) {
         const bloodShieldLabel = (getTermIntroLibrary().blood_shield || {}).label || '血盾';
         bloodShieldMeter.classList.toggle('hidden', !shown);
         bloodShieldMeter.dataset.statusValue = String(shieldValue);
-        bloodShieldMeter.title = `${bloodShieldLabel}: ${shieldValue}`;
+        bloodShieldMeter.title = `${bloodShieldLabel}:${shieldValue}`;
         const shieldValueEl = bloodShieldMeter.querySelector('.blood-shield-meter-value');
         if (shieldValueEl) shieldValueEl.textContent = String(shieldValue);
         delete bloodShieldMeter.dataset.termIntroBound;
@@ -33946,7 +33971,8 @@ function battleLogCardSignature(cardDict, fallbackName = '') {
     const keys = [
         'def_id', 'cost_e_override', 'cost_m_override', 'fission_level', 'fusion_level',
         'mimic_discount', 'bonus_damage', 'held_turns', 'return_to_hand_turns',
-        'swift_value', 'magic_swift_value', 'power_value', 'temp_swift_value',
+        'swift_value', 'magic_swift_value', 'power_value', 'power_base',
+        'fission_base', 'fusion_base', 'temp_swift_value',
         'temp_heavy_value', 'extra_hits',
     ];
     const compact = {};
@@ -35503,6 +35529,9 @@ function cardChoiceIdentity(card) {
         Number(card.swift_value || 0),
         Number(card.magic_swift_value || 0),
         Number(card.power_value || 0),
+        Number(card.power_base || 0),
+        Number(card.fission_base || 1),
+        Number(card.fusion_base || 1),
         Number(card.temp_swift_value || 0),
         Number(card.temp_heavy_value || 0),
         Number(card.temp_magic_heavy_value || 0),

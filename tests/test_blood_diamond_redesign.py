@@ -51,8 +51,9 @@ class BloodDiamondRedesignTests(unittest.TestCase):
         card_def = self.card_defs['BloodDiamond']
         self.assertEqual(card_def.hits, 1)
         self.assertEqual(card_def.fission_level, 4)
-        self.assertIn('preserve_fission', card_def.flags)
-        self.assertIn('不减少裂变层数', card_def.effect_text)
+        self.assertIn('unfading_fission', card_def.flags)
+        # 双加数体系（2026-10-01）：「打出后不减少裂变层数」句由「不灭：裂变」标签芯片承担
+        self.assertNotIn('不减少裂变层数', card_def.effect_text)
         self.assertNotIn('×4', card_def.effect_text)
 
     def test_playing_it_deals_one_hit_per_petal_and_keeps_bleed_small(self):
@@ -69,14 +70,18 @@ class BloodDiamondRedesignTests(unittest.TestCase):
         reset_card_after_play(coral)
         self.assertEqual(coral.fission_level, 4)
 
-    def test_plain_thorn_card_still_loses_its_layers(self):
+    def test_plain_thorn_card_still_loses_its_gained_layers(self):
+        # 双加数体系（设计 2026-10-01）：无「不灭：裂变」的普通裂变卡打出后
+        # 回落到卡面基线（获得的增量 M 清零），而不再重置为 1。
         plain = CardInstance('Coral')
         plain.instance_flags.clear()
         CARD_DEFS['Coral'] = type(self.card_defs['Coral'])(
             **{**self.card_defs['Coral'].__dict__, 'flags': set()}
         )
+        plain.fission_base = 4
+        plain.fission_level = 7
         reset_card_after_play(plain)
-        self.assertEqual(plain.fission_level, 1)
+        self.assertEqual(plain.fission_level, 4)
 
 
 if __name__ == '__main__':
