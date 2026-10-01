@@ -844,7 +844,7 @@ GTN_STATIC_VERSION += '-nitro-drawfix-1'
 GTN_STATIC_VERSION += '-antennae-uifix-1'
 GTN_STATIC_VERSION += '-skin-card-ratio-1'
 GTN_STATIC_VERSION += '-server-play-prediction-1'
-GTN_STATIC_VERSION += '-skin-text-contrast-15-inkmap-linesplit-1-gallery-prob-1-preview-modal-mobile-1-preview-side-toggle-1-skin-darkband-1-skin-pale-2-skin-pale-3-skin-parity-4-targetpick-controls-1-handling-rebuild-1-poker-moddraw-1-r28782-fix-1-feedback-batch2-1-fc-scroll-1-moddraw-swap-1-sawblade-bleed-1-chip-modifiers-1-zone-restore-1-bandage-lighten-1-feedback-batch3-1-ach-fix-1'
+GTN_STATIC_VERSION += '-skin-text-contrast-15-inkmap-linesplit-1-gallery-prob-1-preview-modal-mobile-1-preview-side-toggle-1-skin-darkband-1-skin-pale-2-skin-pale-3-skin-parity-4-targetpick-controls-1-handling-rebuild-1-poker-moddraw-1-r28782-fix-1-feedback-batch2-1-fc-scroll-1-moddraw-swap-1-sawblade-bleed-1-chip-modifiers-1-zone-restore-1-bandage-lighten-1-feedback-batch3-1-ach-fix-1-mg2048-sync-1'
 GTN_STATIC_VERSION += '-skin-preview-modal-1'
 GTN_STATIC_VERSION += '-card-tag-dedup-1'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
@@ -36466,6 +36466,24 @@ def _minigame_2048_identity():
     if not user_id or not username:
         return None
     return int(user_id), username
+
+
+def _leisure_play_mode_for(user_id):
+    """2048 战绩归属（GS 反馈：限时模式同步不了——此函数被引用却从未定义，
+    sync/state 全部 NameError 500）。有活动门票会话 → ticket（限时榜）；
+    免费时段/无会话 → normal（14 天普通榜）。会话表不存在时按 normal。"""
+    try:
+        with get_db_connection() as conn:
+            leisure_ticket._session_table(conn)
+            row = conn.execute(
+                'SELECT active FROM leisure_play_sessions WHERE user_id = ?',
+                (int(user_id),),
+            ).fetchone()
+        if row is not None and int(row['active'] or 0) == 1:
+            return 'ticket'
+    except Exception:
+        pass
+    return 'normal'
 
 
 def _minigame_2048_guard():
