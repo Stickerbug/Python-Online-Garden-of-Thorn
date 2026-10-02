@@ -14147,7 +14147,7 @@ function formatDamageHits(values) {
     if (list.length === 1) return `${list[0]}D`;
     const first = list[0];
     if (list.every(v => v === first)) return `${first}D${times}${list.length}`;
-    return list.map(v => `${v}D`).join(' + ');
+    return list.map(v => `${v}D`).join('+');
 }
 
 function getResponseAttackerState(data) {
