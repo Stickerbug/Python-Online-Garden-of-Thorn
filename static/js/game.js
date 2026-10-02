@@ -31582,7 +31582,9 @@ function canPlayCard(cardDict) {
     if (!immune && getActionLimitStatusValue(you, 'attack_blocked', '禁攻') > 0 && cardDef.card_type === 'thorn') return false;
     if (!immune && getActionLimitStatusValue(you, 'attack_only', '仅攻击') > 0 && cardDef.card_type !== 'thorn') return false;
     if (!immune && getActionLimitStatusValue(you, 'magic_blocked', '魔力封锁') > 0 && Number(cardDict.cost_m || cardDef.cost_m || 0) > 0) return false;
-    if (isOceanSapphireCard(cardDict, cardDef) && !getOceanSapphireSelectableAttacks(cardDict).length) return false;
+    // 蓝宝石的「手中有可选攻击牌」预检移除（#315）：客户端门让卡面变灰且零提示，
+    // 玩家不知道原因；改为交服务端权威判定——无合法攻击牌时点击会收到明确的
+    // 「手中没有可选择的攻击牌」提示，有牌时行为不变。
     const elixir = you.elixir || 0;
     const magic = you.magic || 0;
     const { totalE, totalM } = getCardDisplayCosts(cardDict, cardDef, you);
