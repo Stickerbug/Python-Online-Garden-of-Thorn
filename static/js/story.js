@@ -71,6 +71,7 @@
     let storyMapPreviewOpen = false;
     let storyPlaybackRate = document.documentElement.classList.contains('story-speed-5x') ? 5
         : document.documentElement.classList.contains('story-speed-3x') ? 3
+        : document.documentElement.classList.contains('story-speed-1x') ? 1
         : 2;
     let storyShowHandOrder = (window.GTN_STORAGE || window.localStorage)?.getItem('gtn_show_hand_order') === '1';
     let pendingStorySaveId = 0;
@@ -14033,8 +14034,9 @@
     }
 
     function setStoryPlaybackRate(rate) {
-        const value = rate === 5 ? 5 : rate === 3 ? 3 : 2;
+        const value = rate === 1 ? 1 : rate === 5 ? 5 : rate === 3 ? 3 : 2;
         storyPlaybackRate = value;
+        document.documentElement.classList.toggle('story-speed-1x', value === 1);
         document.documentElement.classList.toggle('story-speed-2x', value === 2);
         document.documentElement.classList.toggle('story-speed-3x', value === 3);
         document.documentElement.classList.toggle('story-speed-5x', value === 5);

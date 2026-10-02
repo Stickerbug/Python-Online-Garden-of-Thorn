@@ -225,7 +225,7 @@
           + titlesHtml(item) + nameHtml(item, name || '?') + '</span>: ';
       const messageId = Number(item.message_id || item.messageId || 0);
       return `<div class="chat-msg"${messageId > 0 ? ` data-chat-message-id="${messageId}"` : ''}>`
-        + `<span class="chat-nick${system ? ' system-name' : ''}">${originBadgeHtml(item)}${head}</span>`
+        + `<span class="chat-nick${system ? ' system-name' : ''}">${head}</span>`
         + mentionHtml(item) + actionsHtml(item) + '</div>';
     }
 

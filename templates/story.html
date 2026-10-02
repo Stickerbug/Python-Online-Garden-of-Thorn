@@ -48,7 +48,12 @@
         'story-hide-ui-borders',
         readPreference('gtn_story_hide_card_borders') === '1',
       );
-      // 演出速度三档（2×默认 / 3× / 5×）；新键 gtn_story_speed，旧键 gtn_story_speed_2x 仅作迁移读取
+      // 演出速度四档（1×原速 / 2×默认 / 3× / 5×）；新键 gtn_story_speed，
+      // 旧键 gtn_story_speed_2x 仅作迁移读取。1× 用专用类与默认 2× 区分。
+      document.documentElement.classList.toggle(
+        'story-speed-1x',
+        readPreference('gtn_story_speed') === '1',
+      );
       document.documentElement.classList.toggle(
         'story-speed-2x',
         readPreference('gtn_story_speed') === '2'
@@ -623,6 +628,7 @@
           <div class="story-settings-row story-settings-speed-row">
             <span id="story-settings-speed-label">演出速度</span>
             <div class="story-settings-speed-options" id="story-settings-speed-options" role="radiogroup" aria-labelledby="story-settings-speed-label">
+              <label class="story-speed-option"><input type="radio" name="story-settings-speed" value="1"><span>1×</span></label>
               <label class="story-speed-option"><input type="radio" name="story-settings-speed" value="2" checked><span>2×</span></label>
               <label class="story-speed-option"><input type="radio" name="story-settings-speed" value="3"><span>3×</span></label>
               <label class="story-speed-option"><input type="radio" name="story-settings-speed" value="5"><span>5×</span></label>
