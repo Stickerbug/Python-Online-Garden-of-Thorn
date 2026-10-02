@@ -15139,13 +15139,21 @@ def user_rank_payload(user_or_id, *, include_special=False):
             ).fetchone()
             if row is None:
                 return _rank.rank_payload(1, 0)
+        keys = row.keys() if hasattr(row, 'keys') else (row or {}).keys()
+
+        def _val(name, default):
+            try:
+                return row[name] if name in keys else default
+            except Exception:
+                return default
+
         payload = _rank.rank_payload(
-            int(row.get('rank_tier') or 1),
-            int(row.get('rank_points') or 0),
-            streak=int(row.get('rank_streak') or 0),
+            int(_val('rank_tier', 1) or 1),
+            int(_val('rank_points', 0) or 0),
+            streak=int(_val('rank_streak', 0) or 0),
         )
         if include_special:
-            payload['special'] = float(row.get('rank_special') or 0.0)
+            payload['special'] = float(_val('rank_special', 0.0) or 0.0)
     return payload
 
 

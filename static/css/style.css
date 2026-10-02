@@ -2480,6 +2480,101 @@ a.title-shop-afdian-go:hover {
   grid-column: 1 / -1;
 }
 
+/* —— 段位徽章（2026-10-02）：大段稀有度填充色边框 + 小段卡面图标 —— */
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 2px solid var(--rank-color, #7F8C8D);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--rank-color, #7F8C8D) 18%, var(--bg-primary));
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1.4;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.rank-badge.is-empty {
+  opacity: 0.6;
+}
+.rank-badge-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+/* 小段卡面图标：不带外框/底色，只显示卡面本身 */
+.rank-badge-icon {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  vertical-align: middle;
+}
+.rank-badge-icon-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  font-size: 11px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--rank-color, #7F8C8D) 30%, transparent);
+}
+.rank-badge-streak {
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--rank-color, #7F8C8D);
+  color: #fff;
+  font-size: 10px;
+  font-style: normal;
+}
+
+.account-rank-progress-item {
+  grid-column: 1 / -1;
+}
+.rank-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+.rank-progress-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--bg-secondary, #2b2b33) 80%, transparent);
+  overflow: hidden;
+}
+.rank-progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--rank-color, #7F8C8D);
+  transition: width 0.4s ease;
+}
+.rank-progress-hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+/* 大厅玩家行的段位徽章 */
+.lobby-player-rank .rank-badge {
+  font-size: 11px;
+  padding: 1px 6px;
+}
+
+/* 对局结束的段位行 */
+.gameover-rank-flag {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--accent, #ffd94a);
+  white-space: nowrap;
+}
+
+/* 邀请预览的段位徽章 */
+.invite-gr-rank {
+  margin: 4px 0;
+}
+
 .account-gr-chart-svg {
   display: block;
   width: 100%;

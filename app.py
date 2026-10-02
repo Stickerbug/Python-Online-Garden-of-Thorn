@@ -11618,7 +11618,7 @@ ADMIN_COMMAND_TREE = {
     },
     'rating': {
         'hidden': True,
-        'summary': '花阶分与排行榜',
+        'summary': '花阶分与排行榜（后台）',
         'usage': 'rating <season|list|info|set|add|snapshot|rebuild> ...',
         'children': {
             'season': {'summary': '查看当前赛季信息', 'usage': 'rating season'},
@@ -11628,6 +11628,38 @@ ADMIN_COMMAND_TREE = {
             'add': {'summary': '手动增减花阶分', 'usage': 'rating add <ID|注册顺序|用户名> <season|total|both> <+/-数值> [原因]'},
             'snapshot': {'summary': '写入今天的花阶分曲线快照', 'usage': 'rating snapshot <ID|注册顺序|用户名>'},
             'rebuild': {'summary': '用历史 matches 摘要重建初始花阶分', 'usage': 'rating rebuild <preview|confirm>'},
+        },
+    },
+    'rank': {
+        'hidden': True,
+        'summary': '段位系统（玩家可见的进度）',
+        'usage': 'rank <info|set|settle>',
+        'children': {
+            'info': {'summary': '查看账号段位与特殊修正', 'usage': 'rank info <ID|注册顺序|用户名>'},
+            'set': {'summary': '直接设置段位与段位分', 'usage': 'rank set <ID|注册顺序|用户名> <段位序号1-44> [段位分]'},
+            'settle': {'summary': '手动触发段位月度结算（幂等）', 'usage': 'rank settle [月份YYYY-MM]'},
+        },
+    },
+    'rankmod': {
+        'hidden': True,
+        'summary': '段位特殊修正（胜加负减公式里的附加项，全局与玩家可叠加）',
+        'usage': 'rankmod <global|player|view> ...',
+        'children': {
+            'global': {
+                'summary': '设置全局特殊修正',
+                'usage': 'rankmod global <数值|clear>',
+                'children': {
+                    'set': {'summary': '设置全局特殊修正', 'usage': 'rankmod global <数值|clear>'},
+                },
+            },
+            'player': {
+                'summary': '设置玩家特殊修正',
+                'usage': 'rankmod player <账号> <数值|clear>',
+                'children': {
+                    'set': {'summary': '设置玩家特殊修正', 'usage': 'rankmod player <账号> <数值|clear>'},
+                },
+            },
+            'view': {'summary': '查看全局/玩家特殊修正', 'usage': 'rankmod view [账号]'},
         },
     },
     'chat': {
@@ -11727,6 +11759,12 @@ ADMIN_COMMAND_DIRECT_TRANSLATIONS = {
     ('account', 'rating', 'set'): 'rating-set',
     ('account', 'rating', 'add'): 'rating-add',
     ('account', 'rating', 'snapshot'): 'rating-snapshot',
+    ('rankmod', 'global', 'set'): 'rankmod',
+    ('rankmod', 'player', 'set'): 'rankmod',
+    ('rankmod', 'view'): 'rankmod',
+    ('rank', 'info'): 'rank-info',
+    ('rank', 'set'): 'rankset',
+    ('rank', 'settle'): 'rank-settle',
     ('account', 'reputation', 'info'): 'reputation-info',
     ('account', 'reputation', 'ledger'): 'reputation-ledger',
     ('account', 'reputation', 'add'): 'reputation-add',

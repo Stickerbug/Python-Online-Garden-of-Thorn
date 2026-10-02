@@ -1139,7 +1139,7 @@ I18N.zh = { ...I18N.en,
     gallery_type: '类型', gallery_cost: '费用', gallery_tags_label: '标签', gallery_description: '描述', gallery_effect: '效果', gallery_trigger: '触发',
     mode_select: '模式', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '无限火力', mode_random_deck: '随机卡组',
     mode_casual_1v1: '娱乐 1v1', mode_casual_2v2: '娱乐 2v2', mode_ranked_1v1: '天梯 1v1', mode_ranked_2v2: '天梯 2v2', mode_casual_urf: '无限火力', mode_casual_random_deck: '随机卡组',
-    ai_1v1_test: '对战 Phelren V1', ai_1v1_test_title: '对战 Phelren V1', ai_1v1_test_pending: '确认与 Phelren 进行 1v1 对局？本场对局不计花阶分，且仅使用原版模组。', ai_1v1_test_loading: '正在加载 Phelren V1…',
+    ai_1v1_test: '对战 Phelren V1', ai_1v1_test_title: '对战 Phelren V1', ai_1v1_test_pending: '确认与 Phelren 进行 1v1 对局？本场对局不计段位，且仅使用原版模组。', ai_1v1_test_loading: '正在加载 Phelren V1…',
     form_team: '组队', leave_team: '离开队伍', invite_team: '邀请队伍',
     team_invite_msg: '{0} 邀请你组队', team_formed_msg: '已与 {0} 组队',
     team_disbanded_msg: '队伍已解散', team_match_invite_msg: '队伍 {0} 向你们发起挑战',
@@ -1898,8 +1898,8 @@ Object.assign(I18N.en, { settings_story_hide_card_borders: 'Hide Story Mode card
 Object.assign(I18N.zh, { settings_story_hide_card_borders: '隐藏故事模式卡牌边框' });
 Object.assign(I18N.fr, { settings_story_hide_card_borders: 'Masquer les bordures des cartes du mode histoire' });
 Object.assign(I18N.ja, { settings_story_hide_card_borders: 'ストーリーモードのカード枠を隠す' });
-Object.assign(I18N.en, { official_mods: 'Official Mods', entertainment_mods: 'Entertainment Mods', entertainment_mods_note: 'Matches using any entertainment mod do not affect Garden Rating.', no_entertainment_mods: 'No entertainment mods yet', gr_unranked_entertainment: 'This match used an entertainment mod and did not affect GR.', community_mods: 'Community Mods', upload_mod: 'Upload Mod', refresh: 'Refresh', no_community_mods: 'No community mods found', mod_beta_warning: 'In testing, not recommended' });
-Object.assign(I18N.zh, { official_mods: '官方模组', entertainment_mods: '娱乐模组', entertainment_mods_note: '启用任一娱乐模组后，对局不计花阶分。', no_entertainment_mods: '暂无娱乐模组', gr_unranked_entertainment: '本局使用了娱乐模组，不计入花阶分。', community_mods: '社区模组', upload_mod: '上传模组', refresh: '刷新', no_community_mods: '未找到社区模组', mod_beta_warning: '测试中，不推荐使用' });
+Object.assign(I18N.en, { official_mods: 'Official Mods', entertainment_mods: 'Entertainment Mods', entertainment_mods_note: 'Matches using any entertainment mod do not affect your rank.', no_entertainment_mods: 'No entertainment mods yet', gr_unranked_entertainment: 'This match used an entertainment mod and did not affect your rank.', community_mods: 'Community Mods', upload_mod: 'Upload Mod', refresh: 'Refresh', no_community_mods: 'No community mods found', mod_beta_warning: 'In testing, not recommended' });
+Object.assign(I18N.zh, { official_mods: '官方模组', entertainment_mods: '娱乐模组', entertainment_mods_note: '启用任一娱乐模组后，对局不计段位。', no_entertainment_mods: '暂无娱乐模组', gr_unranked_entertainment: '本局使用了娱乐模组，不计入段位。', community_mods: '社区模组', upload_mod: '上传模组', refresh: '刷新', no_community_mods: '未找到社区模组', mod_beta_warning: '测试中，不推荐使用' });
 Object.assign(I18N.fr, { entertainment_mods: 'Mods détente', entertainment_mods_note: 'Les parties utilisant un mod détente ne modifient pas le Garden Rating.', no_entertainment_mods: 'Aucun mod détente', gr_unranked_entertainment: 'Cette partie utilisait un mod détente et n’a pas modifié le GR.', mod_beta_warning: 'En test, déconseillé' });
 Object.assign(I18N.ja, { entertainment_mods: 'エンタメMod', entertainment_mods_note: 'エンタメModを使用した対局はGarden Ratingに影響しません。', no_entertainment_mods: 'エンタメModはまだありません', gr_unranked_entertainment: 'エンタメModを使用したため、この対局はGRに影響しません。', mod_beta_warning: 'テスト中、非推奨' });
 Object.assign(I18N.en, { replay_download: 'Download' });
@@ -1972,7 +1972,7 @@ Object.assign(I18N.en, {
     account_new_password_confirm: 'Confirm New Password', account_change_password: 'Change Password', account_password_changed: 'Password changed',
     account_change_username: 'Change Username', account_info: 'Account Info', account_online_time: 'Total Match Time', thorn_dew: 'Thorn Dew', account_delete: 'Delete Account', stats: 'Stats',
     achievements: 'Achievements', achievements_title: 'Achievements & Thorn Dew', achievements_empty: 'No achievements yet.', achievements_hidden: 'Hidden achievement. Unlock it to reveal.',
-    leaderboard: 'Leaderboard', leaderboard_note: 'Ranked by Garden Rating. Season board needs 8 ranked games; total board needs 20.', leaderboard_empty: 'No ranked players yet.', leaderboard_loading: 'Loading leaderboard...', leaderboard_next_refresh: 'Refresh in {0}', leaderboard_gr: 'GR', leaderboard_season: 'Season', leaderboard_total: 'All-time', leaderboard_raw_rate: 'Win %', leaderboard_hide_titles: 'Hide Titles', leaderboard_show_titles: 'Show Titles',
+    leaderboard: 'Leaderboard', leaderboard_note: 'Ranked by rank tier. Season board needs 8 ranked games; total board needs 20.', leaderboard_empty: 'No ranked players yet.', leaderboard_loading: 'Loading leaderboard...', leaderboard_next_refresh: 'Refresh in {0}', leaderboard_gr: 'Rank', leaderboard_season: 'Season', leaderboard_total: 'All-time', leaderboard_raw_rate: 'Win %', leaderboard_hide_titles: 'Hide Titles', leaderboard_show_titles: 'Show Titles',
     account_login: 'Log In', account_register: 'Register', account_enter: 'Enter with Account', account_logout: 'Log Out',
     account_not_logged_in: 'Not logged in', account_logged_in_as: 'Signed in as {0}', account_stats: 'Games {0} / Wins {1} / Losses {2} / Draws {3}',
     account_need_login: 'Log in or register first', account_error: 'Account error', account_password_mismatch: 'Passwords do not match', guest_enter: 'Enter as Guest',
@@ -1984,7 +1984,7 @@ Object.assign(I18N.zh, {
     account_new_password_confirm: '确认新密码', account_change_password: '修改密码', account_password_changed: '密码已修改',
     account_change_username: '修改用户名', account_info: '账号信息', account_online_time: '总对局时长', thorn_dew: '荆露', account_delete: '注销账户', stats: '统计',
     achievements: '成就', achievements_title: '成就与荆露', achievements_empty: '暂无成就。', achievements_hidden: '隐藏成就，达成后揭晓。',
-    leaderboard: '排行榜', leaderboard_note: '排行按照花阶分计算。赛季榜需本赛季至少8场计分对局，总榜需至少20场计分对局。', leaderboard_empty: '暂无符合条件的玩家。', leaderboard_loading: '正在加载排行榜...', leaderboard_next_refresh: '刷新倒计时 {0}', leaderboard_gr: '花阶分', leaderboard_season: '赛季榜', leaderboard_total: '总榜', leaderboard_raw_rate: '胜率', leaderboard_hide_titles: '隐藏称号', leaderboard_show_titles: '显示称号',
+    leaderboard: '排行榜', leaderboard_note: '排行按照段位计算。赛季榜需本赛季至少8场计分对局，总榜需至少20场计分对局。', leaderboard_empty: '暂无符合条件的玩家。', leaderboard_loading: '正在加载排行榜...', leaderboard_next_refresh: '刷新倒计时 {0}', leaderboard_gr: '段位', leaderboard_season: '赛季榜', leaderboard_total: '总榜', leaderboard_raw_rate: '胜率', leaderboard_hide_titles: '隐藏称号', leaderboard_show_titles: '显示称号',
     account_login: '登录', account_register: '注册', account_enter: '账号进入', account_logout: '退出登录',
     account_not_logged_in: '未登录', account_logged_in_as: '已登录：{0}', account_stats: '对局 {0} / 胜 {1} / 负 {2} / 平 {3}',
     account_need_login: '请先登录或注册账号', account_error: '账号错误', account_password_mismatch: '两次输入的密码不一致', guest_enter: '游客进入',
@@ -1997,7 +1997,7 @@ Object.assign(I18N.fr, {
     account_change_username: 'Changer le nom', account_info: 'Compte', account_online_time: 'Temps total en match', thorn_dew: 'Rosée d’épines',
     achievements: 'Succès', achievements_title: 'Succès et Rosée', achievements_empty: 'Aucun succès.', achievements_hidden: 'Succès caché.',
     account_delete: 'Supprimer le compte', stats: 'Stats',
-    leaderboard: 'Classement', leaderboard_note: 'Classement par Garden Rating. Saison: 8 parties classées; total: 20.', leaderboard_empty: 'Aucun joueur classé.', leaderboard_loading: 'Chargement du classement...', leaderboard_next_refresh: 'Actualisation {0}', leaderboard_gr: 'GR', leaderboard_season: 'Saison', leaderboard_total: 'Total', leaderboard_raw_rate: 'Victoire', leaderboard_hide_titles: 'Masquer les titres', leaderboard_show_titles: 'Afficher les titres',
+    leaderboard: 'Classement', leaderboard_note: 'Classement par palier. Saison : 8 parties classées ; total : 20.', leaderboard_empty: 'Aucun joueur classé.', leaderboard_loading: 'Chargement du classement...', leaderboard_next_refresh: 'Actualisation {0}', leaderboard_gr: 'Rank', leaderboard_season: 'Saison', leaderboard_total: 'Total', leaderboard_raw_rate: 'Victoire', leaderboard_hide_titles: 'Masquer les titres', leaderboard_show_titles: 'Afficher les titres',
     account_login: 'Connexion', account_register: 'Inscription', account_enter: 'Entrer avec le compte', account_logout: 'Déconnexion',
     account_not_logged_in: 'Non connecté', account_logged_in_as: 'Connecté : {0}', account_stats: 'Parties {0} / V {1} / D {2} / N {3}',
     account_need_login: 'Connectez-vous ou inscrivez-vous', account_error: 'Erreur de compte', account_password_mismatch: 'Les mots de passe ne correspondent pas', guest_enter: 'Entrer en invité',
@@ -2010,7 +2010,7 @@ Object.assign(I18N.ja, {
     account_change_username: 'ユーザー名変更', account_info: 'アカウント情報', account_online_time: '総対戦時間', thorn_dew: 'ソーンデュー',
     achievements: '実績', achievements_title: '実績とソーンデュー', achievements_empty: '実績はありません。', achievements_hidden: '隠し実績です。',
     account_delete: 'アカウント削除', stats: '統計',
-    leaderboard: 'ランキング', leaderboard_note: 'Garden Ratingで順位を計算します。シーズン榜は8戦、総合榜は20戦以上が必要です。', leaderboard_empty: '該当プレイヤーはいません。', leaderboard_loading: 'ランキング読込中...', leaderboard_next_refresh: '更新まで {0}', leaderboard_gr: 'GR', leaderboard_season: 'シーズン', leaderboard_total: '総合', leaderboard_raw_rate: '勝率', leaderboard_hide_titles: '称号を隠す', leaderboard_show_titles: '称号を表示',
+    leaderboard: 'ランキング', leaderboard_note: '段位で順位を計算します。シーズン榜は8戦、総合榜は20戦以上が必要です。', leaderboard_empty: '該当プレイヤーはいません。', leaderboard_loading: 'ランキング読込中...', leaderboard_next_refresh: '更新まで {0}', leaderboard_gr: 'Rank', leaderboard_season: 'シーズン', leaderboard_total: '総合', leaderboard_raw_rate: '勝率', leaderboard_hide_titles: '称号を隠す', leaderboard_show_titles: '称号を表示',
     account_login: 'ログイン', account_register: '登録', account_enter: 'アカウントで入る', account_logout: 'ログアウト',
     account_not_logged_in: '未ログイン', account_logged_in_as: 'ログイン中: {0}', account_stats: '対戦 {0} / 勝 {1} / 負 {2} / 引分 {3}',
     account_need_login: '先にログインまたは登録してください', account_error: 'アカウントエラー', account_password_mismatch: 'パスワードが一致しません', guest_enter: 'ゲストで入る',
@@ -17889,6 +17889,87 @@ function formatGrValue(value) {
     return String(Math.round(n));
 }
 
+// —— 段位徽章（2026-10-02 设计）：花阶分转后台，玩家侧统一展示段位 ——
+// 徽章形如 【eric omega [basic图标] 132/200】：边框带大段稀有度填充色，
+// 小段图标 = Basic/Sewage/Disc/GoldenNazar 四张卡的卡面。
+const RANK_SUB_TIER_ICON_DEF = {
+    basic: 'Basic',
+    sewage: 'Sewage',
+    disc: 'Disc',
+    golden_nazar: 'GoldenNazar',
+};
+
+function normalizeRankData(rank) {
+    if (!rank || typeof rank !== 'object') return null;
+    const tierIndex = Math.max(1, Math.min(44, Number(rank.tier_index || 1)));
+    const cap = Math.max(1, Number(rank.cap || 20));
+    const points = Math.max(0, Math.min(cap, Number(rank.points || 0)));
+    return {
+        tierIndex,
+        tier: String(rank.tier || ''),
+        // 兼容两种来源：服务端载荷（sub_tier）与已归一化对象（subTier）。
+        subTier: String(rank.sub_tier ?? rank.subTier ?? ''),
+        label: String(rank.label || ''),
+        points,
+        cap,
+        streak: Math.max(0, Number(rank.streak || 0)),
+        color: /^#[0-9a-fA-F]{3,8}$/.test(String(rank.color || '')) ? rank.color : '#7F8C8D',
+    };
+}
+
+function rankCapitalizeWords(text) {
+    return String(text || '')
+        .split(/(\s+)/)
+        .map(part => (/\S/.test(part) ? part.charAt(0).toUpperCase() + part.slice(1) : part))
+        .join('');
+}
+
+function rankSubTierIconUrl(subTier) {
+    const defId = RANK_SUB_TIER_ICON_DEF[subTier];
+    if (!defId) return '';
+    const cardDef = getCardDef(defId);
+    return getCardArtUrl({}, cardDef || {});
+}
+
+function renderRankBadgeHtml(rank, options = {}) {
+    const data = normalizeRankData(rank);
+    if (!data) return '<span class="rank-badge is-empty">-</span>';
+    const showPoints = options.showPoints !== false;
+    const iconUrl = rankSubTierIconUrl(data.subTier);
+    const tierText = rankCapitalizeWords(data.tier);
+    const subText = rankCapitalizeWords(data.subTier.replace('_', ' '));
+    // 有小段卡面图标时不再重复显示小段文字（如 basic），图标即小段。
+    const icon = iconUrl
+        ? `<img class="rank-badge-icon" src="${escapeHtml(iconUrl)}" alt="${escapeHtml(subText)}" title="${escapeHtml(subText)}" loading="lazy">`
+        : `<span class="rank-badge-icon rank-badge-icon-fallback">${escapeHtml(subText.slice(0, 1))}</span>`;
+    const subLabel = iconUrl ? '' : subText;
+    const pointsText = showPoints ? ` ${data.points}/${data.cap}` : '';
+    const streakText = data.streak > 0 && showPoints
+        ? `<span class="rank-badge-streak">${data.streak}${options.streakLabel || lt({ zh: '连胜', en: 'W', fr: 'V', ja: '連勝' })}</span>`
+        : '';
+    const title = data.label ? rankCapitalizeWords(data.label.replace('_', ' ')) : `${tierText} ${subText}`;
+    return `<span class="rank-badge" style="--rank-color:${data.color}" title="${escapeHtml(title)}">` +
+        `<span class="rank-badge-text">${escapeHtml(tierText)}${icon}${escapeHtml(subLabel)}${escapeHtml(pointsText)}</span>` +
+        streakText +
+        '</span>';
+}
+
+function renderRankProgressHtml(rank) {
+    const data = normalizeRankData(rank);
+    if (!data) return '<div class="account-replay-sub">-</div>';
+    const pct = Math.min(100, Math.round((data.points / data.cap) * 100));
+    const hint = data.streak > 0
+        ? lt({ zh: `距升段还需 ${2 - data.streak} 胜`, en: `${2 - data.streak} wins to promote`, fr: `${2 - data.streak} victoires pour monter`, ja: `昇段まであと${2 - data.streak}勝` })
+        : lt({ zh: '到上限后再 2 连胜升段', en: 'Reach cap, then 2 wins to promote', fr: 'Atteignez le plafond puis 2 victoires', ja: '上限後2連勝で昇段' });
+    return `
+        <div class="rank-progress" style="--rank-color:${data.color}">
+            ${renderRankBadgeHtml(data)}
+            <div class="rank-progress-bar"><div class="rank-progress-fill" style="width:${pct}%"></div></div>
+            <div class="rank-progress-hint">${escapeHtml(hint)}</div>
+        </div>
+    `;
+}
+
 function renderGrMiniChart(history) {
     const points = (Array.isArray(history) ? history : [])
         .map(item => ({
@@ -19358,10 +19439,8 @@ function renderAccountInfoPanel(user) {
     const thornDewTotal = Math.max(0, Number(user.thorn_dew_total ?? (thornDewFree + thornDewPaid)) || 0);
     const items = [
         [currentLang === 'zh' ? '信誉' : 'Reputation', user.reputation_profile?.value ?? user.reputation ?? 85],
-        ...(user.reputation_profile?.linked_gr_band ? [[currentLang === 'zh' ? '关联组最高总花阶分' : 'Linked highest GR', user.reputation_profile.linked_gr_band.label]] : []),
-        [currentLang === 'zh' ? '赛季花阶分' : 'Season GR', formatGrValue(user.season_gr)],
-        [currentLang === 'zh' ? '总花阶分' : 'Total GR', formatGrValue(user.total_gr)],
-        [currentLang === 'zh' ? '历史最高' : 'Best GR', formatGrValue(user.highest_gr)],
+        // 2026-10-02：段位替代花阶分展示（花阶分只在后台运行）。
+        [currentLang === 'zh' ? '段位' : 'Rank', renderRankBadgeHtml(user.rank), 'html'],
         [currentLang === 'zh' ? '本赛季计分局' : 'Season Ranked', user.season_ranked_games || 0],
         [currentLang === 'zh' ? '有效对局数' : 'Valid Games', games],
         [currentLang === 'zh' ? '胜率' : 'Win Rate', winRate],
@@ -19369,15 +19448,15 @@ function renderAccountInfoPanel(user) {
         [UI.account_online_time || '总对局时长', formatAccountPlayTime(user.play_seconds ?? 0)],
         [UI.thorn_dew || '荆露', thornDewTotal, true],
     ];
-    grid.innerHTML = items.map(([label, value, isDew]) => `
+    grid.innerHTML = items.map(([label, value, kind]) => `
         <div class="account-info-item">
             <span class="account-info-label">${escapeHtml(label)}</span>
-            <span class="account-info-value">${isDew ? thornDewAmountHtml(value) : escapeHtml(value)}</span>
+            <span class="account-info-value">${kind === 'html' ? value : (kind === true ? thornDewAmountHtml(value) : escapeHtml(value))}</span>
         </div>
     `).join('') + `
-        <div class="account-info-item account-gr-chart-item">
-            <span class="account-info-label">${escapeHtml(currentLang === 'zh' ? '花阶分变化' : 'Rating Trend')}</span>
-            ${renderGrMiniChart(user.gr_history || [])}
+        <div class="account-info-item account-rank-progress-item">
+            <span class="account-info-label">${escapeHtml(currentLang === 'zh' ? '段位进度' : 'Rank Progress')}</span>
+            ${renderRankProgressHtml(user.rank)}
         </div>
     `;
 }
@@ -21566,15 +21645,13 @@ function leaderboardRowHtml(item, rank, extraClass = '') {
     const losses = Number(item && item.losses || 0) || 0;
     const draws = Number(item && item.draws || 0) || 0;
     const rate = Number(item && item.win_rate || 0);
-    const gr = Number(item && item.gr != null ? item.gr : (leaderboardScope === 'total' ? item.total_gr : item.season_gr));
     const rateText = `${Number.isInteger(rate) ? rate.toFixed(0) : rate.toFixed(1)}%`;
-    const grText = Number.isFinite(gr) ? formatGrValue(gr) : '-';
     const rankClass = leaderboardRankClass(rank);
     return `
         <div class="leaderboard-row${extraClass ? ` ${extraClass}` : ''}">
             <span class="leaderboard-rank ${rankClass}">${escapeHtml(String(rank || '-'))}</span>
             <span class="leaderboard-name ${rankClass}">${playerNameHtml(item || {}, { adminPrefix: true, showTitles: !leaderboardHideTitles })}</span>
-            <span class="leaderboard-rate leaderboard-gr">${escapeHtml(grText)}</span>
+            <span class="leaderboard-rate leaderboard-gr">${renderRankBadgeHtml(item && item.rank_info)}</span>
             <span class="leaderboard-rate">${escapeHtml(rateText)}</span>
             <span class="leaderboard-games">${games}</span>
             <span class="leaderboard-wins">${wins}</span>
@@ -21586,8 +21663,8 @@ function leaderboardRowHtml(item, rank, extraClass = '') {
 
 function leaderboardHeaderHtml() {
     const labels = currentLang === 'zh'
-        ? ['排行', '昵称', UI.leaderboard_gr || '花阶分', UI.leaderboard_raw_rate || '胜率', '总局数', '胜场', '败场', '平场']
-        : ['Rank', 'Name', UI.leaderboard_gr || 'GR', UI.leaderboard_raw_rate || 'Win %', 'Games', 'Wins', 'Losses', 'Draws'];
+        ? ['排行', '昵称', '段位', UI.leaderboard_raw_rate || '胜率', '总局数', '胜场', '败场', '平场']
+        : ['Rank', 'Name', 'Rank', UI.leaderboard_raw_rate || 'Win %', 'Games', 'Wins', 'Losses', 'Draws'];
     return `<div class="leaderboard-row leaderboard-head">
         ${labels.map((label, idx) => {
             const cls = idx === 1 ? 'leaderboard-name' : '';
@@ -21647,10 +21724,15 @@ function startLeaderboardRefreshTimer() {
 function renderLeaderboardItems(items, selfRank = null) {
     const list = $('leaderboard-list');
     if (!list) return;
+    // 2026-10-02：排行按段位（序号、段位分、连胜）排；同段位按计分局数。
+    const rankScore = item => {
+        const r = normalizeRankData(item && item.rank_info);
+        return r ? (r.tierIndex * 1000000 + r.points * 100 + r.streak) : 0;
+    };
     const rows = (Array.isArray(items) ? [...items] : []).sort((a, b) => {
-        const scoreA = Number(a && a.gr != null ? a.gr : (leaderboardScope === 'total' ? (a && a.total_gr) : (a && a.season_gr)) || 0);
-        const scoreB = Number(b && b.gr != null ? b.gr : (leaderboardScope === 'total' ? (b && b.total_gr) : (b && b.season_gr)) || 0);
-        if (Math.abs(scoreB - scoreA) >= 0.0001) return scoreB - scoreA;
+        const scoreB = rankScore(b);
+        const scoreA = rankScore(a);
+        if (scoreB !== scoreA) return scoreB - scoreA;
         const gamesKey = leaderboardScope === 'total' ? 'total_ranked_games' : 'season_ranked_games';
         return Number(b && b[gamesKey] || 0) - Number(a && a[gamesKey] || 0);
     });
@@ -21659,8 +21741,8 @@ function renderLeaderboardItems(items, selfRank = null) {
     let previousRank = 0;
     const renderedRows = rows.map((item, index) => {
         const isSelf = currentId && item && item.id != null && String(item.id) === currentId;
-        const score = Number(item && item.gr != null ? item.gr : (leaderboardScope === 'total' ? (item && item.total_gr) : (item && item.season_gr)) || 0);
-        const rank = previousScore !== null && Math.abs(score - previousScore) < 0.0001 ? previousRank : index + 1;
+        const score = rankScore(item);
+        const rank = previousScore !== null && score === previousScore ? previousRank : index + 1;
         previousScore = score;
         previousRank = rank;
         return leaderboardRowHtml(item, rank, isSelf ? 'is-self-rank' : '');
@@ -27479,11 +27561,11 @@ function renderLobby(data) {
             badge.textContent = UI.spectating_status || '观战中';
             row.appendChild(badge);
         }
-        if (isRankedMatchMode(currentMode) && p.is_registered_user && p.season_gr != null) {
-            const gr = document.createElement('span');
-            gr.className = 'lobby-player-gr';
-            gr.textContent = currentLang === 'zh' ? `花阶分 ${formatGrValue(p.season_gr)}` : `GR ${formatGrValue(p.season_gr)}`;
-            row.appendChild(gr);
+        if (isRankedMatchMode(currentMode) && p.is_registered_user && p.rank) {
+            const rankEl = document.createElement('span');
+            rankEl.className = 'lobby-player-gr lobby-player-rank';
+            rankEl.innerHTML = renderRankBadgeHtml(p.rank);
+            row.appendChild(rankEl);
         }
         const actions = document.createElement('div');
         actions.className = 'lobby-player-actions';
@@ -37427,25 +37509,28 @@ function renderInviteGrPreview(data = {}) {
         return text ? `<p class="invite-gr-preview is-neutral">${escapeHtml(text)}</p>` : '';
     }
     const viewer = preview.viewer || {};
+    // 2026-10-02：邀请预览展示段位（标签来自服务端，平局恒为 ±0 不再单列）。
+    const badge = viewer.label
+        ? `<div class="invite-gr-rank">${renderRankBadgeHtml({
+            label: viewer.label,
+            points: viewer.points,
+            cap: viewer.cap,
+        })}</div>`
+        : '';
     const rows = [
         [currentLang === 'zh' ? '胜利' : 'Win', viewer.win_delta],
-        [currentLang === 'zh' ? '平局' : 'Draw', viewer.draw_delta],
         [currentLang === 'zh' ? '失败' : 'Loss', viewer.loss_delta],
     ];
-    const repeat = Number(preview.repeat_factor || 1);
-    const repeatText = repeat < 0.999
-        ? `<div class="invite-gr-repeat">${escapeHtml(currentLang === 'zh' ? `重复对局衰减 ×${repeat.toFixed(2)}` : `Repeat match factor ×${repeat.toFixed(2)}`)}</div>`
-        : '';
     return `
         <div class="invite-gr-preview-card">
-            <div class="invite-gr-title">${escapeHtml(currentLang === 'zh' ? '花阶分预估' : 'Garden Rating Preview')}</div>
+            <div class="invite-gr-title">${escapeHtml(currentLang === 'zh' ? '段位预估' : 'Rank Preview')}</div>
+            ${badge}
             ${rows.map(([label, delta]) => `
                 <div class="invite-gr-row">
                     <span>${escapeHtml(label)}</span>
-                    <b class="${escapeHtml(grDeltaClass(delta))}">${escapeHtml(formatGrDelta(delta))}</b>
+                    <b class="${escapeHtml(grDeltaClass(delta))}">${escapeHtml((Number(delta) >= 0 ? '+' : '') + String(delta))}</b>
                 </div>
             `).join('')}
-            ${repeatText}
         </div>
     `;
 }
@@ -37478,41 +37563,48 @@ function renderGameOverGr(gs = {}) {
     const gr = summary.gr_result || gs.gr_result || null;
     box.innerHTML = '';
     box.classList.add('hidden');
-    const title = currentLang === 'zh' ? '花阶分' : 'Garden Rating';
+    const title = currentLang === 'zh' ? '段位' : 'Rank';
     if (!gr) return;
     if (!gr.applied) {
         const reason = gr.reason || summary.ranking_invalid_reason || '';
         const text = reason === 'entertainment_mod'
             ? UI.gr_unranked_entertainment
             : (currentLang === 'zh'
-                ? `本局不计入花阶分${reason ? `（${reason}）` : ''}`
-                : `This match did not affect GR${reason ? ` (${reason})` : ''}`);
+                ? `本局不计入段位${reason ? `（${reason}）` : ''}`
+                : `This match did not affect your rank${reason ? ` (${reason})` : ''}`);
         box.innerHTML = `<div class="gameover-gr-title">${escapeHtml(title)}</div><div class="gameover-gr-muted">${escapeHtml(text)}</div>`;
         box.classList.remove('hidden');
         return;
     }
     const playerIds = Array.isArray(summary.player_ids) ? summary.player_ids : [];
     const names = Array.isArray(summary.players) ? summary.players : [];
-    const seasonDeltas = gr.season_deltas || {};
-    const before = gr.before || {};
-    const after = gr.after || {};
+    // 2026-10-02：对局结束展示段位变化（花阶分只在后台）。
+    const rankResult = gr.rank || {};
+    const rankAfter = rankResult.after || {};
+    const rankKeys = Object.keys(rankAfter);
     const rows = [];
-    playerIds.forEach((uid, idx) => {
-        if (uid === null || uid === undefined || uid === '') return;
-        const key = String(uid);
-        const delta = seasonDeltas[key];
-        if (delta === undefined) return;
-        const oldGr = before[key] && before[key].season_gr;
-        const newGr = after[key] && after[key].season_gr;
-        const isMe = currentAccount && String(currentAccount.id) === key;
-        rows.push(`
-            <div class="gameover-gr-row${isMe ? ' is-self' : ''}">
-                <span>${escapeHtml(names[idx] || `P${idx + 1}`)}</span>
-                <span>${escapeHtml(formatGrValue(oldGr))} → ${escapeHtml(formatGrValue(newGr))}</span>
-                <b class="${Number(delta) >= 0 ? 'positive' : 'negative'}">${escapeHtml(formatGrDelta(delta))}</b>
-            </div>
-        `);
-    });
+    if (rankKeys.length) {
+        playerIds.forEach((uid, idx) => {
+            if (uid === null || uid === undefined || uid === '') return;
+            const key = String(uid);
+            const afterEntry = rankAfter[key];
+            if (!afterEntry) return;
+            const isMe = currentAccount && String(currentAccount.id) === key;
+            const delta = Number(afterEntry.delta || 0);
+            const flags = [];
+            if (afterEntry.promoted) flags.push(lt({ zh: '升段！', en: 'Promoted!', fr: 'Promu !', ja: '昇段！' }));
+            if (afterEntry.demoted) flags.push(lt({ zh: '降段', en: 'Demoted', fr: 'Rétrogradé', ja: '降段' }));
+            if (afterEntry.daily_double) flags.push(lt({ zh: '双倍', en: '×2', fr: '×2', ja: '倍増' }));
+            rows.push(`
+                <div class="gameover-gr-row${isMe ? ' is-self' : ''}">
+                    <span>${escapeHtml(names[idx] || `P${idx + 1}`)}</span>
+                    <span>${renderRankBadgeHtml(afterEntry)}</span>
+                    <b class="${delta >= 0 ? 'positive' : 'negative'}">${delta >= 0 ? '+' : ''}${delta}</b>
+                    ${flags.length ? `<i class="gameover-rank-flag">${escapeHtml(flags.join(' · '))}</i>` : ''}
+                </div>
+            `);
+        });
+    }
     const repeat = Number(gr.repeat_factor || 1);
     const repeatText = repeat < 0.999
         ? `<div class="gameover-gr-muted">${escapeHtml(currentLang === 'zh' ? `重复对局衰减：×${repeat.toFixed(2)}` : `Repeat match factor: ×${repeat.toFixed(2)}`)}</div>`
