@@ -1490,9 +1490,9 @@ a.title-shop-afdian-go:hover {
 
 .leaderboard-row {
   display: grid;
-  /* 2026-10-02：段位上线后移动端整行超宽被截断——胜/负/平合并为一栏
-   * （如 26/104/5），数字列压窄、去掉 458px 硬最小宽，昵称列弹性收纳。 */
-  grid-template-columns: 36px minmax(64px, 1fr) max-content 48px 46px max-content;
+  /* 2026-10-03：胜/负/平合并后腾出的宽度按比例分给各列（此前全归昵称列，
+   * 右侧数字列被挤到右缘），各列内容仍居中。 */
+  grid-template-columns: 36px minmax(64px, 1.5fr) minmax(max-content, 1.1fr) minmax(48px, 0.7fr) minmax(46px, 0.7fr) minmax(max-content, 0.9fr);
   min-width: 0;
   align-items: center;
   gap: 0;
@@ -1535,8 +1535,8 @@ a.title-shop-afdian-go:hover {
     gap: 2px;
   }
   .leaderboard-gr .rank-badge-icon {
-    width: 16px;
-    height: 16px;
+    width: 20px;
+    height: 20px;
   }
 }
 
@@ -2530,8 +2530,8 @@ a.title-shop-afdian-go:hover {
 }
 /* 小段卡面图标：不带外框/底色，只显示卡面本身 */
 .rank-badge-icon {
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
   object-fit: contain;
   vertical-align: middle;
 }
