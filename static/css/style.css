@@ -9970,6 +9970,18 @@ html.blind-level-4 .card-prediction-part.magic {
   border-color: rgba(122, 92, 255, 0.34);
 }
 
+.card-flag.unfading {
+  color: #B54708;
+  background: rgba(181, 71, 8, 0.12);
+  border-color: rgba(181, 71, 8, 0.3);
+}
+
+.card-flag.stand-ready {
+  color: #4A6FA5;
+  background: rgba(74, 111, 165, 0.12);
+  border-color: rgba(74, 111, 165, 0.3);
+}
+
 .card-flag.magic-swift {
   color: #6C5CE7;
   background: rgba(108, 92, 231, 0.15);
@@ -21394,6 +21406,8 @@ html[data-ui-style="minimal"][data-theme="dark"] .card,
 [data-theme="dark"] .card-flag.temp-swift { color: #70D1F5; }
 [data-theme="dark"] .card-flag.temp-heavy { color: #D0AAA0; }
 [data-theme="dark"] .card-flag.temp-magic-heavy { color: #B4A1FF; }
+[data-theme="dark"] .card-flag.unfading { color: #E8A25C; }
+[data-theme="dark"] .card-flag.stand-ready { color: #8FB4E8; }
 [data-theme="dark"] .card-flag.magic-swift { color: #ACA0FF; }
 [data-theme="dark"] .card-flag.power { color: #F0786C; }
 [data-theme="dark"] .card-flag.team-limited { color: #B8D27F; }

@@ -15072,7 +15072,13 @@ function addFlagIntroItem(items, seen, flag) {
     // 词条库只维护一条「不灭」，无需为每种组合单独成文。
     if (normalized === 'unfading_power' || normalized === 'unfading_fission') {
         addFlagIntroItem(items, seen, 'unfading');
-        addFlagIntroItem(items, seen, normalized === 'unfading_power' ? 'power' : 'fission_layer');
+        // 属性词条用与卡面层数相同的键（power=flag:power，裂变=fission_layer），
+        // seen 去重生效，避免同屏出现两条裂变。
+        if (normalized === 'unfading_power') {
+            addFlagIntroItem(items, seen, 'power');
+        } else {
+            addTermIntroItem(items, seen, 'fission_layer');
+        }
         return;
     }
     // 「暂时X」的术语介绍就是 X 的词条（其中已说明暂时位），不单独成文
