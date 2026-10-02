@@ -1477,9 +1477,13 @@ a.title-shop-afdian-go:hover {
 }
 
 .leaderboard-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
+  /* 2026-10-03：列对齐——列表自身成为网格，各行经 subgrid 共享同一组列轨道；
+   * 此前每行是独立网格、max-content 各自计算，段位等列逐行错位且表头对不齐。
+   * 不支持 subgrid 的旧浏览器自动退回行内网格（各行独立，同旧版行为）。 */
+  display: grid;
+  grid-template-columns: 36px minmax(64px, 1.5fr) minmax(max-content, 1.1fr) minmax(48px, 0.7fr) minmax(46px, 0.7fr) minmax(max-content, 0.9fr);
+  align-content: start;
+  gap: 1px 0;
   border: 0;
   border-radius: var(--radius-sm);
   overflow: auto;
@@ -1490,8 +1494,9 @@ a.title-shop-afdian-go:hover {
 
 .leaderboard-row {
   display: grid;
+  grid-column: 1 / -1;
   /* 2026-10-03：胜/负/平合并后腾出的宽度按比例分给各列（此前全归昵称列，
-   * 右侧数字列被挤到右缘），各列内容仍居中。 */
+   * 右侧数字列被挤到右缘），各列内容仍居中；subgrid 生效时本模板被覆盖。 */
   grid-template-columns: 36px minmax(64px, 1.5fr) minmax(max-content, 1.1fr) minmax(48px, 0.7fr) minmax(46px, 0.7fr) minmax(max-content, 0.9fr);
   min-width: 0;
   align-items: center;
@@ -1517,6 +1522,9 @@ a.title-shop-afdian-go:hover {
 
 /* 移动端紧凑档：合并后的胜/负/平一栏足够放下，徽章同步缩小。 */
 @media (max-width: 600px) {
+  .leaderboard-list {
+    grid-template-columns: 28px minmax(44px, 1fr) max-content 40px 36px max-content;
+  }
   .leaderboard-row {
     grid-template-columns: 28px minmax(44px, 1fr) max-content 40px 36px max-content;
     font-size: 10px;
@@ -1537,6 +1545,14 @@ a.title-shop-afdian-go:hover {
   .leaderboard-gr .rank-badge-icon {
     width: 20px;
     height: 20px;
+  }
+}
+
+/* 须置于上方媒体查询之后：subgrid 覆盖各宽度下的行内模板，让全部行与
+ * 表头共享列表级列轨道，彻底消除逐行错位。 */
+@supports (grid-template-columns: subgrid) {
+  .leaderboard-row {
+    grid-template-columns: subgrid;
   }
 }
 
