@@ -9,6 +9,8 @@ import re
 import sqlite3
 import time
 import random
+
+import rank_system as _rank
 from contextlib import closing
 from collections import Counter
 from datetime import datetime, timedelta, timezone
@@ -979,6 +981,40 @@ def init_db(
             conn.execute('ALTER TABLE users ADD COLUMN season_ranked_games INTEGER DEFAULT 0')
         if 'gr_season_id' not in existing_columns:
             conn.execute("ALTER TABLE users ADD COLUMN gr_season_id TEXT DEFAULT 'S1'")
+        # 段位系统（设计 2026-10-02）：花阶分（GR）转入后台只算不显，玩家侧
+        # 展示段位。列一次性成组添加；首次添加后按当前赛季花阶分回填段位。
+        rank_columns_added = False
+        if 'rank_tier' not in existing_columns:
+            conn.execute('ALTER TABLE users ADD COLUMN rank_tier INTEGER NOT NULL DEFAULT 1')
+            conn.execute('ALTER TABLE users ADD COLUMN rank_points INTEGER NOT NULL DEFAULT 0')
+            conn.execute('ALTER TABLE users ADD COLUMN rank_streak INTEGER NOT NULL DEFAULT 0')
+            conn.execute('ALTER TABLE users ADD COLUMN rank_special REAL NOT NULL DEFAULT 0')
+            conn.execute("ALTER TABLE users ADD COLUMN rank_daily_key TEXT NOT NULL DEFAULT ''")
+            conn.execute('ALTER TABLE users ADD COLUMN rank_daily_count INTEGER NOT NULL DEFAULT 0')
+            conn.execute("ALTER TABLE users ADD COLUMN rank_settled_month TEXT NOT NULL DEFAULT ''")
+            rank_columns_added = True
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS rank_global_settings (
+                singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+                special_correction REAL NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL
+            )
+        ''')
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS rank_monthly_settlements (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                month_key TEXT NOT NULL,
+                user_id INTEGER NOT NULL,
+                before_json TEXT NOT NULL,
+                after_json TEXT NOT NULL,
+                dew_granted INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                UNIQUE (month_key, user_id)
+            )
+        ''')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_users_rank ON users(rank_tier, rank_points)')
+        if rank_columns_added:
+            _backfill_ranks_from_season_gr(conn)
         if 'keybindings_json' not in existing_columns:
             conn.execute('ALTER TABLE users ADD COLUMN keybindings_json TEXT')
         if 'keybindings_revision' not in existing_columns:
@@ -5308,6 +5344,12 @@ def row_to_user(row):
         'total_ranked_games': int(row['total_ranked_games'] or 0) if 'total_ranked_games' in row.keys() else 0,
         'season_ranked_games': int(row['season_ranked_games'] or 0) if 'season_ranked_games' in row.keys() else 0,
         'gr_season_id': row['gr_season_id'] if 'gr_season_id' in row.keys() else current_gr_season()['id'],
+        # 2026-10-02：段位对玩家展示（rank 字段）；花阶分仅供服务端内部继续计算。
+        'rank': _rank.rank_payload(
+            int(row['rank_tier'] or 1) if 'rank_tier' in row.keys() else 1,
+            int(row['rank_points'] or 0) if 'rank_points' in row.keys() else 0,
+            streak=int(row['rank_streak'] or 0) if 'rank_streak' in row.keys() else 0,
+        ),
         'keybindings': _keybindings_from_row(row),
     }
     data['thorn_dew_total'] = data['thorn_dew_free'] + data['thorn_dew_paid']
@@ -7217,20 +7259,17 @@ def _leaderboard_payload(row, rank=None, scope='season', equipped_titles=None, n
     wins = int(row['wins'] or 0)
     losses = int(row['losses'] or 0)
     draws = int(row['draws'] or 0)
-    season_gr = float(row['season_gr'] or GR_INITIAL) if 'season_gr' in row.keys() else float(GR_INITIAL)
-    total_gr = float(row['total_gr'] or GR_INITIAL) if 'total_gr' in row.keys() else float(GR_INITIAL)
-    gr_value = season_gr if scope == 'season' else total_gr
     payload = {
         'id': row['id'],
         'username': row['username'],
         'player_id': row['player_id'],
         'scope': scope,
-        'gr': round(gr_value, 1),
-        'season_gr': round(season_gr, 1),
-        'total_gr': round(total_gr, 1),
-        'highest_gr': round(float(row['highest_gr'] or GR_INITIAL), 1) if 'highest_gr' in row.keys() else float(GR_INITIAL),
-        'season_ranked_games': int(row['season_ranked_games'] or 0) if 'season_ranked_games' in row.keys() else 0,
-        'total_ranked_games': int(row['total_ranked_games'] or 0) if 'total_ranked_games' in row.keys() else 0,
+        # 2026-10-02：排行榜按段位展示；花阶分只在后台（管理端）可见。
+        'rank_info': _rank.rank_payload(
+            int(row['rank_tier'] or 1) if 'rank_tier' in row.keys() else 1,
+            int(row['rank_points'] or 0) if 'rank_points' in row.keys() else 0,
+            streak=int(row['rank_streak'] or 0) if 'rank_streak' in row.keys() else 0,
+        ),
         'gr_season_id': row['gr_season_id'] if 'gr_season_id' in row.keys() else current_gr_season()['id'],
         'games_played': games,
         'wins': wins,
@@ -7263,21 +7302,24 @@ def list_leaderboard(min_games=None, limit=50, scope='season'):
         rows = conn.execute(
             f'''
             SELECT id, username, player_id, games_played, wins, losses, draws,
-                   season_gr, total_gr, highest_gr, season_ranked_games, total_ranked_games, gr_season_id
+                   rank_tier, rank_points, rank_streak,
+                   season_ranked_games, total_ranked_games, gr_season_id
             FROM users
             WHERE deleted_at IS NULL
               AND COALESCE(banned, 0) = 0
               AND COALESCE({games_col}, 0) >= ?
               AND COALESCE(games_played, 0) >= ?
               {season_filter}
-              ORDER BY
-                COALESCE({gr_col}, ?) DESC,
+            ORDER BY
+                COALESCE(rank_tier, 1) DESC,
+                COALESCE(rank_points, 0) DESC,
+                COALESCE(rank_streak, 0) DESC,
                 COALESCE({games_col}, 0) DESC,
                 wins DESC,
                 username_lower ASC
             LIMIT ?
             ''',
-            (params[0], min_games, *params[1:-1], GR_INITIAL, params[-1]),
+            (params[0], min_games, *params[1:-1], params[-1]),
         ).fetchall()
         titles_by_user = _equipped_titles_by_user_conn(conn, [row['id'] for row in rows])
         name_styles_by_user = {
@@ -7316,7 +7358,8 @@ def get_leaderboard_rank(user_id, min_games=None, scope='season'):
         row = conn.execute(
             f'''
             SELECT id, username, player_id, games_played, wins, losses, draws,
-                   season_gr, total_gr, highest_gr, season_ranked_games, total_ranked_games, gr_season_id
+                   rank_tier, rank_points, rank_streak,
+                   season_ranked_games, total_ranked_games, gr_season_id
             FROM users
             WHERE id = ?
               AND deleted_at IS NULL
@@ -7340,12 +7383,14 @@ def get_leaderboard_rank(user_id, min_games=None, scope='season'):
               AND COALESCE(games_played, 0) >= ?
               {season_filter}
             ORDER BY
-              COALESCE({gr_col}, ?) DESC,
-              COALESCE({games_col}, 0) DESC,
-              wins DESC,
-              username_lower ASC
+                COALESCE(rank_tier, 1) DESC,
+                COALESCE(rank_points, 0) DESC,
+                COALESCE(rank_streak, 0) DESC,
+                COALESCE({games_col}, 0) DESC,
+                wins DESC,
+                username_lower ASC
             ''',
-            (rank_params[0], min_games, *rank_params[1:], GR_INITIAL),
+            (rank_params[0], min_games, *rank_params[1:]),
         ).fetchall()
         rank = 0
         for idx, ranked in enumerate(ranked_rows, start=1):
@@ -14268,6 +14313,61 @@ def _gr_winner_side_from_summary(summary, team_a, team_b):
     return None, False
 
 
+def preview_rank_match_result(mode, player_ids, viewer_user_id=None):
+    """邀请预览：按段位规则算出胜负增减（确定值，无需模拟）。
+
+    mode: '1v1' | '2v2'（引擎模式）。player_ids 按座位顺序；viewer 的
+    对手 = 同局其余玩家（2v2 取段位均值）。特殊修正按全局 + 本人叠加。
+    """
+    mode = str(mode or '').lower()
+    if mode not in ('1v1', '2v2'):
+        return {'applied': False, 'reason': 'unsupported_mode'}
+    ids = []
+    for value in player_ids or []:
+        if value is None:
+            return {'applied': False, 'reason': 'guest_participant'}
+        try:
+            ids.append(int(value))
+        except (TypeError, ValueError):
+            return {'applied': False, 'reason': 'guest_participant'}
+    if not ids:
+        return {'applied': False, 'reason': 'missing_player_ids'}
+    try:
+        viewer_uid = int(viewer_user_id) if viewer_user_id is not None else ids[0]
+    except (TypeError, ValueError):
+        viewer_uid = ids[0]
+    if viewer_uid not in ids:
+        return {'applied': False, 'reason': 'viewer_not_in_match'}
+    with get_db_connection() as conn:
+        rows = conn.execute(
+            f"SELECT id, rank_tier, rank_points, rank_special FROM users WHERE id IN ({','.join(['?'] * len(ids))})",
+            ids,
+        ).fetchall()
+        by_id = {int(row['id']): row for row in rows}
+        if len(by_id) != len(set(ids)):
+            return {'applied': False, 'reason': 'unknown_user'}
+        global_special = get_rank_global_special(conn)
+    own = by_id[viewer_uid]
+    own_tier = int(own['rank_tier'] or 1)
+    opponents = [by_id[uid] for uid in ids if uid != viewer_uid]
+    # 2v2：其余三人里，对手是敌方的两个；预览不区分敌我时取其余玩家均值，
+    # 与实战口径（敌方均值）在邀请场景下足够接近（双方段位已知）。
+    opp_avg = _rank.opponent_tier_average([int(o['rank_tier'] or 1) for o in opponents])
+    special_total = global_special + float(own['rank_special'] or 0.0)
+    payload = _rank.rank_payload(own_tier, int(own['rank_points'] or 0))
+    return {
+        'applied': True,
+        'viewer': {
+            'label': payload['label'],
+            'points': payload['points'],
+            'cap': payload['cap'],
+            'win_delta': _rank.match_gain(own_tier, opp_avg, special_total),
+            'draw_delta': 0,
+            'loss_delta': _rank.match_loss(own_tier, opp_avg, special_total),
+        },
+    }
+
+
 def preview_gr_match_result(mode, player_ids, viewer_user_id=None):
     """Preview season GR deltas for a possible 1v1/2v2 match without writes."""
     mode = str(mode or '').lower()
@@ -14960,6 +15060,187 @@ def restore_legacy_gr_archives(dry_run=True):
     return summary
 
 
+def _backfill_ranks_from_season_gr(conn):
+    """首次引入段位列时，按当前赛季花阶分换算初始段位（rank_system 口径）。"""
+    import rank_system as _rank
+    rows = conn.execute('SELECT id, season_gr FROM users').fetchall()
+    updates = []
+    for row in rows:
+        tier, points = _rank.gr_to_rank(row['season_gr'])
+        updates.append((tier, points, int(row['id'])))
+    conn.executemany(
+        'UPDATE users SET rank_tier = ?, rank_points = ? WHERE id = ?',
+        updates,
+    )
+
+
+def get_rank_global_special(conn=None) -> float:
+    """全局特殊修正（控制台可调；与玩家自身的特殊修正叠加）。"""
+    import rank_system as _rank  # noqa: F401  保持导入口径一致
+    if conn is None:
+        with get_db_connection() as own:
+            row = own.execute(
+                'SELECT special_correction FROM rank_global_settings WHERE singleton_id = 1',
+            ).fetchone()
+            return float(row['special_correction']) if row is not None else 0.0
+    row = conn.execute(
+        'SELECT special_correction FROM rank_global_settings WHERE singleton_id = 1',
+    ).fetchone()
+    return float(row['special_correction']) if row is not None else 0.0
+
+
+def set_rank_global_special(value: float):
+    try:
+        amount = float(value)
+    except (TypeError, ValueError):
+        return None, '特殊修正必须是数字'
+    with get_db_connection() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        conn.execute('''
+            INSERT INTO rank_global_settings (singleton_id, special_correction, updated_at)
+            VALUES (1, ?, ?)
+            ON CONFLICT(singleton_id) DO UPDATE SET
+                special_correction = excluded.special_correction,
+                updated_at = excluded.updated_at
+        ''', (amount, utc_now()))
+        conn.commit()
+    return {'special_correction': amount}, None
+
+
+def set_user_rank_special(identifier, value):
+    user = find_user_for_admin(identifier)
+    if not user:
+        return None, '账号不存在'
+    try:
+        amount = float(value)
+    except (TypeError, ValueError):
+        return None, '特殊修正必须是数字'
+    with get_db_connection() as conn:
+        cur = conn.execute(
+            'UPDATE users SET rank_special = ? WHERE id = ?',
+            (amount, int(user['id'])),
+        )
+        if cur.rowcount <= 0:
+            return None, '账号不存在'
+        conn.commit()
+    return {'id': user['id'], 'username': user.get('username'), 'rank_special': amount}, None
+
+
+def user_rank_payload(user_or_id, *, include_special=False):
+    """玩家段位展示载荷（对玩家可见；花阶分不再出现在其中）。"""
+    import rank_system as _rank
+    with get_db_connection() as conn:
+        if isinstance(user_or_id, dict):
+            row = user_or_id
+        else:
+            row = conn.execute(
+                'SELECT rank_tier, rank_points, rank_streak, rank_special FROM users WHERE id = ?',
+                (int(user_or_id),),
+            ).fetchone()
+            if row is None:
+                return _rank.rank_payload(1, 0)
+        payload = _rank.rank_payload(
+            int(row.get('rank_tier') or 1),
+            int(row.get('rank_points') or 0),
+            streak=int(row.get('rank_streak') or 0),
+        )
+        if include_special:
+            payload['special'] = float(row.get('rank_special') or 0.0)
+    return payload
+
+
+def settle_ranks_monthly(month_key=None, *, limit=None):
+    """月度结算（设计 2026-10-02，北京月末 23:59 锁定）。
+
+    每名未注销玩家：获得 段位×1000 荆露；段位分清零；按规则掉段
+    （basic → 前一大段 basic，非 basic → 本大段 basic；common basic 不动）。
+    以 rank_settled_month + rank_monthly_settlements 唯一键做幂等，重复
+    调用同月不会重复发奖或重复掉段。
+    """
+    if not month_key:
+        from datetime import datetime, timezone, timedelta
+        month_key = _rank.beijing_month_key(datetime.now(timezone.utc))
+    settled = []
+    total_dew = 0
+    with get_db_connection() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        rows = conn.execute(
+            '''
+            SELECT id, rank_tier, rank_points, rank_streak
+            FROM users
+            WHERE deleted_at IS NULL AND COALESCE(rank_settled_month, '') != ?
+            ''',
+            (month_key,),
+        ).fetchall()
+        if limit:
+            rows = rows[:int(limit)]
+        for row in rows:
+            uid = int(row['id'])
+            before = _rank.rank_payload(
+                int(row['rank_tier'] or 1),
+                int(row['rank_points'] or 0),
+                streak=int(row['rank_streak'] or 0),
+            )
+            try:
+                conn.execute(
+                    '''
+                    INSERT INTO rank_monthly_settlements (
+                        month_key, user_id, before_json, after_json, dew_granted, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    ''',
+                    (
+                        month_key,
+                        uid,
+                        json.dumps(before, ensure_ascii=False),
+                        '',   # 先占位，结算后回填
+                        0,
+                        utc_now(),
+                    ),
+                )
+            except sqlite3.IntegrityError:
+                continue   # 该玩家本月已结算（并发兜底）
+            new_tier = _rank.monthly_settlement_tier(int(before['tier_index']))
+            after = _rank.rank_payload(new_tier, 0)
+            dew = _rank.settlement_reward_dew(int(before['tier_index']))
+            conn.execute(
+                '''
+                UPDATE users
+                SET rank_tier = ?, rank_points = 0, rank_streak = 0, rank_settled_month = ?
+                WHERE id = ?
+                ''',
+                (new_tier, month_key, uid),
+            )
+            conn.execute(
+                'UPDATE rank_monthly_settlements SET after_json = ?, dew_granted = ? '
+                'WHERE month_key = ? AND user_id = ?',
+                (json.dumps(after, ensure_ascii=False), dew, month_key, uid),
+            )
+            settled.append({'user_id': uid, 'before': before, 'after': after, 'dew': dew})
+            total_dew += dew
+        conn.commit()
+    # 荆露在结算行落库之后逐个发放（同事务外的独立记账，失败不影响段位重置）。
+    granted = 0
+    for entry in settled:
+        try:
+            adjust_user_thorn_dew(
+                int(entry['user_id']),
+                free_delta=int(entry['dew']),
+                reason=f'段位月度结算 {entry["before"]["label"]}',
+                source_type='rank_settlement',
+                source_id=month_key,
+            )
+            granted += 1
+        except Exception:
+            continue
+    return {
+        'month_key': month_key,
+        'users': len(settled),
+        'dew_total': total_dew,
+        'dew_granted': granted,
+        'settlements': settled[:20],
+    }
+
+
 def apply_gr_match_result(match_id, summary):
     """Apply Garden Rating (GR) for one completed match.
 
@@ -15114,6 +15395,12 @@ def apply_gr_match_result(match_id, summary):
         from pvp_economy import protected_loss_conn
         protected = {uid:protected_loss_conn(conn,uid) for uid in all_ids}
         protected_users = []
+        # 段位（设计 2026-10-02）：与 GR 同事务同对局；全局特殊修正读取一次。
+        rank_global_special = get_rank_global_special(conn)
+        rank_before = {}
+        rank_after = {}
+        rank_deltas = {}
+        rank_daily_key = _rank.beijing_day_key(played_dt)
         for uid in all_ids:
             row = by_id[uid]
             on_a = uid in team_a
@@ -15166,6 +15453,65 @@ def apply_gr_match_result(match_id, summary):
                 ''',
                 (played_dt.date().isoformat(), uid, season['id'], new_season, new_total, uid, uid, utc_now()),
             )
+            # —— 段位结算：胜负/平局按段位规则计点（2v2 取对方段位均值，
+            # 每日前 5 计分局胜利翻倍，北京时间自然日）。GR 的新手保护不适用。
+            own_tier = int(row['rank_tier'] or 1)
+            own_points = int(row['rank_points'] or 0)
+            own_streak = int(row['rank_streak'] or 0)
+            if is_draw:
+                rank_outcome = 'draw'
+            elif score == 1.0:
+                rank_outcome = 'win'
+            else:
+                rank_outcome = 'loss'
+            opponent_ids = team_b if on_a else team_a
+            opp_tier_avg = _rank.opponent_tier_average(
+                [int(by_id[o]['rank_tier'] or 1) for o in opponent_ids],
+            )
+            special_total = rank_global_special + float(row['rank_special'] or 0.0)
+            prev_daily_key = str(row['rank_daily_key'] or '')
+            prev_daily_count = int(row['rank_daily_count'] or 0)
+            daily_count = prev_daily_count + 1 if prev_daily_key == rank_daily_key else 1
+            rank_change = _rank.apply_match_result(
+                own_tier,
+                own_points,
+                own_streak,
+                outcome=rank_outcome,
+                opponent_tier_avg=opp_tier_avg,
+                special_total=special_total,
+                daily_double=(
+                    daily_count <= _rank.DAILY_DOUBLE_GAMES and rank_outcome == 'win'
+                ),
+            )
+            conn.execute(
+                '''
+                UPDATE users
+                SET rank_tier = ?, rank_points = ?, rank_streak = ?,
+                    rank_daily_key = ?, rank_daily_count = ?
+                WHERE id = ?
+                ''',
+                (
+                    int(rank_change['tier_index']),
+                    int(rank_change['points']),
+                    int(rank_change['streak']),
+                    rank_daily_key,
+                    daily_count,
+                    uid,
+                ),
+            )
+            rank_before[str(uid)] = _rank.rank_payload(own_tier, own_points, streak=own_streak)
+            rank_after[str(uid)] = _rank.rank_payload(
+                int(rank_change['tier_index']),
+                int(rank_change['points']),
+                streak=int(rank_change['streak']),
+            )
+            rank_after[str(uid)].update({
+                'delta': int(rank_change['delta']),
+                'promoted': bool(rank_change['promoted']),
+                'demoted': bool(rank_change['demoted']),
+                'daily_double': bool(rank_change['daily_double']),
+            })
+            rank_deltas[str(uid)] = int(rank_change['delta'])
         result_payload = {
             'applied': True,
             'season_id': season['id'],
@@ -15175,6 +15521,12 @@ def apply_gr_match_result(match_id, summary):
             'total_deltas': total_deltas,
             'before': before,
             'after': after,
+            # 段位结果：客户端对局结束界面展示段位变化（花阶分不再展示）。
+            'rank': {
+                'deltas': rank_deltas,
+                'before': rank_before,
+                'after': rank_after,
+            },
         }
         result_payload['newcomer_protected_user_ids'] = protected_users
         conn.execute(

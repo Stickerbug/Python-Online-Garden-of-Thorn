@@ -1886,10 +1886,10 @@ Object.assign(I18N.ja, {
     tag_desc_fission_layer: '通常のタグではなく特殊な仕組みです。分裂層は攻撃カードが何回に分かれて解決されるかを表し、融合層と共同で作用します。各ヒットは ceil(基礎ダメージ×融合/分裂) を与えます。三角形のようにヒットごとに以後のダメージが変わるカードは、各分裂ヒットでその時点の層数を使って再計算します。カードが捨て札に入ると分裂は既定値1に戻ります。'
 });
 
-Object.assign(I18N.en, { settings_show_english_card_names: 'Show English card names', settings_show_hand_order: 'Show hand card order', settings_show_card_images: 'Show card images', no_selectable_player: 'No selectable player', season_ends_in: 'Season ends in {0}', season_has_ended: 'The season has ended' });
-Object.assign(I18N.zh, { settings_show_english_card_names: '显示卡牌英文名称', settings_show_hand_order: '显示手牌序数', settings_show_card_images: '显示卡牌图片', no_selectable_player: '没有可选中的玩家', season_ends_in: '赛季结束：{0}', season_has_ended: '赛季已结束' });
-Object.assign(I18N.fr, { settings_show_english_card_names: 'Afficher les noms anglais des cartes', settings_show_hand_order: 'Afficher l’ordre des cartes en main', settings_show_card_images: 'Afficher les images des cartes', no_selectable_player: 'Aucun joueur ciblable', season_ends_in: 'La saison se termine dans {0}', season_has_ended: 'La saison est terminée' });
-Object.assign(I18N.ja, { settings_show_english_card_names: '英語のカード名を表示', settings_show_hand_order: '手札の順番を表示', settings_show_card_images: 'カード画像を表示', no_selectable_player: '選択可能なプレイヤーがいません', season_ends_in: 'シーズン終了まで {0}', season_has_ended: 'シーズンは終了しました' });
+Object.assign(I18N.en, { settings_show_english_card_names: 'Show English card names', settings_show_hand_order: 'Show hand card order', settings_show_card_images: 'Show card images', settings_show_own_skins: 'Show my card skins', settings_show_others_skins: "Show others' card skins", no_selectable_player: 'No selectable player', season_ends_in: 'Season ends in {0}', season_has_ended: 'The season has ended' });
+Object.assign(I18N.zh, { settings_show_english_card_names: '显示卡牌英文名称', settings_show_hand_order: '显示手牌序数', settings_show_card_images: '显示卡牌图片', settings_show_own_skins: '显示自己卡牌皮肤', settings_show_others_skins: '显示他人卡牌皮肤', no_selectable_player: '没有可选中的玩家', season_ends_in: '赛季结束：{0}', season_has_ended: '赛季已结束' });
+Object.assign(I18N.fr, { settings_show_english_card_names: 'Afficher les noms anglais des cartes', settings_show_hand_order: 'Afficher l’ordre des cartes en main', settings_show_card_images: 'Afficher les images des cartes', settings_show_own_skins: 'Afficher mes skins', settings_show_others_skins: 'Afficher les skins des autres', no_selectable_player: 'Aucun joueur ciblable', season_ends_in: 'La saison se termine dans {0}', season_has_ended: 'La saison est terminée' });
+Object.assign(I18N.ja, { settings_show_english_card_names: '英語のカード名を表示', settings_show_hand_order: '手札の順番を表示', settings_show_card_images: 'カード画像を表示', settings_show_own_skins: '自分のカードスキンを表示', settings_show_others_skins: '他人のカードスキンを表示', no_selectable_player: '選択可能なプレイヤーがいません', season_ends_in: 'シーズン終了まで {0}', season_has_ended: 'シーズンは終了しました' });
 Object.assign(I18N.en, { settings_landscape_mode: 'Enable landscape mode', settings_fullscreen: 'Fullscreen', settings_enter_fullscreen: 'Enter fullscreen', settings_exit_fullscreen: 'Exit fullscreen', settings_fullscreen_unsupported: 'Fullscreen unavailable', settings_fullscreen_failed: 'Could not change fullscreen mode' });
 Object.assign(I18N.zh, { settings_landscape_mode: '开启横屏模式', settings_fullscreen: '全屏', settings_enter_fullscreen: '进入全屏', settings_exit_fullscreen: '退出全屏', settings_fullscreen_unsupported: '浏览器不支持全屏', settings_fullscreen_failed: '无法切换全屏模式' });
 Object.assign(I18N.fr, { settings_landscape_mode: 'Activer le mode paysage', settings_fullscreen: 'Plein écran', settings_enter_fullscreen: 'Passer en plein écran', settings_exit_fullscreen: 'Quitter le plein écran', settings_fullscreen_unsupported: 'Plein écran indisponible', settings_fullscreen_failed: 'Impossible de changer le mode plein écran' });
@@ -6716,6 +6716,10 @@ function updateStaticText() {
     if (settingsHandOrderLabel) settingsHandOrderLabel.textContent = UI.settings_show_hand_order || '显示手牌序数';
     const settingsCardImagesLabel = $('settings-label-show-card-images');
     if (settingsCardImagesLabel) settingsCardImagesLabel.textContent = UI.settings_show_card_images;
+    const ownSkinsLabel = $('settings-label-show-own-skins');
+    if (ownSkinsLabel) ownSkinsLabel.textContent = UI.settings_show_own_skins || '显示自己卡牌皮肤';
+    const othersSkinsLabel = $('settings-label-show-others-skins');
+    if (othersSkinsLabel) othersSkinsLabel.textContent = UI.settings_show_others_skins || '显示他人卡牌皮肤';
     const settingsPlayGestureLabel = $('settings-label-play-gesture-animation');
     if (settingsPlayGestureLabel) settingsPlayGestureLabel.textContent = UI.settings_play_gesture_animation || '显示出牌操作演示';
     const settingsLandscapeModeLabel = $('settings-label-landscape-mode');
@@ -12338,10 +12342,23 @@ function myEquippedCardSkin() {
 }
 
 /* 指定对局玩家的皮肤：gameState.player_card_skins[座位] */
+function showOwnCardSkinsEnabled() {
+    try { return localStorage.getItem('gtn_show_own_skins') !== '0'; } catch (_) { return true; }
+}
+
+function showOthersCardSkinsEnabled() {
+    try { return localStorage.getItem('gtn_show_others_skins') !== '0'; } catch (_) { return true; }
+}
+
 function playerCardSkinAt(playerId) {
     const gs = gameState || {};
     const list = Array.isArray(gs.player_card_skins) ? gs.player_card_skins : [];
     const id = Number(playerId);
+    // 外观设置（默认开）：显示自己 / 显示他人卡牌皮肤。图鉴等无座位场景按
+    // 「自己视角」归入前者；皮肤预览的 skinOverride 不经过这里，不受开关影响。
+    const ownView = id === Number(gs.your_id) || gs.your_id == null || (gs.solo && !gs.spectating);
+    if (ownView && !showOwnCardSkinsEnabled()) return '';
+    if (!ownView && !showOthersCardSkinsEnabled()) return '';
     if (Number.isFinite(id) && list[id] != null) {
         const sid = cardSkinById(list[id]);
         if (sid) return sid;
@@ -40270,6 +40287,22 @@ async function init() {
     if (cardImagesToggle) {
         cardImagesToggle.checked = showCardImages;
         cardImagesToggle.addEventListener('change', (e) => applyShowCardImages(e.target.checked));
+    }
+    const ownSkinsToggle = $('settings-show-own-skins');
+    if (ownSkinsToggle) {
+        ownSkinsToggle.checked = showOwnCardSkinsEnabled();
+        ownSkinsToggle.addEventListener('change', (e) => {
+            try { localStorage.setItem('gtn_show_own_skins', e.target.checked ? '1' : '0'); } catch (_) {}
+            refreshVisibleCardDisplays();
+        });
+    }
+    const othersSkinsToggle = $('settings-show-others-skins');
+    if (othersSkinsToggle) {
+        othersSkinsToggle.checked = showOthersCardSkinsEnabled();
+        othersSkinsToggle.addEventListener('change', (e) => {
+            try { localStorage.setItem('gtn_show_others_skins', e.target.checked ? '1' : '0'); } catch (_) {}
+            refreshVisibleCardDisplays();
+        });
     }
     const touchDblclickToggle = $('settings-touch-dblclick-intro');
     if (touchDblclickToggle) {

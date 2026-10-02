@@ -14482,6 +14482,11 @@ class GameEngine:
             return {'success': False, 'error': '不是你的回合'}
         if self.pending_response is not None:
             return {'success': False, 'error': '等待反制响应'}
+        # #321：自己还有未完成的选择（如磁铁的抽牌选择）时不能结束回合——
+        # 此前允许结束，选牌窗跨回合残留在界面上且点击无效。
+        pending_choice = self.pending_choice
+        if isinstance(pending_choice, dict) and int(pending_choice.get('player_id', -1)) == int(player_id):
+            return {'success': False, 'error': '请先完成当前选择'}
         self._end_player_turn(player_id)
         return {'success': True}
 

@@ -27,6 +27,8 @@ import platform
 import subprocess
 import sqlite3
 import traceback
+import rank_system
+import db as db_module
 from functools import wraps
 from contextlib import closing
 from collections import deque, OrderedDict
@@ -5379,6 +5381,10 @@ def auth_user_payload(user):
     if not user:
         return None
     payload = dict(user)
+    # 2026-10-02：花阶分只在后台运行，不再进入任何玩家可见载荷；
+    # 玩家侧的进度展示统一用段位（payload['rank']）。
+    for hidden_field in ('season_gr', 'total_gr', 'highest_gr', 'gr_season_id'):
+        payload.pop(hidden_field, None)
     if DB_AVAILABLE and user.get('id'):
         account_integrity.recover_reputation_daily(user_id=user['id'])
         payload['reputation_profile'] = account_integrity.get_reputation_profile(user['id'])
@@ -5605,8 +5611,8 @@ def public_player_info(sid, player=None):
         'spectating_match_mode': spectating_match_mode,
         'user_id': p.get('user_id'),
         'is_registered_user': bool(p.get('is_registered_user')),
-        'season_gr': p.get('season_gr') if match_type == 'ranked' else None,
-        'total_gr': p.get('total_gr') if match_type == 'ranked' else None,
+        # 2026-10-02：大厅展示段位；花阶分不再对玩家下发。
+        'rank': dict(p['rank']) if p.get('rank') else None,
         'skin': public_skin_config(p.get('skin')),
         'skin_look': normalize_skin_look(p.get('skin_look')),
         'reputation_profile': {
@@ -12466,6 +12472,101 @@ def format_gr_delta_value(value):
     return f"{num:+.1f}"
 
 
+def _rank_console_command(cmd, parts, raw):
+    """段位控制台（2026-10-02 设计）。
+
+    rankmod global <数值|clear>          全局特殊修正
+    rankmod player <账号> <数值|clear>    玩家特殊修正（与全局叠加）
+    rankmod view [账号]                   查看全局/玩家特殊修正
+    rankset <账号> <段位序号1-44> [段位分] 管理员直接改段位
+    rank-info <账号>                      查看玩家段位详情
+    """
+    if not DB_AVAILABLE:
+        return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
+    if cmd == 'rank-info':
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(raw, len(raw), 'rank-info <账号>')}
+        user = find_user_for_admin(parts[1])
+        if not user:
+            return {'success': False, 'output': '账号不存在'}
+        payload = db_module.user_rank_payload(parts[1], include_special=True)
+        global_special = db_module.get_rank_global_special()
+        return {
+            'success': True,
+            'output': (
+                f"{user.get('username')} (ID:{user.get('player_id') or '-'})\n"
+                f"段位：{payload['label']} {payload['points']}/{payload['cap']}"
+                f"（序号 {payload['tier_index']}/44，连胜 {payload['streak']}）\n"
+                f"特殊修正：玩家 {payload['special']:+g} / 全局 {global_special:+g}"
+                f"（合计 {payload['special'] + global_special:+g}）"
+            ),
+        }
+    if cmd == 'rankmod':
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(
+                raw, len(raw),
+                'rankmod global <数值|clear> | rankmod player <账号> <数值|clear> | rankmod view [账号]')}
+        sub = parts[1].lower()
+        if sub == 'view':
+            global_special = db_module.get_rank_global_special()
+            lines = [f'全局特殊修正：{global_special:+g}']
+            if len(parts) >= 3:
+                user = find_user_for_admin(parts[2])
+                if not user:
+                    return {'success': False, 'output': '账号不存在'}
+                payload = db_module.user_rank_payload(parts[2], include_special=True)
+                lines.append(
+                    f"{user.get('username')}：玩家修正 {payload['special']:+g}"
+                    f"（合计 {payload['special'] + global_special:+g}）"
+                )
+            return {'success': True, 'output': '\n'.join(lines)}
+        if sub == 'global':
+            if len(parts) < 3:
+                return {'success': False, 'output': command_error(raw, len(raw), 'rankmod global <数值|clear>')}
+            value = 0.0 if parts[2].lower() == 'clear' else parts[2]
+            result, error = db_module.set_rank_global_special(value)
+            if error:
+                return {'success': False, 'output': error}
+            admin_event('admin', f'rankmod global {parts[2]}')
+            return {'success': True, 'output': f'全局特殊修正已设置为 {result["special_correction"]:+g}'}
+        if sub == 'player':
+            if len(parts) < 4:
+                return {'success': False, 'output': command_error(raw, len(raw), 'rankmod player <账号> <数值|clear>')}
+            value = 0.0 if parts[3].lower() == 'clear' else parts[3]
+            result, error = db_module.set_user_rank_special(parts[2], value)
+            if error:
+                return {'success': False, 'output': error}
+            admin_event('admin', f'rankmod player {result["username"]}#{result["id"]} {parts[3]}')
+            return {'success': True, 'output': f'{result["username"]} 的特殊修正已设置为 {result["rank_special"]:+g}'}
+        return {'success': False, 'output': command_error(raw, len(raw), 'rankmod global|player|view …')}
+    if cmd == 'rankset':
+        if len(parts) < 3:
+            return {'success': False, 'output': command_error(raw, len(raw), 'rankset <账号> <段位序号1-44> [段位分]')}
+        user = find_user_for_admin(parts[1])
+        if not user:
+            return {'success': False, 'output': '账号不存在'}
+        try:
+            tier = rank_system.clamp_tier(int(parts[2]))
+        except (TypeError, ValueError):
+            return {'success': False, 'output': '段位序号必须是 1-44'}
+        points = 0
+        if len(parts) >= 4:
+            try:
+                points = max(0, min(rank_system.rank_cap(tier), int(parts[3])))
+            except (TypeError, ValueError):
+                return {'success': False, 'output': '段位分必须是数字'}
+        with db_module.get_db_connection() as conn:
+            conn.execute(
+                'UPDATE users SET rank_tier = ?, rank_points = ?, rank_streak = 0 WHERE id = ?',
+                (tier, points, int(user['id'])),
+            )
+            conn.commit()
+        admin_event('admin', f'rankset {user["username"]}#{user["id"]} tier={tier} points={points}')
+        payload = rank_system.rank_payload(tier, points)
+        return {'success': True, 'output': f'已设置：{payload["label"]} {payload["points"]}/{payload["cap"]}'}
+    return {'success': False, 'output': '未知段位命令'}
+
+
 def gr_preview_text_for_sids(mode, sids, viewer_sid):
     payload = gr_preview_payload_for_sids(mode, sids, viewer_sid)
     return payload.get('text', '') if payload else ''
@@ -12478,7 +12579,7 @@ def gr_preview_payload_for_sids(mode, sids, viewer_sid):
             'applied': False,
             'reason': 'casual_match',
             'match_mode': match_mode,
-            'text': '娱乐赛不计花阶分',
+            'text': '娱乐赛不计段位',
         }
     if not DB_AVAILABLE:
         return {}
@@ -12486,51 +12587,50 @@ def gr_preview_payload_for_sids(mode, sids, viewer_sid):
     for psid in sids or []:
         player = players.get(psid) or {}
         user_ids.append(player.get('user_id') if player.get('is_registered_user') else None)
+    if any(uid is None for uid in user_ids):
+        return {
+            'applied': False,
+            'reason': 'guest_participant',
+            'text': '本局包含游客，不计段位',
+        }
     if any((players.get(psid) or {}).get('entertainment_mods') for psid in sids or []):
         return {
             'applied': False,
             'reason': 'entertainment_mod',
-            'text': '本局使用娱乐模组，不计花阶分',
+            'text': '本局使用娱乐模组，不计段位',
         }
     viewer = players.get(viewer_sid) or {}
     viewer_user_id = viewer.get('user_id') if viewer.get('is_registered_user') else None
     try:
-        preview = preview_gr_match_result(engine_mode, user_ids, viewer_user_id=viewer_user_id)
+        preview = preview_rank_match_result(engine_mode, user_ids, viewer_user_id=viewer_user_id)
     except Exception as exc:
-        admin_event('error', f'failed to preview GR invite: {exc}')
+        admin_event('error', f'failed to preview rank invite: {exc}')
         return {}
     if not preview.get('applied'):
         reason = preview.get('reason') or ''
-        if reason == 'guest_participant':
-            text = '本局包含游客，不计花阶分'
         if reason in ('missing_player_ids', 'unknown_user'):
             return {}
-        else:
-            text = '本局不计花阶分' if reason != 'guest_participant' else text
         return {
             'applied': False,
             'reason': reason,
-            'text': text,
+            'text': '本局不计段位',
         }
     viewer_preview = preview.get('viewer') or {}
     if not viewer_preview:
         return {}
-    win_delta = format_gr_delta_value(viewer_preview.get('win_delta'))
-    loss_delta = format_gr_delta_value(viewer_preview.get('loss_delta'))
-    draw_delta = format_gr_delta_value(viewer_preview.get('draw_delta'))
-    text = f'花阶分预估：胜 {win_delta} / 平 {draw_delta} / 负 {loss_delta}'
-    repeat = float(preview.get('repeat_factor') or 1)
-    if repeat < 0.999:
-        text += f'（重复对局×{repeat:.2f}）'
+    win_delta = int(viewer_preview.get('win_delta') or 0)
+    loss_delta = int(viewer_preview.get('loss_delta') or 0)
+    text = f"段位预估：{viewer_preview.get('label', '')} 胜 +{win_delta} / 负 -{loss_delta}"
     return {
         'applied': True,
         'text': text,
-        'repeat_factor': repeat,
-        'repeat_count': preview.get('repeat_count', 0),
         'viewer': {
-            'win_delta': viewer_preview.get('win_delta', 0),
-            'draw_delta': viewer_preview.get('draw_delta', 0),
-            'loss_delta': viewer_preview.get('loss_delta', 0),
+            'label': viewer_preview.get('label'),
+            'points': viewer_preview.get('points'),
+            'cap': viewer_preview.get('cap'),
+            'win_delta': win_delta,
+            'draw_delta': 0,
+            'loss_delta': loss_delta,
         },
     }
 
@@ -15027,6 +15127,18 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
             return {'success': False, 'output': error}
         admin_event('admin', f"GR snapshot written for {user.get('username')}#{user.get('id')}")
         return {'success': True, 'output': f'已写入今天的花阶分曲线快照。\n{format_rating_user(user)}'}
+    if cmd in ('rankmod', 'rankset', 'rank-info'):
+        return _rank_console_command(cmd, parts, raw)
+    if cmd == 'rank-settle':
+        # 手动触发段位月度结算（默认结算上个月；幂等）。
+        if not DB_AVAILABLE:
+            return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
+        month_key = parts[1].strip() if len(parts) >= 2 else rank_system.beijing_month_key(
+            datetime.now(timezone.utc) - timedelta(days=1),
+        )
+        result = db_module.settle_ranks_monthly(month_key)
+        admin_event('admin', f"rank-settle {month_key} users={result['users']} dew={result['dew_total']}")
+        return {'success': True, 'output': f"段位月度结算完成：{month_key}\n玩家 {result['users']} 名，共发放荆露 {result['dew_total']}"}
     if cmd == 'rating-rebuild':
         if not DB_AVAILABLE:
             return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
@@ -28456,8 +28568,7 @@ def on_login(data):
             'is_registered_user': is_registered_user,
             'accept_game_invites': bool(account_user.get('accept_game_invites', True)) if account_user else True,
             'allow_guest_spectators': bool(account_user.get('allow_guest_spectators')) if account_user else False,
-            'season_gr': account_user.get('season_gr') if account_user else None,
-            'total_gr': account_user.get('total_gr') if account_user else None,
+            'rank': dict(account_user['rank']) if account_user and account_user.get('rank') else None,
             'reputation_profile': login_reputation_profile,
             'mod_source': community_fields.get('mod_source', 'official'),
             'community_mod_url': community_fields.get('community_mod_url', ''),
@@ -36575,6 +36686,66 @@ def ensure_minigame_2048_settlement_worker():
                          name='minigame2048-settlement', daemon=True).start()
 
 
+_RANK_MONTHLY_SETTLEMENT_STARTED = False
+
+
+def _rank_monthly_next_run_utc(now=None):
+    """下一次月度结算时刻（UTC）：北京下月 1 日 00:00（即上月末 23:59 后一刻）。"""
+    from datetime import datetime, timedelta
+    now = now or datetime.now(timezone.utc)
+    beijing = now + timedelta(hours=8)
+    first_of_month = beijing.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    next_first = (first_of_month.replace(day=28) + timedelta(days=5)).replace(day=1)
+    return next_first - timedelta(hours=8)
+
+
+def _rank_monthly_settlement_worker():
+    """段位月度结算（设计 2026-10-02）：北京月末 23:59 锁定。
+
+    到点结算上一个月（发荆露、段位分清零、按规则掉段）；幂等由
+    rank_settled_month + rank_monthly_settlements 唯一键保证，重启/多实例
+    重复执行不会重复发奖。
+    """
+    while True:
+        try:
+            delay = (_rank_monthly_next_run_utc() - datetime.now(timezone.utc)).total_seconds()
+            delay = max(1.0, min(delay, 3600.0))
+            try:
+                socketio.sleep(delay)
+            except Exception:
+                time.sleep(delay)
+            if datetime.now(timezone.utc) < _rank_monthly_next_run_utc() - timedelta(seconds=1):
+                continue   # 被长睡截断，重算
+            from datetime import timedelta as _td
+            month_key = rank_system.beijing_month_key(
+                datetime.now(timezone.utc) - _td(days=1),
+            )
+            result = db_module.settle_ranks_monthly(month_key)
+            admin_event(
+                'admin',
+                f'rank monthly settlement month={month_key} users={result["users"]} '
+                f'dew={result["dew_total"]}',
+            )
+        except Exception as exc:
+            admin_event('error', f'rank monthly settlement failed: {exc}')
+            try:
+                socketio.sleep(60)
+            except Exception:
+                time.sleep(60)
+
+
+def ensure_rank_monthly_settlement_worker():
+    global _RANK_MONTHLY_SETTLEMENT_STARTED
+    if _RANK_MONTHLY_SETTLEMENT_STARTED:
+        return
+    _RANK_MONTHLY_SETTLEMENT_STARTED = True
+    try:
+        socketio.start_background_task(_rank_monthly_settlement_worker)
+    except Exception:
+        threading.Thread(target=_rank_monthly_settlement_worker,
+                         name='rank-monthly-settlement', daemon=True).start()
+
+
 @app.route('/minigame')
 def minigame_hub_page():
     """休闲花园首页：小游戏列表。
@@ -37176,6 +37347,8 @@ if __name__ == '__main__':
     )
     # 休闲花园 2048 的周结算：不依赖有人打开小游戏，错过时点会补做。
     ensure_minigame_2048_settlement_worker()
+    # 段位月度结算（2026-10-02）：北京月末 23:59 锁定，错点补做、幂等。
+    ensure_rank_monthly_settlement_worker()
     threading.Thread(
         target=_prewarm_public_card_cache_worker,
         name='public-cache-prewarm',
