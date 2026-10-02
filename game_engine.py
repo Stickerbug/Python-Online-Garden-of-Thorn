@@ -10397,6 +10397,12 @@ class GameEngine:
                 return result
             result['def_id'] = str(getattr(card, 'def_id', '') or '')
             sim = copy.deepcopy(self)
+            # 预测基线：丢弃未决交互。真实局里 pending_response（等待反制的
+            # 那张牌）会在模拟的 drive 阶段被消化，其效果日志与扣费混入
+            # 「这张悬停牌」的预测（串显）；预测只展示本牌效果，直接清掉。
+            for pending_attr in ('pending_response', 'pending_choice', 'pending_v2_ui'):
+                if getattr(sim, pending_attr, None) is not None:
+                    setattr(sim, pending_attr, None)
             before = sim._prediction_outcome_snapshot()
             names = sim._prediction_name_map()
             # 卡费补回口径：只补这张牌本身的 cost+extra（play_card 同式计算），
@@ -10438,9 +10444,14 @@ class GameEngine:
                     play_result = sim.play_card(player_id, card_instance_id, play_choice)
             except Exception:
                 play_result = {'success': False}
-            result['played'] = bool(isinstance(play_result, dict) and play_result.get('success'))
+            played_ok = bool(isinstance(play_result, dict) and play_result.get('success'))
+            result['played'] = played_ok
             sim._prediction_drive_pending(player_id)
-            result.update(sim._prediction_extract_outcome(log_start, before, names, spent))
+            # 费用补回只在真的打出并结算时生效：打出失败时费用根本没扣，
+            # 照样补回会把「没发生的支付」显示成「对自己获得 X 资源」。
+            result.update(sim._prediction_extract_outcome(
+                log_start, before, names, spent if played_ok else None,
+            ))
             result['ok'] = True
             return result
         except Exception:
