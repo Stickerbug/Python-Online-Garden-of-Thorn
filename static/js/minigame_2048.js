@@ -51,8 +51,11 @@ function opsRateAllows() {
   const now = Date.now();
   if (!opsRateStartAt) opsRateStartAt = now;
   const elapsedSeconds = (now - opsRateStartAt) / 1000;
-  const budget = state.ops.length + OPS_RATE_BURST_ALLOWANCE + OPS_RATE_LIMIT_PER_SECOND * elapsedSeconds;
-  return budget >= 1;
+  // 与服务端同式（sync_progress）：累计操作总数 ≤ 2×本局经过秒 + 4。
+  // 旧公式把历史 ops 算进预算恒为真，本地限速从未生效——疯狂连打全部
+  // 放行，服务端按真实时间预算拒批，表现为「数据不同步」。
+  const allowedTotal = OPS_RATE_BURST_ALLOWANCE + OPS_RATE_LIMIT_PER_SECOND * elapsedSeconds;
+  return state.ops.length + 1 <= allowedTotal;
 }
 /* 同步防抖：原来 400ms 太快，快速连按时会持续打满服务端限流；
    本地仍然是每一步即时保存，联网同步稍微合并一下不影响进度。 */
@@ -558,9 +561,18 @@ async function syncNow() {
     }
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
-      setSyncText(response.status === 429
-        ? lt({ zh: '同步繁忙，本地进度已保留，稍后自动重试', en: 'Sync busy — saved locally, retrying soon', fr: 'Synchronisation occupée — sauvegardé, nouvel essai bientôt', ja: '同期が混み合っています。ローカル保存済み、後で再試行します' })
-        : (body.error || lt({ zh: '同步被拒绝，本地进度已保留', en: 'Sync rejected — progress saved locally', fr: 'Sync rejetée — progression sauvegardée', ja: '同期が拒否されました。ローカル保存済み' })), 'error');
+      if (body && String(body.reason || '').includes('操作过快')) {
+        // 服务端预算比本地紧：把已积累操作折算成已用时间，对齐两端口径，
+        // 否则本地继续放行超速操作、每批都被拒，进度永远同步不上去。
+        if (state.ops.length > OPS_RATE_BURST_ALLOWANCE) {
+          opsRateStartAt = Date.now() - (state.ops.length / OPS_RATE_LIMIT_PER_SECOND) * 1000;
+        }
+        setSyncText(lt({ zh: '操作过快，稍等片刻会自动继续同步', en: 'Too fast — sync resumes automatically in a moment', fr: 'Trop rapide — la synchronisation reprend dans un instant', ja: '操作が速すぎます。少し待つと同期を再開します' }), 'error');
+      } else {
+        setSyncText(response.status === 429
+          ? lt({ zh: '同步繁忙，本地进度已保留，稍后自动重试', en: 'Sync busy — saved locally, retrying soon', fr: 'Synchronisation occupée — sauvegardé, nouvel essai bientôt', ja: '同期が混み合っています。ローカル保存済み、後で再試行します' })
+          : (body.error || lt({ zh: '同步被拒绝，本地进度已保留', en: 'Sync rejected — progress saved locally', fr: 'Sync rejetée — progression sauvegardée', ja: '同期が拒否されました。ローカル保存済み' })), 'error');
+      }
       retryDelay = Math.min(retryDelay * 2, RETRY_MAX_MS);
       scheduleSync(retryDelay);
       return;
