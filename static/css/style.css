@@ -1490,8 +1490,10 @@ a.title-shop-afdian-go:hover {
 
 .leaderboard-row {
   display: grid;
-  grid-template-columns: 42px minmax(78px, 0.82fr) 76px 58px 56px 48px 48px 48px;
-  min-width: 458px;
+  /* 2026-10-02：段位上线后移动端整行超宽被截断——胜/负/平合并为一栏
+   * （如 26/104/5），数字列压窄、去掉 458px 硬最小宽，昵称列弹性收纳。 */
+  grid-template-columns: 36px minmax(64px, 1fr) max-content 48px 46px max-content;
+  min-width: 0;
   align-items: center;
   gap: 0;
   padding: 0;
@@ -1505,12 +1507,37 @@ a.title-shop-afdian-go:hover {
 
 .leaderboard-row > span {
   min-width: 0;
-  padding: 5px 6px;
+  padding: 5px 5px;
   border-right: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: center;
+}
+
+/* 移动端紧凑档：合并后的胜/负/平一栏足够放下，徽章同步缩小。 */
+@media (max-width: 600px) {
+  .leaderboard-row {
+    grid-template-columns: 28px minmax(44px, 1fr) max-content 40px 36px max-content;
+    font-size: 10px;
+  }
+  .leaderboard-row > span {
+    padding: 4px 3px;
+  }
+  .leaderboard-gr .rank-badge {
+    font-size: 10px;
+    padding: 1px 4px;
+    border-width: 1.5px;
+    border-radius: 8px;
+    gap: 2px;
+  }
+  .leaderboard-gr .rank-badge-text {
+    gap: 2px;
+  }
+  .leaderboard-gr .rank-badge-icon {
+    width: 16px;
+    height: 16px;
+  }
 }
 
 .leaderboard-row > span:last-child {
@@ -1545,9 +1572,7 @@ a.title-shop-afdian-go:hover {
 .leaderboard-rate,
 .leaderboard-gr,
 .leaderboard-games,
-.leaderboard-wins,
-.leaderboard-losses,
-.leaderboard-draws {
+.leaderboard-wld {
   font-family: var(--font-main);
   white-space: nowrap;
 }

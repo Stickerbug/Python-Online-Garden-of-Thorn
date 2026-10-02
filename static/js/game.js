@@ -21654,17 +21654,15 @@ function leaderboardRowHtml(item, rank, extraClass = '') {
             <span class="leaderboard-rate leaderboard-gr">${renderRankBadgeHtml(item && item.rank_info)}</span>
             <span class="leaderboard-rate">${escapeHtml(rateText)}</span>
             <span class="leaderboard-games">${games}</span>
-            <span class="leaderboard-wins">${wins}</span>
-            <span class="leaderboard-losses">${losses}</span>
-            <span class="leaderboard-draws">${draws}</span>
+            <span class="leaderboard-wld" title="${escapeHtml(currentLang === 'zh' ? '胜/负/平' : 'W/L/D')}">${wins}/${losses}/${draws}</span>
         </div>
     `;
 }
 
 function leaderboardHeaderHtml() {
     const labels = currentLang === 'zh'
-        ? ['排行', '昵称', '段位', UI.leaderboard_raw_rate || '胜率', '总局数', '胜场', '败场', '平场']
-        : ['Rank', 'Name', 'Rank', UI.leaderboard_raw_rate || 'Win %', 'Games', 'Wins', 'Losses', 'Draws'];
+        ? ['排行', '昵称', '段位', UI.leaderboard_raw_rate || '胜率', '总局数', '胜/负/平']
+        : ['Rank', 'Name', 'Rank', UI.leaderboard_raw_rate || 'Win %', 'Games', 'W/L/D'];
     return `<div class="leaderboard-row leaderboard-head">
         ${labels.map((label, idx) => {
             const cls = idx === 1 ? 'leaderboard-name' : '';
