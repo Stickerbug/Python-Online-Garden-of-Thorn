@@ -9418,6 +9418,9 @@ class GameEngine:
             'choice_params': choice_params,
             'original_choice': dict(choice) if isinstance(choice, dict) else None,
             'already_paid': bool(already_paid),
+            # 本次打出流程中是否已 reveal 隐藏信息（#316/#318：磁铁先看牌
+            # 再选抽牌，取消时信息收益无法收回，不能整体撤销白嫖）
+            'revealed_hidden': bool(getattr(self, '_pending_play_revealed_hidden', False)),
         }
         if already_paid:
             self.pending_choice['paid_e'] = max(0, int(getattr(card, '_paid_e_this_play', 0) or 0))
@@ -10929,20 +10932,41 @@ class GameEngine:
             if (pending.get('choice_params') or {}).get('cancellable') is False:
                 self.pending_choice = pending
                 return {'success': False, 'error': '此选择不能取消'}
-            if pending.get('already_paid'):
-                try:
-                    card._paid_e_this_play = int(pending.get('paid_e', getattr(card, '_paid_e_this_play', 0)) or 0)
-                    card._paid_m_this_play = int(pending.get('paid_m', getattr(card, '_paid_m_this_play', getattr(card, 'cost_m', 0))) or 0)
-                except Exception:
-                    pass
-                self._undo_pending_choice_play_side_effects(
-                    player_id,
-                    card,
-                    play_log_marker=pending.get('play_log_marker'),
-                )
-            elif ps.find_hand_card(card.instance_id) is None:
-                ps.hand.insert(0, card)
-            return {'success': False, 'cancelled': True, 'error': '选择已取消'}
+            reveals_hidden = bool(pending.get('revealed_hidden')) or (
+                str(pending.get('choice_type', '')) in ('choose_card_from_hand', 'choose_from_enemy_hand')
+                and pending.get('hand_cards') is not None
+                and int(pending.get('target_player_id', player_id)) != int(player_id)
+            )
+            if reveals_hidden:
+                # #316/#318：选牌窗展示的是对方手牌（或流程已 reveal）——
+                # 信息收益收不回，整体撤销等于免费看牌。取消改为「费用照扣、
+                # 牌留在手中」直接收尾：主费按卡面结算并写战报，效果不再继续。
+                dup_count = ps.cards_played_this_turn.get(card.def_id, 0)
+                extra_e = self._get_extra_e_for_card(player_id, card)
+                total_e = max(0, int(getattr(card, 'cost_e', 0) or 0) + extra_e)
+                total_m = max(0, int(getattr(card, 'cost_m', 0) or 0))
+                self._spend_resource(player_id, 'elixir', total_e, card)
+                self._spend_resource(player_id, 'magic', total_m, card)
+                ps.cards_played_this_turn[card.def_id] = dup_count + 1
+                if ps.find_hand_card(card.instance_id) is None:
+                    ps.hand.insert(0, card)
+                self.log_msg(f"{self.pn(player_id)}取消了{card.name_cn}，{card.name_cn}留在手中")
+                return {'success': True, 'cancelled': True}
+            else:
+                if pending.get('already_paid'):
+                    try:
+                        card._paid_e_this_play = int(pending.get('paid_e', getattr(card, '_paid_e_this_play', 0)) or 0)
+                        card._paid_m_this_play = int(pending.get('paid_m', getattr(card, '_paid_m_this_play', getattr(card, 'cost_m', 0))) or 0)
+                    except Exception:
+                        pass
+                    self._undo_pending_choice_play_side_effects(
+                        player_id,
+                        card,
+                        play_log_marker=pending.get('play_log_marker'),
+                    )
+                elif ps.find_hand_card(card.instance_id) is None:
+                    ps.hand.insert(0, card)
+                return {'success': False, 'cancelled': True, 'error': '选择已取消'}
         if isinstance(choice, dict):
             original_choice = pending.get('original_choice') if isinstance(pending.get('original_choice'), dict) else {}
             original_target_id = self._choice_target_from_choice(original_choice, -1)
@@ -11120,6 +11144,7 @@ class GameEngine:
         target_id = self._resolve_target(player_id, params.get('target', 'enemy'))
         if not self._valid_player_id(target_id):
             return
+        self._pending_play_revealed_hidden = True
         viewer_id = self._resolve_target(
             player_id, params.get('viewer', params.get('to', 'self')),
         )
@@ -12173,9 +12198,14 @@ class GameEngine:
         keep.fusion_multiplier = float(keep.fusion_level)
         keep.fission_count = keep.fission_level - 1
 
-        for attr in ('swift_value', 'magic_swift_value', 'power_value', 'bonus_damage', 'temp_swift_value', 'temp_heavy_value', 'temp_magic_heavy_value'):
+        # 电荷同样取最大值（#323：此前不在合并列表里，丢弃哪张就丢哪张的电荷——
+        # 三层电荷的牌被丢，保留牌电荷清零，与「特殊效果取最大值」的描述不符）
+        for attr in ('swift_value', 'magic_swift_value', 'power_value', 'bonus_damage', 'temp_swift_value', 'temp_heavy_value', 'temp_magic_heavy_value', 'charge_value'):
             values = [int(getattr(c, attr, 0) or 0) for c in cards]
             setattr(keep, attr, clamp_card_power(max(values)) if attr == 'power_value' else max(0, max(values)))
+        if int(getattr(keep, 'charge_value', 0) or 0) > 0:
+            keep.instance_flags.add('charge')
+            keep.disabled_flags.discard('charge')
 
         # Layered special-effect tags remain active if any merged card had them.
         keep.instance_flags.update(*(getattr(c, 'instance_flags', set()) or set() for c in cards))
@@ -19629,6 +19659,7 @@ class GameEngine:
                     return result
                 break
         self.negated_card = False
+        self._pending_play_revealed_hidden = False
         needs_choice = self._card_needs_choice(card)
         if needs_choice and not self._choice_satisfies_request(card, choice):
             queued = self._queue_card_choice(player_id, card, choice, already_paid=True)
