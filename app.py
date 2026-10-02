@@ -849,6 +849,7 @@ GTN_STATIC_VERSION += '-server-play-prediction-1'
 GTN_STATIC_VERSION += '-skin-text-contrast-15-inkmap-linesplit-1-gallery-prob-1-preview-modal-mobile-1-preview-side-toggle-1-skin-darkband-1-skin-pale-2-skin-pale-3-skin-parity-4-targetpick-controls-1-handling-rebuild-1-poker-moddraw-1-r28782-fix-1-feedback-batch2-1-fc-scroll-1-moddraw-swap-1-sawblade-bleed-1-chip-modifiers-1-zone-restore-1-bandage-lighten-1-feedback-batch3-1-ach-fix-1-mg2048-sync--ratelimit-1'
 GTN_STATIC_VERSION += '-skin-preview-modal-1'
 GTN_STATIC_VERSION += '-card-tag-dedup-1'
+GTN_STATIC_VERSION += '-rank-system-1'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 STORY_COOP_ENABLED = os.environ.get('GTN_STORY_COOP_ENABLED', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 GTN_AI_1V1_TEST_ENABLED = os.environ.get('GTN_AI_1V1_TEST_ENABLED', '1').strip().lower() in ('1', 'true', 'yes', 'on')
