@@ -452,6 +452,12 @@ try:
     merged = merge_mod_cards_to_card_defs()
     apply_card_i18n_defaults(CARD_DEFS)
     print(f'[startup] mods loaded, merged {len(merged)} cards')
+    # 反馈 #328：启动兜底——重抽 static/assets/mod-card-art 里丢失的包内
+    # 资产（卡数据仍指向 URL 但文件缺失时，卡面退化成灰底问号）。
+    from mod_loader import ensure_static_mod_assets
+    restored_assets = ensure_static_mod_assets()
+    if restored_assets:
+        print(f'[startup] restored {restored_assets} missing mod card art assets')
 except Exception as e:
     apply_card_i18n_defaults(CARD_DEFS)
     print(f'[startup] mod loading failed: {type(e).__name__}: {e}')

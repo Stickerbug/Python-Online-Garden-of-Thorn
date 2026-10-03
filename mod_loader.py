@@ -802,6 +802,59 @@ def load_v2_mod_from_data(data: dict, source: str = "memory", allow_reserved_nam
     return mod
 
 
+def ensure_static_mod_assets() -> int:
+    """启动兜底：重抽 static/assets/mod-card-art 里缺失的包内资产。
+
+    反馈 #328：卡数据里的 image 是上次抽取后的 /static/assets/mod-card-art/
+    URL——文件一旦丢失（清理/部署差异），URL 仍在但 404，卡面退化成灰底
+    问号。注册时的惰性抽取救不了「数据已指向 static」的场景，这里按包
+    全量核对一次。文件落盘统一走 _register_gtnmod_asset（内部 safe_member
+    归一 + 摘要文件名 + 白名单后缀 + 目录创建，与运行时同一条安全管线）。
+    """
+    restored = 0
+    if not os.path.isdir(MODS_DIR):
+        return 0
+    for entry in os.scandir(MODS_DIR):
+        if not entry.name.lower().endswith('.gtnmod') or not entry.is_file():
+            continue
+        filepath = entry.path
+        package_key = _gtnmod_package_key(filepath)
+        try:
+            with zipfile.ZipFile(filepath, 'r') as zf:
+                for raw_member in zf.namelist():
+                    safe_member = _safe_zip_member(raw_member)
+                    lowered = safe_member.lower()
+                    if not safe_member or not lowered.endswith(GTNMOD_ASSET_EXTS):
+                        continue
+                    if not any(lowered.startswith(f'{folder}/') for folder in GTNMOD_ASSET_DIRS):
+                        continue
+                    asset_id = hashlib.sha256(
+                        f'{package_key}|{safe_member}'.encode('utf-8')
+                    ).hexdigest()[:32]
+                    ext = os.path.splitext(safe_member)[1].lower()
+                    target = os.path.join(
+                        STATIC_MOD_ASSET_DIR,
+                        _hex_asset_filename(asset_id, ext),
+                    )
+                    if os.path.exists(target) and os.path.getsize(target) > 0:
+                        continue
+                    before = restored
+                    _register_gtnmod_asset(filepath, safe_member, package_key)
+                    if os.path.exists(target) and os.path.getsize(target) > 0:
+                        restored = before + 1
+        except Exception:
+            continue
+    return restored
+
+
+def _hex_asset_filename(asset_id: str, ext: str) -> str:
+    if not asset_id or not all(ch in '0123456789abcdef' for ch in asset_id.lower()):
+        return ''
+    if ext not in GTNMOD_ASSET_EXTS:
+        return ''
+    return asset_id.lower() + ext
+
+
 def load_mod(filepath: str) -> Mod:
     mod = Mod(filepath)
     try:
