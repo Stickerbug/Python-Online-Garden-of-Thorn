@@ -1018,7 +1018,7 @@ const I18N = {
         mod_selection_force_vanilla: 'Enabled the vanilla card mod because the selected mods must contain at least one Thorn, Bloom, Root, and Guard card.',
     mode_select: 'Mode', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: 'Infinite Fire', mode_random_deck: 'Random Deck',
         mode_casual_1v1: 'Casual 1v1', mode_casual_2v2: 'Casual 2v2', mode_ranked_1v1: 'Ranked 1v1', mode_ranked_2v2: 'Ranked 2v2', mode_casual_urf: 'Infinite Fire', mode_casual_random_deck: 'Random Deck',
-        ai_1v1_test: 'Battle Phelren V1', ai_1v1_test_title: 'Battle Phelren V1', ai_1v1_test_pending: 'Confirm a 1v1 match against Phelren? This match does not affect Garden Rating and uses the vanilla card set only.', ai_1v1_test_loading: 'Loading Phelren V1...',
+        ai_1v1_test: 'Battle Phelren V2', ai_1v1_test_title: 'Battle Phelren V2', ai_1v1_test_pending: 'Confirm a 1v1 match against Phelren? This match does not affect Garden Rating and uses the vanilla card set only.', ai_1v1_test_loading: 'Loading Phelren V2...',
         form_team: 'Form Team', leave_team: 'Leave Team', invite_team: 'Invite Team',
         team_invite_msg: '{0} invites you to form a team', team_formed_msg: 'Team formed with {0}',
         team_disbanded_msg: 'Team disbanded', team_match_invite_msg: 'Team {0} challenges your team',
@@ -1139,7 +1139,7 @@ I18N.zh = { ...I18N.en,
     gallery_type: '类型', gallery_cost: '费用', gallery_tags_label: '标签', gallery_description: '描述', gallery_effect: '效果', gallery_trigger: '触发',
     mode_select: '模式', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '无限火力', mode_random_deck: '随机卡组',
     mode_casual_1v1: '娱乐 1v1', mode_casual_2v2: '娱乐 2v2', mode_ranked_1v1: '天梯 1v1', mode_ranked_2v2: '天梯 2v2', mode_casual_urf: '无限火力', mode_casual_random_deck: '随机卡组',
-    ai_1v1_test: '对战 Phelren V1', ai_1v1_test_title: '对战 Phelren V1', ai_1v1_test_pending: '确认与 Phelren 进行 1v1 对局？本场对局不计段位，且仅使用原版模组。', ai_1v1_test_loading: '正在加载 Phelren V1…',
+    ai_1v1_test: '对战 Phelren V2', ai_1v1_test_title: '对战 Phelren V2', ai_1v1_test_pending: '确认与 Phelren 进行 1v1 对局？本场对局不计段位，且仅使用原版模组。', ai_1v1_test_loading: '正在加载 Phelren V2…',
     form_team: '组队', leave_team: '离开队伍', invite_team: '邀请队伍',
     team_invite_msg: '{0} 邀请你组队', team_formed_msg: '已与 {0} 组队',
     team_disbanded_msg: '队伍已解散', team_match_invite_msg: '队伍 {0} 向你们发起挑战',
@@ -1225,7 +1225,7 @@ I18N.fr = { ...I18N.en,
     choose_light_cards: 'Choisissez les cartes Attaque à convertir', choose_yggdrasil_card: 'Carte Arbre-Monde', opening_sequence_title: 'Arrangement floral', opening_sequence_message: 'Faites glisser les cartes pour réorganiser votre pioche. La carte du haut sera piochée en premier.', convert_label: 'Convertir', convert_per_type: 'Max {0} par type',
     selected_count: 'Sélectionné {0}/{1}', max_selection_warning: 'Ne peut pas dépasser {0}', deck_total: 'Deck : {0} cartes', view_deck_title: 'Voir le deck',
     mode_select: 'Mode', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: 'Feu infini', mode_random_deck: 'Deck aléatoire',
-    ai_1v1_test: 'Affronter Phelren V1', ai_1v1_test_title: 'Affronter Phelren V1', ai_1v1_test_pending: 'Confirmer un duel 1v1 contre Phelren ? Cette partie ne modifie pas le Garden Rating et utilise uniquement le jeu de base Vanilla.', ai_1v1_test_loading: 'Chargement de Phelren V1…',
+    ai_1v1_test: 'Affronter Phelren V2', ai_1v1_test_title: 'Affronter Phelren V2', ai_1v1_test_pending: 'Confirmer un duel 1v1 contre Phelren ? Cette partie ne modifie pas le Garden Rating et utilise uniquement le jeu de base Vanilla.', ai_1v1_test_loading: 'Chargement de Phelren V2…',
     hand_deck_info_opp: 'Main:{0} Deck:{1}', hand_deck_discard_info: 'Main:{0} Deck:{1} Défausse:{2}', round_status: 'Tour {0} - {1}',
     server_broadcast: 'Serveur : {0}', error_msg: 'Erreur : {0}', lobby_status: 'Salon - {0}', no_counter_countdown: 'Pas de contre({0})',
     select_event_desc: "Choisir un événement de départ", opponent_selected: 'Adversaire a choisi', opponent_selecting: 'Adversaire choisit...',
@@ -1313,7 +1313,7 @@ I18N.ja = { ...I18N.en,
     choose_light_cards: '変化させる攻撃カードを選択', choose_yggdrasil_card: '世界樹変換カードを選択', opening_sequence_title: '花序編成', opening_sequence_message: 'カードをドラッグして山札の順序を変更します。一番上のカードから引きます。', convert_label: '変換', convert_per_type: 'タイプごとに最大{0}枚',
     selected_count: '選択済み {0}/{1}', max_selection_warning: '{0}を超えることはできません', deck_total: 'デッキ: {0}枚', view_deck_title: 'デッキ確認',
     mode_select: 'モード', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '無限火力', mode_random_deck: 'ランダムデッキ',
-    ai_1v1_test: 'Phelren V1 と対戦', ai_1v1_test_title: 'Phelren V1 と対戦', ai_1v1_test_pending: 'Phelren との1v1対戦を開始しますか？この対戦では Garden Rating は変動せず、Vanilla カードのみを使用します。', ai_1v1_test_loading: 'Phelren V1 を読み込んでいます…',
+    ai_1v1_test: 'Phelren V2 と対戦', ai_1v1_test_title: 'Phelren V2 と対戦', ai_1v1_test_pending: 'Phelren との1v1対戦を開始しますか？この対戦では Garden Rating は変動せず、Vanilla カードのみを使用します。', ai_1v1_test_loading: 'Phelren V2 を読み込んでいます…',
     hand_deck_info_opp: '手札:{0} デッキ:{1}', hand_deck_discard_info: '手札:{0} デッキ:{1} 捨て札:{2}', round_status: '第{0}ターン - {1}',
     server_broadcast: 'サーバー: {0}', error_msg: 'エラー: {0}', lobby_status: 'ロビー - {0}', no_counter_countdown: 'カウンターなし({0})',
     select_event_desc: 'オープニングイベントを選択', opponent_selected: '相手が選択済み', opponent_selecting: '相手が選択中...',
@@ -2690,7 +2690,102 @@ let homeFloatingCardsSpawned = false;
 function updateHomeTouhouActiveClass(viewId = activeViewId) {
     const active = homeUiStyle === 'touhou' && viewId === 'view-login';
     document.documentElement.classList.toggle('home-touhou-active', active);
-    if (active) spawnHomeFloatingCards();
+    const widget = $('home-identity-widget');
+    if (widget) widget.classList.toggle('hidden', !active);
+    if (active) {
+        spawnHomeFloatingCards();
+        fillHomeIdentityWidget();
+    }
+}
+/* 右下角玩家身份卡（概念图）：形象+两侧卡牌+昵称称号；分区点击打开对应编辑。
+ * 称号/昵称用 setPlayerNameContent（与游戏内完全一致的渲染），
+ * 两侧卡牌用 createCardElement（真卡背/真卡面），形象带 look 渲染。 */
+let homeIdentityTitleMeta = null;
+let homeIdentityTitlesFetching = false;
+function fetchHomeIdentityTitles() {
+    if (!currentAccount || homeIdentityTitleMeta || homeIdentityTitlesFetching) return;
+    homeIdentityTitlesFetching = true;
+    fetch('/api/achievements', { credentials: 'same-origin' })
+        .then(response => response.json().catch(() => ({})))
+        .then(data => {
+            if (!data || !data.success) return;
+            const equipped = data.titles && Array.isArray(data.titles.equipped)
+                ? data.titles.equipped.filter(item => item && item.name)
+                : [];
+            homeIdentityTitleMeta = {
+                accountId: currentAccount && currentAccount.id,
+                equipped_titles: equipped,
+                name_style: data.name_style || null,
+                name_color: data.name_color || '',
+            };
+            fillHomeIdentityWidget();
+        })
+        .catch(() => {})
+        .finally(() => { homeIdentityTitlesFetching = false; });
+}
+function fillHomeIdentityWidget() {
+    const widget = $('home-identity-widget');
+    if (!widget) return;
+    const nick = (currentAccount && (currentAccount.display_name || currentAccount.nickname))
+        || ($('input-nickname') && $('input-nickname').value)
+        || (UI.guest_label || '游客');
+    const topEl = $('home-id-top');
+    if (topEl) {
+        // 账号切换后丢弃旧缓存，重新拉取
+        if (homeIdentityTitleMeta && homeIdentityTitleMeta.accountId !== (currentAccount && currentAccount.id)) {
+            homeIdentityTitleMeta = null;
+        }
+        const meta = currentAccount ? (homeIdentityTitleMeta || {}) : {};
+        // 称号来源合并：特殊资料直接带 equipped_titles；普通账号走 /api/achievements
+        const accountTitles = (currentAccount && Array.isArray(currentAccount.equipped_titles) && currentAccount.equipped_titles.length)
+            ? currentAccount.equipped_titles
+            : (meta.equipped_titles || []);
+        setPlayerNameContent(topEl, {
+            nickname: nick,
+            name: nick,
+            is_registered_user: !!currentAccount,
+            reputation_profile: currentAccount && currentAccount.reputation_profile,
+            name_style: meta.name_style || (currentAccount && currentAccount.name_style),
+            name_color: meta.name_color || (currentAccount && currentAccount.name_color),
+            equipped_titles: currentAccount ? accountTitles : [],
+        });
+        if (currentAccount && !homeIdentityTitleMeta) fetchHomeIdentityTitles();
+    }
+    const avatarEl = $('home-id-avatar');
+    if (avatarEl) {
+        avatarEl.innerHTML = renderSkinAvatar(getCurrentSkinConfig(), { look: localSkinLook, lookOwner: 'local' });
+    }
+    if (!widget.dataset.cardDef) {
+        const defIds = Object.keys(CARD_DEFS || {}).filter(id => {
+            const d = CARD_DEFS[id];
+            return !!(d && (d.image_url || d.image));
+        });
+        if (defIds.length) widget.dataset.cardDef = defIds[Math.floor(Math.random() * defIds.length)];
+    }
+    const cardDefId = widget.dataset.cardDef || '';
+    const leftBtn = $('home-id-card-l');
+    const rightBtn = $('home-id-card-r');
+    if (leftBtn && !leftBtn.firstChild) leftBtn.appendChild(createCardElement({}, { faceDown: true }));
+    if (rightBtn && cardDefId && !rightBtn.firstChild) {
+        rightBtn.appendChild(createCardElement({ def_id: cardDefId }, { small: true, disableIntro: true }));
+    }
+    bindHomeIdentityWidgetClicks(widget);
+}
+function bindHomeIdentityWidgetClicks(widget) {
+    if (widget.dataset.gtnClickBound === '1') return;
+    widget.dataset.gtnClickBound = '1';
+    const openSkinPageAt = (tab) => {
+        openSkinEditor();
+        switchSkinPageTab(tab);
+    };
+    const avatarBtn = $('home-id-avatar');
+    if (avatarBtn) avatarBtn.addEventListener('click', () => openSkinPageAt('look'));
+    const cardL = $('home-id-card-l');
+    if (cardL) cardL.addEventListener('click', () => openSkinPageAt('card-skins'));
+    const cardR = $('home-id-card-r');
+    if (cardR) cardR.addEventListener('click', () => openSkinPageAt('card-skins'));
+    const topBtn = $('home-id-top');
+    if (topBtn) topBtn.addEventListener('click', () => openSkinPageAt('titles'));
 }
 function spawnHomeFloatingCards() {
     const container = $('home-floating-cards');
@@ -6363,7 +6458,7 @@ function setAi1v1TestLoading(loading) {
     }
     if (label) {
         label.textContent = ai1v1StartPending
-            ? (UI.ai_1v1_test_loading || '正在加载 Phelren V1…')
+            ? (UI.ai_1v1_test_loading || '正在加载 Phelren V2…')
             : UI.ai_1v1_test;
     }
 }
@@ -6648,7 +6743,7 @@ function updateStaticText() {
     const aiTestLabel = $('ai-1v1-test-label');
     if (aiTestLabel) {
         aiTestLabel.textContent = ai1v1StartPending
-            ? (UI.ai_1v1_test_loading || '正在加载 Phelren V1…')
+            ? (UI.ai_1v1_test_loading || '正在加载 Phelren V2…')
             : UI.ai_1v1_test;
     }
     const settingsTabAppearance = $('settings-tab-appearance');
@@ -17510,7 +17605,7 @@ function connectSocket(serverUrl) {
             return;
         }
         // AI 对局的 ACTION_BUSY 不弹红色 toast——左侧提示区灰字足够
-        if (rejectCode === 'ACTION_BUSY' && gameState && gameState.ai_match) {
+        if (rejectCode === 'ACTION_BUSY' && gameState && (gameState.ai_match || gameState.ai_test || gameState.match_kind === 'phelren')) {
             debugLog('[client] AI busy, showing in action hint instead of toast');
             const hint = $('classic-action-hint');
             if (hint) {
@@ -17630,6 +17725,12 @@ function connectSocket(serverUrl) {
         const errorMessage = data && (data.message || '');
         if (errorCode === 'NO_PENDING_CHOICE' || errorMessage === UI.error_no_pending_choice || errorMessage === '没有待选择操作') {
             debugLog('[client] ignored stale no-pending-choice server_error');
+            clearPendingServerAction();
+            return;
+        }
+        // AI 对局的 ACTION_BUSY 不弹红色 toast——静默处理
+        if (errorCode === 'ACTION_BUSY' && gameState && (gameState.ai_match || gameState.ai_test || gameState.match_kind === 'phelren')) {
+            debugLog('[client] AI busy server_error suppressed');
             clearPendingServerAction();
             return;
         }
@@ -19604,6 +19705,7 @@ function saveLocalSkinConfig(skin) {
     try {
         localStorage.setItem('gtn_skin_config', JSON.stringify(normalizeSkinConfig(skin)));
     } catch (_) {}
+    fillHomeIdentityWidget();
 }
 
 function getCurrentSkinConfig() {
@@ -37785,7 +37887,7 @@ function renderGameOver(data) {
                 if (!socket || !socket.connected || rematchBtn.disabled) return;
                 setAi1v1TestLoading(true);
                 rematchBtn.disabled = true;
-                rematchBtn.textContent = UI.ai_1v1_test_loading || '正在加载 Phelren V1…';
+                rematchBtn.textContent = UI.ai_1v1_test_loading || '正在加载 Phelren V2…';
                 socket.emit('ai_1v1_rematch', {});
             };
         } else if (isTutorialGameOver && isWin) {

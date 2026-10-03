@@ -14826,49 +14826,98 @@ html[data-home-ui="touhou"] .subtitle {
   letter-spacing: 0.28em;
 }
 
-/* —— 阶梯式菜单：模式按钮逐级右移、轻斜、左刺条 —— */
+/* —— 東方式菜单：纯文字无边框无底色，逐项文字涂色（概念图：金/粉/天蓝/绿），
+ *    悬停整项变红＋左侧星标（東方标题界面经典样式）。不旋转菜单本体。 —— */
 html[data-home-ui="touhou"] .login-form {
   align-items: flex-start;
-  margin-top: 30px;
-  transform: rotate(-3deg);
-  transform-origin: left top;
-  gap: 10px;
+  margin-top: 26px;
+  gap: 2px;
 }
 html[data-home-ui="touhou"] .login-form .form-row {
-  width: 100%;
+  width: auto;
 }
 html[data-home-ui="touhou"] .login-form .form-row .btn {
-  transform: rotate(-1.2deg);
-  background: color-mix(in srgb, var(--bg-card) 58%, transparent);
-  border-left: 4px solid var(--thorn);
-  border-radius: 6px 20px 20px 6px;
-  font-size: 1.06em;
-  letter-spacing: 0.14em;
-  padding-left: 18px;
-  padding-right: 14px;
-  line-height: 1.25;
-  transition: transform 160ms ease, background 160ms ease, box-shadow 160ms ease;
+  display: inline-flex;
+  align-items: center;
+  width: auto;
+  padding: 3px 8px 3px 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  font-weight: 800;
+  line-height: 1.35;
+  letter-spacing: 0.18em;
+  transition: color 140ms ease, transform 140ms ease;
 }
+html[data-home-ui="touhou"] .login-form .form-row .btn::before {
+  content: '★';
+  display: inline-block;
+  width: 1.05em;
+  margin-right: 0.16em;
+  color: transparent;
+  transition: color 140ms ease;
+}
+html[data-home-ui="touhou"] #btn-connect,
+html[data-home-ui="touhou"] #btn-story-mode,
+html[data-home-ui="touhou"] #btn-solo-training,
+html[data-home-ui="touhou"] #btn-minigame-2048 {
+  min-height: 0;
+  width: auto;
+  padding: 3px 8px 3px 0;
+  font-size: clamp(20px, 2.4vw, 27px);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+/* 各入口文字涂色：沿用按钮原本色相（多人=青绿 故事=琥珀 训练=蓝 休闲=紫） */
+html[data-home-ui="touhou"] #btn-connect { color: var(--bloom); }
+html[data-home-ui="touhou"] #btn-story-mode { color: #d99a3d; }
+html[data-home-ui="touhou"] #btn-solo-training { color: var(--magic); }
+html[data-home-ui="touhou"] #btn-minigame-2048 { color: #8f7ff0; }
 html[data-home-ui="touhou"] .login-form .form-row .btn:hover {
-  transform: rotate(-1.2deg) translateX(10px) scale(1.03);
-  background: color-mix(in srgb, var(--bg-card) 92%, transparent);
-  box-shadow: -6px 8px 22px color-mix(in srgb, var(--thorn) 22%, transparent);
+  transform: translateX(6px);
+}
+html[data-home-ui="touhou"] #btn-connect:hover,
+html[data-home-ui="touhou"] #btn-story-mode:hover,
+html[data-home-ui="touhou"] #btn-solo-training:hover,
+html[data-home-ui="touhou"] #btn-minigame-2048:hover {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: #ff4f4f;
+}
+html[data-home-ui="touhou"] .login-form .form-row .btn:hover::before {
+  color: #ffd54a;
+}
+/* 工具行（反馈中心/反馈/关于）：小字次要色 */
+html[data-home-ui="touhou"] .login-form .login-utility-row {
+  margin-left: 24px;
+  margin-top: 16px;
+  opacity: 0.85;
+}
+html[data-home-ui="touhou"] .login-form .login-utility-row .btn-settings {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+html[data-home-ui="touhou"] .login-form .login-utility-row .btn-settings:hover {
+  color: #ff8a8a;
+  transform: none;
 }
 /* .login-form 子元素序号：1=游客分隔条 2=昵称行 3=多人 4=故事 5=训练场 6=休闲花园 */
 html[data-home-ui="touhou"] .login-form .form-row:nth-child(4),
 html[data-home-ui="touhou"] #story-mode-entry-row {
-  margin-left: 26px;
+  margin-left: 34px;
 }
 html[data-home-ui="touhou"] .login-form .form-row:nth-child(5) {
-  margin-left: 52px;
+  margin-left: 68px;
 }
 html[data-home-ui="touhou"] #minigame-2048-entry-row {
-  margin-left: 78px;
-}
-html[data-home-ui="touhou"] .login-form .login-utility-row {
-  margin-left: 18px;
-  margin-top: 16px;
-  opacity: 0.82;
+  margin-left: 102px;
 }
 html[data-home-ui="touhou"] .home-footer {
   position: absolute;
@@ -14880,36 +14929,108 @@ html[data-home-ui="touhou"] .login-container > * {
   position: relative;
   z-index: 1;
 }
+/* 身份卡是 login-container 子元素，须压过上面的通配定位规则保持固定右下角 */
+#home-identity-widget {
+  position: fixed !important;
+  z-index: 910;
+}
 
-/* —— 右下角皮肤调控位：主页且 touhou 生效时，顶栏皮肤按钮固定到右下角 —— */
-html.home-touhou-active .top-action-buttons .skin-top-btn {
+/* —— 右下角玩家身份卡（概念图：皮肤周围两张牌、顶上昵称和称号，
+ *    点击对应区域打开对应编辑：形象/卡牌皮肤/称号）。 —— */
+.home-identity-widget {
+  display: none;
   position: fixed;
-  top: auto;
-  left: auto;
   right: 20px;
   bottom: 20px;
   z-index: 910;
-  width: auto;
-  min-width: 54px;
-  padding: 9px 16px;
-  border-radius: 999px;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px 12px;
+  border-radius: 16px;
   background: color-mix(in srgb, var(--bg-card) 88%, transparent);
   box-shadow: 0 8px 26px rgba(20, 28, 20, 0.3);
-  font-size: 13px;
-  border: 1.5px solid color-mix(in srgb, var(--thorn) 55%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--thorn) 45%, transparent);
 }
-html.home-touhou-active .top-action-buttons .skin-top-btn:hover {
-  transform: translateY(-2px) scale(1.04);
+html.home-touhou-active #home-identity-widget {
+  display: flex;
+}
+.home-id-top {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  max-width: 250px;
+  padding: 2px 6px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  font-family: var(--font-main);
+}
+.home-id-top .player-title-inline,
+.home-id-top .player-name-value {
+  font-size: 13px;
+}
+.home-id-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.home-id-avatar {
+  width: 58px;
+  height: 58px;
+  padding: 3px;
+  border: 2px solid var(--bloom);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--bg-primary) 70%, transparent);
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform 140ms ease, border-color 140ms ease;
+}
+.home-id-avatar .skin-avatar {
+  width: 100%;
+  height: 100%;
+}
+.home-id-avatar:hover {
+  transform: scale(1.08);
+  border-color: #ff8a8a;
+}
+.home-id-card {
+  width: 46px;
+  height: 64px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: visible;
+  cursor: pointer;
+  transition: transform 140ms ease;
+}
+.home-id-card .card {
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+#home-id-card-l {
+  transform: rotate(-12deg);
+}
+#home-id-card-r {
+  transform: rotate(12deg);
+}
+.home-id-card:hover {
+  border-color: #ff8a8a;
+}
+#home-id-card-l:hover {
+  transform: rotate(-12deg) translateY(-4px) scale(1.06);
+}
+#home-id-card-r:hover {
+  transform: rotate(12deg) translateY(-4px) scale(1.06);
 }
 
-/* 窄屏微调：标题与阶梯收敛，避免横向溢出 */
+/* 窄屏微调：阶梯步长收敛，避免横向溢出 */
 @media (max-width: 600px) {
   html[data-home-ui="touhou"] .login-container {
     padding: clamp(72px, 14vh, 110px) 16px 40px 22px;
-  }
-  html[data-home-ui="touhou"] .login-form {
-    transform: rotate(-2deg);
-    width: min(300px, calc(100vw - 90px));
   }
   html[data-home-ui="touhou"] .title-main {
     transform: rotate(-5deg);
@@ -14921,18 +15042,30 @@ html.home-touhou-active .top-action-buttons .skin-top-btn:hover {
   }
   html[data-home-ui="touhou"] .login-form .form-row:nth-child(4),
   html[data-home-ui="touhou"] #story-mode-entry-row {
-    margin-left: 10px;
+    margin-left: 14px;
   }
   html[data-home-ui="touhou"] .login-form .form-row:nth-child(5) {
-    margin-left: 20px;
+    margin-left: 28px;
   }
   html[data-home-ui="touhou"] #minigame-2048-entry-row {
-    margin-left: 30px;
+    margin-left: 42px;
   }
-  html.home-touhou-active .top-action-buttons .skin-top-btn {
+  html.home-touhou-active #home-identity-widget {
     right: 12px;
-    bottom: 64px;
-    padding: 7px 12px;
+    bottom: 60px;
+    padding: 7px 10px 9px;
+    gap: 4px;
+  }
+  .home-id-avatar {
+    width: 46px;
+    height: 46px;
+  }
+  .home-id-card {
+    width: 34px;
+    height: 48px;
+  }
+  .home-id-top .player-title-inline,
+  .home-id-top .player-name-value {
     font-size: 11px;
   }
 }
