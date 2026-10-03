@@ -578,8 +578,8 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 50px;
-  height: 50px;
+  width: 64px;
+  height: 64px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -594,8 +594,8 @@ body {
 
 .top-icon-btn img {
   display: none;
-  width: 46px;
-  height: 46px;
+  width: 60px;
+  height: 60px;
   object-fit: contain;
   pointer-events: none;
   filter: drop-shadow(0 2px 3px rgba(35, 45, 35, 0.18));
@@ -604,10 +604,10 @@ body {
 .top-icon-text {
   display: grid;
   place-items: center;
-  width: 46px;
-  height: 46px;
+  width: 60px;
+  height: 60px;
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 900;
   line-height: 1;
   border-radius: 50%;
@@ -840,13 +840,23 @@ body {
   }
 
   .top-icon-btn {
-    width: 48px;
-    height: 48px;
+    width: 54px;
+    height: 54px;
+  }
+
+  .top-icon-btn img,
+  .top-icon-text {
+    width: 50px;
+    height: 50px;
+  }
+
+  .top-icon-text {
+    font-size: 13px;
   }
 
   .top-icon-btn::before {
-    width: 44px;
-    height: 44px;
+    width: 48px;
+    height: 48px;
   }
 }
 
@@ -14826,15 +14836,15 @@ html[data-home-ui="touhou"] .login-container {
 html[data-home-ui="touhou"] .title-main {
   position: absolute;
   left: 5vw;
-  top: 20vh;
+  top: 16vh;
   z-index: 2;
   display: flex;
   align-items: baseline;
-  gap: 2.2vw;
+  gap: 1.6vw;
   margin: 0;
   font-family: var(--font-card);
   font-weight: 700;
-  font-size: clamp(34px, 11vw, 212px);
+  font-size: clamp(28px, 7.2vw, 145px);
   line-height: 1;
   color: #1f1f1f;
 }
@@ -14853,11 +14863,11 @@ html[data-home-ui="touhou"] .title-word-thorn {
 html[data-home-ui="touhou"] .title-sub {
   position: absolute;
   left: 38vw;
-  top: 41vh;
+  top: 33vh;
   z-index: 2;
   margin: 0;
   font-family: var(--font-main);
-  font-size: clamp(16px, 5.3vw, 103px);
+  font-size: clamp(14px, 3.6vw, 72px);
   font-weight: 900;
   color: #d1181b;
   letter-spacing: 0.12em;
@@ -15055,7 +15065,7 @@ html.home-touhou-active #home-identity-widget {
   /* 排版与大厅玩家行一致（.lobby-player-row .player-name 基准）；
    * 行内流式排列（无 gap），称号紧贴昵称与游戏内完全一致 */
   font-family: var(--font-main);
-  font-size: clamp(13px, 1.35vw, 26px);
+  font-size: clamp(15px, 1.8vw, 34px);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -15138,8 +15148,8 @@ html[data-theme="dark"].home-touhou-active .home-id-avatar {
 /* 窄屏微调：弧线横向收紧、玩家区缩小，避免与标题/菜单重叠 */
 @media (max-width: 600px) {
   html[data-home-ui="touhou"] .title-main {
-    font-size: clamp(30px, 9.5vw, 64px);
-    top: 12vh;
+    font-size: clamp(26px, 8vw, 56px);
+    top: 10vh;
   }
   html[data-home-ui="touhou"] .title-word-of {
     transform: translateY(-0.3em);
@@ -15148,9 +15158,9 @@ html[data-theme="dark"].home-touhou-active .home-id-avatar {
     transform: translateY(-0.38em);
   }
   html[data-home-ui="touhou"] .title-sub {
-    font-size: clamp(15px, 4.6vw, 32px);
+    font-size: clamp(14px, 4vw, 28px);
     left: 24vw;
-    top: 30vh;
+    top: 24vh;
   }
   html[data-home-ui="touhou"] .login-divider {
     top: 40vh;
