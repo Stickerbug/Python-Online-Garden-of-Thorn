@@ -572,32 +572,10 @@ body {
   gap: 8px;
   max-width: calc(100vw - 24px);
 }
-/* 東方风主页：顶栏按钮组移到右上角分两行（填补右上空白）；设置与皮肤入口
- * 由弧线菜单/右下身份卡承担，顶部不再重复；按钮在東方风下放大 */
+/* 東方风主页（矢量图 mainpage-copy2）：所有标志图标并入左侧菜单列，
+ * 顶部按钮组整体隐藏；设置与皮肤由菜单/右下身份卡承担 */
 html.home-touhou-active .top-action-buttons {
-  left: auto;
-  right: 14px;
-  top: 10px;
-  display: grid;
-  grid-template-columns: repeat(6, auto);
-  justify-items: center;
-  gap: 8px;
-}
-html.home-touhou-active .top-action-buttons .skin-top-btn,
-html.home-touhou-active .top-action-buttons .top-settings-btn {
   display: none !important;
-}
-html.home-touhou-active .top-icon-btn {
-  width: 100px;
-  height: 100px;
-}
-html.home-touhou-active .top-icon-btn img,
-html.home-touhou-active .top-icon-text {
-  width: 96px;
-  height: 96px;
-}
-html.home-touhou-active .top-icon-text {
-  font-size: 22px;
 }
 
 .top-icon-btn {
@@ -14897,8 +14875,8 @@ html[data-home-ui="touhou"] .login-container {
 }
 html[data-home-ui="touhou"] .title-main {
   position: absolute;
-  left: 4vw;
-  top: 4vh;
+  left: 40vw;
+  top: 13vh;
   z-index: 2;
   display: flex;
   align-items: baseline;
@@ -14923,8 +14901,8 @@ html[data-home-ui="touhou"] .title-word-thorn {
 }
 html[data-home-ui="touhou"] .title-sub {
   position: absolute;
-  left: 4vw;
-  top: 17vh;
+  left: 59vw;
+  top: 29.5vh;
   z-index: 2;
   margin: 0;
   font-family: var(--font-main);
@@ -14954,7 +14932,7 @@ html[data-home-ui="touhou"] .login-form .form-row {
 /* 游客分隔条与昵称行：置于标题下、菜单上方；半透明底片让元素边界清晰 */
 html[data-home-ui="touhou"] .login-divider {
   left: 5vw;
-  top: 33.5vh;
+  top: 9.5vh;
   width: min(300px, 60vw);
   padding: 4px 12px;
   border-radius: 8px;
@@ -14963,7 +14941,7 @@ html[data-home-ui="touhou"] .login-divider {
 }
 html[data-home-ui="touhou"] #login-nickname-row {
   left: 5vw;
-  top: 36.5vh;
+  top: 13vh;
   width: min(300px, 60vw);
   padding: 6px 12px;
   border-radius: 10px;
@@ -15053,20 +15031,25 @@ html[data-home-ui="touhou"] #btn-minigame-2048:hover {
 html[data-home-ui="touhou"] .login-form .form-row .btn:hover::after {
   color: #ffd54a;
 }
-/* 弧线定位（矢量图 1920×1080 坐标换算：left=x/19.2vw，top=(y-45)/10.8vh）
- * 菜单 7 项：多人/故事/训练场/休闲/设置/反馈中心/手册（训练场替换设计稿的退出槽位顺移） */
-html[data-home-ui="touhou"] .login-form .form-row:nth-child(3) { left: 13.2vw; top: 43.4vh; }
-html[data-home-ui="touhou"] #story-mode-entry-row { left: 9.05vw; top: 49.4vh; }
-html[data-home-ui="touhou"] #solo-training-entry-row { left: 6.35vw; top: 56.1vh; }
-html[data-home-ui="touhou"] #minigame-2048-entry-row { left: 3.7vw; top: 62.8vh; }
-html[data-home-ui="touhou"] #home-entry-settings-row { left: 5.3vw; top: 70vh; }
-html[data-home-ui="touhou"] #home-entry-feedback-row { left: 7.6vw; top: 77.3vh; }
-html[data-home-ui="touhou"] #home-entry-about-row { left: 9.7vw; top: 84.1vh; }
+/* 菜单（矢量图 mainpage-copy2）：全部入口并入左列直排（带轻微左括号弧度），
+ * 12 项均布 21vh→84.8vh；x 沿设计稿曲线 7.6→3.16→7.14vw */
+html[data-home-ui="touhou"] .login-form .form-row:nth-child(3) { left: 7.6vw; top: 21vh; }
+html[data-home-ui="touhou"] #story-mode-entry-row { left: 6.05vw; top: 26.8vh; }
+html[data-home-ui="touhou"] #solo-training-entry-row { left: 5.2vw; top: 32.6vh; }
+html[data-home-ui="touhou"] #minigame-2048-entry-row { left: 4.3vw; top: 38.4vh; }
+html[data-home-ui="touhou"] #home-entry-settings-row { left: 3.5vw; top: 44.2vh; }
+html[data-home-ui="touhou"] #home-entry-account-row { left: 3.16vw; top: 50vh; }
+html[data-home-ui="touhou"] #home-entry-ann-row { left: 3.3vw; top: 55.8vh; }
+html[data-home-ui="touhou"] #home-entry-shop-row { left: 3.9vw; top: 61.6vh; }
+html[data-home-ui="touhou"] #home-entry-media-row { left: 4.6vw; top: 67.4vh; }
+html[data-home-ui="touhou"] #home-entry-feedback-row { left: 5.5vw; top: 73.2vh; }
+html[data-home-ui="touhou"] #home-entry-about-row { left: 6.4vw; top: 79vh; }
+html[data-home-ui="touhou"] #home-entry-quit-row { left: 7.14vw; top: 84.8vh; }
 /* 错误提示行绝对定位避免推动布局 */
 html[data-home-ui="touhou"] #login-error {
   position: absolute;
   left: 5vw;
-  top: 30.5vh;
+  top: 18.5vh;
   width: min(320px, 70vw);
 }
 /* 附加入口（设置/反馈中心/手册/退出）与原工具行：東方风下前者显示、后者隐藏。
@@ -15211,7 +15194,8 @@ html[data-theme="dark"].home-touhou-active .home-id-top {
 @media (max-width: 600px) {
   html[data-home-ui="touhou"] .title-main {
     font-size: clamp(26px, 8vw, 56px);
-    top: 10vh;
+    left: 30vw;
+    top: 6vh;
   }
   html[data-home-ui="touhou"] .title-word-of {
     transform: translateY(-0.3em);
@@ -15221,29 +15205,34 @@ html[data-theme="dark"].home-touhou-active .home-id-top {
   }
   html[data-home-ui="touhou"] .title-sub {
     font-size: clamp(14px, 4vw, 28px);
-    left: 24vw;
-    top: 24vh;
+    left: 44vw;
+    top: 15vh;
   }
   html[data-home-ui="touhou"] .login-divider {
-    top: 40vh;
+    top: 3.5vh;
   }
   html[data-home-ui="touhou"] #login-nickname-row {
-    top: 42.6vh;
+    top: 6.5vh;
   }
   html[data-home-ui="touhou"] #login-error {
-    top: 36.5vh;
+    top: 11.5vh;
   }
   html[data-home-ui="touhou"] .login-form .form-row .btn {
     font-size: clamp(16px, 4vw, 24px);
     -webkit-text-stroke: 0.3px #7b5925;
   }
-  html[data-home-ui="touhou"] .login-form .form-row:nth-child(3) { left: 26vw; top: 52vh; }
-  html[data-home-ui="touhou"] #story-mode-entry-row { left: 17vw; top: 58vh; }
-  html[data-home-ui="touhou"] #solo-training-entry-row { left: 10vw; top: 64vh; }
-  html[data-home-ui="touhou"] #minigame-2048-entry-row { left: 3vw; top: 70vh; }
-  html[data-home-ui="touhou"] #home-entry-settings-row { left: 8vw; top: 76vh; }
-  html[data-home-ui="touhou"] #home-entry-feedback-row { left: 14vw; top: 82vh; }
-  html[data-home-ui="touhou"] #home-entry-about-row { left: 20vw; top: 88vh; }
+  html[data-home-ui="touhou"] .login-form .form-row:nth-child(3) { left: 12vw; top: 26vh; }
+  html[data-home-ui="touhou"] #story-mode-entry-row { left: 9vw; top: 31.5vh; }
+  html[data-home-ui="touhou"] #solo-training-entry-row { left: 7vw; top: 37vh; }
+  html[data-home-ui="touhou"] #minigame-2048-entry-row { left: 5vw; top: 42.5vh; }
+  html[data-home-ui="touhou"] #home-entry-settings-row { left: 3.5vw; top: 48vh; }
+  html[data-home-ui="touhou"] #home-entry-account-row { left: 2.8vw; top: 53.5vh; }
+  html[data-home-ui="touhou"] #home-entry-ann-row { left: 2.8vw; top: 59vh; }
+  html[data-home-ui="touhou"] #home-entry-shop-row { left: 3.4vw; top: 64.5vh; }
+  html[data-home-ui="touhou"] #home-entry-media-row { left: 4.4vw; top: 70vh; }
+  html[data-home-ui="touhou"] #home-entry-feedback-row { left: 5.6vw; top: 75.5vh; }
+  html[data-home-ui="touhou"] #home-entry-about-row { left: 7vw; top: 81vh; }
+  html[data-home-ui="touhou"] #home-entry-quit-row { left: 8.4vw; top: 86.5vh; }
   html.home-touhou-active #home-identity-widget {
     right: 2vw;
     bottom: 5vh;

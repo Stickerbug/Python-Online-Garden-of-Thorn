@@ -2798,7 +2798,8 @@ function bindHomeIdentityWidgetClicks(widget) {
     const topBtn = $('home-id-top');
     if (topBtn) topBtn.addEventListener('click', () => openSkinPageAt('titles'));
 }
-/* 東方风主页弧线菜单的附加入口：设置/反馈中心/手册/退出（简约模式隐藏） */
+/* 東方风主页左侧列菜单：设置/帐号/公告日志/商店皮肤/社交/反馈中心/关于/退出
+ * （新图标项触发原右上角按钮的同一弹层；简约模式隐藏） */
 function setupHomeExtraEntries() {
     const settingsBtn = $('home-entry-settings');
     if (settingsBtn && settingsBtn.dataset.gtnClickBound !== '1') {
@@ -2810,11 +2811,51 @@ function setupHomeExtraEntries() {
         aboutBtn.dataset.gtnClickBound = '1';
         aboutBtn.addEventListener('click', openAbout);
     }
+    /* 图标项 → 原按钮同款行为（点击源按钮即打开对应弹层） */
+    const sourceClickPairs = [
+        ['home-entry-account', 'btn-account-top'],
+        ['home-entry-ann', 'btn-community-top'],
+        ['home-entry-shop', 'btn-title-shop-top'],
+        ['home-entry-media', 'btn-friends-top'],
+    ];
+    sourceClickPairs.forEach(([entryId, sourceId]) => {
+        const entry = $(entryId);
+        const source = $(sourceId);
+        if (!entry || entry.dataset.gtnClickBound === '1') return;
+        entry.dataset.gtnClickBound = '1';
+        entry.addEventListener('click', () => {
+            if (source && !source.classList.contains('hidden')) {
+                source.click();
+            } else {
+                // 好友等需要登录的入口：游客时转打开帐号面板
+                const accountBtn = $('btn-account-top');
+                if (accountBtn) accountBtn.click();
+            }
+        });
+    });
+    const quitBtn = $('home-entry-quit');
+    if (quitBtn && quitBtn.dataset.gtnClickBound !== '1') {
+        quitBtn.dataset.gtnClickBound = '1';
+        quitBtn.addEventListener('click', async () => {
+            const confirmed = await gameConfirm(
+                '退出游戏',
+                currentAccount ? '确定退出游戏并登出当前账号吗？' : '确定退出游戏并返回初始状态吗？',
+            );
+            if (!confirmed) return;
+            if (currentAccount) {
+                await onAccountLogout();
+                fillHomeIdentityWidget();
+                flashStatus('已退出登录', 1600);
+            } else {
+                window.location.reload();
+            }
+        });
+    }
     // 文案与现有入口保持一致（跟随语言设置）
     const settingsSrc = document.querySelector('#btn-open-settings .top-icon-label');
     if (settingsBtn) settingsBtn.textContent = (settingsSrc && settingsSrc.textContent) || '设置';
     const aboutSrc = $('btn-open-about');
-    if (aboutBtn && aboutSrc) aboutBtn.textContent = aboutSrc.textContent || '手册';
+    if (aboutBtn && aboutSrc) aboutBtn.textContent = aboutSrc.textContent || '关于';
     const feedbackLink = $('home-entry-feedback');
     const feedbackSrc = $('btn-public-feedback-center');
     if (feedbackLink && feedbackSrc) feedbackLink.textContent = feedbackSrc.textContent || '反馈中心';
