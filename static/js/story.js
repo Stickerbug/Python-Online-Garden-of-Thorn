@@ -6859,6 +6859,14 @@
     }
 
     function storyCardIsUpgradable(card) {
+        // 反馈 #340：generated 卡（泰坦锻造等）的升级能力看它自身携带的
+        // upgrade 定义（锻造合成固定 upgrade: null → 不可升级），而不是
+        // 原 def_id 的定义——否则休息点会把不可升级的合成牌列为可升级
+        // 并收费，升级前后却没有任何变化。
+        if (card?.generated && typeof card.generated === 'object') {
+            const own = card.generated.upgrade;
+            return Boolean(own && (own.infinite || !card?.upgraded));
+        }
         const upgrade = storyContent?.cards?.[card?.def_id]?.upgrade;
         return Boolean(upgrade && (upgrade.infinite || !card?.upgraded));
     }
