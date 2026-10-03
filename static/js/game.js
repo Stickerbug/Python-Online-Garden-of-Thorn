@@ -2695,6 +2695,7 @@ function updateHomeTouhouActiveClass(viewId = activeViewId) {
     if (active) {
         spawnHomeFloatingCards();
         fillHomeIdentityWidget();
+        setupHomeExtraEntries();
     }
 }
 /* 右下角玩家身份卡（概念图）：形象+两侧卡牌+昵称称号；分区点击打开对应编辑。
@@ -2796,6 +2797,27 @@ function bindHomeIdentityWidgetClicks(widget) {
     if (cardR) cardR.addEventListener('click', () => openSkinPageAt('card-skins'));
     const topBtn = $('home-id-top');
     if (topBtn) topBtn.addEventListener('click', () => openSkinPageAt('titles'));
+}
+/* 東方风主页弧线菜单的附加入口：设置/反馈中心/手册（简约模式隐藏，无副作用） */
+function setupHomeExtraEntries() {
+    const settingsBtn = $('home-entry-settings');
+    if (settingsBtn && settingsBtn.dataset.gtnClickBound !== '1') {
+        settingsBtn.dataset.gtnClickBound = '1';
+        settingsBtn.addEventListener('click', openSettings);
+    }
+    const aboutBtn = $('home-entry-about');
+    if (aboutBtn && aboutBtn.dataset.gtnClickBound !== '1') {
+        aboutBtn.dataset.gtnClickBound = '1';
+        aboutBtn.addEventListener('click', openAbout);
+    }
+    // 文案与现有入口保持一致（跟随语言设置）
+    const settingsSrc = document.querySelector('#btn-open-settings .top-icon-label');
+    if (settingsBtn) settingsBtn.textContent = (settingsSrc && settingsSrc.textContent) || '设置';
+    const aboutSrc = $('btn-open-about');
+    if (aboutBtn && aboutSrc) aboutBtn.textContent = aboutSrc.textContent || '手册';
+    const feedbackLink = $('home-entry-feedback');
+    const feedbackSrc = $('btn-public-feedback-center');
+    if (feedbackLink && feedbackSrc) feedbackLink.textContent = feedbackSrc.textContent || '反馈中心';
 }
 function spawnHomeFloatingCards() {
     const container = $('home-floating-cards');

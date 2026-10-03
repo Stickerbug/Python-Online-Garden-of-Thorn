@@ -14891,33 +14891,82 @@ html[data-home-ui="touhou"] #btn-minigame-2048:hover {
 html[data-home-ui="touhou"] .login-form .form-row .btn:hover::before {
   color: #ffd54a;
 }
-/* 工具行（反馈中心/反馈/关于）：小字次要色 */
-html[data-home-ui="touhou"] .login-form .login-utility-row {
-  margin-left: 24px;
-  margin-top: 16px;
-  opacity: 0.85;
+/* .login-form 子元素序号：1=游客分隔条 2=昵称行 3=多人 4=故事 5=训练场 6=休闲花园
+ * 7=设置入口 8=反馈中心入口 9=手册入口（附加入口仅 touhou 模式显示） */
+.home-extra-entry {
+  display: none;
 }
-html[data-home-ui="touhou"] .login-form .login-utility-row .btn-settings {
+html[data-home-ui="touhou"] .home-extra-entry {
+  display: block;
+}
+/* 附加入口（概念图：Option 白灰/反馈中心 浅蓝/手册 浅黄） */
+html[data-home-ui="touhou"] #home-entry-settings { color: #d5dbe0; }
+html[data-home-ui="touhou"] #home-entry-feedback { color: #bfe0ef; }
+html[data-home-ui="touhou"] #home-entry-about { color: #eee3b8; }
+html[data-home-ui="touhou"] #home-entry-settings,
+html[data-home-ui="touhou"] #home-entry-feedback,
+html[data-home-ui="touhou"] #home-entry-about {
+  min-height: 0;
+  width: auto;
+  padding: 3px 8px 3px 0;
+  font-size: clamp(20px, 2.4vw, 27px);
+  font-weight: 800;
+  line-height: 1.35;
+  letter-spacing: 0.18em;
   background: transparent;
   border: 0;
+  border-radius: 0;
   box-shadow: none;
-  color: var(--text-secondary);
-  font-size: 13px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  transition: color 140ms ease, transform 140ms ease;
 }
-html[data-home-ui="touhou"] .login-form .login-utility-row .btn-settings:hover {
-  color: #ff8a8a;
-  transform: none;
+html[data-home-ui="touhou"] #home-entry-settings::before,
+html[data-home-ui="touhou"] #home-entry-feedback::before,
+html[data-home-ui="touhou"] #home-entry-about::before {
+  content: '★';
+  display: inline-block;
+  width: 1.05em;
+  margin-right: 0.16em;
+  color: transparent;
+  transition: color 140ms ease;
 }
-/* .login-form 子元素序号：1=游客分隔条 2=昵称行 3=多人 4=故事 5=训练场 6=休闲花园 */
+html[data-home-ui="touhou"] #home-entry-settings:hover,
+html[data-home-ui="touhou"] #home-entry-feedback:hover,
+html[data-home-ui="touhou"] #home-entry-about:hover {
+  background: transparent;
+  color: #ff4f4f;
+  transform: translateX(6px);
+}
+html[data-home-ui="touhou"] #home-entry-settings:hover::before,
+html[data-home-ui="touhou"] #home-entry-feedback:hover::before,
+html[data-home-ui="touhou"] #home-entry-about:hover::before {
+  color: #ffd54a;
+}
+/* 弧线（扇形）排列：概念图累计偏移 0→36→78→115→142→152→148 后回收 */
 html[data-home-ui="touhou"] .login-form .form-row:nth-child(4),
 html[data-home-ui="touhou"] #story-mode-entry-row {
-  margin-left: 34px;
+  margin-left: 36px;
 }
 html[data-home-ui="touhou"] .login-form .form-row:nth-child(5) {
-  margin-left: 68px;
+  margin-left: 78px;
 }
 html[data-home-ui="touhou"] #minigame-2048-entry-row {
-  margin-left: 102px;
+  margin-left: 115px;
+}
+html[data-home-ui="touhou"] #home-entry-settings-row {
+  margin-left: 142px;
+}
+html[data-home-ui="touhou"] #home-entry-feedback-row {
+  margin-left: 152px;
+}
+html[data-home-ui="touhou"] #home-entry-about-row {
+  margin-left: 148px;
+}
+/* 附加入口替代原工具行 */
+html[data-home-ui="touhou"] .login-form .login-utility-row {
+  display: none;
 }
 html[data-home-ui="touhou"] .home-footer {
   position: absolute;
@@ -14956,18 +15005,16 @@ html.home-touhou-active #home-identity-widget {
   display: flex;
 }
 .home-id-top {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  max-width: 250px;
+  display: block;
+  max-width: 260px;
   padding: 2px 6px;
   border: 0;
   background: transparent;
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
-  /* 排版与大厅玩家行一致（.lobby-player-row .player-name 基准），
-   * 账号/游客/管理名染色由 .player-name-inline.* 全局规则命中 */
+  /* 排版与大厅玩家行一致（.lobby-player-row .player-name 基准）；
+   * 行内流式排列（无 gap），称号紧贴昵称与游戏内完全一致 */
   font-family: var(--font-main);
   font-size: 14px;
   font-weight: 600;
@@ -14979,8 +15026,8 @@ html.home-touhou-active #home-identity-widget {
   gap: 8px;
 }
 .home-id-avatar {
-  width: 58px;
-  height: 58px;
+  width: 86px;
+  height: 86px;
   padding: 3px;
   border: 2px solid var(--bloom);
   border-radius: 50%;
@@ -14999,8 +15046,8 @@ html.home-touhou-active #home-identity-widget {
   border-color: #ff8a8a;
 }
 .home-id-card {
-  width: 46px;
-  height: 64px;
+  width: 58px;
+  height: 82px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -15044,13 +15091,22 @@ html.home-touhou-active #home-identity-widget {
   }
   html[data-home-ui="touhou"] .login-form .form-row:nth-child(4),
   html[data-home-ui="touhou"] #story-mode-entry-row {
-    margin-left: 14px;
+    margin-left: 18px;
   }
   html[data-home-ui="touhou"] .login-form .form-row:nth-child(5) {
-    margin-left: 28px;
+    margin-left: 39px;
   }
   html[data-home-ui="touhou"] #minigame-2048-entry-row {
-    margin-left: 42px;
+    margin-left: 57px;
+  }
+  html[data-home-ui="touhou"] #home-entry-settings-row {
+    margin-left: 71px;
+  }
+  html[data-home-ui="touhou"] #home-entry-feedback-row {
+    margin-left: 76px;
+  }
+  html[data-home-ui="touhou"] #home-entry-about-row {
+    margin-left: 74px;
   }
   html.home-touhou-active #home-identity-widget {
     right: 12px;
@@ -15059,12 +15115,12 @@ html.home-touhou-active #home-identity-widget {
     gap: 4px;
   }
   .home-id-avatar {
-    width: 46px;
-    height: 46px;
+    width: 64px;
+    height: 64px;
   }
   .home-id-card {
-    width: 34px;
-    height: 48px;
+    width: 42px;
+    height: 60px;
   }
   .home-id-top {
     font-size: 12px;
