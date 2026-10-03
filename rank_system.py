@@ -43,6 +43,8 @@ _DEFAULT_CAP = 200
 WIN_BASE = 5
 LOSS_BASE = 3
 MIN_CHANGE = 1
+MAX_WIN = 10     # 平衡 2026-10-02：胜利加分上限（封顶后再吃倍率）
+MAX_LOSS = 5     # 失败扣分上限
 DAILY_DOUBLE_GAMES = 5      # 每日前 5 局计分对局，胜利加分翻倍
 BEIJING_TZ_OFFSET_HOURS = 8
 
@@ -118,13 +120,13 @@ def opponent_correction(own_tier: int, opponent_tier_avg: float) -> float:
 def match_gain(own_tier: int, opponent_tier_avg: float, special_total: float = 0.0) -> int:
     """胜利加分：5 + 段位修正 + 特殊修正，至少 1。"""
     raw = WIN_BASE + opponent_correction(own_tier, opponent_tier_avg) + float(special_total or 0.0)
-    return max(MIN_CHANGE, _round_half_up(raw))
+    return max(MIN_CHANGE, min(MAX_WIN, _round_half_up(raw)))
 
 
 def match_loss(own_tier: int, opponent_tier_avg: float, special_total: float = 0.0) -> int:
     """失败扣分：3 - 段位修正 - 特殊修正，至少 1（返回正数）。"""
     raw = LOSS_BASE - opponent_correction(own_tier, opponent_tier_avg) - float(special_total or 0.0)
-    return max(MIN_CHANGE, _round_half_up(raw))
+    return max(MIN_CHANGE, min(MAX_LOSS, _round_half_up(raw)))
 
 
 def _round_half_up(value: float) -> int:
@@ -140,6 +142,8 @@ def apply_match_result(
     opponent_tier_avg: float,
     special_total: float = 0.0,
     daily_double: bool = False,
+    double_card: bool = False,
+    loss_shield: bool = False,
 ) -> Dict[str, object]:
     """一局计分对局后的段位变化（纯函数）。
 
@@ -147,7 +151,10 @@ def apply_match_result(
     升段：段位分已在上限，再累计 2 连胜 → 升一段、归 0。
     降段：段位分已在 0，再输一局 → 降一段、置为新段上限（最低段不再降）。
     平局：分不变，连胜清零。
-    daily_double: 每日前 5 局的胜利加分 ×2（在最低 +1 之后翻倍）。
+    daily_double: 每日前 5 局的胜利加分 ×2（封顶 +10 之后再乘）。
+    double_card: 双倍卡——同上 ×2；与每日双倍共存时合计 ×3（设计 2026-10-02）。
+    loss_shield: 保分卡——本局失败不扣分、不降段（连胜照旧清零）。
+    common 大段失败不掉分（含降段）；unusual 扣分减半向上取整。
     """
     tier_index = clamp_tier(tier_index)
     cap = rank_cap(tier_index)
@@ -171,9 +178,11 @@ def apply_match_result(
         return result
     if outcome == 'win':
         gain = match_gain(tier_index, opponent_tier_avg, special_total)
-        if daily_double:
-            gain *= 2
-            result['daily_double'] = True
+        multiplier = 3 if (daily_double and double_card) else 2 if (daily_double or double_card) else 1
+        if multiplier > 1:
+            gain *= multiplier
+            result['daily_double'] = daily_double
+            result['double_card'] = double_card
         was_at_cap = points >= cap
         new_points = min(cap, points + gain)
         result['delta'] = new_points - points
@@ -196,7 +205,19 @@ def apply_match_result(
             result['streak'] = 0
         return result
     if outcome == 'loss':
+        major = rank_major(tier_index)
+        if loss_shield:
+            result['shielded'] = True
+            result['streak'] = 0
+            result['changed'] = bool(streak)
+            return result
+        if major == 'common':
+            result['streak'] = 0
+            result['changed'] = bool(streak)
+            return result
         loss = match_loss(tier_index, opponent_tier_avg, special_total)
+        if major == 'unusual':
+            loss = max(1, math.ceil(loss / 2))
         was_at_zero = points <= 0
         new_points = max(0, points - loss)
         result['delta'] = new_points - points
