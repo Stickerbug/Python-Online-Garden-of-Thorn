@@ -22418,6 +22418,23 @@ html[data-ui-style="minimal"] .card.card-skin-no-corner::before,
 .battle-classic .card.card-skin-no-corner::before {
   display: none; /* 非初始皮肤：右上角类型色 1/4 圆圈不显示 */
 }
+/* 经典 UI 他人出牌动画：中央明牌展示（打出的卡先显示在中间） */
+.classic-center-stage {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%) scale(1.35);
+    z-index: 4600;
+    pointer-events: none;
+    box-shadow: 0 18px 46px rgba(0, 0, 0, 0.45);
+    animation: classicCenterStageIn 180ms ease-out;
+}
+
+@keyframes classicCenterStageIn {
+    from { opacity: 0; transform: translate(-50%, -50%) scale(1.05); }
+    to { opacity: 1; transform: translate(-50%, -50%) scale(1.35); }
+}
+
 .card-skin-under {
   position: absolute;
   left: 50%;

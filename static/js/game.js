@@ -14585,7 +14585,62 @@ function resetPlayPredictionCache() {
     playPredictionPendingKeys.clear();
 }
 
+// ===== 经典 UI 他人出牌动画（设计 2026-10-02）：中央展示 → 等反制窗 → 飞行 =====
+// 事件由服务器在打出完成时广播（card_played）；卡牌打出本就进战报公开，
+// 无隐藏信息泄露。中央定格 600ms 为多人对决固定值（不联动故事模式速度档）。
+let classicOpponentPlayQueueTail = Promise.resolve();
+
+function onClassicCardPlayedBroadcast(data) {
+    if (!data || replayMode || isSpectating) return;
+    const gs = gameState || {};
+    if (Number(data.actor_id) === Number(gs.your_id)) return;
+    if (data.room_id != null && gs.room_id != null && Number(data.room_id) !== Number(gs.room_id)) return;
+    classicOpponentPlayQueueTail = classicOpponentPlayQueueTail
+        .then(() => playClassicOpponentCard(data))
+        .catch(() => {});
+}
+
+async function playClassicOpponentCard(data) {
+    const cardDict = data.card || {};
+    if (!cardDict.def_id) return;
+    const el = createCardElement(cardDict, { draggable: false, disableIntro: true });
+    if (!el) return;
+    el.classList.add('classic-center-stage');
+    document.body.appendChild(el);
+    await new Promise(resolve => setTimeout(resolve, 600));
+    if (data.has_response_window) {
+        // 等反制窗结束（轮询 pending_response 消失，12s 兜底防卡死）
+        await new Promise(resolve => {
+            const timer = setInterval(() => {
+                if (!(gameState && gameState.pending_response)) {
+                    clearInterval(timer);
+                    resolve();
+                }
+            }, 250);
+            setTimeout(() => { clearInterval(timer); resolve(); }, 12000);
+        });
+    }
+    const rect = el.getBoundingClientRect();
+    el.remove();
+    const pileEl = document.querySelector('#classic-discard-count') || document.querySelector('#classic-exile-count');
+    if (window.STS2 && rect.width > 2 && pileEl) {
+        await STS2.flyCard({
+            from: rect,
+            to: pileEl,
+            cardEl: el,
+            duration: 300,
+            arcHeight: 90,
+            scaleTo: 0.4,
+            rotate: 18,
+            ease: 'inout',
+            trail: false,
+            z: 4600,
+        }).catch(() => {});
+    }
+}
+
 function bindPlayPredictionSocket() {
+    bindSocketEvent('card_played', onClassicCardPlayedBroadcast);
     bindSocketEvent('play_predictions', (data) => {
         if (!data || typeof data.predictions !== 'object') return;
         if (data.room_id != null && gameState && gameState.room_id != null

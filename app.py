@@ -17866,6 +17866,39 @@ def _room_state_broadcast_worker(room):
             pass
 
 
+
+def _emit_classic_card_played(room, pidx, card_dict, choice=None):
+    """经典 UI 他人出牌动画（设计 2026-10-02）：打出完成即广播明牌事件。
+
+    客户端中央展示 → 等反制窗结束 → 飞行弃牌。卡牌打出本就进战报公开，
+    无隐藏信息泄露；自己座位由客户端按 actor_id 忽略（走既有出牌动画）。
+    """
+    try:
+        engine = getattr(room, 'engine', None)
+        has_window = engine is not None and getattr(engine, 'pending_response', None) is not None
+        target_id = -1
+        src_choice = choice if isinstance(choice, dict) else {}
+        for key in ('target_player_id', 'target_player', 'target_id'):
+            try:
+                raw = int(src_choice.get(key, -1))
+            except (TypeError, ValueError):
+                raw = -1
+            if raw >= 0:
+                target_id = raw
+                break
+        payload = {
+            'room_id': getattr(room, 'room_id', None),
+            'actor_id': int(pidx),
+            'card': card_dict or {},
+            'target_id': target_id,
+            'has_response_window': bool(has_window),
+        }
+        for sid in list(getattr(room, 'player_sids', []) or []):
+            socketio.emit('card_played', payload, room=sid)
+    except Exception:
+        pass
+
+
 def broadcast_game_state(room):
     if room is None:
         return
@@ -35089,6 +35122,8 @@ def on_play_card(data):
         emit_turn_timer_update(room)
     if completed_play_for_timer:
         record_valid_player_action(room, pidx, 'play_card')
+    if result.get('success') and result.get('card') and not result.get('needs_choice'):
+        _emit_classic_card_played(room, pidx, result.get('card') or {}, choice)
     if result.get('success') or result.get('needs_ally_consent') or result.get('needs_response') or result.get('needs_v2_ui'):
         replay_action_payload = {
             'card_instance_id': card_instance_id,
