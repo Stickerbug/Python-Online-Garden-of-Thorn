@@ -2827,28 +2827,74 @@ function spawnHomeFloatingCards() {
     const container = $('home-floating-cards');
     if (!container || homeFloatingCardsSpawned) return;
     homeFloatingCardsSpawned = true;
-    const defIds = Object.keys(CARD_DEFS || {});
-    if (!defIds.length) return;
     const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const total = reduced ? 0 : Math.min(12, Math.max(7, Math.round(window.innerWidth / 130)));
+    if (reduced) return;
+    /* 来源：CARD_DEFS＝当前启用模组合并后的全部卡牌定义（官方＋模组），
+     * 预过滤出有卡面图的，避免分层列因无图定义而空缺 */
+    const artDefIds = Object.keys(CARD_DEFS || {}).filter(id => {
+        const d = CARD_DEFS[id];
+        return !!(d && (d.image_url || d.image));
+    });
+    if (!artDefIds.length) return;
+    const total = Math.min(22, Math.max(10, Math.round(window.innerWidth / 96)));
+    /* 固定种子：同一用户每次刷新拿到完全相同的卡牌/位置/速度；
+     * 相位用绝对时间（Date.now）计算，刷新后漂移进程无缝延续 */
+    let seedText = '';
+    try {
+        seedText = String((currentAccount && (currentAccount.id || currentAccount.username)) || '')
+            || localStorage.getItem('gtn_home_hfc_seed') || '';
+        if (!seedText) {
+            seedText = 'hfc-' + Math.random().toString(36).slice(2, 10);
+            localStorage.setItem('gtn_home_hfc_seed', seedText);
+        }
+    } catch (_) { seedText = 'hfc-default'; }
+    let seedHash = 1779033703;
+    for (let i = 0; i < seedText.length; i++) {
+        seedHash = Math.imul(seedHash ^ seedText.charCodeAt(i), 3432918353);
+        seedHash = (seedHash << 13) | (seedHash >>> 19);
+    }
+    const rand = () => {
+        seedHash = Math.imul(seedHash ^ (seedHash >>> 16), 2246822507);
+        seedHash = Math.imul(seedHash ^ (seedHash >>> 13), 3266489909);
+        seedHash ^= seedHash >>> 16;
+        return (seedHash >>> 0) / 4294967296;
+    };
+    const nowSec = Date.now() / 1000;
     for (let i = 0; i < total; i++) {
-        const def = CARD_DEFS[defIds[Math.floor(Math.random() * defIds.length)]];
-        const url = getCardArtUrl({}, def);
+        const def = CARD_DEFS[artDefIds[Math.floor(rand() * artDefIds.length)]];
+        const url = def ? getCardArtUrl({}, def) : '';
         if (!url) continue;
-        const el = document.createElement('img');
-        el.src = url;
-        el.alt = '';
-        el.draggable = false;
-        el.className = 'home-floating-card';
-        const depth = 0.35 + Math.random() * 0.65;
-        el.style.setProperty('--hfc-depth', String(depth));
-        el.style.setProperty('--hfc-left', `${Math.random() * 96}%`);
-        el.style.setProperty('--hfc-size', `${44 + Math.round(depth * 58)}px`);
-        el.style.setProperty('--hfc-delay', `${-Math.random() * 46}s`);
-        el.style.setProperty('--hfc-duration', `${30 + Math.random() * 26}s`);
-        el.style.setProperty('--hfc-sway', `${(Math.random() * 2 - 1) * 26}px`);
-        el.style.setProperty('--hfc-rot', `${(Math.random() * 2 - 1) * 16}deg`);
-        container.appendChild(el);
+        const depth = 0.35 + rand() * 0.65;
+        const riseDuration = 34 + rand() * 30;
+        const swayDuration = 6 + rand() * 9;
+        const spinDuration = (rand() < 0.5 ? -1 : 1) * (10 + rand() * 14);
+        const rise = document.createElement('div');
+        rise.className = 'home-floating-card';
+        /* 分层取样保证水平分布均匀：每卡一列，列内抖动，杜绝局部密集 */
+        const column = (i + rand() * 0.72) / total;
+        rise.style.setProperty('--hfc-depth', String(depth));
+        rise.style.setProperty('--hfc-left', `${(column * 96).toFixed(2)}%`);
+        rise.style.setProperty('--hfc-size', `${44 + Math.round(depth * 58)}px`);
+        rise.style.setProperty('--hfc-duration', `${riseDuration.toFixed(2)}s`);
+        rise.style.setProperty('--hfc-delay', `${(-(nowSec % riseDuration)).toFixed(2)}s`);
+        rise.style.setProperty('--hfc-sway', `${(8 + rand() * 22).toFixed(1)}px`);
+        rise.style.setProperty('--hfc-sway-duration', `${swayDuration.toFixed(2)}s`);
+        rise.style.setProperty('--hfc-sway-delay', `${(-(nowSec % swayDuration)).toFixed(2)}s`);
+        const sway = document.createElement('div');
+        sway.className = 'hfc-sway';
+        sway.style.setProperty('--hfc-sway-duration', `${swayDuration.toFixed(2)}s`);
+        sway.style.setProperty('--hfc-sway-delay', `${(-(nowSec % swayDuration)).toFixed(2)}s`);
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = '';
+        img.draggable = false;
+        img.className = 'hfc-spin';
+        img.style.setProperty('--hfc-spin-duration', `${Math.abs(spinDuration).toFixed(2)}s`);
+        img.style.setProperty('--hfc-spin-delay', `${(-(nowSec % Math.abs(spinDuration))).toFixed(2)}s`);
+        if (spinDuration < 0) img.style.animationDirection = 'reverse';
+        sway.appendChild(img);
+        rise.appendChild(sway);
+        container.appendChild(rise);
     }
 }
 function applyHomeUiStyle(style) {
