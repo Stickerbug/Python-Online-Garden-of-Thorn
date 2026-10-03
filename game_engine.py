@@ -7416,12 +7416,13 @@ class GameEngine:
                 self._put_card_in_exile(ps.player_id, card)
             elif exile_played_card:
                 card.instance_flags.add('exile')
-        actor_text = ''
+        # 反馈 #335：战报归属按牌主人（target）——source_player_id 只决定无敌
+        # 持续到谁的回合（9.29 设计），旧文案把它当牌主人，对手的绝境求生牌
+        # 触发时误报"我的世界树之叶使其复活"。
+        actor_text = f"{self.pn(target_id)}的世界树之叶"
         if source_player_id is not None and source_player_id != target_id:
-            actor_text = f"{self.pn(source_player_id)}的世界树之叶使"
             invincible_text = f"无敌直到{self.pn(source_player_id)}的下一个回合开始！"
         else:
-            actor_text = f"{self.pn(target_id)}的世界树之叶"
             invincible_text = '无敌直到自己的下一个回合开始！'
         revive_text = '复活，' if was_dead else ''
         self.log_msg(f"{actor_text}{self.pn(target_id)}{revive_text}生命值设为5，抽{len(drawn)}张牌，清除所有效果，{invincible_text}")

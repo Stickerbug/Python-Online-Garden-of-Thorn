@@ -5177,6 +5177,9 @@ def _play_card(state, payload, seed, events, autoplay_depth=0):
     charge = max(0, int((card.get('modifiers') or {}).get('charge') or 0))
     if charge:
         _player_raw_damage(state, charge, events, 'charge')
+        # 反馈 #327：打出结算电荷伤害后清零层数——旧实现只伤不清，牌进
+        # 弃牌堆后抽回再打又触发一次，电荷「永远无法减少」。
+        card.setdefault('modifiers', {})['charge'] = 0
     is_attack = values.get('type') == 'thorn'
     is_skill = values.get('type') == 'bloom'
     attack_multiplier = float(combat.get('next_attack_multiplier') or 1) if is_attack else 1
