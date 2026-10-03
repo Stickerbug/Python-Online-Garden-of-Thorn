@@ -502,11 +502,12 @@
 <!-- 主页UI·東方Project风：右下角玩家身份卡（形象+两侧卡牌+昵称称号，分区点击进对应编辑） -->
 <div id="home-identity-widget" class="home-identity-widget hidden">
   <button type="button" id="home-id-top" class="home-id-top player-name-inline" title="编辑昵称与称号"></button>
-  <div class="home-id-row">
+  <div class="home-id-cards">
     <button type="button" id="home-id-card-l" class="home-id-card" title="编辑卡牌皮肤"></button>
-    <button type="button" id="home-id-avatar" class="home-id-avatar" title="编辑形象"></button>
+    <button type="button" id="home-id-card-m" class="home-id-card" title="编辑卡牌皮肤"></button>
     <button type="button" id="home-id-card-r" class="home-id-card" title="编辑卡牌皮肤"></button>
   </div>
+  <button type="button" id="home-id-avatar" class="home-id-avatar" title="编辑形象"></button>
 </div>
 <div id="account-warning-banner" class="account-warning-banner hidden"></div>
 <div class="login-form">
@@ -517,28 +518,31 @@
 <div id="account-nickname-display" class="account-nickname-display hidden"></div>
 </div>
 <div class="form-row">
-<button id="btn-connect" class="btn btn-primary">多人游戏</button>
+<button id="btn-connect" class="btn btn-primary" data-menu-en="Multiplayer">多人游戏</button>
 </div>
 <div id="story-mode-entry-row" class="form-row">
-<button id="btn-story-mode" class="btn btn-story" type="button">故事模式</button>
+<button id="btn-story-mode" class="btn btn-story" type="button" data-menu-en="Story Mode">故事模式</button>
 </div>
-<div class="form-row">
-<button id="btn-solo-training" class="btn btn-magic">单人训练场</button>
+<div class="form-row" id="solo-training-entry-row">
+<button id="btn-solo-training" class="btn btn-magic" data-menu-en="Training">单人训练场</button>
 </div>
 {% if minigame_available|default(false) %}
 <div class="form-row" id="minigame-2048-entry-row">
-          <button id="btn-minigame-2048" class="btn btn-leisure" type="button" title="休闲花园">休闲花园</button>
+          <button id="btn-minigame-2048" class="btn btn-leisure" type="button" title="休闲花园" data-menu-en="Casual Garden">休闲花园</button>
 </div>
 {% endif %}
-<!-- 東方Project风主页：弧线菜单的附加入口（设置/反馈中心/手册），简约模式下隐藏 -->
+<!-- 東方Project风主页：弧线菜单的附加入口（设置/反馈中心/手册/退出），简约模式下隐藏 -->
 <div class="form-row home-extra-entry" id="home-entry-settings-row">
-  <button id="home-entry-settings" class="btn" type="button">设置</button>
+  <button id="home-entry-settings" class="btn" type="button" data-menu-en="Option">设置</button>
 </div>
 <div class="form-row home-extra-entry" id="home-entry-feedback-row">
-  <a id="home-entry-feedback" class="btn" href="/feedback-center" target="_blank" rel="noopener">反馈中心</a>
+  <a id="home-entry-feedback" class="btn" href="/feedback-center" target="_blank" rel="noopener" data-menu-en="Feedback Center">反馈中心</a>
 </div>
 <div class="form-row home-extra-entry" id="home-entry-about-row">
-  <button id="home-entry-about" class="btn" type="button">手册</button>
+  <button id="home-entry-about" class="btn" type="button" data-menu-en="Manual">手册</button>
+</div>
+<div class="form-row home-extra-entry" id="home-entry-quit-row">
+  <button id="home-entry-quit" class="btn" type="button" data-menu-en="Quit">退出游戏</button>
 </div>
 <div class="form-row login-utility-row">
 <a id="btn-public-feedback-center" class="btn-settings" href="/feedback-center" target="_blank" rel="noopener">反馈中心</a>

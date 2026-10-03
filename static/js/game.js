@@ -2774,12 +2774,14 @@ function fillHomeIdentityWidget() {
         if (defIds.length) widget.dataset.cardDef = defIds[Math.floor(Math.random() * defIds.length)];
     }
     const cardDefId = widget.dataset.cardDef || '';
-    const leftBtn = $('home-id-card-l');
-    const rightBtn = $('home-id-card-r');
-    if (leftBtn && !leftBtn.firstChild) leftBtn.appendChild(createCardElement({}, { faceDown: true }));
-    if (rightBtn && cardDefId && !rightBtn.firstChild) {
-        rightBtn.appendChild(createCardElement({ def_id: cardDefId }, { small: true, disableIntro: true }));
+    const backBtn = $('home-id-card-l');
+    const faceBtn = $('home-id-card-m');
+    const backBtn2 = $('home-id-card-r');
+    if (backBtn && !backBtn.firstChild) backBtn.appendChild(createCardElement({}, { faceDown: true }));
+    if (faceBtn && cardDefId && !faceBtn.firstChild) {
+        faceBtn.appendChild(createCardElement({ def_id: cardDefId }, { small: true, disableIntro: true }));
     }
+    if (backBtn2 && !backBtn2.firstChild) backBtn2.appendChild(createCardElement({}, { faceDown: true }));
     bindHomeIdentityWidgetClicks(widget);
 }
 function bindHomeIdentityWidgetClicks(widget) {
@@ -2793,12 +2795,14 @@ function bindHomeIdentityWidgetClicks(widget) {
     if (avatarBtn) avatarBtn.addEventListener('click', () => openSkinPageAt('look'));
     const cardL = $('home-id-card-l');
     if (cardL) cardL.addEventListener('click', () => openSkinPageAt('card-skins'));
+    const cardM = $('home-id-card-m');
+    if (cardM) cardM.addEventListener('click', () => openSkinPageAt('card-skins'));
     const cardR = $('home-id-card-r');
     if (cardR) cardR.addEventListener('click', () => openSkinPageAt('card-skins'));
     const topBtn = $('home-id-top');
     if (topBtn) topBtn.addEventListener('click', () => openSkinPageAt('titles'));
 }
-/* 東方风主页弧线菜单的附加入口：设置/反馈中心/手册（简约模式隐藏，无副作用） */
+/* 東方风主页弧线菜单的附加入口：设置/反馈中心/手册/退出（简约模式隐藏） */
 function setupHomeExtraEntries() {
     const settingsBtn = $('home-entry-settings');
     if (settingsBtn && settingsBtn.dataset.gtnClickBound !== '1') {
@@ -2809,6 +2813,26 @@ function setupHomeExtraEntries() {
     if (aboutBtn && aboutBtn.dataset.gtnClickBound !== '1') {
         aboutBtn.dataset.gtnClickBound = '1';
         aboutBtn.addEventListener('click', openAbout);
+    }
+    const quitBtn = $('home-entry-quit');
+    if (quitBtn && quitBtn.dataset.gtnClickBound !== '1') {
+        quitBtn.dataset.gtnClickBound = '1';
+        quitBtn.addEventListener('click', async () => {
+            const confirmed = await gameConfirm(
+                UI.home_quit_confirm_title || '退出游戏',
+                UI.home_quit_confirm_body || (currentAccount
+                    ? '确定退出游戏并登出当前账号吗？'
+                    : '确定退出游戏并返回初始状态吗？'),
+            );
+            if (!confirmed) return;
+            if (currentAccount) {
+                await onAccountLogout();
+                fillHomeIdentityWidget();
+                flashStatus(UI.home_quit_done || '已退出登录', 1600);
+            } else {
+                window.location.reload();
+            }
+        });
     }
     // 文案与现有入口保持一致（跟随语言设置）
     const settingsSrc = document.querySelector('#btn-open-settings .top-icon-label');
