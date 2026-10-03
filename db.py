@@ -993,6 +993,20 @@ def init_db(
             conn.execute('ALTER TABLE users ADD COLUMN rank_daily_count INTEGER NOT NULL DEFAULT 0')
             conn.execute("ALTER TABLE users ADD COLUMN rank_settled_month TEXT NOT NULL DEFAULT ''")
             rank_columns_added = True
+        # 段位扩展（设计 2026-10-02 第二批）：新人判定/消耗卡库存与激活/阶梯定价
+        for col_sql in (
+            'ALTER TABLE users ADD COLUMN rank_highest_tier INTEGER NOT NULL DEFAULT 1',
+            'ALTER TABLE users ADD COLUMN rank_newbie_games INTEGER NOT NULL DEFAULT 0',
+            'ALTER TABLE users ADD COLUMN rank_shield_cards INTEGER NOT NULL DEFAULT 0',
+            'ALTER TABLE users ADD COLUMN rank_double_cards INTEGER NOT NULL DEFAULT 0',
+            'ALTER TABLE users ADD COLUMN rank_shield_armed INTEGER NOT NULL DEFAULT 0',
+            'ALTER TABLE users ADD COLUMN rank_double_armed INTEGER NOT NULL DEFAULT 0',
+            'ALTER TABLE users ADD COLUMN rank_card_buys INTEGER NOT NULL DEFAULT 0',
+            "ALTER TABLE users ADD COLUMN rank_card_day TEXT NOT NULL DEFAULT ''",
+        ):
+            col_name = col_sql.split('ADD COLUMN ')[1].split(' ')[0]
+            if col_name not in existing_columns:
+                conn.execute(col_sql)
         conn.execute('''
             CREATE TABLE IF NOT EXISTS rank_global_settings (
                 singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
@@ -15527,6 +15541,8 @@ def apply_gr_match_result(match_id, summary):
             prev_daily_key = str(row['rank_daily_key'] or '')
             prev_daily_count = int(row['rank_daily_count'] or 0)
             daily_count = prev_daily_count + 1 if prev_daily_key == rank_daily_key else 1
+            shield_armed = int(row['rank_shield_armed'] or 0)
+            double_armed = int(row['rank_double_armed'] or 0)
             rank_change = _rank.apply_match_result(
                 own_tier,
                 own_points,
@@ -15537,12 +15553,19 @@ def apply_gr_match_result(match_id, summary):
                 daily_double=(
                     daily_count <= _rank.DAILY_DOUBLE_GAMES and rank_outcome == 'win'
                 ),
+                double_card=bool(double_armed),
+                loss_shield=bool(shield_armed),
             )
+            prev_highest = max(int(row['rank_highest_tier'] or 1), own_tier)
+            new_highest = max(prev_highest, int(rank_change['tier_index']))
+            newbie_games = int(row['rank_newbie_games'] or 0) + 1
             conn.execute(
                 '''
                 UPDATE users
                 SET rank_tier = ?, rank_points = ?, rank_streak = ?,
-                    rank_daily_key = ?, rank_daily_count = ?
+                    rank_daily_key = ?, rank_daily_count = ?,
+                    rank_highest_tier = ?, rank_newbie_games = ?,
+                    rank_shield_armed = 0, rank_double_armed = 0
                 WHERE id = ?
                 ''',
                 (
@@ -15551,6 +15574,8 @@ def apply_gr_match_result(match_id, summary):
                     int(rank_change['streak']),
                     rank_daily_key,
                     daily_count,
+                    new_highest,
+                    newbie_games,
                     uid,
                 ),
             )

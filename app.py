@@ -441,7 +441,7 @@ RANKED_MATCH_MODES = ('ranked_1v1', 'ranked_2v2')
 # 设计 2026-09-30：模组随机抽选（候选+双方禁用）挂到天梯；娱乐改为双方
 # 各自模组设置直开（自选，与旧天梯口径一致）。历史名 CASUAL_MOD_DRAW 已改。
 MOD_DRAW_MATCH_MODES = ('ranked_1v1', 'ranked_2v2')
-MOD_DRAW_CANDIDATE_LIMIT = 5
+MOD_DRAW_CANDIDATE_LIMIT = 4   # 设计 2026-10-02：天梯抽选 4 个候选（原版恒开兜底 ban 空场景）
 MOD_DRAW_TIMEOUT_SECONDS = 40
 MOD_DRAW_BAN_LIMITS = {'1v1': 2, '2v2': 1}
 CHAT_CACHE_LIMIT = 1000
@@ -8901,6 +8901,25 @@ def same_casual_shared_mod_preference(players_or_sids, include_entertainment=Tru
             return False
         signatures.append(casual_shared_mod_signature(player, include_entertainment=include_entertainment))
     return bool(signatures) and all(signature == signatures[0] for signature in signatures)
+
+
+def _rank_tier_of_player(player):
+    """段位：注册用户取 users.rank_tier（缓存于 player），否则按最低段。"""
+    try:
+        tier = int(player.get('rank_tier') or 0)
+    except (TypeError, ValueError):
+        tier = 0
+    return tier if tier > 0 else 1
+
+
+def _rank_match_blocked(player_a, player_b):
+    """设计 2026-10-02：legendary 及以上不得与 common 对战（防新手刚来就被打爆）。
+    1v1 直比；2v2 由调用方取「双方最高与最低」两侧各比一次。"""
+    import rank_system as _rs
+    legendary_start = _rs.MAJOR_TIERS.index('legendary') * len(_rs.SUB_TIERS) + 1
+    common_end = _rs.MAJOR_TIERS.index('unusual') * len(_rs.SUB_TIERS)
+    ta, tb = _rank_tier_of_player(player_a), _rank_tier_of_player(player_b)
+    return (ta >= legendary_start and tb <= common_end) or (tb >= legendary_start and ta <= common_end)
 
 
 def same_match_mod_preference(match_mode, players_or_sids):
@@ -29534,6 +29553,18 @@ def on_invite_team(data):
                 'reason': 'mod_unlock_choice_required',
             })
             return
+        # 设计 2026-10-02：legendary+ 不得与 common 匹配；2v2 取双方最高与最低
+        team_a_players = [players.get(msid, {}) for msid in my_team['members']]
+        team_b_players = [players.get(msid, {}) for msid in target_team['members']]
+        if (
+            team_a_players and team_b_players
+            and (
+                _rank_match_blocked(max(team_a_players, key=_rank_tier_of_player), min(team_b_players, key=_rank_tier_of_player))
+                or _rank_match_blocked(max(team_b_players, key=_rank_tier_of_player), min(team_a_players, key=_rank_tier_of_player))
+            )
+        ):
+            emit_match_start_failed(all_match_sids, '段位差距过大：传奇及以上不能与普通段位匹配')
+            return
         if not same_match_mod_preference(match_mode, all_match_sids):
             reference_sid = my_team['leader']
             reference_player = players.get(reference_sid, {})
@@ -29636,6 +29667,14 @@ def on_accept_team_match(data):
                 '需要先选择要解锁的官方模组，才能进入天梯 1v1/2v2。',
                 reason='mod_unlock_choice_required',
             )
+            return
+        pair_blocked = False
+        if len(all_sids) >= 2:
+            others = [players.get(msid, {}) for msid in all_sids[1:]]
+            me = players.get(all_sids[0], {})
+            pair_blocked = any(_rank_match_blocked(me, other) for other in others)
+        if pair_blocked:
+            emit_match_start_failed(all_sids, '段位差距过大：传奇及以上不能与普通段位匹配')
             return
         if not same_match_mod_preference(match_mode, all_sids):
             reference_sid = all_sids[0]
@@ -30740,6 +30779,8 @@ def _story_chat_sender_profile(user):
         'user_id': source.get('id') or (user or {}).get('id'),
         'is_registered_user': True,
         'beta_mode': bool(is_beta_instance()),
+        # 段位缓存（匹配禁令用；结算后由 rank 更新路径刷新）
+        'rank_tier': int(source.get('rank_tier') or (user or {}).get('rank_tier') or 1),
     })
     source.update(special_public_fields(source))
     return source
