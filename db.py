@@ -5366,6 +5366,53 @@ def row_to_admin_user(row):
     return user
 
 
+IP_NEWBIE_PLAY_SECONDS_LIMIT = 5 * 3600   # 「低游玩时长」阈值：5 小时
+IP_NEWBIE_ACCOUNT_LIMIT = 3               # 同一 IP 下此类账号最多 3 个
+IP_DELETED_GRACE_HOURS = 48               # 删除账号 48 小时后才从计数中移除
+
+
+def count_ip_newbie_accounts(ip):
+    """同一 IP 下的「低游玩时长」账号数（平衡 2026-10-02 注册限制）。
+
+    口径：该 IP 注册/登录过的账号里，play_seconds < 5 小时且未删除的算
+    「低时长」；已删除账号在删除后 48 小时内仍占用名额（防删号刷新绕过）。
+    返回 (count, blocking_usernames)。
+    """
+    token = str(ip or '').strip()[:80]
+    if not token:
+        return 0, []
+    cutoff = utc_iso(utc_now_dt() - timedelta(hours=IP_DELETED_GRACE_HOURS))
+    try:
+        with closing(get_db_connection()) as conn:
+            rows = conn.execute(
+                """
+                SELECT u.id, u.username, u.play_seconds, u.deleted_at
+                FROM users u
+                WHERE u.id IN (
+                    SELECT user_id FROM user_ip_events WHERE ip = ?
+                )
+                """,
+                (token,),
+            ).fetchall()
+    except Exception:
+        return 0, []
+    counted = []
+    for row in rows:
+        deleted_at = (row['deleted_at'] or '').strip() if 'deleted_at' in row.keys() else ''
+        if deleted_at:
+            # 已删除：48 小时内仍计数，超过则释放名额
+            if deleted_at >= cutoff:
+                counted.append((row['id'], row['username']))
+            continue
+        try:
+            play_seconds = int(row['play_seconds'] or 0)
+        except (TypeError, ValueError):
+            play_seconds = 0
+        if play_seconds < IP_NEWBIE_PLAY_SECONDS_LIMIT:
+            counted.append((row['id'], row['username']))
+    return len(counted), [name for _uid, name in counted]
+
+
 def record_user_ip_event(user_id, username='', ip='', source='auth', dedupe_seconds=0):
     try:
         uid = int(user_id)

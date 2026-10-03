@@ -24928,6 +24928,16 @@ def api_auth_register():
         return jsonify({'success': False, 'error': '密码格式无效'}), 400
     if 'password_confirm' in data and str(password) != str(data.get('password_confirm', '')):
         return jsonify({'success': False, 'error': '两次输入的密码不一致'}), 400
+    # 平衡/风控 2026-10-02：同一 IP 下游玩时长不足 5 小时的账号最多 3 个，
+    # 已满则拒绝注册（删除的账号 48 小时后才释放名额）。
+    try:
+        from db import count_ip_newbie_accounts
+        newbie_count, _blocking = count_ip_newbie_accounts(ip)
+        if newbie_count >= 3:
+            record_suspicious_event('register_ip_newbie_limit', f'ip newbie accounts full: {newbie_count}', ip=ip, severity='medium')
+            return jsonify({'success': False, 'error': '该网络下低游玩时长的账号数量已达上限，无法继续注册'}), 400
+    except Exception as exc:
+        admin_event('warning', f'ip newbie limit check failed: {exc}')
     user, error = create_user(username, password)
     if error:
         return jsonify({'success': False, 'error': error}), 400

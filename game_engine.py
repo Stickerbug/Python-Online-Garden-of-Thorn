@@ -430,6 +430,7 @@ class PlayerState:
         self.equipment: List[EquipmentInstance] = []
         self.extra_hand_limit_bonus: int = 0
         self.external_zero_e_ignore_hand_limit: bool = False
+        self.external_m_cost_ignore_hand_limit: bool = False
         self.cards_played_this_turn: Dict[str, int] = {}
         self.cards_played_this_turn_instance_ids: List[int] = []
         self.turn_damage_taken: int = 0
@@ -802,13 +803,26 @@ class PlayerState:
             for e in self.equipment
         )
 
+    def m_cost_cards_ignore_hand_limit(self) -> bool:
+        """魔法黄金叶（2026-10-02 平衡）：带 M 消耗的牌不占手牌上限。"""
+        from engine_runtime_support import card_has_flag
+        return bool(getattr(self, 'external_m_cost_ignore_hand_limit', False)) or any(
+            card_has_flag(getattr(e, 'card_instance', None), 'm_cost_ignore_hand_limit')
+            and getattr(e, 'effect_target', self.player_id) == self.player_id
+            and max(0, int((getattr(e, 'custom_vars', {}) or {}).get('sewers_sealed', 0) or 0)) <= 0
+            for e in self.equipment
+        )
+
     def rule_hand_size(self) -> int:
         ignore_zero_e = self.zero_e_cards_ignore_hand_limit()
+        ignore_m_cost = self.m_cost_cards_ignore_hand_limit()
         total = 0
         for c in self.hand:
             if c.def_id == ERROR_CARD_ID:
                 continue
             if ignore_zero_e and int(getattr(c, 'cost_e', 0) or 0) == 0:
+                continue
+            if ignore_m_cost and int(getattr(c, 'cost_m', 0) or 0) > 0:
                 continue
             total += 1
         return total
@@ -9710,8 +9724,7 @@ class GameEngine:
         result = self._execute_card_effect(player_id, card, choice)
         ps.custom_vars['void_last_played_def_id'] = getattr(card, 'def_id', '')
         ps.custom_vars.pop('void_current_previous_def_id', None)
-        self._enforce_unique_cards_for_all()
-        return result
+        return self._after_response_result(player_id, result)
 
     def _check_response_needed(self, player_id: int, card: CardInstance) -> bool:
         flags = self._effective_card_flags(card)
@@ -10097,6 +10110,22 @@ class GameEngine:
     def _after_response_result(self, player_id: int, result: dict) -> dict:
         self._enforce_unique_cards_for_all()
         self._bio_drain_auto_play_queue()
+        # 平衡 2026-10-02：打出带有沉重的牌后立即结束回合（沉重是完全的负面
+        # 修饰——费用已 +N，还要交出回合；打出前卡的 heavy_value>0 判定，
+        # reset 后仍保留在留存位）。反制/选择窗未决时不抢结算。
+        if (
+            not self.game_over
+            and self.phase == 'action'
+            and self.current_player == player_id
+            and self.pending_response is None
+            and self.pending_choice is None
+            and not getattr(self, 'pending_v2_ui', None)
+            and int(getattr(result.get('card') and CardInstance.from_dict(result['card']) or None, 'heavy_value', 0) or 0) > 0
+            and not isinstance(self.players[player_id].custom_vars.get('honey_control'), dict)
+        ):
+            self.log_msg(f"{self.pn(player_id)}的沉重生效，立即结束回合")
+            self._end_player_turn(player_id)
+            return result
         if (
             not self.game_over
             and self.phase == 'action'
@@ -19578,7 +19607,11 @@ class GameEngine:
         self._card_resolution_depth = card_resolution_depth + 1
         self._game_over_defer_depth += 1
         try:
-            return self._execute_card_effect_impl(player_id, card, choice)
+            _result = self._execute_card_effect_impl(player_id, card, choice)
+            if isinstance(_result, dict) and _result.get('success'):
+                # 打出后刷新快照（沉重等打出中获得的留存修饰要反映到结果里）
+                _result['card'] = card.to_dict()
+            return _result
         finally:
             self._formal_logic_current_play_card = previous_formal_card
             self._game_over_defer_depth = max(0, self._game_over_defer_depth - 1)
@@ -21879,6 +21912,8 @@ class GameEngine:
                 if value > 0:
                     target_card.instance_flags.add('heavy')
                     target_card.disabled_flags.discard('heavy')
+                    # 平衡 2026-10-02：获得沉重的牌同时被揭示（对手可见）
+                    target_card.instance_flags.add('revealed')
                 else:
                     target_card.instance_flags.discard('heavy')
                     target_card.disabled_flags.add('heavy')

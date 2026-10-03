@@ -92,9 +92,10 @@ STORY_CHARACTERS = {
         'design': '以魔力支付专属卡牌，并通过魔力源泉在每回合开始时回复1M。',
         'implementation_status': 'playable',
         'starter_deck': (
-            {'card_id': 'basic', 'count': 5},
+            {'card_id': 'basic', 'count': 4},
             {'card_id': 'rose', 'count': 5},
             {'character_card_id': 'mage_basic', 'count': 1},
+            {'character_card_id': 'mage_leaf', 'count': 1},
         ),
         'starter_relics': ('magic_source',),
         'unlock': {
