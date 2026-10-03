@@ -14966,11 +14966,12 @@ html.home-touhou-active #home-identity-widget {
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
+  /* 排版与大厅玩家行一致（.lobby-player-row .player-name 基准），
+   * 账号/游客/管理名染色由 .player-name-inline.* 全局规则命中 */
   font-family: var(--font-main);
-}
-.home-id-top .player-title-inline,
-.home-id-top .player-name-value {
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 .home-id-row {
   display: flex;
@@ -14988,6 +14989,7 @@ html.home-touhou-active #home-identity-widget {
   overflow: hidden;
   transition: transform 140ms ease, border-color 140ms ease;
 }
+.home-id-avatar .player-avatar,
 .home-id-avatar .skin-avatar {
   width: 100%;
   height: 100%;
@@ -15064,9 +15066,8 @@ html.home-touhou-active #home-identity-widget {
     width: 34px;
     height: 48px;
   }
-  .home-id-top .player-title-inline,
-  .home-id-top .player-name-value {
-    font-size: 11px;
+  .home-id-top {
+    font-size: 12px;
   }
 }
 

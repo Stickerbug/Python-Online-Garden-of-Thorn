@@ -2753,7 +2753,17 @@ function fillHomeIdentityWidget() {
     }
     const avatarEl = $('home-id-avatar');
     if (avatarEl) {
-        avatarEl.innerHTML = renderSkinAvatar(getCurrentSkinConfig(), { look: localSkinLook, lookOwner: 'local' });
+        // 与游戏内完全一致的头像渲染链：.player-avatar 外框 + avatar_url 图片覆盖 +
+        // resolveSkinLookForPlayer（本地玩家解析 localSkinLook）+ avatarKind
+        avatarEl.innerHTML = renderPlayerAvatar({
+            id: playerId,
+            name: nick,
+            skin: getCurrentSkinConfig(),
+            skin_look: localSkinLook,
+            avatar_url: (currentAccount && currentAccount.avatar_url) || '',
+            avatar_kind: (currentAccount && currentAccount.avatar_kind) || '',
+            isCurrent: true,
+        });
     }
     if (!widget.dataset.cardDef) {
         const defIds = Object.keys(CARD_DEFS || {}).filter(id => {
