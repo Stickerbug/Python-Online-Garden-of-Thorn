@@ -138,7 +138,8 @@ def compute_state(valid_games: int, chosen_mods: Iterable[str]) -> dict:
 
 
 def guest_state() -> dict:
-    state = compute_state(0, ())
+    # 游客无段位（按最低段）：只有 Vanilla 常开（段位制口径）。
+    state = rank_tier_state(1)
     state['guest'] = True
     return state
 
@@ -174,19 +175,63 @@ def _linked_user_ids(conn, user_id: int) -> list[int]:
 
 def _state_for_connection(conn, user_id: int) -> dict:
     uid = int(user_id)
-    member_ids = _linked_user_ids(conn, uid)
-    valid_games = int(pvp_economy.profile_conn(conn, uid).get('valid_games') or 0)
-    placeholders = ','.join('?' for _ in member_ids)
-    rows = conn.execute(
-        f'''
-        SELECT mod_filename
-        FROM user_mod_unlock_choices
-        WHERE user_id IN ({placeholders})
-        ORDER BY created_at, mod_filename
-        ''',
-        tuple(member_ids),
-    ).fetchall()
-    return compute_state(valid_games, (row['mod_filename'] for row in rows))
+    # 设计 2026-10-02：官方模组解锁改为段位驱动（掉段收回）——
+    # Unusual1-4 → 花园/沙漠/丛林/海洋，Rare1 → 工厂，Vanilla 恒开。
+    row = conn.execute(
+        'SELECT rank_tier FROM users WHERE id = ?',
+        (uid,),
+    ).fetchone()
+    tier = int(row['rank_tier'] or 1) if row is not None else 1
+    return rank_tier_state(tier)
+
+
+# 段位 → 官方包解锁表（达到该 tier 解锁；以当前段位为准，掉段收回）。
+RANK_UNLOCK_TABLE: tuple[tuple[int, str], ...] = (
+    (5, 'Garden Cards Addition.gtnmod'),    # Unusual 1
+    (6, 'Desert Cards Addition.gtnmod'),    # Unusual 2
+    (7, 'Jungle Cards Addition.gtnmod'),    # Unusual 3
+    (8, 'Ocean Cards Addition.gtnmod'),     # Unusual 4
+    (9, 'Factory Cards Addition.gtnmod'),   # Rare 1
+)
+
+
+def rank_tier_state(rank_tier: int) -> dict:
+    """段位驱动的解锁状态（与 compute_state 同形，自选流程退役）。"""
+    import rank_system as _rank
+    tier = max(1, int(rank_tier or 1))
+    names = official_mod_filenames()
+    required_tier = {name: need for need, name in RANK_UNLOCK_TABLE}
+    unlocked: list[str] = []
+    if VANILLA_MOD_FILENAME in names:
+        unlocked.append(VANILLA_MOD_FILENAME)
+    for name in names:
+        if name == VANILLA_MOD_FILENAME:
+            continue
+        need = required_tier.get(name)
+        if need is not None and tier >= need:
+            unlocked.append(name)
+    locked_next = sorted(
+        ((need, name) for name, need in required_tier.items() if name not in unlocked),
+    )
+    return {
+        'rank_tier': tier,
+        'rank_tier_label': _rank.rank_label(tier),
+        'fixed_unlocked': True,
+        'entertainment_unlocked': True,
+        'community_unlocked': True,
+        'fixed_mods': [],
+        'remaining_mods': [n for n in names if n not in unlocked and n != VANILLA_MOD_FILENAME],
+        'unlocked_official': unlocked,
+        'choice_candidates': [],
+        'chosen_mods': [],
+        'unspent_choices': 0,
+        'next_unlock_games': 0,
+        'next_unlock_tier': locked_next[0][0] if locked_next else 0,
+        'next_unlock_mod': locked_next[0][1] if locked_next else '',
+        'all_official_unlocked': not locked_next,
+        'has_pending_choice': False,
+        'guest': False,
+    }
 
 
 def load_state(user_id: int | None) -> dict:
@@ -197,24 +242,5 @@ def load_state(user_id: int | None) -> dict:
 
 
 def choose_unlock(user_id: int, mod_filename: str) -> dict:
-    """Persist one official-mod choice and return the refreshed state."""
-    uid = int(user_id)
-    filename = str(mod_filename or '').strip()
-    with db.get_db_connection() as conn:
-        # Serialize entitlement spending so two simultaneous clicks cannot
-        # consume the same choice allowance twice.
-        conn.execute('BEGIN IMMEDIATE')
-        state = _state_for_connection(conn, uid)
-        if not state.get('has_pending_choice'):
-            raise ValueError('当前没有可用的官方模组自选次数')
-        if filename not in set(state.get('choice_candidates') or []):
-            raise ValueError('该模组当前不可选择')
-        conn.execute(
-            '''
-            INSERT OR IGNORE INTO user_mod_unlock_choices(user_id, mod_filename, created_at)
-            VALUES (?, ?, ?)
-            ''',
-            (uid, filename, db.utc_now()),
-        )
-        conn.commit()
-        return _state_for_connection(conn, uid)
+    """段位制（2026-10-02）下官方包不再自选——统一按段位解锁/收回。"""
+    raise ValueError('官方模组已改为按段位自动解锁，无需手动选择')

@@ -15187,6 +15187,137 @@ def set_user_rank_special(identifier, value):
     return {'id': user['id'], 'username': user.get('username'), 'rank_special': amount}, None
 
 
+RANK_CARD_PRICES = (300, 500, 1000, 2000)   # 保分/双倍卡阶梯定价（每日重置）
+RANK_CARD_TYPES = ('shield', 'double')
+
+
+def rank_card_price(buys_today: int) -> int:
+    """当日第 N 张的价格：300/500/1000/2000，第 5 张起恒 2000。"""
+    try:
+        n = max(0, int(buys_today or 0))
+    except (TypeError, ValueError):
+        n = 0
+    return RANK_CARD_PRICES[min(n, len(RANK_CARD_PRICES) - 1)]
+
+
+def rank_cards_payload(user_id) -> dict:
+    """段位消耗卡状态（库存/激活/今日价格）。两类卡合并计阶梯。"""
+    import rank_system as _rank
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return {}
+    today = _rank.beijing_day_key(datetime.now(timezone.utc))
+    with get_db_connection() as conn:
+        row = conn.execute(
+            '''SELECT rank_shield_cards, rank_double_cards, rank_shield_armed,
+                      rank_double_armed, rank_card_buys, rank_card_day FROM users WHERE id = ?''',
+            (uid,),
+        ).fetchone()
+    if row is None:
+        return {}
+    buys = int(row['rank_card_buys'] or 0) if str(row['rank_card_day'] or '') == today else 0
+    return {
+        'shield': {
+            'owned': int(row['rank_shield_cards'] or 0),
+            'armed': bool(int(row['rank_shield_armed'] or 0)),
+        },
+        'double': {
+            'owned': int(row['rank_double_cards'] or 0),
+            'armed': bool(int(row['rank_double_armed'] or 0)),
+        },
+        'price_today': rank_card_price(buys),
+        'price_next': rank_card_price(buys + 1),
+        'buys_today': buys,
+        'day_key': today,
+    }
+
+
+def purchase_rank_card(user_id, card_type: str) -> tuple:
+    """购买一张保分/双倍卡（两类共用当日价格阶梯）。返回 (payload, error)。"""
+    import rank_system as _rank
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None, '账号无效'
+    kind = str(card_type or '').strip().lower()
+    if kind not in RANK_CARD_TYPES:
+        return None, '卡类型无效'
+    today = _rank.beijing_day_key(datetime.now(timezone.utc))
+    with get_db_connection() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        row = conn.execute(
+            'SELECT rank_card_buys, rank_card_day FROM users WHERE id = ?',
+            (uid,),
+        ).fetchone()
+        if row is None:
+            conn.rollback()
+            return None, '账号不存在'
+        buys = int(row['rank_card_buys'] or 0) if str(row['rank_card_day'] or '') == today else 0
+        price = rank_card_price(buys)
+        balance = get_user_thorn_dew(uid)
+        if balance['total'] < price:
+            conn.rollback()
+            return None, '荆露不足'
+        col = 'rank_shield_cards' if kind == 'shield' else 'rank_double_cards'
+        conn.execute(
+            f'UPDATE users SET {col} = COALESCE({col}, 0) + 1,'
+            ' rank_card_buys = ?, rank_card_day = ? WHERE id = ?',
+            (buys + 1, today, uid),
+        )
+        conn.commit()
+    spend_user_thorn_dew(
+        uid, price,
+        reason=f'购买段位{"保分" if kind == "shield" else "双倍"}卡（今日第{buys + 1}张）',
+        source_type='rank_card', source_id=f'buy:{kind}:{today}:{buys + 1}',
+    )
+    return rank_cards_payload(uid), None
+
+
+def use_rank_card(user_id, card_type: str) -> tuple:
+    """激活一张卡供下一局使用（互斥：一场对局只能激活一张）。"""
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None, '账号无效'
+    kind = str(card_type or '').strip().lower()
+    if kind not in RANK_CARD_TYPES:
+        return None, '卡类型无效'
+    with get_db_connection() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        if kind == 'shield':
+            owned_col, armed_col, other_armed = 'rank_shield_cards', 'rank_shield_armed', 'rank_double_armed'
+        else:
+            owned_col, armed_col, other_armed = 'rank_double_cards', 'rank_double_armed', 'rank_shield_armed'
+        row = conn.execute(f'SELECT {owned_col} AS owned, {armed_col} AS armed FROM users WHERE id = ?', (uid,)).fetchone()
+        if row is None:
+            conn.rollback()
+            return None, '账号不存在'
+        if int(row['owned'] or 0) <= 0:
+            conn.rollback()
+            return None, '该卡已激活，无需重复使用' if int(row['armed'] or 0) else '没有可用的卡'
+        if kind == 'double':
+            # 激活双倍：保分若已激活则退回库存（SQLite UPDATE 右值均取旧行，
+            # armed 为 0/1——未激活时 +0，不会凭空增发）
+            conn.execute(
+                'UPDATE users SET rank_double_cards = rank_double_cards - 1,'
+                ' rank_double_armed = 1,'
+                ' rank_shield_cards = rank_shield_cards + rank_shield_armed,'
+                ' rank_shield_armed = 0 WHERE id = ?',
+                (uid,),
+            )
+        else:
+            conn.execute(
+                'UPDATE users SET rank_shield_cards = rank_shield_cards - 1,'
+                ' rank_shield_armed = 1,'
+                ' rank_double_cards = rank_double_cards + rank_double_armed,'
+                ' rank_double_armed = 0 WHERE id = ?',
+                (uid,),
+            )
+        conn.commit()
+    return rank_cards_payload(uid), None
+
+
 def user_rank_payload(user_or_id, *, include_special=False):
     """玩家段位展示载荷（对玩家可见；花阶分不再出现在其中）。"""
     import rank_system as _rank

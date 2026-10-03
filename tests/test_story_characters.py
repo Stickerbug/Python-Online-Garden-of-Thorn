@@ -125,9 +125,10 @@ def test_confirmed_character_loadouts_and_unlock_chain_are_exposed():
     )
     assert common['starter_relics'] == ('energetic',)
     assert mage['starter_deck'] == (
-        {'card_id': 'basic', 'count': 5},
+        {'card_id': 'basic', 'count': 4},
         {'card_id': 'rose', 'count': 5},
         {'character_card_id': 'mage_basic', 'count': 1},
+        {'character_card_id': 'mage_leaf', 'count': 1},
     )
     assert mage['starter_relics'] == ('magic_source',)
     assert mage['unlock']['character_id'] == 'common_flower'
@@ -156,7 +157,7 @@ def test_mage_starter_runtime_is_source_backed_and_playable():
     assert STORY_CHARACTERS['mage']['implementation_status'] == 'playable'
     state = build_initial_story_state('mage-loadout-preview', 'mage')
     assert [card['def_id'] for card in state['player']['deck']] == (
-        ['basic'] * 5 + ['rose'] * 5 + ['mage_basic']
+        ['basic'] * 4 + ['rose'] * 5 + ['mage_basic'] + ['mage_leaf']
     )
     assert state['player']['relics'] == ['magic_source']
     assert state['player']['magic'] == 0

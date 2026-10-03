@@ -5,6 +5,7 @@ import db
 import mod_unlocks
 
 
+@pytest.mark.skip(reason="2026-10-02 官方包改为段位驱动解锁，自选体系退役")
 def test_official_unlock_progression_thresholds():
     guest = mod_unlocks.guest_state()
     assert guest['unlocked_official'] == [mod_unlocks.VANILLA_MOD_FILENAME]
@@ -42,6 +43,7 @@ def test_surplus_entitlements_auto_unlock_everything_without_choices():
     assert all(name in state['unlocked_official'] for name in state['remaining_mods'])
 
 
+@pytest.mark.skip(reason="2026-10-02 官方包改为段位驱动解锁，自选体系退役")
 def test_choose_unlock_persists_and_validates(tmp_path, monkeypatch):
     monkeypatch.setattr(db, 'DB_PATH', str(tmp_path / 'unlock.sqlite3'))
     db.init_db()
@@ -316,7 +318,7 @@ def test_ranked_2v2_team_match_starts_mod_draw(monkeypatch):
         assert created_room is not None
         assert created_room.match_mode == 'ranked_2v2'
         assert created_room.mod_draw_active
-        assert len(created_room.mod_draw_candidates) == 5
+        assert len(created_room.mod_draw_candidates) == 4   # 2026-10-02：候选 5→4
     finally:
         if created_room is not None:
             gtn.rooms.pop(created_room.room_id, None)

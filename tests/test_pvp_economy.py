@@ -69,9 +69,12 @@ def test_newcomer_base_rewards_and_no_title_double_multiplier(accounts,ids,ranke
 
 
 def test_bonus_tenth_game_and_title_twentieth_boundaries(accounts):
+    # 2026-10-02 新口径：增幅×2 不再按总局数（旧前10局），而是「从未达 rare
+    # 且前 20 个计分局」——本测试走 casual award（不计 rank_newbie_games），
+    # 新人零计分局 → 恒 ×2；is_newcomer（称号口径）仍按 20 总局。
     for n in range(1,22):
         result=award(win=-1,day=n)
-        assert result['awarded'][0]['amount']==(90 if n<=10 else 45)
+        assert result['awarded'][0]['amount']==90
         assert profile(1)['is_newcomer']==(n<20)
     assert profile(1)['title_remaining']==0
 

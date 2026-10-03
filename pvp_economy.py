@@ -31,8 +31,17 @@ def profile_conn(conn, uid):
             # already played on any confirmed account consume the shared quota.
             valid = sum(entry[1] for entry in members)
             ranked = sum(entry[2] for entry in members)
+    # 荆露增幅（设计 2026-10-02）：新人=从未达到过 rare（rank_highest_tier），
+    # 增幅 ×2 只持续其前 20 个计分局（rank_newbie_games，天梯结算累计）。
+    import rank_system as _rank
+    _rare_start = _rank.MAJOR_TIERS.index('rare') * len(_rank.SUB_TIERS) + 1
+    newcomer_boost = (
+        primary
+        and int(row['rank_highest_tier'] or 1) < _rare_start
+        and int(row['rank_newbie_games'] or 0) < 20
+    )
     return {'is_newcomer':primary and valid<20,'valid_games':valid,'ranked_games':ranked,
-            'reward_multiplier':2 if primary and valid<10 else 1,
+            'reward_multiplier':2 if newcomer_boost else 1,
             'protected_ranked_remaining':max(0,3-ranked) if primary else 0,
             'title_remaining':max(0,20-valid) if primary else 0,'win_streak':streak,
             'linked_secondary':not primary}

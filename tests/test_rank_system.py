@@ -36,9 +36,10 @@ class RankMathTests(unittest.TestCase):
         self.assertEqual(2, rs.match_gain(12, 9, 0))    # 5-3=2
 
     def test_win_loss_bounds(self):
+        # 平衡 2026-10-02：胜 +1~+10、败 -1~-5（封顶后再吃倍率）
         self.assertEqual(1, rs.match_gain(9, 1, 0))     # 5-8 → 至少 1
-        self.assertEqual(13, rs.match_gain(1, 9, 0))    # 5+8
-        self.assertEqual(14, rs.match_loss(12, 1, 0))   # 3+11
+        self.assertEqual(10, rs.match_gain(1, 9, 0))    # 5+8 → 封顶 10
+        self.assertEqual(5, rs.match_loss(12, 1, 0))    # 3+11 → 封顶 5
         self.assertEqual(1, rs.match_loss(1, 9, 0))     # 3-8 → 至少 1
 
     def test_promote_after_two_wins_at_cap(self):
@@ -53,16 +54,18 @@ class RankMathTests(unittest.TestCase):
         self.assertEqual(0, r2['streak'])
 
     def test_cap_win_then_loss_breaks_streak(self):
-        r = rs.apply_match_result(1, 20, 1, outcome='loss', opponent_tier_avg=1)
+        # 2026-10-02：common 不掉分——改用 unusual（tier5，cap30；loss 3→减半 2）
+        r = rs.apply_match_result(5, 30, 1, outcome='loss', opponent_tier_avg=5)
         self.assertFalse(r['promoted'])
         self.assertEqual(0, r['streak'])
-        self.assertEqual(17, r['points'])   # 20-3
+        self.assertEqual(28, r['points'])   # 30-ceil(3/2)
 
     def test_demote_at_zero(self):
-        r = rs.apply_match_result(2, 0, 0, outcome='loss', opponent_tier_avg=2)
+        # 2026-10-02：common 不降段——改用 unusual basic（tier5）验证降段
+        r = rs.apply_match_result(5, 0, 0, outcome='loss', opponent_tier_avg=5)
         self.assertTrue(r['demoted'])
-        self.assertEqual(1, r['tier_index'])
-        self.assertEqual(20, r['points'])   # 降段后 = 新段上限
+        self.assertEqual(4, r['tier_index'])
+        self.assertEqual(20, r['points'])   # 降段后 = 新段(common golden_nazar)上限
 
     def test_floor_no_demote(self):
         r = rs.apply_match_result(1, 0, 0, outcome='loss', opponent_tier_avg=1)
@@ -76,16 +79,17 @@ class RankMathTests(unittest.TestCase):
         self.assertEqual(0, r['streak'])
 
     def test_daily_double_win_only_after_min(self):
+        # 2026-10-02：封顶 +10 之后再乘倍率；common 失败不掉分
         r = rs.apply_match_result(9, 10, 0, outcome='win', opponent_tier_avg=12, daily_double=True)
-        # gain = max(1, 5+3) = 8 → ×2 = 16 → 10+16=26 → cap(rare)=50
+        # gain = min(10, 5+3) = 8 → ×2 = 16 → 26
         self.assertEqual(26, r['points'])
         self.assertTrue(r['daily_double'])
-        # 最低 +1 再翻倍：common basic(1) vs 高段(44) → gain=1 → ×2=2
+        # 封顶 +10 再翻倍：低段打高 44 → gain 封顶 10 → ×2=20 → cap(common)=20
         r2 = rs.apply_match_result(1, 0, 0, outcome='win', opponent_tier_avg=44, daily_double=True)
-        self.assertEqual(20, r2['points'])   # gain=48×2 → cap 20
-        # 失败不翻倍
+        self.assertEqual(20, r2['points'])
+        # 失败不翻倍且 common 不掉分
         r3 = rs.apply_match_result(1, 5, 0, outcome='loss', opponent_tier_avg=1, daily_double=True)
-        self.assertEqual(2, r3['points'])   # 5-3
+        self.assertEqual(5, r3['points'])
         self.assertFalse(r3['daily_double'])
 
     def test_top_rank_no_promote(self):
@@ -214,7 +218,7 @@ class RankSettlementIntegrationTests(unittest.TestCase):
         viewer = preview['viewer']
         self.assertEqual('rare golden_nazar', viewer['label'])
         self.assertEqual(2, viewer['win_delta'])
-        self.assertEqual(6, viewer['loss_delta'])    # 3+3（对面低 3 小段）
+        self.assertEqual(5, viewer['loss_delta'])    # 3+3 → 封顶 5（2026-10-02 上限）
 
     def test_user_payload_has_rank_no_gr_leak(self):
         payload = self.db.user_rank_payload(self.uid1)

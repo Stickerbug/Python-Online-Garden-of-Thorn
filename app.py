@@ -850,7 +850,7 @@ GTN_STATIC_VERSION += '-skin-text-contrast-15-inkmap-linesplit-1-gallery-prob-1-
 GTN_STATIC_VERSION += '-skin-preview-modal-1'
 GTN_STATIC_VERSION += '-card-tag-dedup-1'
 GTN_STATIC_VERSION += '-rank-system-4'
-GTN_STATIC_VERSION += '-home-ui-touhou-9'
+GTN_STATIC_VERSION += '-home-ui-touhou-12'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 STORY_COOP_ENABLED = os.environ.get('GTN_STORY_COOP_ENABLED', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 GTN_AI_1V1_TEST_ENABLED = os.environ.get('GTN_AI_1V1_TEST_ENABLED', '1').strip().lower() in ('1', 'true', 'yes', 'on')
@@ -25194,6 +25194,48 @@ def api_auth_logout():
             admin_event('error', f"failed to enqueue last seen on logout: {exc}")
     _clear_account_session()
     return _clear_remember_cookie(jsonify({'success': True}))
+
+
+@app.route('/api/rank/cards', methods=['GET'])
+def api_rank_cards_status():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user = _current_account_user()
+    if not user:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    return jsonify({'success': True, 'cards': db.rank_cards_payload(user['id'])})
+
+
+@app.route('/api/rank/cards/purchase', methods=['POST'])
+def api_rank_cards_purchase():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user = _current_account_user()
+    if not user:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        data = {}
+    cards, error = db.purchase_rank_card(user['id'], str(data.get('card_type') or ''))
+    if error:
+        return jsonify({'success': False, 'error': error}), 400
+    return jsonify({'success': True, 'cards': cards})
+
+
+@app.route('/api/rank/cards/use', methods=['POST'])
+def api_rank_cards_use():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user = _current_account_user()
+    if not user:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        data = {}
+    cards, error = db.use_rank_card(user['id'], str(data.get('card_type') or ''))
+    if error:
+        return jsonify({'success': False, 'error': error}), 400
+    return jsonify({'success': True, 'cards': cards})
 
 
 @app.route('/api/auth/me')
