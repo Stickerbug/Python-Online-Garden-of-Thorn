@@ -15069,12 +15069,13 @@ html[data-home-ui="touhou"] #login-error {
   top: 30.5vh;
   width: min(320px, 70vw);
 }
-/* 附加入口（设置/反馈中心/手册/退出）与原工具行：東方风下前者显示、后者隐藏 */
+/* 附加入口（设置/反馈中心/手册/退出）与原工具行：東方风下前者显示、后者隐藏。
+ * !important 压过 .login-form .form-row 的 display:flex，简约模式严格隐藏 */
 .home-extra-entry {
-  display: none;
+  display: none !important;
 }
 html[data-home-ui="touhou"] .home-extra-entry {
-  display: block;
+  display: block !important;
 }
 html[data-home-ui="touhou"] .login-form .login-utility-row {
   display: none;
