@@ -16,7 +16,7 @@
 <script nonce="{{ csp_nonce }}">
 (() => {
   window.__GTN_BETA_MODE__ = {{ beta_mode|default(false)|tojson }};
-  const betaExactKeys = new Set(['gtn_theme', 'gtn_lang', 'gtn_ui_style', 'gtn_ui_style_v2_migrated', 'gtn_hidden_features_enabled', 'gtn_play_gesture_animation', 'gtn_landscape_mode', 'gtn_story_hide_card_borders']);
+  const betaExactKeys = new Set(['gtn_theme', 'gtn_lang', 'gtn_ui_style', 'gtn_ui_style_v2_migrated', 'gtn_hidden_features_enabled', 'gtn_home_ui', 'gtn_landscape_mode', 'gtn_story_hide_card_borders']);
   const betaKey = (key) => window.__GTN_BETA_MODE__ && betaExactKeys.has(key) ? `gtn_beta_${key.slice(4)}` : key;
   const readCookie = (key) => {
     try {
@@ -495,9 +495,10 @@
 <div id="view-login" class="view">
 <div class="login-container">
 <div id="beta-mode-badge" class="beta-mode-badge{% if not beta_mode|default(false) %} hidden{% endif %}">内测模式</div>
-<h1 class="title-main">Garden of Thorn</h1>
+<h1 class="title-main"><span class="title-word title-word-garden">Garden</span> <span class="title-word title-word-of">of</span> <span class="title-word title-word-thorn">Thorn</span></h1>
 <h2 class="title-sub">荆棘花园</h2>
 <p class="subtitle">在线联机卡牌对战</p>
+<div id="home-floating-cards" class="home-floating-cards" aria-hidden="true"></div>
 <div id="account-warning-banner" class="account-warning-banner hidden"></div>
 <div class="login-form">
 <div class="login-divider"><span id="guest-divider-label">游客模式</span></div>
@@ -1069,6 +1070,13 @@
 <option value="classic">经典</option>
 </select>
 </div>
+<div class="settings-theme-row">
+<label id="settings-label-home-ui">主页UI</label>
+<select id="settings-home-ui-select">
+<option value="simple">简约</option>
+<option value="touhou">東方Project风</option>
+</select>
+</div>
 <div class="settings-lang-row">
 <label id="settings-label-lang">语言</label>
 <select id="settings-lang-select">
@@ -1101,10 +1109,6 @@
 <div id="settings-touch-dblclick-row" class="settings-check-row">
 <input type="checkbox" id="settings-touch-dblclick-intro">
 <label id="settings-label-touch-dblclick" for="settings-touch-dblclick-intro" title="触屏设备没有右键；开启后双击卡牌/术语可打开或关闭介绍">触控模式：双击打开介绍</label>
-</div>
-<div id="settings-play-gesture-row" class="settings-check-row">
-<input type="checkbox" id="settings-play-gesture-animation">
-<label id="settings-label-play-gesture-animation" for="settings-play-gesture-animation">显示出牌操作演示</label>
 </div>
 <div id="settings-landscape-mode-row" class="settings-check-row">
 <input type="checkbox" id="settings-landscape-mode">
@@ -1357,7 +1361,7 @@
       draft: 'Draft Phase', reroll: 'Reroll', selectEvent: 'Select Event', selectEventDesc: 'Select an opening event', opponent: 'Opponent', oppInfo: 'Hand:0 Deck:0 Discard:0', battleLog: 'Battle Log', you: 'You', youInfo: 'Hand:0 Deck:0 Discard:0 Exile:0', dragToPlay: 'Drag to Play',
       endTurn: 'End Turn', viewDeck: 'View Draw Deck', viewDiscard: 'View Discard', viewExile: 'View Exile', setNextDraw: 'Set Next Draw', pauseEdit: 'Pause & Edit', surrender: 'Surrender', switchPerspective: 'Switch Perspective', leaveSpectate: 'Leave Spectate', rematch: 'Rematch', returnLobby: 'Return to Lobby',
       modEditor: 'Mod Editor', modPlaceholder: 'Paste or edit mod JSON here...', loadMod: 'Load Mod', save: 'Save', validateJson: 'Validate JSON',
-      appearance: 'Appearance', theme: 'Theme', light: 'Light', dark: 'Dark', uiStyle: 'UI Style', minimal: 'Minimal', classic: 'Classic', language: 'Language', landscapeMode: 'Enable landscape mode', server: 'Server', address: 'Address', serverPlaceholder: 'Leave empty for default server', mods: 'Mods', audio: 'Audio', noMods: 'No mod files found', ok: 'OK', cancel: 'Cancel',
+      appearance: 'Appearance', theme: 'Theme', light: 'Light', dark: 'Dark', uiStyle: 'UI Style', minimal: 'Minimal', classic: 'Classic', homeUi: 'Home UI', homeUiSimple: 'Simple', homeUiTouhou: 'Touhou Style', language: 'Language', landscapeMode: 'Enable landscape mode', server: 'Server', address: 'Address', serverPlaceholder: 'Leave empty for default server', mods: 'Mods', audio: 'Audio', noMods: 'No mod files found', ok: 'OK', cancel: 'Cancel',
       rotatePrompt: 'Please play in landscape mode', rotateSub: 'Rotate to Landscape', continueEnter: 'Continue'
     },
     zh: {
@@ -1368,7 +1372,7 @@
       draft: '选牌阶段', reroll: '刷新', selectEvent: '选择配装倾向', selectEventDesc: '选择一个配装倾向', opponent: '对手', oppInfo: '手牌:0 牌堆:0 弃牌:0', battleLog: '战斗日志', you: '你', youInfo: '手牌:0 牌堆:0 弃牌:0 放逐:0', dragToPlay: '拖动打出',
       endTurn: '结束回合', viewDeck: '查看抽牌堆', viewDiscard: '查看弃牌堆', viewExile: '查看放逐区', setNextDraw: '设置下次抽牌', pauseEdit: '暂停并编辑', surrender: '投降', switchPerspective: '切换视角', leaveSpectate: '退出观战', rematch: '再来一局', returnLobby: '返回大厅',
       modEditor: '模组编辑器', modPlaceholder: '在此粘贴或编辑模组 JSON...', loadMod: '加载模组', save: '保存', validateJson: '验证 JSON',
-      appearance: '外观', theme: '主题', light: '明亮', dark: '黑暗', uiStyle: '界面风格', minimal: '简约', classic: '经典', language: '语言', landscapeMode: '开启横屏模式', server: '服务器', address: '地址', serverPlaceholder: '留空使用默认服务器', mods: '模组', audio: '音频', noMods: '未找到模组文件', ok: '确定', cancel: '取消',
+      appearance: '外观', theme: '主题', light: '明亮', dark: '黑暗', uiStyle: '界面风格', minimal: '简约', classic: '经典', homeUi: '主页UI', homeUiSimple: '简约', homeUiTouhou: '東方Project风', language: '语言', landscapeMode: '开启横屏模式', server: '服务器', address: '地址', serverPlaceholder: '留空使用默认服务器', mods: '模组', audio: '音频', noMods: '未找到模组文件', ok: '确定', cancel: '取消',
       rotatePrompt: '请横屏游玩', rotateSub: '请旋转至横屏', continueEnter: '继续进入'
     }
   };
@@ -1393,7 +1397,7 @@
   setText('#view-lobby .lobby-header h2', t.lobby); setText('#view-lobby .lobby-left .lobby-section:first-child h3', t.onlinePlayers); setText('#lobby-online-count', t.onlineCount); setText('#view-lobby .lobby-left .lobby-section:last-child h3', t.ongoingGames); setText('#view-lobby .lobby-right .lobby-section h3', t.chat); setPlaceholder('#lobby-chat-input', t.messagePlaceholder); setText('#btn-lobby-chat-send', t.send); setText('#btn-lobby-back', t.backHome);
   setText('#view-draft h2', t.draft); setText('#btn-draft-reroll', t.reroll); setText('#view-event-select h2', t.selectEvent); setText('#view-event-select .event-desc', t.selectEventDesc); setText('#opp-label', t.opponent); setText('#opp-info', t.oppInfo); document.querySelectorAll('[data-battle-panel-tab="log"] .battle-panel-tab-label').forEach(el => { el.textContent = t.battleLog; }); setText('#you-label', t.you); setText('#you-info', t.youInfo); setText('#play-zone .play-zone-hint', t.dragToPlay); setText('#btn-end-turn', t.endTurn); setText('#btn-view-deck', t.viewDeck); setText('#btn-view-discard', t.viewDiscard); setText('#btn-view-exile', t.viewExile); setText('#btn-solo-next-draw', t.setNextDraw); setText('#btn-solo-edit', t.pauseEdit); setText('#btn-prediction-target', t.predictionTarget || '修改预测目标'); setText('#btn-surrender', t.surrender); setText('#btn-switch-perspective', t.switchPerspective); setText('#btn-spectate-view-deck', t.viewDeck); setText('#btn-spectate-view-discard', t.viewDiscard); setText('#btn-spectate-view-exile', t.viewExile); setText('#btn-leave-spectate', t.leaveSpectate); setPlaceholder('#game-chat-input', t.messagePlaceholder); setText('#btn-game-chat-send', t.send);
   setText('#btn-rematch', t.rematch); setText('#btn-return-lobby', t.returnLobby); setText('#btn-report-match', (window.__bootLang === 'zh' ? '举报本局' : 'Report Match')); setText('#view-mod-editor h2', t.modEditor); setPlaceholder('#mod-editor-area', t.modPlaceholder); setText('#btn-mod-load', t.loadMod); setText('#btn-mod-save', t.save); setText('#btn-mod-validate', t.validateJson); setText('#btn-mod-back', t.back);
-  setText('#settings-title', t.settings); setText('#settings-tab-appearance', t.appearance); setText('#settings-tab-server', t.server); setText('#settings-tab-mods', t.mods); setText('#settings-tab-audio', t.audio); setText('#settings-section-appearance', t.appearance); setText('#settings-label-theme', t.theme); setText('#settings-theme-select option[value=\"light\"]', t.light); setText('#settings-theme-select option[value=\"dark\"]', t.dark); setText('#settings-label-ui-style', t.uiStyle); setText('#settings-ui-style-select option[value=\"minimal\"]', t.minimal); setText('#settings-ui-style-select option[value=\"classic\"]', t.classic); setText('#settings-label-lang', t.language); setText('#settings-label-landscape-mode', t.landscapeMode); setText('#settings-section-server', t.server); setText('#settings-label-server', t.address); setPlaceholder('#settings-server-input', t.serverPlaceholder); setText('#settings-section-mods', t.mods); setText('#settings-section-audio', t.audio); setText('#settings-no-mods', t.noMods); setText('#btn-settings-close', t.ok); setText('#game-prompt-cancel', t.cancel); setText('.rotate-text', t.rotatePrompt); setText('.rotate-text-en', t.rotateSub); setText('#btn-dismiss-rotate', t.continueEnter);
+  setText('#settings-title', t.settings); setText('#settings-tab-appearance', t.appearance); setText('#settings-tab-server', t.server); setText('#settings-tab-mods', t.mods); setText('#settings-tab-audio', t.audio); setText('#settings-section-appearance', t.appearance); setText('#settings-label-theme', t.theme); setText('#settings-theme-select option[value=\"light\"]', t.light); setText('#settings-theme-select option[value=\"dark\"]', t.dark); setText('#settings-label-ui-style', t.uiStyle); setText('#settings-ui-style-select option[value=\"minimal\"]', t.minimal); setText('#settings-ui-style-select option[value=\"classic\"]', t.classic); setText('#settings-label-home-ui', t.homeUi); setText('#settings-home-ui-select option[value=\"simple\"]', t.homeUiSimple); setText('#settings-home-ui-select option[value=\"touhou\"]', t.homeUiTouhou); setText('#settings-label-lang', t.language); setText('#settings-label-landscape-mode', t.landscapeMode); setText('#settings-section-server', t.server); setText('#settings-label-server', t.address); setPlaceholder('#settings-server-input', t.serverPlaceholder); setText('#settings-section-mods', t.mods); setText('#settings-section-audio', t.audio); setText('#settings-no-mods', t.noMods); setText('#btn-settings-close', t.ok); setText('#game-prompt-cancel', t.cancel); setText('.rotate-text', t.rotatePrompt); setText('.rotate-text-en', t.rotateSub); setText('#btn-dismiss-rotate', t.continueEnter);
   const app = document.getElementById('app'); if (app) app.style.visibility = 'visible';
 })();
 </script>

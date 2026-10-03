@@ -29,7 +29,7 @@ class SettingsPersistenceTests(unittest.TestCase):
             'gtn_ui_style',
             'gtn_show_english_card_names',
             'gtn_show_card_images',
-            'gtn_play_gesture_animation',
+            'gtn_home_ui',
             'gtn_landscape_mode',
             'gtn_audio_master',
             'gtn_audio_music',

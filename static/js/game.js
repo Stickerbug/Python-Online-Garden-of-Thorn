@@ -38,7 +38,7 @@ const GTN_BETA_STORAGE_EXACT_KEYS = new Set([
     'gtn_show_english_card_names',
     'gtn_show_hand_order',
     'gtn_show_card_images',
-    'gtn_play_gesture_animation',
+    'gtn_home_ui',
     'gtn_landscape_mode',
     'gtn_story_hide_card_borders',
     'gtn_audio_enabled',
@@ -94,7 +94,7 @@ const GTN_COOKIE_FALLBACK_KEYS = new Set([
     'gtn_show_english_card_names',
     'gtn_show_hand_order',
     'gtn_show_card_images',
-    'gtn_play_gesture_animation',
+    'gtn_home_ui',
     'gtn_landscape_mode',
     'gtn_story_hide_card_borders',
     'gtn_audio_enabled',
@@ -2197,10 +2197,10 @@ Object.assign(I18N.en, { right_angle_person_prefix: 'Right-Angle Person' });
 Object.assign(I18N.zh, { right_angle_person_prefix: '\u76f4\u89d2\u4eba' });
 Object.assign(I18N.fr, { right_angle_person_prefix: 'Personne angle droit' });
 Object.assign(I18N.ja, { right_angle_person_prefix: '直角人' });
-Object.assign(I18N.en, { settings_ui_style: 'UI Style', ui_style_minimal: 'Minimal', ui_style_classic: 'Classic' });
-Object.assign(I18N.zh, { settings_ui_style: '界面风格', ui_style_minimal: '简约', ui_style_classic: '经典' });
-Object.assign(I18N.fr, { settings_ui_style: 'Style UI', ui_style_minimal: 'Minimal', ui_style_classic: 'Classique' });
-Object.assign(I18N.ja, { settings_ui_style: 'UIスタイル', ui_style_minimal: 'ミニマル', ui_style_classic: 'クラシック' });
+Object.assign(I18N.en, { settings_ui_style: 'UI Style', ui_style_minimal: 'Minimal', ui_style_classic: 'Classic', settings_home_ui: 'Home UI', home_ui_simple: 'Simple', home_ui_touhou: 'Touhou Style' });
+Object.assign(I18N.zh, { settings_ui_style: '界面风格', ui_style_minimal: '简约', ui_style_classic: '经典', settings_home_ui: '主页UI', home_ui_simple: '简约', home_ui_touhou: '東方Project风' });
+Object.assign(I18N.fr, { settings_ui_style: 'Style UI', ui_style_minimal: 'Minimal', ui_style_classic: 'Classique', settings_home_ui: 'UI d’accueil', home_ui_simple: 'Simple', home_ui_touhou: 'Style Touhou' });
+Object.assign(I18N.ja, { settings_ui_style: 'UIスタイル', ui_style_minimal: 'ミニマル', ui_style_classic: 'クラシック', settings_home_ui: 'ホームUI', home_ui_simple: 'シンプル', home_ui_touhou: '東方Project風' });
 Object.assign(I18N.en, { mimic_extra_cost: 'Cost {0}E' });
 Object.assign(I18N.zh, { mimic_extra_cost: '\u6d88\u8017 {0}E' });
 Object.assign(I18N.fr, { mimic_extra_cost: 'Co\u00fbt {0}E' });
@@ -2574,7 +2574,6 @@ Object.assign(I18N.en, {
     report_category_misleading: 'Misleading',
     report_category_duplicate: 'Duplicate / already reported',
     report_category_other: 'Other',
-    settings_play_gesture_animation: 'Show play gesture demo',
 });
 Object.assign(I18N.zh, {
     report: '举报',
@@ -2605,7 +2604,6 @@ Object.assign(I18N.zh, {
     report_category_misleading: '误导/虚假',
     report_category_duplicate: '重复/已存在',
     report_category_other: '其他',
-    settings_play_gesture_animation: '显示出牌操作演示',
 });
 Object.assign(I18N.fr, {
     report: 'Signaler',
@@ -2621,7 +2619,6 @@ Object.assign(I18N.fr, {
     report_success: 'Signalement envoye',
     report_login_required: 'Connectez-vous a un compte pour signaler.',
     report_error: 'Signalement echoue : {0}',
-    settings_play_gesture_animation: 'Afficher le geste de jeu',
 });
 Object.assign(I18N.ja, {
     report: '通報',
@@ -2637,7 +2634,6 @@ Object.assign(I18N.ja, {
     report_success: '通報を送信しました',
     report_login_required: '通報するにはアカウントでログインしてください。',
     report_error: '通報失敗: {0}',
-    settings_play_gesture_animation: 'カード操作デモを表示',
 });
 
 // Keep player-facing keyword names canonical in every supported language.
@@ -2686,7 +2682,52 @@ function touchDblclickEnabled() {
 }
 let landscapeModeEnabled = localStorage.getItem('gtn_landscape_mode') === '1';
 let storyCardBordersHidden = localStorage.getItem('gtn_story_hide_card_borders') === '1';
-let playGestureAnimationEnabled = localStorage.getItem('gtn_play_gesture_animation') === '1';
+/* 主页UI（2026-10-03，反馈单#326 概念）：simple=现状简约版（默认）；
+ * touhou=東方Project风——斜排大标题、阶梯式菜单、飘动卡牌背景、右下角皮肤调控位。 */
+let homeUiStyle = localStorage.getItem('gtn_home_ui') === 'touhou' ? 'touhou' : 'simple';
+document.documentElement.setAttribute('data-home-ui', homeUiStyle);
+let homeFloatingCardsSpawned = false;
+function updateHomeTouhouActiveClass(viewId = activeViewId) {
+    const active = homeUiStyle === 'touhou' && viewId === 'view-login';
+    document.documentElement.classList.toggle('home-touhou-active', active);
+    if (active) spawnHomeFloatingCards();
+}
+function spawnHomeFloatingCards() {
+    const container = $('home-floating-cards');
+    if (!container || homeFloatingCardsSpawned) return;
+    homeFloatingCardsSpawned = true;
+    const defIds = Object.keys(CARD_DEFS || {});
+    if (!defIds.length) return;
+    const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const total = reduced ? 0 : Math.min(12, Math.max(7, Math.round(window.innerWidth / 130)));
+    for (let i = 0; i < total; i++) {
+        const def = CARD_DEFS[defIds[Math.floor(Math.random() * defIds.length)]];
+        const url = getCardArtUrl({}, def);
+        if (!url) continue;
+        const el = document.createElement('img');
+        el.src = url;
+        el.alt = '';
+        el.draggable = false;
+        el.className = 'home-floating-card';
+        const depth = 0.35 + Math.random() * 0.65;
+        el.style.setProperty('--hfc-depth', String(depth));
+        el.style.setProperty('--hfc-left', `${Math.random() * 96}%`);
+        el.style.setProperty('--hfc-size', `${44 + Math.round(depth * 58)}px`);
+        el.style.setProperty('--hfc-delay', `${-Math.random() * 46}s`);
+        el.style.setProperty('--hfc-duration', `${30 + Math.random() * 26}s`);
+        el.style.setProperty('--hfc-sway', `${(Math.random() * 2 - 1) * 26}px`);
+        el.style.setProperty('--hfc-rot', `${(Math.random() * 2 - 1) * 16}deg`);
+        container.appendChild(el);
+    }
+}
+function applyHomeUiStyle(style) {
+    homeUiStyle = style === 'touhou' ? 'touhou' : 'simple';
+    localStorage.setItem('gtn_home_ui', homeUiStyle);
+    document.documentElement.setAttribute('data-home-ui', homeUiStyle);
+    const sel = $('settings-home-ui-select');
+    if (sel) sel.value = homeUiStyle;
+    updateHomeTouhouActiveClass();
+}
 document.documentElement.classList.toggle('landscape-mode-enabled', landscapeModeEnabled);
 const UI_STYLE_MIGRATION_KEY = 'gtn_ui_style_v2_migrated';
 const HIDDEN_FEATURES_KEY = 'gtn_hidden_features_enabled';
@@ -6367,15 +6408,9 @@ function applyStoryCardBordersHidden(value) {
     updateStoryCardBordersInput();
 }
 
-function updatePlayGestureAnimationInput() {
-    const input = $('settings-play-gesture-animation');
-    if (input) input.checked = !!playGestureAnimationEnabled;
-}
-
-function applyPlayGestureAnimation(value) {
-    playGestureAnimationEnabled = !!value;
-    localStorage.setItem('gtn_play_gesture_animation', playGestureAnimationEnabled ? '1' : '0');
-    updatePlayGestureAnimationInput();
+function updateHomeUiSelectValue() {
+    const sel = $('settings-home-ui-select');
+    if (sel) sel.value = homeUiStyle;
 }
 
 function isBattleTextInputFocused() {
@@ -6708,6 +6743,15 @@ function updateStaticText() {
     if (settingsLabelTheme) settingsLabelTheme.textContent = UI.settings_theme;
     const settingsLabelUiStyle = $('settings-label-ui-style');
     if (settingsLabelUiStyle) settingsLabelUiStyle.textContent = UI.settings_ui_style;
+    const settingsLabelHomeUi = $('settings-label-home-ui');
+    if (settingsLabelHomeUi) settingsLabelHomeUi.textContent = UI.settings_home_ui || '主页UI';
+    const homeUiSelect = $('settings-home-ui-select');
+    if (homeUiSelect) {
+        const simpleOpt = homeUiSelect.querySelector('option[value="simple"]');
+        const touhouOpt = homeUiSelect.querySelector('option[value="touhou"]');
+        if (simpleOpt) simpleOpt.textContent = UI.home_ui_simple || '简约';
+        if (touhouOpt) touhouOpt.textContent = UI.home_ui_touhou || '東方Project风';
+    }
     const settingsLabelLang = $('settings-label-lang');
     if (settingsLabelLang) settingsLabelLang.textContent = UI.settings_lang;
     const settingsEnglishNameLabel = $('settings-label-show-english-names');
@@ -6720,8 +6764,6 @@ function updateStaticText() {
     if (ownSkinsLabel) ownSkinsLabel.textContent = UI.settings_show_own_skins || '显示自己卡牌皮肤';
     const othersSkinsLabel = $('settings-label-show-others-skins');
     if (othersSkinsLabel) othersSkinsLabel.textContent = UI.settings_show_others_skins || '显示他人卡牌皮肤';
-    const settingsPlayGestureLabel = $('settings-label-play-gesture-animation');
-    if (settingsPlayGestureLabel) settingsPlayGestureLabel.textContent = UI.settings_play_gesture_animation || '显示出牌操作演示';
     const settingsLandscapeModeLabel = $('settings-label-landscape-mode');
     if (settingsLandscapeModeLabel) settingsLandscapeModeLabel.textContent = UI.settings_landscape_mode;
     const settingsFullscreenLabel = $('settings-label-fullscreen');
@@ -7473,6 +7515,7 @@ function updateBattlePanelTabs(gs = gameState) {
 
 function updateTopActionButtons(viewId = activeViewId) {
     const onHome = viewId === 'view-login';
+    updateHomeTouhouActiveClass(viewId);
     const settingsTop = $('btn-open-settings');
     if (settingsTop) settingsTop.classList.toggle('hidden', !onHome);
     const accountTop = $('btn-account-top');
@@ -17461,6 +17504,16 @@ function connectSocket(serverUrl) {
         const rejectMessage = (data && data.message) || UI.operation_failed;
         if (rejectCode === 'NO_PENDING_CHOICE' || rejectMessage === UI.error_no_pending_choice || rejectMessage === '没有待选择操作') {
             debugLog('[client] ignored stale no-pending-choice rejection');
+            return;
+        }
+        // AI 对局的 ACTION_BUSY 不弹红色 toast——左侧提示区灰字足够
+        if (rejectCode === 'ACTION_BUSY' && gameState && gameState.ai_match) {
+            debugLog('[client] AI busy, showing in action hint instead of toast');
+            const hint = $('classic-action-hint');
+            if (hint) {
+                hint.textContent = gameState.ai_thinking ? 'Phelren 思考中…' : 'Phelren 处理中…';
+                hint.classList.add('ai-busy-hint');
+            }
             return;
         }
         clientRejectAction(rejectMessage);
@@ -30853,7 +30906,9 @@ function renderClassicBattle(gs) {
         const classicTimer = $('classic-turn-timer');
         if (classicTimer) classicTimer.textContent = formatClassicTurnTimerText(gs);
         $('classic-phase').textContent = vm.turn.phaseText || '';
-        $('classic-action-hint').textContent = selected ? getClassicPlayHint(selected) : (vm.turn.isMyTurn ? UI.your_turn : UI.opponent_turn);
+        const actionHint = $('classic-action-hint');
+        actionHint.textContent = selected ? getClassicPlayHint(selected) : (vm.turn.isMyTurn ? UI.your_turn : UI.opponent_turn);
+        actionHint.classList.remove('ai-busy-hint');
         const maskOwnPiles = blindLevel >= 3;
         const maskOwnDrawDeck = shouldMaskOwnDrawDeck();
         const maskOwnDiscardPile = shouldMaskOwnDiscardPile();
@@ -35638,57 +35693,6 @@ function createVirtualWindowsCursor() {
     return cursor;
 }
 
-function animateVirtualPlayGesture(cardInstanceId, options = {}) {
-    const force = !!options.force;
-    if (!force && (!playGestureAnimationEnabled || isSpectating || replayMode)) return 0;
-    if (!force && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return 0;
-    const source = options.sourceElement || document.querySelector(
-        `#you-hand .card[data-instance-id="${cardInstanceId}"], #classic-hand-fan [data-instance-id="${cardInstanceId}"], .card[data-instance-id="${cardInstanceId}"], [data-instance-id="${cardInstanceId}"]`
-    );
-    if (!source) return 0;
-    const sourceRect = source.getBoundingClientRect();
-    if (!sourceRect || sourceRect.width <= 2 || sourceRect.height <= 2) return 0;
-    const targetEl = options.targetElement || getPlayGestureFallbackTarget();
-    const targetRect = targetEl && targetEl.getBoundingClientRect ? targetEl.getBoundingClientRect() : null;
-    const targetX = targetRect && targetRect.width > 0
-        ? targetRect.left + targetRect.width * 0.5
-        : window.innerWidth * 0.5;
-    const targetY = targetRect && targetRect.height > 0
-        ? targetRect.top + targetRect.height * 0.5
-        : window.innerHeight * 0.42;
-    const startX = sourceRect.left + sourceRect.width * 0.58;
-    const startY = sourceRect.top + sourceRect.height * 0.5;
-    const cardStartX = sourceRect.left;
-    const cardStartY = sourceRect.top;
-    const cardEndX = targetX - sourceRect.width * 0.5;
-    const cardEndY = targetY - sourceRect.height * 0.5;
-    const cursor = createVirtualWindowsCursor();
-    const clone = source.cloneNode(true);
-    clone.classList.add('virtual-play-card');
-    clone.style.left = `${cardStartX}px`;
-    clone.style.top = `${cardStartY}px`;
-    clone.style.width = `${sourceRect.width}px`;
-    clone.style.height = `${sourceRect.height}px`;
-    clone.style.setProperty('--gesture-card-dx', `${cardEndX - cardStartX}px`);
-    clone.style.setProperty('--gesture-card-dy', `${cardEndY - cardStartY}px`);
-    cursor.style.left = `${startX}px`;
-    cursor.style.top = `${startY}px`;
-    cursor.style.setProperty('--gesture-cursor-dx', `${targetX - startX}px`);
-    cursor.style.setProperty('--gesture-cursor-dy', `${targetY - startY}px`);
-    document.body.append(clone, cursor);
-    source.classList.add('virtual-play-source');
-    const canMarkTarget = targetEl && targetEl.classList && targetEl !== document.body && targetEl !== document.documentElement;
-    if (canMarkTarget) targetEl.classList.add('virtual-play-target');
-    const duration = 680;
-    setTimeout(() => {
-        clone.remove();
-        cursor.remove();
-        source.classList.remove('virtual-play-source');
-        if (canMarkTarget) targetEl.classList.remove('virtual-play-target');
-    }, duration + 80);
-    return duration;
-}
-
 function animateFusionMerge(fusionCardId, targetIds = [], options = {}) {
     const startDelay = Number(options.startDelay || 0);
     // 融合的几张卡都会离手，全部登记避免差分动画重复演出
@@ -35965,16 +35969,12 @@ async function onPlayCard(cardInstanceId, options = {}) {
     const optimisticResources = buildOptimisticResourceOverride(cardDict, gameState && gameState.you, optimisticCost);
     queueLocalResourceCost(cardDict, gameState && gameState.you, { shownOptimistically: !!optimisticResources });
     const playedTargetElement = getClassicPlayedCardAnimationTarget(cardDict, cardDef, targetPlayerId);
-    const playGestureDelay = animateVirtualPlayGesture(cardInstanceId, {
-        targetElement: playedTargetElement,
-    });
     if (cardDict.def_id === 'Fusion' && choice && Array.isArray(choice.target_instance_ids)) {
-        animateFusionMerge(cardInstanceId, choice.target_instance_ids, { startDelay: playGestureDelay || 300 });
+        animateFusionMerge(cardInstanceId, choice.target_instance_ids, { startDelay: 300 });
     } else {
         animatePlayedCard(cardInstanceId, {
             shatterAfter: shouldShatterAfterPlay,
             targetElement: playedTargetElement,
-            startDelay: playGestureDelay,
         });
     }
     pendingPlayCard = cardDict;
@@ -40417,6 +40417,11 @@ async function init() {
     $('settings-theme-select').addEventListener('change', (e) => { applyTheme(e.target.value); });
     const uiStyleSelect = $('settings-ui-style-select');
     if (uiStyleSelect) uiStyleSelect.addEventListener('change', (e) => { applyUiStyle(e.target.value); });
+    const homeUiSelect = $('settings-home-ui-select');
+    if (homeUiSelect) {
+        homeUiSelect.value = homeUiStyle;
+        homeUiSelect.addEventListener('change', (e) => { applyHomeUiStyle(e.target.value); });
+    }
     $('settings-lang-select').addEventListener('change', (e) => { applyLang(e.target.value); });
     const englishNameToggle = $('settings-show-english-names');
     if (englishNameToggle) {
@@ -40456,11 +40461,6 @@ async function init() {
             try { localStorage.setItem('gtn_touch_dblclick_intro', e.target.checked ? '1' : '0'); } catch (_) {}
             touchDblclickIntro = e.target.checked;
         });
-    }
-    const playGestureToggle = $('settings-play-gesture-animation');
-    if (playGestureToggle) {
-        playGestureToggle.checked = playGestureAnimationEnabled;
-        playGestureToggle.addEventListener('change', (e) => applyPlayGestureAnimation(e.target.checked));
     }
     const landscapeModeToggle = $('settings-landscape-mode');
     if (landscapeModeToggle) {

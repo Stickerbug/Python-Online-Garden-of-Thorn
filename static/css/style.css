@@ -8260,17 +8260,6 @@ a.title-shop-afdian-go:hover {
   object-fit: contain;
 }
 
-.virtual-play-card.card {
-  position: fixed;
-  z-index: 4600;
-  pointer-events: none;
-  margin: 0;
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
-  transform-origin: 50% 50%;
-  animation: virtualCardDragPlay 680ms cubic-bezier(.18,.84,.2,1) forwards;
-  will-change: transform, opacity, filter;
-}
-
 .virtual-play-source {
   opacity: 0.34 !important;
 }
@@ -8302,29 +8291,6 @@ a.title-shop-afdian-go:hover {
   100% {
     opacity: 0;
     transform: translate3d(calc(var(--gesture-cursor-dx) + 10px), calc(var(--gesture-cursor-dy) + 8px), 0) scale(1);
-  }
-}
-
-@keyframes virtualCardDragPlay {
-  0%, 18% {
-    opacity: 0;
-    transform: translate3d(0, 0, 0) scale(1) rotate(0deg);
-    filter: brightness(1);
-  }
-  22% {
-    opacity: 0.98;
-    transform: translate3d(0, -10px, 0) scale(1.06) rotate(-1deg);
-    filter: brightness(1.04);
-  }
-  76% {
-    opacity: 0.98;
-    transform: translate3d(var(--gesture-card-dx), var(--gesture-card-dy), 0) scale(0.72) rotate(3deg);
-    filter: brightness(1.12);
-  }
-  100% {
-    opacity: 0;
-    transform: translate3d(var(--gesture-card-dx), var(--gesture-card-dy), 0) scale(0.58) rotate(3deg);
-    filter: brightness(1.18);
   }
 }
 
@@ -14751,6 +14717,222 @@ body.spectate-disconnect-modal-active #classic-leave-spectate:not(.hidden) {
   width: min(360px, calc(100vw - 40px));
 }
 
+/* ===== 主页UI·東方Project风（2026-10-03，反馈单#326 概念实现）=====
+ * 设置→外观→主页UI 切换；simple 为现状默认。touhou 仅改主页观感：
+ * 斜排大标题（Thorn 放大）、阶梯式菜单、飘动卡牌背景、右下角皮肤调控位。
+ * 不改按钮归属与交互逻辑。 */
+html[data-home-ui="touhou"] #view-login {
+  background:
+    radial-gradient(circle, color-mix(in srgb, var(--thorn) 9%, transparent) 0 2.2px, transparent 2.4px) 0 0 / 148px 148px,
+    radial-gradient(circle, color-mix(in srgb, var(--thorn) 6%, transparent) 0 1.7px, transparent 1.9px) 40px 34px / 92px 92px,
+    var(--bg-primary);
+  overflow: hidden;
+}
+
+/* —— 飘动卡牌背景 —— */
+.home-floating-cards {
+  display: none;
+}
+html[data-home-ui="touhou"] .home-floating-cards {
+  display: block;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.home-floating-card {
+  position: absolute;
+  top: 100%;
+  left: var(--hfc-left);
+  width: var(--hfc-size);
+  height: calc(var(--hfc-size) * 1.4);
+  object-fit: cover;
+  border-radius: 9px;
+  opacity: calc(0.13 + 0.26 * var(--hfc-depth));
+  filter: saturate(0.88) contrast(0.98);
+  animation: homeCardDrift var(--hfc-duration) linear infinite;
+  animation-delay: var(--hfc-delay);
+  will-change: transform;
+}
+@keyframes homeCardDrift {
+  0% {
+    transform: translate3d(0, 4vh, 0) rotate(-2deg);
+    opacity: 0;
+  }
+  8% {
+    opacity: calc(0.13 + 0.26 * var(--hfc-depth));
+  }
+  48% {
+    transform: translate3d(var(--hfc-sway), -58vh, 0) rotate(var(--hfc-rot));
+  }
+  92% {
+    opacity: calc(0.13 + 0.26 * var(--hfc-depth));
+  }
+  100% {
+    transform: translate3d(0, -116vh, 0) rotate(2deg);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-home-ui="touhou"] .home-floating-cards {
+    display: none;
+  }
+}
+
+/* —— 斜排大标题：整体上扬，Thorn 字号放大 —— */
+html[data-home-ui="touhou"] .login-container {
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: clamp(64px, 12vh, 120px) 24px 40px clamp(20px, 8vw, 128px);
+  text-align: left;
+}
+.title-word {
+  display: inline-block;
+}
+html[data-home-ui="touhou"] .title-main {
+  display: flex;
+  align-items: baseline;
+  gap: 0.32em;
+  transform: rotate(-7deg);
+  transform-origin: left bottom;
+  margin: 0 0 0 0.5em;
+}
+html[data-home-ui="touhou"] .title-word-garden {
+  font-size: 0.74em;
+  transform: translateY(0.3em);
+}
+html[data-home-ui="touhou"] .title-word-of {
+  font-size: 0.44em;
+  color: var(--text-secondary);
+  transform: translateY(0.1em);
+}
+html[data-home-ui="touhou"] .title-word-thorn {
+  font-size: 1.3em;
+  color: var(--thorn);
+  transform: translateY(-0.06em);
+  text-shadow: 0 3px 0 color-mix(in srgb, var(--thorn) 26%, transparent);
+}
+html[data-home-ui="touhou"] .title-sub {
+  align-self: flex-start;
+  margin: 0.2em 0 0 4.2em;
+  transform: rotate(-7deg);
+  transform-origin: left top;
+  letter-spacing: 0.5em;
+}
+html[data-home-ui="touhou"] .subtitle {
+  align-self: flex-start;
+  margin-left: 1.2em;
+  letter-spacing: 0.28em;
+}
+
+/* —— 阶梯式菜单：模式按钮逐级右移、轻斜、左刺条 —— */
+html[data-home-ui="touhou"] .login-form {
+  align-items: flex-start;
+  margin-top: 30px;
+  transform: rotate(-3deg);
+  transform-origin: left top;
+  gap: 10px;
+}
+html[data-home-ui="touhou"] .login-form .form-row {
+  width: 100%;
+}
+html[data-home-ui="touhou"] .login-form .form-row .btn {
+  transform: rotate(-1.2deg);
+  background: color-mix(in srgb, var(--bg-card) 58%, transparent);
+  border-left: 4px solid var(--thorn);
+  border-radius: 6px 20px 20px 6px;
+  font-size: 1.06em;
+  letter-spacing: 0.14em;
+  transition: transform 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+html[data-home-ui="touhou"] .login-form .form-row .btn:hover {
+  transform: rotate(-1.2deg) translateX(10px) scale(1.03);
+  background: color-mix(in srgb, var(--bg-card) 92%, transparent);
+  box-shadow: -6px 8px 22px color-mix(in srgb, var(--thorn) 22%, transparent);
+}
+/* .login-form 子元素序号：1=游客分隔条 2=昵称行 3=多人 4=故事 5=训练场 6=休闲花园 */
+html[data-home-ui="touhou"] .login-form .form-row:nth-child(4),
+html[data-home-ui="touhou"] #story-mode-entry-row {
+  margin-left: 26px;
+}
+html[data-home-ui="touhou"] .login-form .form-row:nth-child(5) {
+  margin-left: 52px;
+}
+html[data-home-ui="touhou"] #minigame-2048-entry-row {
+  margin-left: 78px;
+}
+html[data-home-ui="touhou"] .login-form .login-utility-row {
+  margin-left: 18px;
+  margin-top: 16px;
+  opacity: 0.82;
+}
+html[data-home-ui="touhou"] .home-footer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 8px;
+}
+html[data-home-ui="touhou"] .login-container > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* —— 右下角皮肤调控位：主页且 touhou 生效时，顶栏皮肤按钮固定到右下角 —— */
+html.home-touhou-active .top-action-buttons .skin-top-btn {
+  position: fixed;
+  top: auto;
+  left: auto;
+  right: 20px;
+  bottom: 20px;
+  z-index: 910;
+  width: auto;
+  min-width: 54px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-card) 88%, transparent);
+  box-shadow: 0 8px 26px rgba(20, 28, 20, 0.3);
+  font-size: 13px;
+  border: 1.5px solid color-mix(in srgb, var(--thorn) 55%, transparent);
+}
+html.home-touhou-active .top-action-buttons .skin-top-btn:hover {
+  transform: translateY(-2px) scale(1.04);
+}
+
+/* 窄屏微调：标题与阶梯收敛，避免横向溢出 */
+@media (max-width: 600px) {
+  html[data-home-ui="touhou"] .login-container {
+    padding: clamp(72px, 14vh, 110px) 16px 40px 22px;
+  }
+  html[data-home-ui="touhou"] .title-main {
+    transform: rotate(-5deg);
+  }
+  html[data-home-ui="touhou"] .title-sub {
+    transform: rotate(-5deg);
+    margin-left: 2.6em;
+    letter-spacing: 0.3em;
+  }
+  html[data-home-ui="touhou"] .login-form {
+    transform: rotate(-2deg);
+  }
+  html[data-home-ui="touhou"] .login-form .form-row:nth-child(4),
+  html[data-home-ui="touhou"] #story-mode-entry-row {
+    margin-left: 14px;
+  }
+  html[data-home-ui="touhou"] .login-form .form-row:nth-child(5) {
+    margin-left: 28px;
+  }
+  html[data-home-ui="touhou"] #minigame-2048-entry-row {
+    margin-left: 42px;
+  }
+  html.home-touhou-active .top-action-buttons .skin-top-btn {
+    right: 12px;
+    bottom: 64px;
+    padding: 7px 12px;
+    font-size: 11px;
+  }
+}
+
 #btn-connect,
 #btn-story-mode,
 #btn-solo-training,
@@ -16890,6 +17072,14 @@ html[data-ui-style="minimal"] .btn-end-turn {
   border: 1px solid rgba(244, 143, 177, 0.18);
   font-size: 12px;
   line-height: 1.35;
+}
+
+/* AI 思考中的灰色低调提示（替代红色 toast 弹窗） */
+.classic-action-hint.ai-busy-hint {
+  color: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+  font-style: italic;
 }
 
 .classic-resource-block {
