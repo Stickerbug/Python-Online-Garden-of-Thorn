@@ -2708,20 +2708,17 @@ class GameEngine2v2(GameEngine):
             return {'success': False, 'error': '没有可选中的玩家'}
         if self._equipment_trigger_forbids_self_target(eq.card_def) and target_player_id == player_id:
             return {'success': False, 'error': '不能选择自己作为目标'}
+        # 反馈 #333：装备触发目标为队友时不再要求队友同意——玩家是在主动使用
+        # 自己的装备（已确认选择目标），属于"自决行为"；旧的 needs_ally_consent
+        # 路径客户端不处理（只看到 success:true 但效果未执行），多花/花朵等
+        # 装备触发后出现"成功但什么都不发生"的体验。出牌打队友仍需同意。
         if (
             not uses_effect_target
             and target_player_id != player_id
             and self.is_ally(player_id, target_player_id)
             and not ally_approved
         ):
-            self.pending_ally_request = {
-                'action': 'trigger',
-                'player_id': player_id,
-                'target_player_id': target_player_id,
-                'equipment_instance_id': equipment_instance_id,
-                'card': eq.card_instance.to_dict(),
-            }
-            return {'success': True, 'needs_ally_consent': True, 'card': eq.card_instance.to_dict(), 'target_player_id': target_player_id}
+            ally_approved = True
         max_uses = self._equipment_trigger_max_uses(eq)
         if max_uses > 0 and int(getattr(eq, 'uses_this_turn', 0)) >= max_uses:
             return {'success': False, 'error': f'该装备本回合最多触发{max_uses}次'}
