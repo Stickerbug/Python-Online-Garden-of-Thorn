@@ -2766,20 +2766,20 @@ function fillHomeIdentityWidget() {
             isCurrent: true,
         });
     }
-    if (!widget.dataset.cardDef) {
-        const defIds = Object.keys(CARD_DEFS || {}).filter(id => {
-            const d = CARD_DEFS[id];
-            return !!(d && (d.image_url || d.image));
-        });
-        if (defIds.length) widget.dataset.cardDef = defIds[Math.floor(Math.random() * defIds.length)];
+    /* 左卡＝装备的卡牌皮肤卡面，右卡＝卡背；未装备（初始）时初始皮肤没有
+     * 卡面素材，两边都显示卡背 */
+    const skinId = myEquippedCardSkin();
+    const frontUrl = skinId ? cardSkinFrontUrl(skinId) : '';
+    const leftBtn = $('home-id-card-l');
+    const rightBtn = $('home-id-card-r');
+    if (leftBtn) {
+        if (frontUrl) {
+            leftBtn.innerHTML = `<img src="${escapeHtml(frontUrl)}" alt="" draggable="false">`;
+        } else if (!leftBtn.firstChild) {
+            leftBtn.appendChild(createCardElement({}, { faceDown: true }));
+        }
     }
-    const cardDefId = widget.dataset.cardDef || '';
-    const backBtn = $('home-id-card-l');
-    const faceBtn = $('home-id-card-r');
-    if (backBtn && !backBtn.firstChild) backBtn.appendChild(createCardElement({}, { faceDown: true }));
-    if (faceBtn && cardDefId && !faceBtn.firstChild) {
-        faceBtn.appendChild(createCardElement({ def_id: cardDefId }, { small: true, disableIntro: true }));
-    }
+    if (rightBtn && !rightBtn.firstChild) rightBtn.appendChild(createCardElement({}, { faceDown: true }));
     bindHomeIdentityWidgetClicks(widget);
 }
 function bindHomeIdentityWidgetClicks(widget) {
