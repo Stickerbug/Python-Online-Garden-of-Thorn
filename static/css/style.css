@@ -572,14 +572,29 @@ body {
   gap: 8px;
   max-width: calc(100vw - 24px);
 }
+/* 東方风主页：顶栏按钮组移到右上角分两行（填补右上空白）；设置与皮肤入口
+ * 由弧线菜单/右下身份卡承担，顶部不再重复 */
+html.home-touhou-active .top-action-buttons {
+  left: auto;
+  right: 14px;
+  top: 10px;
+  display: grid;
+  grid-template-columns: repeat(6, auto);
+  justify-items: center;
+  gap: 8px;
+}
+html.home-touhou-active .top-action-buttons .skin-top-btn,
+html.home-touhou-active .top-action-buttons .top-settings-btn {
+  display: none !important;
+}
 
 .top-icon-btn {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 64px;
-  height: 64px;
+  width: 88px;
+  height: 88px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -594,8 +609,8 @@ body {
 
 .top-icon-btn img {
   display: none;
-  width: 60px;
-  height: 60px;
+  width: 84px;
+  height: 84px;
   object-fit: contain;
   pointer-events: none;
   filter: drop-shadow(0 2px 3px rgba(35, 45, 35, 0.18));
@@ -604,10 +619,10 @@ body {
 .top-icon-text {
   display: grid;
   place-items: center;
-  width: 60px;
-  height: 60px;
+  width: 84px;
+  height: 84px;
   color: var(--text-primary);
-  font-size: 15px;
+  font-size: 20px;
   font-weight: 900;
   line-height: 1;
   border-radius: 50%;
@@ -840,23 +855,27 @@ body {
   }
 
   .top-icon-btn {
-    width: 54px;
-    height: 54px;
+    width: 66px;
+    height: 66px;
   }
 
   .top-icon-btn img,
   .top-icon-text {
-    width: 50px;
-    height: 50px;
+    width: 62px;
+    height: 62px;
   }
 
   .top-icon-text {
-    font-size: 13px;
+    font-size: 15px;
   }
 
   .top-icon-btn::before {
-    width: 48px;
-    height: 48px;
+    width: 60px;
+    height: 60px;
+  }
+
+  html.home-touhou-active .top-action-buttons {
+    grid-template-columns: repeat(4, auto);
   }
 }
 
@@ -14864,8 +14883,8 @@ html[data-home-ui="touhou"] .login-container {
 }
 html[data-home-ui="touhou"] .title-main {
   position: absolute;
-  left: 5vw;
-  top: 16vh;
+  left: 4vw;
+  top: 4vh;
   z-index: 2;
   display: flex;
   align-items: baseline;
@@ -14875,32 +14894,30 @@ html[data-home-ui="touhou"] .title-main {
   font-weight: 700;
   font-size: clamp(28px, 7.2vw, 145px);
   line-height: 1;
-  color: #1f1f1f;
+  color: var(--text-primary);
 }
 html[data-home-ui="touhou"] .title-word-garden,
 html[data-home-ui="touhou"] .title-word-of,
 html[data-home-ui="touhou"] .title-word-thorn {
   font-size: 1em;
-  color: #1f1f1f;
+  color: inherit;
   transform: none;
   text-shadow: none;
 }
 html[data-home-ui="touhou"] .title-word-thorn {
-  text-shadow: 0 0 1.5px #4d4d4d;
   margin-left: 0.9vw;
 }
 html[data-home-ui="touhou"] .title-sub {
   position: absolute;
-  left: 38vw;
-  top: 33vh;
+  left: 4vw;
+  top: 17vh;
   z-index: 2;
   margin: 0;
   font-family: var(--font-main);
   font-size: clamp(14px, 3.6vw, 72px);
   font-weight: 900;
-  color: #d1181b;
+  color: var(--thorn);
   letter-spacing: 0.12em;
-  text-shadow: 0 1px 0 rgba(255, 252, 240, 0.45);
 }
 html[data-home-ui="touhou"] .subtitle {
   display: none;
@@ -15001,6 +15018,12 @@ html[data-home-ui="touhou"] .login-form .form-row .btn::after {
   color: transparent;
   transition: color 140ms ease;
 }
+/* 四个模式入口恢复简约版原色（多人=青绿 故事=琥珀 训练=蓝 休闲=紫）；
+ * 附加入口（设置/反馈中心/手册）保持矢量图金色 */
+html[data-home-ui="touhou"] #btn-connect { color: var(--bloom); -webkit-text-stroke: 0; }
+html[data-home-ui="touhou"] #btn-story-mode { color: #d99a3d; -webkit-text-stroke: 0; }
+html[data-home-ui="touhou"] #btn-solo-training { color: var(--magic); -webkit-text-stroke: 0; }
+html[data-home-ui="touhou"] #btn-minigame-2048 { color: #8f7ff0; -webkit-text-stroke: 0; }
 html[data-home-ui="touhou"] .login-form .form-row .btn:hover {
   transform: translateX(6px);
   color: #e8352c;
@@ -15053,7 +15076,7 @@ html[data-home-ui="touhou"] .home-footer {
 html[data-theme="dark"][data-home-ui="touhou"] .home-footer {
   color: #9aa38b;
 }
-html[data-home-ui="touhou"] .login-container > *:not(.title-main):not(.title-sub):not(#home-floating-cards) {
+html[data-home-ui="touhou"] .login-container > *:not(.title-main):not(.title-sub):not(#home-floating-cards):not(.home-footer) {
   position: relative;
   z-index: 1;
 }
@@ -15099,7 +15122,7 @@ html.home-touhou-active #home-identity-widget {
   color: var(--text-primary);
 }
 html.home-touhou-active .home-id-top {
-  color: #1f1f1f;
+  color: var(--text-primary);
 }
 html[data-theme="dark"].home-touhou-active .home-id-top {
   color: #e8e4d5;
@@ -15108,7 +15131,8 @@ html[data-theme="dark"].home-touhou-active .home-id-top {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  gap: 0.6vw;
+  /* 中间留空恰好容纳中央头像（19vw 级） */
+  gap: 21vw;
 }
 .home-id-avatar {
   position: absolute;
@@ -15117,18 +15141,14 @@ html[data-theme="dark"].home-touhou-active .home-id-top {
   transform: translateX(-50%);
   width: clamp(96px, 19vw, 384px);
   height: clamp(96px, 19vw, 384px);
-  padding: 4px;
-  border: 3px solid #f5f2e4;
+  padding: 0;
+  border: 0;
   border-radius: 50%;
-  background: #ece7cf;
+  background: transparent;
   box-shadow: 0 10px 30px rgba(40, 50, 35, 0.28);
   cursor: pointer;
   overflow: hidden;
-  transition: transform 140ms ease, border-color 140ms ease;
-}
-html[data-theme="dark"].home-touhou-active .home-id-avatar {
-  border-color: #3a4531;
-  background: #2a3324;
+  transition: transform 140ms ease;
 }
 .home-id-avatar .player-avatar,
 .home-id-avatar .skin-avatar {
@@ -15137,7 +15157,6 @@ html[data-theme="dark"].home-touhou-active .home-id-avatar {
 }
 .home-id-avatar:hover {
   transform: translateX(-50%) scale(1.06);
-  border-color: #ff8a8a;
 }
 .home-id-card {
   width: clamp(48px, 13vw, 270px);
@@ -15157,18 +15176,11 @@ html[data-theme="dark"].home-touhou-active .home-id-avatar {
 #home-id-card-l {
   transform: rotate(-13deg);
 }
-#home-id-card-m {
-  width: clamp(56px, 15.5vw, 320px);
-  transform: translateY(-1.6vh);
-}
 #home-id-card-r {
   transform: rotate(13deg);
 }
 #home-id-card-l:hover {
   transform: rotate(-13deg) translateY(-8px) scale(1.05);
-}
-#home-id-card-m:hover {
-  transform: translateY(calc(-1.6vh - 8px)) scale(1.05);
 }
 #home-id-card-r:hover {
   transform: rotate(13deg) translateY(-8px) scale(1.05);
@@ -15215,11 +15227,11 @@ html[data-theme="dark"].home-touhou-active .home-id-avatar {
     right: 2vw;
     bottom: 1.5vh;
   }
-  .home-id-card {
-    width: 20vw;
+  .home-id-cards {
+    gap: 36vw;
   }
-  #home-id-card-m {
-    width: 23vw;
+  .home-id-card {
+    width: 18vw;
   }
   .home-id-avatar {
     width: 34vw;

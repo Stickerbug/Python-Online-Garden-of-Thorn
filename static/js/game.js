@@ -2775,13 +2775,11 @@ function fillHomeIdentityWidget() {
     }
     const cardDefId = widget.dataset.cardDef || '';
     const backBtn = $('home-id-card-l');
-    const faceBtn = $('home-id-card-m');
-    const backBtn2 = $('home-id-card-r');
+    const faceBtn = $('home-id-card-r');
     if (backBtn && !backBtn.firstChild) backBtn.appendChild(createCardElement({}, { faceDown: true }));
     if (faceBtn && cardDefId && !faceBtn.firstChild) {
         faceBtn.appendChild(createCardElement({ def_id: cardDefId }, { small: true, disableIntro: true }));
     }
-    if (backBtn2 && !backBtn2.firstChild) backBtn2.appendChild(createCardElement({}, { faceDown: true }));
     bindHomeIdentityWidgetClicks(widget);
 }
 function bindHomeIdentityWidgetClicks(widget) {
@@ -2795,8 +2793,6 @@ function bindHomeIdentityWidgetClicks(widget) {
     if (avatarBtn) avatarBtn.addEventListener('click', () => openSkinPageAt('look'));
     const cardL = $('home-id-card-l');
     if (cardL) cardL.addEventListener('click', () => openSkinPageAt('card-skins'));
-    const cardM = $('home-id-card-m');
-    if (cardM) cardM.addEventListener('click', () => openSkinPageAt('card-skins'));
     const cardR = $('home-id-card-r');
     if (cardR) cardR.addEventListener('click', () => openSkinPageAt('card-skins'));
     const topBtn = $('home-id-top');
