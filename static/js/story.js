@@ -13002,7 +13002,11 @@
             ].filter(Boolean).join(' · '),
         );
         before.replaceChildren(createStoryCard(
-            storyCardAtUpgradeState(card, Boolean(card.upgraded)),
+            // 反馈 #340：变化前应显示卡的「当前状态」——对可无限升级的卡，
+            // 之前传 Boolean(card.upgraded) 会触发 +1 级分支，导致变化前
+            // 与变化后显示相同的升级后数值（普通雷神之锤22级时前后同为156）。
+            // 直接传 card 原样（22级=150），变化后 23级=156，差异一目了然。
+            card,
             { compact: true },
         ));
         after.replaceChildren();
