@@ -9724,7 +9724,8 @@ class GameEngine:
         result = self._execute_card_effect(player_id, card, choice)
         ps.custom_vars['void_last_played_def_id'] = getattr(card, 'def_id', '')
         ps.custom_vars.pop('void_current_previous_def_id', None)
-        return self._after_response_result(player_id, result)
+        self._enforce_unique_cards_for_all()
+        return result
 
     def _check_response_needed(self, player_id: int, card: CardInstance) -> bool:
         flags = self._effective_card_flags(card)
@@ -10110,22 +10111,6 @@ class GameEngine:
     def _after_response_result(self, player_id: int, result: dict) -> dict:
         self._enforce_unique_cards_for_all()
         self._bio_drain_auto_play_queue()
-        # 平衡 2026-10-02：打出带有沉重的牌后立即结束回合（沉重是完全的负面
-        # 修饰——费用已 +N，还要交出回合；打出前卡的 heavy_value>0 判定，
-        # reset 后仍保留在留存位）。反制/选择窗未决时不抢结算。
-        if (
-            not self.game_over
-            and self.phase == 'action'
-            and self.current_player == player_id
-            and self.pending_response is None
-            and self.pending_choice is None
-            and not getattr(self, 'pending_v2_ui', None)
-            and int(getattr(result.get('card') and CardInstance.from_dict(result['card']) or None, 'heavy_value', 0) or 0) > 0
-            and not isinstance(self.players[player_id].custom_vars.get('honey_control'), dict)
-        ):
-            self.log_msg(f"{self.pn(player_id)}的沉重生效，立即结束回合")
-            self._end_player_turn(player_id)
-            return result
         if (
             not self.game_over
             and self.phase == 'action'
@@ -21912,8 +21897,6 @@ class GameEngine:
                 if value > 0:
                     target_card.instance_flags.add('heavy')
                     target_card.disabled_flags.discard('heavy')
-                    # 平衡 2026-10-02：获得沉重的牌同时被揭示（对手可见）
-                    target_card.instance_flags.add('revealed')
                 else:
                     target_card.instance_flags.discard('heavy')
                     target_card.disabled_flags.add('heavy')
