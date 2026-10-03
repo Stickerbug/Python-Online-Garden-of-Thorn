@@ -871,16 +871,6 @@ html.home-touhou-active .top-icon-text {
     height: 48px;
   }
 
-  .top-icon-btn img,
-  .top-icon-text {
-    width: 44px;
-    height: 44px;
-  }
-
-  .top-icon-text {
-    font-size: 12px;
-  }
-
   .top-icon-btn::before {
     width: 44px;
     height: 44px;
@@ -14904,9 +14894,6 @@ html[data-home-ui="touhou"] .login-container {
   justify-content: flex-start;
   padding: 0;
   text-align: left;
-}
-.title-word {
-  display: inline-block;
 }
 html[data-home-ui="touhou"] .title-main {
   position: absolute;
