@@ -12529,7 +12529,7 @@ function cardSkinById(skinId) {
 
 /* 卡面/卡背美术修订号：换图时 bump（与 GTN_STATIC_VERSION 独立，
    服务端 card_skins.py 的 URL 同步带参，避免旧 SVG 被浏览器缓存） */
-const CARD_SKIN_ART_REVISION = 9;
+const CARD_SKIN_ART_REVISION = 10;
 
 function cardSkinBackUrl(skinId) {
     const id = cardSkinById(skinId);
