@@ -14844,6 +14844,9 @@ html[data-home-ui="touhou"] .login-form .form-row .btn {
   border-radius: 6px 20px 20px 6px;
   font-size: 1.06em;
   letter-spacing: 0.14em;
+  padding-left: 18px;
+  padding-right: 14px;
+  line-height: 1.25;
   transition: transform 160ms ease, background 160ms ease, box-shadow 160ms ease;
 }
 html[data-home-ui="touhou"] .login-form .form-row .btn:hover {
@@ -14904,6 +14907,10 @@ html.home-touhou-active .top-action-buttons .skin-top-btn:hover {
   html[data-home-ui="touhou"] .login-container {
     padding: clamp(72px, 14vh, 110px) 16px 40px 22px;
   }
+  html[data-home-ui="touhou"] .login-form {
+    transform: rotate(-2deg);
+    width: min(300px, calc(100vw - 90px));
+  }
   html[data-home-ui="touhou"] .title-main {
     transform: rotate(-5deg);
   }
@@ -14912,18 +14919,15 @@ html.home-touhou-active .top-action-buttons .skin-top-btn:hover {
     margin-left: 2.6em;
     letter-spacing: 0.3em;
   }
-  html[data-home-ui="touhou"] .login-form {
-    transform: rotate(-2deg);
-  }
   html[data-home-ui="touhou"] .login-form .form-row:nth-child(4),
   html[data-home-ui="touhou"] #story-mode-entry-row {
-    margin-left: 14px;
+    margin-left: 10px;
   }
   html[data-home-ui="touhou"] .login-form .form-row:nth-child(5) {
-    margin-left: 28px;
+    margin-left: 20px;
   }
   html[data-home-ui="touhou"] #minigame-2048-entry-row {
-    margin-left: 42px;
+    margin-left: 30px;
   }
   html.home-touhou-active .top-action-buttons .skin-top-btn {
     right: 12px;

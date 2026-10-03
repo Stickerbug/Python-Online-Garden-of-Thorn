@@ -6631,7 +6631,10 @@ function updateStaticText() {
     const bootTitle = document.querySelector('.boot-title');
     if (bootTitle) bootTitle.textContent = GAME_TITLE;
     const titleMain = document.querySelector('.title-main');
-    if (titleMain) titleMain.textContent = 'Garden of Thorn';
+    // 主页UI·東方Project风依赖分词 span（Thorn 放大/斜排），仅在没有时补齐
+    if (titleMain && !titleMain.querySelector('.title-word')) {
+        titleMain.innerHTML = '<span class="title-word title-word-garden">Garden</span> <span class="title-word title-word-of">of</span> <span class="title-word title-word-thorn">Thorn</span>';
+    }
     const titleSub = document.querySelector('.title-sub');
     if (titleSub) titleSub.textContent = '荆棘花园';
     const subtitle = document.querySelector('#view-login .subtitle');
@@ -6773,7 +6776,7 @@ function updateStaticText() {
     updateEnglishNameSettingVisibility();
     updateCardImageSettingInput();
     updateHandOrderSettingInput();
-    updatePlayGestureAnimationInput();
+    updateHomeUiSelectValue();
     updateLandscapeModeInput();
     updateFullscreenSettingButton();
     updateStoryCardBordersInput();
