@@ -5364,6 +5364,16 @@ def row_to_user(row):
             int(row['rank_points'] or 0) if 'rank_points' in row.keys() else 0,
             streak=int(row['rank_streak'] or 0) if 'rank_streak' in row.keys() else 0,
         ),
+        'rank_cards': {
+            'shield': {
+                'owned': int(row['rank_shield_cards'] or 0) if 'rank_shield_cards' in row.keys() else 0,
+                'armed': bool(int(row['rank_shield_armed'] or 0)) if 'rank_shield_armed' in row.keys() else False,
+            },
+            'double': {
+                'owned': int(row['rank_double_cards'] or 0) if 'rank_double_cards' in row.keys() else 0,
+                'armed': bool(int(row['rank_double_armed'] or 0)) if 'rank_double_armed' in row.keys() else False,
+            },
+        },
         'keybindings': _keybindings_from_row(row),
     }
     data['thorn_dew_total'] = data['thorn_dew_free'] + data['thorn_dew_paid']

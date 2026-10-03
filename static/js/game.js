@@ -2814,26 +2814,6 @@ function setupHomeExtraEntries() {
         aboutBtn.dataset.gtnClickBound = '1';
         aboutBtn.addEventListener('click', openAbout);
     }
-    const quitBtn = $('home-entry-quit');
-    if (quitBtn && quitBtn.dataset.gtnClickBound !== '1') {
-        quitBtn.dataset.gtnClickBound = '1';
-        quitBtn.addEventListener('click', async () => {
-            const confirmed = await gameConfirm(
-                UI.home_quit_confirm_title || '退出游戏',
-                UI.home_quit_confirm_body || (currentAccount
-                    ? '确定退出游戏并登出当前账号吗？'
-                    : '确定退出游戏并返回初始状态吗？'),
-            );
-            if (!confirmed) return;
-            if (currentAccount) {
-                await onAccountLogout();
-                fillHomeIdentityWidget();
-                flashStatus(UI.home_quit_done || '已退出登录', 1600);
-            } else {
-                window.location.reload();
-            }
-        });
-    }
     // 文案与现有入口保持一致（跟随语言设置）
     const settingsSrc = document.querySelector('#btn-open-settings .top-icon-label');
     if (settingsBtn) settingsBtn.textContent = (settingsSrc && settingsSrc.textContent) || '设置';
@@ -19726,7 +19706,110 @@ function renderAccountInfoPanel(user) {
             <span class="account-info-label">${escapeHtml(currentLang === 'zh' ? '段位进度' : 'Rank Progress')}</span>
             ${renderRankProgressHtml(user.rank)}
         </div>
+        ${renderRankCardsPanelHtml(user)}
     `;
+    bindRankCardsPanel(user);
+}
+
+// ===== 段位消耗卡（保分/双倍，设计 2026-10-02）：购买/激活 =====
+let rankCardsPanelState = null;
+
+function renderRankCardsPanelHtml(user) {
+    const cards = user?.rank_cards;
+    if (!cards || typeof cards !== 'object') return '';
+    rankCardsPanelState = { userId: user?.id ?? null, cards };
+    const labels = {
+        shield: lt({ zh: '保分卡', en: 'Shield Card', fr: 'Carte Bouclier', ja: '保分カード' }),
+        double: lt({ zh: '双倍卡', en: 'Double Card', fr: 'Carte Double', ja: '倍増カード' }),
+    };
+    const descs = {
+        shield: lt({ zh: '下一局失败不扣分不降段', en: 'Next loss costs no points and no demotion', fr: 'La prochaine défaite ne coûte rien', ja: '次の負けで減点・降段なし' }),
+        double: lt({ zh: '下一局胜利得分×2', en: 'Next win gains ×2', fr: 'La prochaine victoire rapporte ×2', ja: '次の勝利で獲得×2' }),
+    };
+    const rows = ['shield', 'double'].map(kind => {
+        const info = cards[kind] || { owned: 0, armed: false };
+        const stateLabel = info.armed
+            ? lt({ zh: '已激活', en: 'Armed', fr: 'Activée', ja: '発動中' })
+            : lt({ zh: '库存', en: 'Owned', fr: 'Stock', ja: '所持' }) + ' ' + info.owned;
+        const useBtn = info.armed
+            ? `<button type="button" class="mini-btn" disabled>${escapeHtml(lt({ zh: '已激活', en: 'Armed', fr: 'Activée', ja: '発動中' }))}</button>`
+            : `<button type="button" class="mini-btn" data-rank-card-use="${kind}" ${info.owned > 0 ? '' : 'disabled'}>${escapeHtml(lt({ zh: '激活', en: 'Arm', fr: 'Activer', ja: '使う' }))}</button>`;
+        return `<div class="rank-card-row" data-rank-card="${kind}">
+            <div class="rank-card-info">
+                <span class="rank-card-name">${escapeHtml(labels[kind])}</span>
+                <span class="rank-card-desc">${escapeHtml(descs[kind])}</span>
+            </div>
+            <span class="rank-card-state">${escapeHtml(stateLabel)}</span>
+            <button type="button" class="mini-btn" data-rank-card-buy="${kind}">${escapeHtml(lt({ zh: '购买', en: 'Buy', fr: 'Acheter', ja: '購入' }))}</button>
+            ${useBtn}
+        </div>`;
+    }).join('');
+    const price = Number(cards.price_today);
+    const priceLabel = Number.isFinite(price) && price > 0
+        ? `${price} ${lt({ zh: '荆露', en: 'dew', fr: 'brume', ja: '荊露' })}`
+        : '';
+    const buyTitleSuffix = lt({
+        zh: '（每买一张涨价，每日重置）',
+        en: ' (rises per purchase, resets daily)',
+        fr: ' (monte à chaque achat, réinitialisé chaque jour)',
+        ja: '（購入ごとに値上がり、毎日リセット）',
+    });
+    return `<div class="account-info-item account-rank-cards-item">
+        <span class="account-info-label">${escapeHtml(lt({ zh: '段位卡', en: 'Rank Cards', fr: 'Cartes de rang', ja: 'ランクカード' }))}</span>
+        <div class="rank-cards-panel">
+            ${rows}
+            <div class="rank-card-buy">
+                <span class="rank-card-note">${escapeHtml(lt({ zh: '一场对局只能激活一张；激活后下一局消耗。今日价格', en: 'One card per match; armed card is consumed next game. Today’s price', fr: 'Une carte par partie ; la carte activée est consommée au prochain match. Prix du jour', ja: '1対局1枚のみ。発動カードは次の対局で消費。本日の価格' }))} ${escapeHtml(priceLabel)}${escapeHtml(buyTitleSuffix)}</span>
+            </div>
+        </div>
+    </div>`;
+}
+
+async function rankCardsApi(path, body) {
+    const res = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(body || {}),
+    });
+    return res.json().catch(() => ({}));
+}
+
+function bindRankCardsPanel(user) {
+    const item = document.querySelector('.account-rank-cards-item');
+    if (!item) return;
+    const refresh = async () => {
+        try {
+            const res = await fetch('/api/rank/cards', { credentials: 'same-origin' });
+            const data = await res.json().catch(() => ({}));
+            if (data && data.success && data.cards && currentAccount) {
+                currentAccount.rank_cards = data.cards;
+                renderAccountInfoPanel(currentAccount);
+            }
+        } catch (_) {}
+    };
+    item.querySelectorAll('[data-rank-card-buy]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const kind = btn.dataset.rankCardBuy;
+            if (!kind || !currentAccount) return;
+            btn.disabled = true;
+            const data = await rankCardsApi('/api/rank/cards/purchase', { card_type: kind });
+            btn.disabled = false;
+            if (data && data.success) { flashStatus(lt({ zh: '购买成功', en: 'Purchased', fr: 'Achetée', ja: '購入しました' })); await refresh(); }
+            else flashStatus((data && data.error) || lt({ zh: '购买失败', en: 'Purchase failed', fr: 'Échec de l’achat', ja: '購入に失敗しました' }));
+        });
+    });
+    item.querySelectorAll('[data-rank-card-use]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const kind = btn.dataset.rankCardUse;
+            if (!kind) return;
+            btn.disabled = true;
+            const data = await rankCardsApi('/api/rank/cards/use', { card_type: kind });
+            btn.disabled = false;
+            if (data && data.success) { flashStatus(lt({ zh: '已激活，下一局生效', en: 'Armed for next match', fr: 'Activée pour le prochain match', ja: '次の対局で発動します' })); await refresh(); }
+            else flashStatus((data && data.error) || lt({ zh: '激活失败', en: 'Failed', fr: 'Échec', ja: '失敗しました' }));
+        });
+    });
 }
 
 function normalizeSkinConfig(raw) {
