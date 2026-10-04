@@ -11223,20 +11223,8 @@ ADMIN_COMMAND_TREE = {
                 'summary': '段位特殊修正（胜加负减公式里的附加项，全局与玩家可叠加）',
                 'usage': 'account rankmod <global|player|view> ...',
                 'children': {
-                    'global': {
-                        'summary': '设置全局特殊修正',
-                        'usage': 'account rankmod global <数值|clear>',
-                        'children': {
-                            'set': {'summary': '设置全局特殊修正', 'usage': 'account rankmod global <数值|clear>'},
-                        },
-                    },
-                    'player': {
-                        'summary': '设置玩家特殊修正',
-                        'usage': 'account rankmod player <账号> <数值|clear>',
-                        'children': {
-                            'set': {'summary': '设置玩家特殊修正', 'usage': 'account rankmod player <账号> <数值|clear>'},
-                        },
-                    },
+                    'global': {'summary': '设置全局特殊修正', 'usage': 'account rankmod global <数值|clear>'},
+                    'player': {'summary': '设置玩家特殊修正', 'usage': 'account rankmod player <账号> <数值|clear>'},
                     'view': {'summary': '查看全局/玩家特殊修正', 'usage': 'account rankmod view [账号]'},
                 },
             },
@@ -11844,9 +11832,9 @@ ADMIN_COMMAND_DIRECT_TRANSLATIONS = {
     ('account', 'rank', 'history'): 'rank-history',
     ('account', 'rank', 'settle'): 'rank-settle',
     ('account', 'rank', 'next'): 'rank-next',
-    ('account', 'rankmod', 'global', 'set'): 'rankmod',
-    ('account', 'rankmod', 'player', 'set'): 'rankmod',
-    ('account', 'rankmod', 'view'): 'rankmod',
+    ('account', 'rankmod', 'global'): ('rankmod', 'global'),
+    ('account', 'rankmod', 'player'): ('rankmod', 'player'),
+    ('account', 'rankmod', 'view'): ('rankmod', 'view'),
     ('account', 'reputation', 'info'): 'reputation-info',
     ('account', 'reputation', 'ledger'): 'reputation-ledger',
     ('account', 'reputation', 'add'): 'reputation-add',
@@ -12596,19 +12584,20 @@ def format_gr_delta_value(value):
 
 
 def _rank_console_command(cmd, parts, raw):
-    """段位控制台（2026-10-02 设计）。
+    """段位控制台（2026-10-02 设计；2026-10-04 移入 account 分组）。
 
-    rankmod global <数值|clear>          全局特殊修正
-    rankmod player <账号> <数值|clear>    玩家特殊修正（与全局叠加）
-    rankmod view [账号]                   查看全局/玩家特殊修正
-    rankset <账号> <段位序号1-44> [段位分] 管理员直接改段位
-    rank-info <账号>                      查看玩家段位详情
+    account rankmod global <数值|clear>          全局特殊修正
+    account rankmod player <账号> <数值|clear>    玩家特殊修正（与全局叠加）
+    account rankmod view [账号]                   查看全局/玩家特殊修正
+    account rank set <账号> <段位序号1-44> [段位分] 管理员直接改段位
+    account rank info <账号>                      查看玩家段位详情
+    account rank list|find|reset|history|settle|next ...
     """
     if not DB_AVAILABLE:
         return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
     if cmd == 'rank-info':
         if len(parts) < 2:
-            return {'success': False, 'output': command_error(raw, len(raw), 'rank-info <账号>')}
+            return {'success': False, 'output': command_error(raw, len(raw), 'account rank info <账号>')}
         user = find_user_for_admin(parts[1])
         if not user:
             return {'success': False, 'output': '账号不存在'}
@@ -12650,7 +12639,7 @@ def _rank_console_command(cmd, parts, raw):
         return {'success': True, 'output': '\n'.join(lines)}
     if cmd == 'rank-find':
         if len(parts) < 2:
-            return {'success': False, 'output': command_error(raw, len(raw), 'rank find <昵称/用户名关键词>')}
+            return {'success': False, 'output': command_error(raw, len(raw), 'account rank find <昵称/用户名关键词>')}
         keyword = f"%{parts[1].strip()}%"
         with db_module.get_db_connection() as conn:
             rows = conn.execute(
@@ -12669,7 +12658,7 @@ def _rank_console_command(cmd, parts, raw):
         return {'success': True, 'output': '\n'.join(lines)}
     if cmd == 'rank-reset':
         if len(parts) < 2:
-            return {'success': False, 'output': command_error(raw, len(raw), 'rank reset <ID|注册顺序|用户名>')}
+            return {'success': False, 'output': command_error(raw, len(raw), 'account rank reset <ID|注册顺序|用户名>')}
         user = find_user_for_admin(parts[1])
         if not user:
             return {'success': False, 'output': '账号不存在'}
@@ -12684,7 +12673,7 @@ def _rank_console_command(cmd, parts, raw):
         return {'success': True, 'output': f'{user["username"]} 段位已重置为 {payload["label"]} 0/{payload["cap"]}'}
     if cmd == 'rank-history':
         if len(parts) < 2:
-            return {'success': False, 'output': command_error(raw, len(raw), 'rank history <ID|注册顺序|用户名> [数量]')}
+            return {'success': False, 'output': command_error(raw, len(raw), 'account rank history <ID|注册顺序|用户名> [数量]')}
         user = find_user_for_admin(parts[1])
         if not user:
             return {'success': False, 'output': '账号不存在'}
@@ -12731,7 +12720,7 @@ def _rank_console_command(cmd, parts, raw):
         if len(parts) < 2:
             return {'success': False, 'output': command_error(
                 raw, len(raw),
-                'rankmod global <数值|clear> | rankmod player <账号> <数值|clear> | rankmod view [账号]')}
+                'account rankmod global <数值|clear> | account rankmod player <账号> <数值|clear> | account rankmod view [账号]')}
         sub = parts[1].lower()
         if sub == 'view':
             global_special = db_module.get_rank_global_special()
@@ -12748,7 +12737,7 @@ def _rank_console_command(cmd, parts, raw):
             return {'success': True, 'output': '\n'.join(lines)}
         if sub == 'global':
             if len(parts) < 3:
-                return {'success': False, 'output': command_error(raw, len(raw), 'rankmod global <数值|clear>')}
+                return {'success': False, 'output': command_error(raw, len(raw), 'account rankmod global <数值|clear>')}
             value = 0.0 if parts[2].lower() == 'clear' else parts[2]
             result, error = db_module.set_rank_global_special(value)
             if error:
@@ -12757,17 +12746,17 @@ def _rank_console_command(cmd, parts, raw):
             return {'success': True, 'output': f'全局特殊修正已设置为 {result["special_correction"]:+g}'}
         if sub == 'player':
             if len(parts) < 4:
-                return {'success': False, 'output': command_error(raw, len(raw), 'rankmod player <账号> <数值|clear>')}
+                return {'success': False, 'output': command_error(raw, len(raw), 'account rankmod player <账号> <数值|clear>')}
             value = 0.0 if parts[3].lower() == 'clear' else parts[3]
             result, error = db_module.set_user_rank_special(parts[2], value)
             if error:
                 return {'success': False, 'output': error}
             admin_event('admin', f'rankmod player {result["username"]}#{result["id"]} {parts[3]}')
             return {'success': True, 'output': f'{result["username"]} 的特殊修正已设置为 {result["rank_special"]:+g}'}
-        return {'success': False, 'output': command_error(raw, len(raw), 'rankmod global|player|view …')}
+        return {'success': False, 'output': command_error(raw, len(raw), 'account rankmod global|player|view …')}
     if cmd == 'rankset':
         if len(parts) < 3:
-            return {'success': False, 'output': command_error(raw, len(raw), 'rankset <账号> <段位序号1-44> [段位分]')}
+            return {'success': False, 'output': command_error(raw, len(raw), 'account rank set <账号> <段位序号1-44> [段位分]')}
         user = find_user_for_admin(parts[1])
         if not user:
             return {'success': False, 'output': '账号不存在'}
