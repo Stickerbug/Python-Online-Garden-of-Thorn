@@ -581,6 +581,8 @@
             summon: 'Summon', defeated: 'Defeated', allies: 'All creatures', playerSide: 'Player side', self: 'Self', addCard: 'Add card', consume: 'Consume',
             developerMode: 'Developer Mode', devJump: 'Jump to Level', devFloor: 'Floor', devRoom: 'Room',
             devValues: 'Set Values', devApply: 'Apply Values', devJumpButton: 'Jump',
+            devTraining: 'Training Ground', devCard: 'Card', devUpgraded: 'Upgraded', devCount: 'Count', devEnemy: 'Enemy',
+            devGiveCard: 'Give Card', devSpawnBoss: 'Start Fight', devCardGiven: 'Card added to deck', devFightStarted: 'Training fight started',
             devValuesUpdated: 'Values updated', devJumped: 'Level loaded',
             pileEmpty: 'No cards here', chooseEnemy: 'Choose the enemy', chooseSelf: 'Choose yourself',
             playSelfAnywhere: 'Click anywhere to play on yourself', playAnywhere: 'Click anywhere to play',
@@ -692,6 +694,8 @@
             summon: '召唤', defeated: '阵亡', allies: '全体生物', playerSide: '玩家方', self: '自己', addCard: '加入卡牌', consume: '吞噬',
             developerMode: '开发人员模式', devJump: '关卡跳转', devFloor: '层数', devRoom: '房间',
             devValues: '数值设置', devApply: '应用数值', devJumpButton: '跳转',
+            devTraining: '训练场', devCard: '卡牌', devUpgraded: '已升级', devCount: '数量', devEnemy: '生物',
+            devGiveCard: '给予卡牌', devSpawnBoss: '进入战斗', devCardGiven: '已加入卡组', devFightStarted: '训练战斗开始',
             devValuesUpdated: '数值已更新', devJumped: '已载入所选关卡',
             pileEmpty: '这里没有牌', chooseEnemy: '点击生物头像以选择目标', chooseSelf: '点击自己的头像以选择目标',
             playSelfAnywhere: '点击场地任意位置对自己使用', playAnywhere: '点击场地任意位置打出',
@@ -776,6 +780,8 @@
             summon: 'Invocation', allies: 'Toutes les créatures', playerSide: 'Camp joueur', self: 'Soi', addCard: 'Ajouter une carte', consume: 'Absorber',
             developerMode: 'Mode développeur', devJump: 'Changer de niveau', devFloor: 'Étage', devRoom: 'Salle',
             devValues: 'Modifier les valeurs', devApply: 'Appliquer', devJumpButton: 'Aller',
+            devTraining: "Terrain d'entraînement", devCard: 'Carte', devUpgraded: 'Améliorée', devCount: 'Quantité', devEnemy: 'Créature',
+            devGiveCard: 'Donner la carte', devSpawnBoss: 'Combattre', devCardGiven: 'Carte ajoutée au deck', devFightStarted: 'Combat lancé',
             devValuesUpdated: 'Valeurs mises à jour', devJumped: 'Niveau chargé',
             cardTerms: 'Termes de carte', statusTerms: 'Terme d’état', actionTerms: 'Terme d’action', traitTerms: 'Terme d’effet', talentTerms: 'Détails du talent', noCardTerms: 'Aucun terme supplémentaire',
             previousCard: 'Carte précédente', nextCard: 'Carte suivante', cardPosition: (current, total) => `${current}/${total}`,
@@ -904,6 +910,8 @@
             summon: '召喚', allies: '全生物', playerSide: 'プレイヤー側', self: '自身', addCard: 'カード追加', consume: '吸収',
             developerMode: '開発者モード', devJump: 'ステージ移動', devFloor: '階', devRoom: '部屋',
             devValues: '数値設定', devApply: '適用', devJumpButton: '移動',
+            devTraining: '訓練場', devCard: 'カード', devUpgraded: '強化済み', devCount: '枚数', devEnemy: '生物',
+            devGiveCard: 'カードを渡す', devSpawnBoss: '戦闘開始', devCardGiven: 'デッキに追加しました', devFightStarted: '訓練戦闘を開始しました',
             devValuesUpdated: '数値を更新しました', devJumped: 'ステージを読み込みました',
             cardTerms: 'カード用語', statusTerms: '状態用語', actionTerms: '行動用語', traitTerms: '特殊効果用語', talentTerms: '天賦の説明', noCardTerms: '追加用語なし',
             previousCard: '前のカード', nextCard: '次のカード', cardPosition: (current, total) => `${current}/${total}`,
@@ -1223,6 +1231,10 @@
             'story-dev-node-label': t.devRoom, 'story-dev-values-label': t.devValues,
             'story-dev-jump': t.devJumpButton, 'story-dev-apply': t.devApply,
             'story-dev-gold-label': t.gold,
+            'story-dev-training-label': t.devTraining,
+            'story-dev-card-label': t.devCard, 'story-dev-upgraded-label': t.devUpgraded,
+            'story-dev-count-label': t.devCount, 'story-dev-enemy-label': t.devEnemy,
+            'story-dev-give-card': t.devGiveCard, 'story-dev-spawn-boss': t.devSpawnBoss,
             'story-deck-change-before-label': t.beforeChange,
             'story-deck-change-after-label': t.afterChange,
             'story-deck-change-cancel': t.cancel,
@@ -1354,11 +1366,69 @@
             ? state?.current_node_id
             : '';
         renderDeveloperNodes(state, currentNodeId);
-        ['story-dev-jump', 'story-dev-apply', 'story-reset-map'].forEach((id) => {
+        renderDeveloperTrainingControls();
+        [
+            'story-dev-jump', 'story-dev-apply', 'story-reset-map',
+            'story-dev-give-card', 'story-dev-spawn-boss',
+            'story-dev-card', 'story-dev-enemy', 'story-dev-card-count',
+        ].forEach((id) => {
             const control = $(id);
             if (control) control.disabled = !activeRun;
         });
         if (options.syncValues) syncDeveloperValues(state);
+    }
+
+    function developerCatalogLabel(entry) {
+        const name = localize(entry?.name) || '';
+        return name || entry?.id || '';
+    }
+
+    function populateDeveloperSelect(select, entries, preferredId) {
+        if (!select || select.dataset.populated === '1') return;
+        select.replaceChildren();
+        entries.forEach((entry) => {
+            const option = document.createElement('option');
+            option.value = entry.id;
+            option.textContent = developerCatalogLabel(entry);
+            select.append(option);
+        });
+        if (preferredId && entries.some((entry) => entry.id === preferredId)) {
+            select.value = preferredId;
+        }
+        select.dataset.populated = '1';
+    }
+
+    function renderDeveloperTrainingControls() {
+        const cards = storyContent?.cards;
+        const enemies = storyContent?.enemies;
+        if (!cards || !enemies) return;
+        const collator = new Intl.Collator(String(lang || 'zh'));
+        const cardSelect = $('story-dev-card');
+        const enemySelect = $('story-dev-enemy');
+        if (cardSelect) {
+            populateDeveloperSelect(
+                cardSelect,
+                Object.entries(cards)
+                    .map(([id, def]) => ({ id, name: def?.name }))
+                    .sort((left, right) => collator.compare(
+                        developerCatalogLabel(left),
+                        developerCatalogLabel(right),
+                    )),
+                cardSelect.value || undefined,
+            );
+        }
+        if (enemySelect) {
+            populateDeveloperSelect(
+                enemySelect,
+                Object.entries(enemies)
+                    .map(([id, def]) => ({ id, name: def?.name }))
+                    .sort((left, right) => collator.compare(
+                        developerCatalogLabel(left),
+                        developerCatalogLabel(right),
+                    )),
+                enemySelect.value || undefined,
+            );
+        }
     }
 
     function setDeveloperMode(open) {
@@ -1410,6 +1480,36 @@
         if (result) {
             renderDeveloperPanel(result.run?.state || activeRun?.state, { syncValues: true });
             showToast(t.devJumped);
+        }
+        if (button) button.disabled = !activeRun;
+    }
+
+    async function giveDeveloperCard() {
+        if (!activeRun || actionInFlight) return;
+        const cardId = String($('story-dev-card')?.value || '');
+        if (!cardId) return;
+        const countRaw = Math.floor(Number($('story-dev-card-count')?.value || 1));
+        const count = Math.max(1, Math.min(10, Number.isFinite(countRaw) ? countRaw : 1));
+        const upgraded = Boolean($('story-dev-card-upgraded')?.checked);
+        const button = $('story-dev-give-card');
+        if (button) button.disabled = true;
+        const result = await storyAction('dev_give_card', { card_id: cardId, upgraded, count });
+        if (result) {
+            renderDeveloperPanel(result.run?.state || activeRun?.state, { syncValues: true });
+            showToast(t.devCardGiven);
+        }
+        if (button) button.disabled = !activeRun;
+    }
+
+    async function spawnDeveloperFight() {
+        if (!activeRun || actionInFlight) return;
+        const enemyId = String($('story-dev-enemy')?.value || '');
+        if (!enemyId) return;
+        const button = $('story-dev-spawn-boss');
+        if (button) button.disabled = true;
+        const result = await storyAction('dev_spawn_boss', { enemy_id: enemyId });
+        if (result && String(result.run?.state?.phase || '') === 'combat') {
+            showToast(t.devFightStarted);
         }
         if (button) button.disabled = !activeRun;
     }
@@ -15123,6 +15223,8 @@
         $('story-dev-floor')?.addEventListener('change', () => renderDeveloperNodes(activeRun?.state || null));
         $('story-dev-jump')?.addEventListener('click', jumpDeveloperNode);
         $('story-dev-apply')?.addEventListener('click', applyDeveloperValues);
+        $('story-dev-give-card')?.addEventListener('click', giveDeveloperCard);
+        $('story-dev-spawn-boss')?.addEventListener('click', spawnDeveloperFight);
         $('story-reset-map')?.addEventListener('click', () => $('story-reset-dialog')?.showModal());
         $('story-reset-dialog')?.addEventListener('close', (event) => {
             if (event.target.returnValue === 'confirm') resetMap();

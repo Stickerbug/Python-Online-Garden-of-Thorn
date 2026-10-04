@@ -11500,6 +11500,42 @@ def _dev_integer(payload, key, maximum):
     return value
 
 
+
+def _dev_give_card(state, payload, events):
+    """建议 #334 训练场：给卡组添加任意一张卡（仅开发模式）。
+
+    payload: { card_id: str, upgraded: bool, count: int }
+    """
+    card_id = str(payload.get('card_id') or '').strip()
+    if not card_id or card_id not in STORY_CARDS:
+        _fail('UNKNOWN_CARD', f'未知卡牌: {card_id}')
+    count = max(1, min(10, int(payload.get('count') or 1)))
+    upgraded = bool(payload.get('upgraded'))
+    for _ in range(count):
+        card = _new_card(state, card_id, upgraded=upgraded)
+        state['player']['deck'].append(card)
+        events.append({
+            'type': 'card_gained',
+            'card_id': card_id,
+            'upgraded': upgraded,
+            'source': 'training',
+        })
+
+
+def _dev_spawn_boss(state, payload, seed, events):
+    """建议 #334 训练场：直接进入与指定 boss 的战斗（仅开发模式）。
+
+    payload: { enemy_id: str } — STORY_ENEMIES 里的任意 boss id
+    """
+    enemy_id = str(payload.get('enemy_id') or '').strip()
+    if enemy_id not in STORY_ENEMIES:
+        _fail('UNKNOWN_ENEMY', f'未知生物: {enemy_id}')
+    # 复用 _start_combat（带完整的战斗状态初始化、手牌抽取）
+    node = {'type': 'training', 'enemy_health_multiplier': 1}
+    _start_combat(state, node, seed, events, encounter_override=[{'def_id': enemy_id}])
+    events.append({'type': 'training_combat_start', 'enemy_id': enemy_id})
+
+
 def _dev_set_values(state, payload, events):
     limits = {
         'health': 999999,
@@ -11896,6 +11932,7 @@ def apply_story_action(source_state, action_type, payload, seed):
             'resolve_deck_operation',
             'discard_enchantment_book',
             'dev_set_values',
+            'dev_give_card',
             'restart_floor',
             'surrender',
         )
@@ -11908,6 +11945,8 @@ def apply_story_action(source_state, action_type, payload, seed):
             'resolve_card_choice',
             'discard_enchantment_book',
             'dev_set_values',
+            'dev_give_card',
+            'dev_spawn_boss',
             'restart_floor',
             'surrender',
         )
@@ -11932,6 +11971,8 @@ def apply_story_action(source_state, action_type, payload, seed):
         'discard_enchantment_book': lambda: _discard_enchantment_book(state, payload, events),
         'surrender': lambda: _surrender_run(state, events),
         'dev_set_values': lambda: _dev_set_values(state, payload, events),
+        'dev_give_card': lambda: _dev_give_card(state, payload, events),
+        'dev_spawn_boss': lambda: _dev_spawn_boss(state, payload, seed, events),
         'dev_jump_node': lambda: _dev_jump_node(state, payload, seed, events),
     }
     handler = handlers.get(action_type)

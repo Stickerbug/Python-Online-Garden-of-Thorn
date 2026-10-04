@@ -126,6 +126,19 @@
         </div>
         <button id="story-dev-apply" class="story-command story-command-primary" type="button">应用数值</button>
       </div>
+      <div class="story-dev-section">
+        <span id="story-dev-training-label" class="story-dev-section-title">训练场</span>
+        <label><span id="story-dev-card-label">卡牌</span><select id="story-dev-card"></select></label>
+        <div class="story-dev-field-row">
+          <label class="story-dev-check"><input id="story-dev-card-upgraded" type="checkbox"><span id="story-dev-upgraded-label">已升级</span></label>
+          <label><span id="story-dev-count-label">数量</span><input id="story-dev-card-count" type="number" min="1" max="10" step="1" value="1" inputmode="numeric"></label>
+        </div>
+        <label><span id="story-dev-enemy-label">生物</span><select id="story-dev-enemy"></select></label>
+        <div class="story-dev-field-row">
+          <button id="story-dev-give-card" class="story-command story-command-primary" type="button">给予卡牌</button>
+          <button id="story-dev-spawn-boss" class="story-command story-command-danger" type="button">进入战斗</button>
+        </div>
+      </div>
       <button id="story-reset-map" class="story-command story-command-danger story-dev-reset" type="button" data-development-action="reset-map">重置地图</button>
     </aside>
     {% endif %}

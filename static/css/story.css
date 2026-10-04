@@ -1688,6 +1688,14 @@ a { font: inherit; }
 }
 
 .story-dev-panel .story-command { width: 100%; }
+.story-dev-check {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 6px !important;
+  min-height: 34px;
+}
+.story-dev-check input { width: 14px; height: 14px; flex: none; }
 .story-dev-reset { margin-top: 12px; }
 
 .story-main {
