@@ -14457,6 +14457,9 @@ def preview_rank_match_result(mode, player_ids, viewer_user_id=None):
         'applied': True,
         'viewer': {
             'label': payload['label'],
+            'tier': payload['tier'],
+            'sub_tier': payload['sub_tier'],
+            'color': payload['color'],
             'points': payload['points'],
             'cap': payload['cap'],
             'win_delta': win_gain,
@@ -14466,11 +14469,17 @@ def preview_rank_match_result(mode, player_ids, viewer_user_id=None):
             'shield_card_active': loss_shielded,
             'win_after': {
                 'label': win_after['label'],
+                'tier': win_after['tier'],
+                'sub_tier': win_after['sub_tier'],
+                'color': win_after['color'],
                 'points': win_after['points'],
                 'cap': win_after['cap'],
             },
             'loss_after': {
                 'label': loss_after['label'],
+                'tier': loss_after['tier'],
+                'sub_tier': loss_after['sub_tier'],
+                'color': loss_after['color'],
                 'points': loss_after['points'],
                 'cap': loss_after['cap'],
             },

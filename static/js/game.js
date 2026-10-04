@@ -2867,19 +2867,26 @@ function spawnHomeFloatingCards() {
     const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (reduced) return;
     /* 来源：CARD_DEFS＝当前启用模组合并后的全部卡牌定义（官方＋模组），
-     * 预过滤出有卡面图的，避免分层列因无图定义而空缺 */
-    const artDefs = Object.keys(CARD_DEFS || {})
-        .map(id => CARD_DEFS[id])
-        .filter(d => !!(d && (d.image_url || d.image)));
-    if (!artDefs.length) return;
-    const total = Math.min(22, Math.max(10, Math.round(window.innerWidth / 96)));
-    /* 会话种子（sessionStorage）：同一标签页内刷新沿用同一批卡牌/位置/速度，
-     * 相位用绝对时间（Date.now）计算，刷新后漂移过程无缝衔接；
-     * 新会话（新标签页/重开浏览器）重新随机——同一账号不再永远看同一批卡。
+     * 预过滤出有卡面图的，并按 URL 去重成卡面池 */
+    const seenUrls = new Set();
+    const pool = [];
+    for (const def of Object.keys(CARD_DEFS || {}).map(id => CARD_DEFS[id])) {
+        if (!(def && (def.image_url || def.image))) continue;
+        const url = getCardArtUrl({}, def);
+        if (url && !seenUrls.has(url)) {
+            seenUrls.add(url);
+            pool.push(url);
+        }
+    }
+    if (!pool.length) return;
+    const columnCount = Math.min(22, Math.max(10, Math.round(window.innerWidth / 96)));
+    /* 会话种子 + 会话起点（sessionStorage）：同一标签页内刷新时，第 k 张卡
+     * 的卡面/位置/速度/出生时刻全部由 (种子, k) 哈希决定——刷新只是按当前
+     * 时间重放同一张时间表，动画无缝衔接；新标签页/重开浏览器换全新时间表。
      * 注意：本文件里裸写的 localStorage 是包装器，removeItem 会连带清
-     * sessionStorage——清旧永久种子必须走 window.localStorage 原生接口，
-     * 且只在旧键确实存在时执行，否则每次刷新都会把会话种子一起抹掉。 */
+     * sessionStorage——清旧永久种子必须走 window.localStorage 原生接口。 */
     let seedText = '';
+    let sessionStartMs = 0;
     try {
         try {
             if (window.localStorage.getItem('gtn_home_hfc_seed') !== null) {
@@ -2887,75 +2894,112 @@ function spawnHomeFloatingCards() {
             }
         } catch (_) {}
         seedText = String(sessionStorage.getItem('gtn_home_hfc_seed') || '');
-        if (!seedText) {
+        const storedStart = Number(sessionStorage.getItem('gtn_home_hfc_start') || 0);
+        if (seedText && Number.isFinite(storedStart) && storedStart > 0) {
+            sessionStartMs = storedStart;
+        } else {
             seedText = 'hfc-' + Math.random().toString(36).slice(2, 12);
+            sessionStartMs = Date.now();
             sessionStorage.setItem('gtn_home_hfc_seed', seedText);
+            sessionStorage.setItem('gtn_home_hfc_start', String(sessionStartMs));
         }
-    } catch (_) { seedText = 'hfc-' + Math.random().toString(36).slice(2, 12); }
+    } catch (_) {
+        seedText = 'hfc-' + Math.random().toString(36).slice(2, 12);
+        sessionStartMs = Date.now();
+    }
     let seedHash = 1779033703;
     for (let i = 0; i < seedText.length; i++) {
         seedHash = Math.imul(seedHash ^ seedText.charCodeAt(i), 3432918353);
         seedHash = (seedHash << 13) | (seedHash >>> 19);
     }
-    const rand = () => {
-        seedHash = Math.imul(seedHash ^ (seedHash >>> 16), 2246822507);
-        seedHash = Math.imul(seedHash ^ (seedHash >>> 13), 3266489909);
-        seedHash ^= seedHash >>> 16;
-        return (seedHash >>> 0) / 4294967296;
+    /* 计数器哈希：rand(k, salt) 只依赖 (种子, k, salt)，重放任意时刻都一致 */
+    const hash01 = (k, salt) => {
+        let h = (seedHash ^ Math.imul(k + 1, 0x9E3779B1) ^ Math.imul(salt + 1, 0x85EBCA6B)) >>> 0;
+        h ^= h >>> 16; h = Math.imul(h, 0x21F0AAAD);
+        h ^= h >>> 15; h = Math.imul(h, 0x735A2D97);
+        h ^= h >>> 15;
+        return (h >>> 0) / 4294967296;
     };
-    const nowSec = Date.now() / 1000;
-    /* 先整池洗牌再按卡面 URL 去重取前 total 张：
-     * 抽样均匀且同一批里不会出现完全相同的卡面（不同卡共用图也不重复）。 */
-    for (let i = artDefs.length - 1; i > 0; i--) {
-        const j = Math.floor(rand() * (i + 1));
-        const swap = artDefs[i];
-        artDefs[i] = artDefs[j];
-        artDefs[j] = swap;
-    }
-    const seenUrls = new Set();
-    const picked = [];
-    for (const def of artDefs) {
-        if (picked.length >= total) break;
-        const url = getCardArtUrl({}, def);
-        if (!url || seenUrls.has(url)) continue;
-        seenUrls.add(url);
-        picked.push({ def, url });
-    }
-    if (!picked.length) return;
-    for (let i = 0; i < picked.length; i++) {
-        const url = picked[i].url;
-        const depth = 0.35 + rand() * 0.65;
-        const riseDuration = 34 + rand() * 30;
-        const swayDuration = 6 + rand() * 9;
-        const spinDuration = (rand() < 0.5 ? -1 : 1) * (10 + rand() * 14);
+    /* 不重复窗口：第 k 张的卡面避开前 W 张，同屏与近几屏内基本见不到重复 */
+    const noRepeatWindow = Math.min(pool.length - 1, 60);
+    const indexCache = new Map();
+    const indexForSpawn = (k) => {
+        if (indexCache.has(k)) return indexCache.get(k);
+        let salt = 0;
+        let idx = Math.floor(hash01(k, salt) * pool.length) % pool.length;
+        for (let tries = 0; tries < 24 && noRepeatWindow > 0; tries++) {
+            let clash = false;
+            for (let back = 1; back <= noRepeatWindow && k - back >= 0; back++) {
+                if (indexForSpawn(k - back) === idx) { clash = true; break; }
+            }
+            if (!clash) break;
+            salt += 1;
+            idx = Math.floor(hash01(k, salt) * pool.length) % pool.length;
+        }
+        indexCache.set(k, idx);
+        return idx;
+    };
+    /* 出生节奏：列多出得密，列少出得疏；同屏数量与旧版固定批相当 */
+    const interval = Math.min(5.2, Math.max(2.6, 48 / columnCount));
+    const spawnTime = (k) => sessionStartMs / 1000 + k * interval + hash01(k, 3) * interval * 0.5;
+    const riseDuration = (k) => 34 + hash01(k, 5) * 30;
+    const spawnCard = (k, delayedBySec) => {
+        const url = pool[indexForSpawn(k)];
+        const depth = 0.35 + hash01(k, 11) * 0.65;
+        const swayDuration = 6 + hash01(k, 13) * 9;
+        const spinAbs = 10 + hash01(k, 15) * 14;
+        const spinDuration = (hash01(k, 17) < 0.5 ? -1 : 1) * spinAbs;
         const rise = document.createElement('div');
         rise.className = 'home-floating-card';
-        /* 分层取样保证水平分布均匀：每卡一列，列内抖动，杜绝局部密集 */
-        const column = (i + rand() * 0.72) / picked.length;
+        /* 轮转列 + 列内抖动，水平分布均匀 */
+        const column = ((k % columnCount) + hash01(k, 19) * 0.72) / columnCount;
+        const dur = riseDuration(k);
         rise.style.setProperty('--hfc-depth', String(depth));
         rise.style.setProperty('--hfc-left', `${(column * 96).toFixed(2)}%`);
         rise.style.setProperty('--hfc-size', `${44 + Math.round(depth * 58)}px`);
-        rise.style.setProperty('--hfc-duration', `${riseDuration.toFixed(2)}s`);
-        rise.style.setProperty('--hfc-delay', `${(-(nowSec % riseDuration)).toFixed(2)}s`);
-        rise.style.setProperty('--hfc-sway', `${(8 + rand() * 22).toFixed(1)}px`);
+        rise.style.setProperty('--hfc-duration', `${dur.toFixed(2)}s`);
+        rise.style.setProperty('--hfc-delay', `${(-delayedBySec).toFixed(2)}s`);
+        rise.style.setProperty('--hfc-sway', `${(8 + hash01(k, 21) * 22).toFixed(1)}px`);
         rise.style.setProperty('--hfc-sway-duration', `${swayDuration.toFixed(2)}s`);
-        rise.style.setProperty('--hfc-sway-delay', `${(-(nowSec % swayDuration)).toFixed(2)}s`);
+        rise.style.setProperty('--hfc-sway-delay', `${(-delayedBySec % swayDuration).toFixed(2)}s`);
         const sway = document.createElement('div');
         sway.className = 'hfc-sway';
         sway.style.setProperty('--hfc-sway-duration', `${swayDuration.toFixed(2)}s`);
-        sway.style.setProperty('--hfc-sway-delay', `${(-(nowSec % swayDuration)).toFixed(2)}s`);
+        sway.style.setProperty('--hfc-sway-delay', `${(-delayedBySec % swayDuration).toFixed(2)}s`);
         const img = document.createElement('img');
         img.src = url;
         img.alt = '';
         img.draggable = false;
         img.className = 'hfc-spin';
-        img.style.setProperty('--hfc-spin-duration', `${Math.abs(spinDuration).toFixed(2)}s`);
-        img.style.setProperty('--hfc-spin-delay', `${(-(nowSec % Math.abs(spinDuration))).toFixed(2)}s`);
+        img.style.setProperty('--hfc-spin-duration', `${spinAbs.toFixed(2)}s`);
+        img.style.setProperty('--hfc-spin-delay', `${(-delayedBySec % spinAbs).toFixed(2)}s`);
         if (spinDuration < 0) img.style.animationDirection = 'reverse';
         sway.appendChild(img);
         rise.appendChild(sway);
+        /* 单程上升结束后移除节点，位置交给后续不断出生的新卡 */
+        rise.addEventListener('animationend', (event) => {
+            if (event.animationName === 'homeCardRise') rise.remove();
+        });
         container.appendChild(rise);
+    };
+    /* 重放：把当前仍在空中的卡按各自相位补齐（负 delay 直接入戏） */
+    const bootSec = Date.now() / 1000;
+    let nextK = 0;
+    while (spawnTime(nextK) <= bootSec) {
+        const age = bootSec - spawnTime(nextK);
+        if (age < riseDuration(nextK)) spawnCard(nextK, age);
+        nextK += 1;
     }
+    /* 之后按时间表持续出生新卡 */
+    window.setInterval(() => {
+        const now = Date.now() / 1000;
+        let guard = 0;
+        while (spawnTime(nextK) <= now && guard < 8) {
+            spawnCard(nextK, Math.max(0, now - spawnTime(nextK)));
+            nextK += 1;
+            guard += 1;
+        }
+    }, 400);
 }
 function applyHomeUiStyle(style) {
     homeUiStyle = style === 'touhou' ? 'touhou' : 'simple';
@@ -27670,38 +27714,24 @@ function modUnlockProgressText(state = modUnlockState) {
             ja: 'ゲストはこの2つのエンタメモードで原版公式Modのみ使用できます。エンタメModとコミュニティModは使用できません。',
         });
     }
-    const valid = Number(state.valid_games || 0);
-    if (!state.fixed_unlocked) {
-        return lt({
-            zh: `有效对局 ${valid}。再完成 ${Math.max(0, Number(state.fixed_unlock_games || 10) - valid)} 场有效对局，将自动解锁 5 个官方模组。`,
-            en: `Valid matches: ${valid}. Complete ${Math.max(0, Number(state.fixed_unlock_games || 10) - valid)} more to automatically unlock 5 official mods.`,
-            fr: `Parties valides : ${valid}. Encore ${Math.max(0, Number(state.fixed_unlock_games || 10) - valid)} pour débloquer automatiquement 5 mods officiels.`,
-            ja: `有効対局 ${valid}。あと ${Math.max(0, Number(state.fixed_unlock_games || 10) - valid)} 戦で公式Modを5つ自動解放します。`,
-        });
-    }
+    // 2026-10-02 起官方模组按段位自动解锁（掉段收回），不再依赖有效对局数
+    const tierLabel = String(state.rank_tier_label || '');
     if (state.all_official_unlocked) {
         return lt({
-            zh: `有效对局 ${valid}。全部官方模组已解锁。`,
-            en: `Valid matches: ${valid}. All official mods are unlocked.`,
-            fr: `Parties valides : ${valid}. Tous les mods officiels sont débloqués.`,
-            ja: `有効対局 ${valid}。すべての公式Modが解放済みです。`,
+            zh: `当前段位 ${tierLabel}，全部官方模组已解锁。`,
+            en: `Current rank ${tierLabel}: all official mods are unlocked.`,
+            fr: `Rang actuel ${tierLabel} : tous les mods officiels sont débloqués.`,
+            ja: `現在の段位 ${tierLabel}、すべての公式Modが解放済みです。`,
         });
     }
-    const unspent = Number(state.unspent_choices || 0);
-    if (unspent > 0) {
-        return lt({
-            zh: `有效对局 ${valid}。还有 ${unspent} 次官方模组自选机会，请先选择要解锁的模组。`,
-            en: `Valid matches: ${valid}. You have ${unspent} official-mod unlock choice(s) to use.`,
-            fr: `Parties valides : ${valid}. Vous avez ${unspent} choix de mod officiel à utiliser.`,
-            ja: `有効対局 ${valid}。公式Modの解放選択が ${unspent} 回残っています。`,
-        });
-    }
-    const nextGames = Number(state.next_unlock_games || 0);
+    const nextLabel = String(state.next_unlock_tier_label || '');
+    const nextMod = String(state.next_unlock_mod || '');
+    const modShort = nextMod.replace(/\.gtnmod$/i, '');
     return lt({
-        zh: `有效对局 ${valid}。再完成 ${Math.max(0, nextGames - valid)} 场有效对局可获得下一次官方模组自选机会。`,
-        en: `Valid matches: ${valid}. Complete ${Math.max(0, nextGames - valid)} more for the next official-mod unlock choice.`,
-        fr: `Parties valides : ${valid}. Encore ${Math.max(0, nextGames - valid)} pour le prochain choix de mod officiel.`,
-        ja: `有効対局 ${valid}。あと ${Math.max(0, nextGames - valid)} 戦で次の公式Mod解放選択を獲得します。`,
+        zh: `当前段位 ${tierLabel}。达到 ${nextLabel} 后自动解锁「${modShort}」；段位下降时未达标模组会被收回。`,
+        en: `Current rank ${tierLabel}. Reaching ${nextLabel} automatically unlocks "${modShort}"; mods lock again if the rank drops.`,
+        fr: `Rang actuel ${tierLabel}. Atteindre ${nextLabel} débloque automatiquement « ${modShort} » ; les mods se verrouillent si le rang baisse.`,
+        ja: `現在の段位 ${tierLabel}。${nextLabel} に到達すると「${modShort}」を自動解放します。段位が下がると再びロックされます。`,
     });
 }
 
@@ -37935,17 +37965,17 @@ function renderInviteGrPreview(data = {}) {
     }
     const viewer = preview.viewer || {};
     const zh = currentLang === 'zh';
-    // 反馈 #341：前后双徽章 + 消耗卡加成标注
+    // 反馈 #341：前后双徽章 + 消耗卡加成标注（tier/sub_tier/color 驱动大段配色与子段图标）
     const beforeBadge = viewer.label
-        ? renderRankBadgeHtml({ label: viewer.label, points: viewer.points, cap: viewer.cap })
+        ? renderRankBadgeHtml({ label: viewer.label, tier: viewer.tier, sub_tier: viewer.sub_tier, color: viewer.color, points: viewer.points, cap: viewer.cap })
         : '';
     const winAfter = viewer.win_after || {};
     const lossAfter = viewer.loss_after || {};
     const winBadge = winAfter.label
-        ? renderRankBadgeHtml({ label: winAfter.label, points: winAfter.points, cap: winAfter.cap })
+        ? renderRankBadgeHtml({ label: winAfter.label, tier: winAfter.tier, sub_tier: winAfter.sub_tier, color: winAfter.color, points: winAfter.points, cap: winAfter.cap })
         : '';
     const lossBadge = lossAfter.label
-        ? renderRankBadgeHtml({ label: lossAfter.label, points: lossAfter.points, cap: lossAfter.cap })
+        ? renderRankBadgeHtml({ label: lossAfter.label, tier: lossAfter.tier, sub_tier: lossAfter.sub_tier, color: lossAfter.color, points: lossAfter.points, cap: lossAfter.cap })
         : '';
     const cards = [];
     if (viewer.double_card_active) cards.push(zh ? '双倍卡×2' : 'Double Card ×2');

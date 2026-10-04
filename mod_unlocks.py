@@ -227,6 +227,7 @@ def rank_tier_state(rank_tier: int) -> dict:
         'unspent_choices': 0,
         'next_unlock_games': 0,
         'next_unlock_tier': locked_next[0][0] if locked_next else 0,
+        'next_unlock_tier_label': _rank.rank_label(locked_next[0][0]) if locked_next else '',
         'next_unlock_mod': locked_next[0][1] if locked_next else '',
         'all_official_unlocked': not locked_next,
         'has_pending_choice': False,

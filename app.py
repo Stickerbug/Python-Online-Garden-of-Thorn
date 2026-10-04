@@ -862,6 +862,48 @@ GTN_STATIC_VERSION += '-cards-desc-1'
 GTN_STATIC_VERSION += '-feedback-batch4-1'
 GTN_STATIC_VERSION += '-guest-chat-phelren-rate-1'
 GTN_STATIC_VERSION += '-hfc-dedup-3'
+# —— 纯静态部署免重启机制 ——
+# 上面这串是“启动时基线”。日常静态改动把增量后缀写进 static_version.txt
+# （随 git 部署），下面这个 before_request 钩子检测到文件变化后直接改写
+# GTN_STATIC_VERSION 模块全局——所有模板引用点读的都是这个全局，因此
+# 改静态文件 + 版本文件即可让客户端换缓存，不需要重启服务（在线有人也不受影响）。
+_GTN_STATIC_VERSION_BOOT = GTN_STATIC_VERSION
+_GTN_STATIC_VERSION_FILE = os.environ.get(
+    'GTN_STATIC_VERSION_FILE',
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static_version.txt'),
+)
+_gtn_static_version_file_state = {'live': '', 'mtime': None}
+
+
+def _refresh_static_version_from_file():
+    global GTN_STATIC_VERSION
+    try:
+        mtime = os.path.getmtime(_GTN_STATIC_VERSION_FILE)
+    except OSError:
+        return
+    if _gtn_static_version_file_state['mtime'] == mtime:
+        return
+    try:
+        with open(_GTN_STATIC_VERSION_FILE, encoding='utf-8') as handle:
+            live = handle.read().strip()
+    except (OSError, UnicodeDecodeError):
+        return
+    _gtn_static_version_file_state['mtime'] = mtime
+    if not live or live == _gtn_static_version_file_state['live']:
+        return
+    GTN_STATIC_VERSION = _GTN_STATIC_VERSION_BOOT + live
+    _gtn_static_version_file_state['live'] = live
+    try:
+        app.logger.info('static version refreshed from file: %s', live)
+    except Exception:
+        pass
+
+
+@app.before_request
+def _touch_static_version_file():
+    _refresh_static_version_from_file()
+
+
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 STORY_COOP_ENABLED = os.environ.get('GTN_STORY_COOP_ENABLED', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 GTN_AI_1V1_TEST_ENABLED = os.environ.get('GTN_AI_1V1_TEST_ENABLED', '1').strip().lower() in ('1', 'true', 'yes', 'on')
@@ -11665,11 +11707,16 @@ ADMIN_COMMAND_TREE = {
     'rank': {
         'hidden': True,
         'summary': '段位系统（玩家可见的进度）',
-        'usage': 'rank <info|set|settle>',
+        'usage': 'rank <info|set|reset|list|find|history|settle|next>',
         'children': {
             'info': {'summary': '查看账号段位与特殊修正', 'usage': 'rank info <ID|注册顺序|用户名>'},
             'set': {'summary': '直接设置段位与段位分', 'usage': 'rank set <ID|注册顺序|用户名> <段位序号1-44> [段位分]'},
+            'reset': {'summary': '重置账号段位到初始（Common Basic 0分）', 'usage': 'rank reset <ID|注册顺序|用户名>'},
+            'list': {'summary': '段位排行榜前N', 'usage': 'rank list [数量]'},
+            'find': {'summary': '按昵称/用户名模糊搜索段位', 'usage': 'rank find <关键词>'},
+            'history': {'summary': '查看账号月度结算历史', 'usage': 'rank history <ID|注册顺序|用户名> [数量]'},
             'settle': {'summary': '手动触发段位月度结算（幂等）', 'usage': 'rank settle [月份YYYY-MM]'},
+            'next': {'summary': '查看下次月度结算时间与上次结算月份', 'usage': 'rank next'},
         },
     },
     'rankmod': {
@@ -11796,7 +11843,12 @@ ADMIN_COMMAND_DIRECT_TRANSLATIONS = {
     ('rankmod', 'view'): 'rankmod',
     ('rank', 'info'): 'rank-info',
     ('rank', 'set'): 'rankset',
+    ('rank', 'reset'): 'rank-reset',
+    ('rank', 'list'): 'rank-list',
+    ('rank', 'find'): 'rank-find',
+    ('rank', 'history'): 'rank-history',
     ('rank', 'settle'): 'rank-settle',
+    ('rank', 'next'): 'rank-next',
     ('account', 'reputation', 'info'): 'reputation-info',
     ('account', 'reputation', 'ledger'): 'reputation-ledger',
     ('account', 'reputation', 'add'): 'reputation-add',
@@ -12571,6 +12623,109 @@ def _rank_console_command(cmd, parts, raw):
                 f"（合计 {payload['special'] + global_special:+g}）"
             ),
         }
+    if cmd == 'rank-list':
+        try:
+            limit = max(1, min(50, int(parts[1]))) if len(parts) >= 2 else 10
+        except (TypeError, ValueError):
+            return {'success': False, 'output': '数量必须是数字'}
+        with db_module.get_db_connection() as conn:
+            rows = conn.execute(
+                'SELECT id, username, rank_tier, rank_points, rank_streak, wins, losses, draws '
+                'FROM users WHERE deleted_at IS NULL AND rank_tier > 1 '
+                'ORDER BY rank_tier DESC, rank_points DESC, rank_streak DESC, wins DESC LIMIT ?',
+                (limit,),
+            ).fetchall()
+        if not rows:
+            return {'success': True, 'output': '暂无段位数据'}
+        lines = []
+        for index, row in enumerate(rows, 1):
+            payload = rank_system.rank_payload(int(row['rank_tier']), int(row['rank_points']),
+                                               streak=int(row['rank_streak'] or 0))
+            lines.append(
+                f"{index}. {row['username']} (ID:{row['id']}) {payload['label']} "
+                f"{payload['points']}/{payload['cap']} "
+                f"W/L/D={row['wins']}/{row['losses']}/{row['draws']}"
+            )
+        return {'success': True, 'output': '\n'.join(lines)}
+    if cmd == 'rank-find':
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(raw, len(raw), 'rank find <昵称/用户名关键词>')}
+        keyword = f"%{parts[1].strip()}%"
+        with db_module.get_db_connection() as conn:
+            rows = conn.execute(
+                'SELECT id, username, rank_tier, rank_points, rank_streak '
+                'FROM users WHERE deleted_at IS NULL AND (username LIKE ? OR username_lower LIKE ?) '
+                'ORDER BY rank_tier DESC, rank_points DESC LIMIT 10',
+                (keyword, keyword.lower()),
+            ).fetchall()
+        if not rows:
+            return {'success': True, 'output': '没有匹配的玩家'}
+        lines = []
+        for row in rows:
+            payload = rank_system.rank_payload(int(row['rank_tier']), int(row['rank_points']),
+                                               streak=int(row['rank_streak'] or 0))
+            lines.append(f"{row['username']} (ID:{row['id']}) {payload['label']} {payload['points']}/{payload['cap']}")
+        return {'success': True, 'output': '\n'.join(lines)}
+    if cmd == 'rank-reset':
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(raw, len(raw), 'rank reset <ID|注册顺序|用户名>')}
+        user = find_user_for_admin(parts[1])
+        if not user:
+            return {'success': False, 'output': '账号不存在'}
+        with db_module.get_db_connection() as conn:
+            conn.execute(
+                'UPDATE users SET rank_tier = 1, rank_points = 0, rank_streak = 0 WHERE id = ?',
+                (int(user['id']),),
+            )
+            conn.commit()
+        admin_event('admin', f'rank-reset {user["username"]}#{user["id"]}')
+        payload = rank_system.rank_payload(1, 0)
+        return {'success': True, 'output': f'{user["username"]} 段位已重置为 {payload["label"]} 0/{payload["cap"]}'}
+    if cmd == 'rank-history':
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(raw, len(raw), 'rank history <ID|注册顺序|用户名> [数量]')}
+        user = find_user_for_admin(parts[1])
+        if not user:
+            return {'success': False, 'output': '账号不存在'}
+        try:
+            limit = max(1, min(24, int(parts[2]))) if len(parts) >= 3 else 6
+        except (TypeError, ValueError):
+            return {'success': False, 'output': '数量必须是数字'}
+        with db_module.get_db_connection() as conn:
+            rows = conn.execute(
+                'SELECT month_key, before_json, after_json, dew_granted, created_at '
+                'FROM rank_monthly_settlements WHERE user_id = ? ORDER BY month_key DESC LIMIT ?',
+                (int(user['id']), limit),
+            ).fetchall()
+        if not rows:
+            return {'success': True, 'output': f'{user["username"]} 暂无月度结算记录'}
+        lines = [f'{user["username"]} 月度结算历史：']
+        for row in rows:
+            try:
+                before = json.loads(row['before_json'])
+                after = json.loads(row['after_json'])
+                before_label = before.get('label') or '-'
+                after_label = after.get('label') or '-'
+            except Exception:
+                before_label = after_label = '?'
+            lines.append(
+                f"{row['month_key']}：{before_label} → {after_label}，荆露 +{row['dew_granted']}（{row['created_at']}）"
+            )
+        return {'success': True, 'output': '\n'.join(lines)}
+    if cmd == 'rank-next':
+        next_run = _rank_monthly_next_run_utc()
+        with db_module.get_db_connection() as conn:
+            row = conn.execute(
+                'SELECT month_key, COUNT(*) AS entries, created_at FROM rank_monthly_settlements '
+                'GROUP BY month_key ORDER BY month_key DESC LIMIT 1',
+            ).fetchone()
+        last_line = '尚无月度结算记录'
+        if row:
+            last_line = f"上次结算：{row['month_key']}（{row['entries']} 人，{row['created_at']}）"
+        return {
+            'success': True,
+            'output': f"下次月度结算：{next_run.strftime('%Y-%m-%d %H:%M')} UTC\n{last_line}",
+        }
     if cmd == 'rankmod':
         if len(parts) < 2:
             return {'success': False, 'output': command_error(
@@ -12702,6 +12857,9 @@ def gr_preview_payload_for_sids(mode, sids, viewer_sid):
         'text': text,
         'viewer': {
             'label': viewer_preview.get('label'),
+            'tier': viewer_preview.get('tier'),
+            'sub_tier': viewer_preview.get('sub_tier'),
+            'color': viewer_preview.get('color'),
             'points': viewer_preview.get('points'),
             'cap': viewer_preview.get('cap'),
             'win_delta': win_delta,
