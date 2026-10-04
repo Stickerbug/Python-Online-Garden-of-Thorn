@@ -54,6 +54,89 @@ BEIJING_TZ_OFFSET_HOURS = 8
 MIGRATION_GR_BASELINE = 1000.0
 MIGRATION_GR_PER_SUBTIER = 10.0
 
+# 重算 2026-10-04：花阶分直线换算 + 小段行进成本。
+# P = (花阶分 − 800) × 4；小段 k（1 基）在 P 空间的起点 =
+# 阶梯累计分 start(k) + 10 × (k−1)——即每升过一个小段，P 要多付 10 分。
+# 落位小段 k* 后的段位分 = P − 起点(k*)。与 2026-10-04 逐档样表
+# （800→Common Basic 0/20 … 1300→Mythic Basic 200/200）全部吻合。
+RECALC_GR_BASELINE = 800.0
+RECALC_GR_SLOPE = 4.0
+RECALC_SUBTIER_COST = 10.0
+
+
+def _ladder_starts() -> List[int]:
+    """前缀和：start[k] = 小段 k 的阶梯起点分（1 基，start[1] = 0）。
+
+    惰性初始化：rank_cap 定义在本文件更靠后的位置。
+    """
+    global _LADDER_STARTS
+    if _LADDER_STARTS is not None:
+        return _LADDER_STARTS
+    starts = [0] * (RANK_COUNT + 1)
+    for tier_index in range(2, RANK_COUNT + 1):
+        starts[tier_index] = starts[tier_index - 1] + rank_cap(tier_index - 1)
+    _LADDER_STARTS = starts
+    return starts
+
+
+_LADDER_STARTS = None
+
+
+def ladder_start(tier_index: int) -> int:
+    """小段 k 的阶梯起点分（该段 0 分对应的绝对段位分）。"""
+    return _ladder_starts()[clamp_tier(tier_index)]
+
+
+def ladder_total() -> int:
+    """整个 44 段天梯的满分（绝对段位分上限）。"""
+    starts = _ladder_starts()
+    return starts[RANK_COUNT] + rank_cap(RANK_COUNT)
+
+
+def absolute_to_tier(absolute_points: int) -> Tuple[int, int]:
+    """绝对段位分 → (段位序号, 段内分)。"""
+    starts = _ladder_starts()
+    ceiling = starts[RANK_COUNT] + rank_cap(RANK_COUNT)
+    value = max(0, min(ceiling, int(absolute_points or 0)))
+    for tier_index in range(1, RANK_COUNT + 1):
+        cap = rank_cap(tier_index)
+        if value < starts[tier_index] + cap or tier_index == RANK_COUNT:
+            return tier_index, value - starts[tier_index]
+    return RANK_COUNT, rank_cap(RANK_COUNT)
+
+
+def tier_to_absolute(tier_index: int, points: int) -> int:
+    """(段位序号, 段内分) → 绝对段位分。"""
+    tier_index = clamp_tier(tier_index)
+    points = max(0, min(rank_cap(tier_index), int(points or 0)))
+    return _ladder_starts()[tier_index] + points
+
+
+def recalc_from_gr(season_gr: float) -> Tuple[int, int]:
+    """2026-10-04 重算口径：花阶分 → (段位序号, 段内分)。
+
+    P = (花阶分 − 800) × 4，向下取整到 0；小段 k 在 P 空间占据
+    [start(k) + 10×(k−1), start(k) + 10×(k−1) + cap(k))。
+    """
+    try:
+        gr = float(season_gr or 0.0)
+    except (TypeError, ValueError):
+        gr = 0.0
+    starts = _ladder_starts()
+    total = max(0, int(round((gr - RECALC_GR_BASELINE) * RECALC_GR_SLOPE)))
+    cost = int(RECALC_SUBTIER_COST)
+    for tier_index in range(1, RANK_COUNT + 1):
+        offset = starts[tier_index] + cost * (tier_index - 1)
+        cap = rank_cap(tier_index)
+        if tier_index == RANK_COUNT:
+            return tier_index, max(0, min(cap, total - offset))
+        next_offset = starts[tier_index + 1] + cost * tier_index
+        # 边界看下一段的调整起点：本段与本段满分之间的空隙按满段处理
+        # （样表：ELO 1300 → P 2000 = mythic basic 200/200，而非 sewage 0）。
+        if total < next_offset:
+            return tier_index, max(0, min(cap, total - offset))
+    return RANK_COUNT, rank_cap(RANK_COUNT)
+
 
 def decompose(tier_index: int) -> Tuple[int, int]:
     """1 基段位序号 → (大段下标, 小段下标)，均 0 基。"""

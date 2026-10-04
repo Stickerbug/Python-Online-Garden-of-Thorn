@@ -15193,6 +15193,110 @@ def _backfill_ranks_from_season_gr(conn):
     )
 
 
+# 段位系统上线日（rank_system.py 引入并首次回填的部署日）。
+RANK_RECALC_DEFAULT_SINCE = '2026-10-03'
+
+
+def _season_gr_deltas_since(conn, since_iso):
+    """上线以来每账号的赛季花阶分有符号变化和（用于回推出上线时刻的花阶分）。
+
+    gr_match_results.season_deltas_json 形如 {"<user_id>": <delta>}。
+    """
+    deltas = {}
+    rows = conn.execute(
+        "SELECT season_deltas_json FROM gr_match_results WHERE played_at >= ?",
+        (str(since_iso),),
+    ).fetchall()
+    for row in rows:
+        try:
+            data = json.loads(row['season_deltas_json'] or '{}')
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        for key, value in data.items():
+            try:
+                uid = int(key)
+                delta = float(value)
+            except (TypeError, ValueError):
+                continue
+            deltas[uid] = deltas.get(uid, 0.0) + delta
+    return deltas
+
+
+def recalc_ranks_from_gr(since_iso=None, dry_run=True, recent_weight=1.0, limit=None):
+    """2026-10-04 段位分重算（花阶分新口径 + 保留上线以来的段位净变化）。
+
+    * 基础：recalc_from_gr(当前赛季花阶分) —— P = (花阶分−800)×4，
+      每升过一个小段 P 多付 10 分（rank_system 口径）。
+    * 近期：Δrecent = 当前绝对段位分 − 上线时刻按旧回填口径折算的绝对分。
+      上线时刻花阶分 = 当前花阶分 − 上线以来 gr_match_results 的赛季 delta 和。
+      Δrecent 就是玩家在新系统上线后靠对局赚/亏的净段位分。
+    * 最终：绝对分 = clamp(基础绝对分 + recent_weight × Δrecent, 0, 满分)。
+
+    返回 (summary, rows)：rows 逐账号列出各项，dry_run=True 只读不写。
+    """
+    import rank_system as _rank
+    since = str(since_iso or RANK_RECALC_DEFAULT_SINCE)
+    weight = max(0.0, min(1.0, float(recent_weight or 0.0)))
+    with get_db_connection() as conn:
+        users = conn.execute(
+            'SELECT id, username, season_gr, rank_tier, rank_points FROM users '
+            'ORDER BY id',
+        ).fetchall()
+        deltas = _season_gr_deltas_since(conn, since)
+    rows_out = []
+    updates = []
+    for user in users:
+        uid = int(user['id'])
+        gr_now = float(user['season_gr'] or 0.0)
+        gr_launch = gr_now - float(deltas.get(uid, 0.0))
+        backfill_tier, backfill_points = _rank.gr_to_rank(gr_launch)
+        a_backfill = _rank.tier_to_absolute(backfill_tier, backfill_points)
+        a_now = _rank.tier_to_absolute(int(user['rank_tier'] or 1), int(user['rank_points'] or 0))
+        delta_recent = a_now - a_backfill
+        base_tier, base_points = _rank.recalc_from_gr(gr_now)
+        a_base = _rank.tier_to_absolute(base_tier, base_points)
+        a_final = max(0, min(_rank.ladder_total(), a_base + int(round(weight * delta_recent))))
+        final_tier, final_points = _rank.absolute_to_tier(a_final)
+        rows_out.append({
+            'id': uid,
+            'username': user['username'],
+            'season_gr': gr_now,
+            'old': {'tier': int(user['rank_tier'] or 1), 'points': int(user['rank_points'] or 0)},
+            'base': {'tier': base_tier, 'points': base_points, 'label': _rank.rank_label(base_tier)},
+            'delta_recent': delta_recent,
+            'final': {'tier': final_tier, 'points': final_points, 'label': _rank.rank_label(final_tier)},
+            'cap': _rank.rank_cap(final_tier),
+        })
+        updates.append((final_tier, final_points, uid))
+    summary = {
+        'since': since,
+        'recent_weight': weight,
+        'players': len(rows_out),
+        'changed': sum(
+            1 for row in rows_out
+            if (row['final']['tier'], row['final']['points']) != (row['old']['tier'], row['old']['points'])
+        ),
+        'recent_affected': sum(1 for row in rows_out if row['delta_recent'] != 0),
+        'dry_run': bool(dry_run),
+    }
+    if not dry_run:
+        with get_db_connection() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            try:
+                conn.executemany(
+                    'UPDATE users SET rank_tier = ?, rank_points = ?, rank_streak = 0 WHERE id = ?',
+                    updates,
+                )
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+    summary['dry_run'] = bool(dry_run)
+    return summary, rows_out
+
+
 def get_rank_global_special(conn=None) -> float:
     """全局特殊修正（控制台可调；与玩家自身的特殊修正叠加）。"""
     import rank_system as _rank  # noqa: F401  保持导入口径一致
