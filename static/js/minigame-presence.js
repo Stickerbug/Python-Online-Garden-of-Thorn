@@ -18,6 +18,7 @@
   const DEFAULTS = {
     gameKey: '',
     nickname: '',
+    userId: null,
     betaMode: false,
     inviteBoxId: 'mg-invite',
     inviteTextId: 'mg-invite-text',
@@ -106,23 +107,56 @@
     ['login_ok', 'login_fail', 'minigame_status', 'lobby_chat_history', 'server_error'].forEach((name) => {
       socket.on(name, (payload) => logEvent(name, payload));
     });
-    socket.on('connect', () => {
-      // 小游戏标签页也是一条登录连接：同账号会接管别的标签页状态
+    // 游客聊天（#343）：游客没有账号会话，account_login 发 true 会被服务端
+    // 直接拒（Account session expired），聊天永远连不上。游客改发昵称登录
+    // （昵称用大厅留在 localStorage 的 gtn_nickname），账号用户保持原握手。
+    const guestChat = state.options.userId == null;
+    const guestNickname = () => String(localStorage.getItem('gtn_nickname') || '').trim();
+    let guestLoginRetries = 0;
+    const emitLogin = () => {
       socket.emit('login', {
-        nickname: String(state.options.nickname || ''),
+        nickname: guestChat ? guestNickname() : String(state.options.nickname || ''),
         mode: '1v1',
         match_mode: 'casual_1v1',
-        account_login: true,
+        account_login: !guestChat,
         beta_mode: !!state.options.betaMode,
         skin: {},
       });
+    };
+    socket.on('connect', () => {
+      // 小游戏标签页也是一条登录连接：同账号会接管别的标签页状态
+      emitLogin();
     });
     socket.on('login_ok', () => {
-      socket.emit('minigame_presence', { game: gameKey });
+      // 游客没有服务端会话，minigame_presence 会被拒（minigame_login_required）
+      if (!guestChat) socket.emit('minigame_presence', { game: gameKey });
     });
     socket.on('login_fail', (payload) => {
       const reason = (payload && payload.reason) || '登录失败';
-      status(`登录/在线不可用：${reason}`, 'denied');
+      if (!guestChat) {
+        status(`登录/在线不可用：${reason}`, 'denied');
+        return;
+      }
+      if (reason === 'Nickname already exists' && guestLoginRetries < 5) {
+        // 自己的大厅标签页还开着：等服务端 15 秒空闲接管窗口过去后重试。
+        guestLoginRetries += 1;
+        window.setTimeout(() => {
+          if (socket.connected) emitLogin();
+        }, 8000);
+        return;
+      }
+      status(guestNickname()
+        ? `游客聊天不可用：${reason}`
+        : '游客聊天需先在大厅用昵称进入一次', 'denied');
+    });
+    // 游客在大厅名单里是 lobby 状态，会被挂机检测抽中；本页正在玩游戏不算挂机，
+    // 自动按住 1 秒回应即可（与大厅客户端的按住按钮等价）。
+    socket.on('afk_check', (payload) => {
+      const id = payload && payload.id;
+      if (!id) return;
+      window.setTimeout(() => {
+        socket.emit('afk_check_response', { id, hold_ms: 1000 });
+      }, 1000);
     });
     socket.on('minigame_status', () => {
       state.ready = true;

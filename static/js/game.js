@@ -5759,6 +5759,9 @@ let battleStartupResyncTimer = null;
 let battleStartupExpectedKey = '';
 let lastGardenInitialDeckRevealKey = '';
 let gardenInitialDeckRevealTimer = null;
+// 重新同步被限流的时间戳（#344）：服务端限 20 次/分，而重同步循环本身可以
+// 跑到 24 次/分——被拒后必须退避，否则每 0.8 秒弹一次「操作过于频繁」。
+let gameStateResyncRateLimitedAt = 0;
 
 function isCompleteBattleStatePayload(data) {
     if (!data || typeof data !== 'object') return false;
@@ -5771,7 +5774,8 @@ function isCompleteBattleStatePayload(data) {
 function requestFullGameState(reason = 'incomplete_state') {
     if (!socket || !socket.connected) return;
     const now = performance.now();
-    if (now - lastGameStateResyncRequestAt >= 2500) {
+    const rateLimitedRecently = now - gameStateResyncRateLimitedAt < 10000;
+    if (!rateLimitedRecently && now - lastGameStateResyncRequestAt >= 3500) {
         lastGameStateResyncRequestAt = now;
         debugLog('[client] requesting full game state:', reason);
         socket.emit('request_game_state', {});
@@ -7959,10 +7963,18 @@ function scheduleTransientLoginRetry(data = {}) {
         return true;
     }
     transientMatchRecovery.loginAttempts = Number(transientMatchRecovery.loginAttempts || 0) + 1;
-    const delay = Math.min(
-        SOCKET_MATCH_LOGIN_RETRY_MAX_MS,
-        700 * Math.pow(1.7, Math.max(0, transientMatchRecovery.loginAttempts - 1)),
+    // 被限流的登录不能用常规退避重试（#344）：登录限额 8 次/分、IP 20 次/分，
+    // 0.7s~8s 的重试节奏只会把额度烧光，形成「几分钟进不去」的自我锁死。
+    // 限流原因改成 12~15s 的慢节奏（约 5 次/分），让额度有恢复窗口。
+    const rateLimited = /请求过于频繁|登录过于频繁|too frequently/i.test(
+        String(data.reason || data.message || ''),
     );
+    const delay = rateLimited
+        ? 12000 + Math.random() * 3000
+        : Math.min(
+            SOCKET_MATCH_LOGIN_RETRY_MAX_MS,
+            700 * Math.pow(1.7, Math.max(0, transientMatchRecovery.loginAttempts - 1)),
+        );
     updateStatus(UI.reconnecting || UI.reconnect_title || '正在重连…');
     transientLoginRetryTimer = setTimeout(() => {
         transientLoginRetryTimer = null;
@@ -17723,15 +17735,25 @@ function connectSocket(serverUrl) {
             debugLog('[client] ignored stale no-pending-choice rejection');
             return;
         }
-        // AI 对局的 ACTION_BUSY 不弹红色 toast——左侧提示区灰字足够
-        if (rejectCode === 'ACTION_BUSY' && gameState && (gameState.ai_match || gameState.ai_test || gameState.match_kind === 'phelren')) {
-            debugLog('[client] AI busy, showing in action hint instead of toast');
+        // AI 对局的 ACTION_BUSY / ACTION_TOO_FAST 不弹红色 toast——左侧提示区灰字足够
+        // （#344：Phelren 战里限流如果弹 toast，配合重同步循环就是每 0.8 秒刷一次屏）
+        if ((rejectCode === 'ACTION_BUSY' || rejectCode === 'ACTION_TOO_FAST')
+            && gameState && (gameState.ai_match || gameState.ai_test || gameState.match_kind === 'phelren')) {
+            debugLog('[client] AI busy/rate-limited, showing in action hint instead of toast');
+            if (data && data.event === 'request_game_state' && rejectCode === 'ACTION_TOO_FAST') {
+                gameStateResyncRateLimitedAt = performance.now();
+            }
             const hint = $('classic-action-hint');
             if (hint) {
-                hint.textContent = gameState.ai_thinking ? 'Phelren 思考中…' : 'Phelren 处理中…';
+                hint.textContent = rejectCode === 'ACTION_TOO_FAST'
+                    ? '操作太快了，稍候片刻再试'
+                    : (gameState.ai_thinking ? 'Phelren 思考中…' : 'Phelren 处理中…');
                 hint.classList.add('ai-busy-hint');
             }
             return;
+        }
+        if (data && data.event === 'request_game_state' && rejectCode === 'ACTION_TOO_FAST') {
+            gameStateResyncRateLimitedAt = performance.now();
         }
         clientRejectAction(rejectMessage);
     });

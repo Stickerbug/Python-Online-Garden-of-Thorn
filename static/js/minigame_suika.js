@@ -1416,6 +1416,7 @@ function attachPresence() {
   presence.attach({
     gameKey: CONFIG.gameKey || 'suika',
     nickname: CONFIG.username || '',
+    userId: CONFIG.userId,
     inviteBoxId: 'sk-invite',
     inviteTextId: 'sk-invite-text',
     acceptBtnId: 'sk-invite-accept',

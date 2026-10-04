@@ -266,6 +266,7 @@ from db import (
     normalize_skin_config,
     normalize_username_key,
     preview_gr_match_result,
+    preview_rank_match_result,
     process_live_achievement_flags,
     public_identity_batch_conn,
     process_match_achievements,
@@ -859,6 +860,7 @@ GTN_STATIC_VERSION += '-rank-system-4'
 GTN_STATIC_VERSION += '-home-ui-touhou-23'
 GTN_STATIC_VERSION += '-cards-desc-1'
 GTN_STATIC_VERSION += '-feedback-batch4-1'
+GTN_STATIC_VERSION += '-guest-chat-phelren-rate-1'
 STORY_DEV_TOOLS_ENABLED = os.environ.get('GTN_STORY_DEV_TOOLS', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 STORY_COOP_ENABLED = os.environ.get('GTN_STORY_COOP_ENABLED', '1').strip().lower() not in ('0', 'false', 'off', 'no')
 GTN_AI_1V1_TEST_ENABLED = os.environ.get('GTN_AI_1V1_TEST_ENABLED', '1').strip().lower() in ('1', 'true', 'yes', 'on')
@@ -7073,7 +7075,7 @@ SOCKET_EVENT_LIMITS = {
     'submit_event_sub_choice': (12, 60),
     'reroll_opening_event': (8, 60),
     'request_pregame_state': (12, 60),
-    'request_game_state': (20, 60),
+    'request_game_state': (30, 60),
     'play_card': (30, 30),
     'response': (30, 30),
     'ally_consent_response': (20, 30),

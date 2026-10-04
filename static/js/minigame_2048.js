@@ -882,25 +882,65 @@ function connectPresence() {
       } catch (_) { /* 忽略 */ }
     });
   });
+  // 游客聊天（#343）：游客没有账号会话，account_login 必须发 false，
+  // 否则服务端直接回 Account session expired，聊天永远不可用。
+  // 昵称复用大厅登录后留在 localStorage 里的那一份（gtn_nickname）。
+  const guestChat = CONFIG.userId == null;
+  const guestNickname = () => String(localStorage.getItem('gtn_nickname') || '').trim();
+  let guestLoginRetries = 0;
   socket.on('connect', () => {
     // 方案 A：小游戏页也走一次正常登录握手（同账号会接管大厅标签页），
     // 这样才有 players[sid] 条目 —— 大厅聊天、在线状态、邀请都依赖它。
     socket.emit('login', {
-      nickname: CONFIG.username || '',
+      nickname: guestChat ? guestNickname() : (CONFIG.username || ''),
       mode: '1v1',
       match_mode: 'casual_1v1',
-      account_login: true,
+      account_login: !guestChat,
       beta_mode: false,
       skin: {},
     });
   });
   socket.on('login_ok', () => {
-    socket.emit('minigame_presence', { game: '2048' });
+    // 游客没有服务端会话，minigame_presence 会被拒（minigame_login_required），
+    // 只有点了登录才需要报在线状态。
+    if (!guestChat) socket.emit('minigame_presence', { game: '2048' });
     setSyncText('在线：正在校验本机进度…');
     scheduleSync(200);
   });
   socket.on('login_fail', (payload) => {
-    setSyncText(`聊天/在线不可用：${(payload && payload.reason) || '登录失败'}`, 'denied');
+    const reason = (payload && payload.reason) || '登录失败';
+    if (!guestChat) {
+      setSyncText(`聊天/在线不可用：${reason}`, 'denied');
+      return;
+    }
+    if (reason === 'Nickname already exists' && guestLoginRetries < 5) {
+      // 自己的大厅标签页还开着：等服务端 15 秒空闲接管窗口过去后重试。
+      guestLoginRetries += 1;
+      window.setTimeout(() => {
+        if (socket.connected) socket.emit('login', {
+          nickname: guestNickname(),
+          mode: '1v1',
+          match_mode: 'casual_1v1',
+          account_login: false,
+          beta_mode: false,
+          skin: {},
+        });
+      }, 8000);
+      setSyncText('聊天连接中…（大厅页还开着时会稍等接管）', 'guest');
+      return;
+    }
+    setSyncText(guestNickname()
+      ? `游客聊天不可用：${reason}`
+      : '游客聊天需先在大厅用昵称进入一次', 'guest');
+  });
+  // 游客在大厅名单里是 lobby 状态，会被挂机检测抽中；本页正在玩游戏不算挂机，
+  // 自动按住 1 秒回应即可（与大厅客户端的按住按钮等价）。
+  socket.on('afk_check', (payload) => {
+    const id = payload && payload.id;
+    if (!id) return;
+    window.setTimeout(() => {
+      socket.emit('afk_check_response', { id, hold_ms: 1000 });
+    }, 1000);
   });
   // 大厅聊天（与多人游戏同一条）：历史 + 新消息，全部交给共用外壳
   socket.on('lobby_chat_history', (payload) => {
@@ -1152,6 +1192,9 @@ async function boot() {
       guestMode = true;
       setSyncText(lt({ zh: '游客模式：本地游玩，登录后成绩上榜', en: 'Guest mode: playing locally. Sign in to rank.', fr: 'Mode visiteur : jeu local. Connectez-vous pour le classement.', ja: 'ゲストモード：ローカルでプレイ。ログインするとランキングに載ります' }), 'guest');
       if (!state) startLocalGame();
+      // 游客也要能聊天（#343）：提前 return 前先把在线外壳接上，
+      // 否则聊天按钮没有任何监听——点了没反应。
+      connectPresence();
       return;
     }
     if (response.status === 403) {
