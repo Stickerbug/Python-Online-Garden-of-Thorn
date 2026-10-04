@@ -6,6 +6,7 @@ import json
 import os
 import sys
 import threading
+import time
 from collections import Counter
 from pathlib import Path
 from typing import Any, Iterable
@@ -42,6 +43,15 @@ CAPTURE_ENABLED = _env_bool("GTN_AI_HUMAN_CAPTURE_ENABLED", True)
 CAPTURE_MATCH_RATE = min(1.0, max(0.0, _env_float("GTN_AI_HUMAN_CAPTURE_RATE", 1.0)))
 CAPTURE_MAX_DECISIONS = max(1, _env_int("GTN_AI_HUMAN_CAPTURE_MAX_DECISIONS", 1500))
 CAPTURE_HISTORY_LIMIT = max(1, _env_int("GTN_AI_HUMAN_HISTORY_LIMIT", 128))
+
+# 快照构建是纯 CPU（枚举全部合法动作 + 完整观测），且跑在 socket 处理器
+# 所在的事件循环上。多房间并行时每个玩家动作都构建一次会把单线程主循环
+# 拖出秒级冻结（2026-10-04 实测 event loop lag 6137ms，故事模式响应超时
+# 报 Failed to fetch）。全局最小间隔把这块 CPU 封顶：默认每 0.25 秒至多
+# 构建一次，超出的动作直接跳过——训练数据是尽力而为的采样，宁缺勿卡服。
+CAPTURE_MIN_INTERVAL = max(0.0, _env_float("GTN_AI_HUMAN_CAPTURE_MIN_INTERVAL", 0.25))
+_LAST_CAPTURE_MONOTONIC = 0.0
+_CAPTURE_PACE_LOCK = threading.Lock()
 
 
 def room_is_capture_eligible(room: Any) -> bool:
@@ -87,6 +97,9 @@ def capture_decision(
     if stats["attempted"] >= CAPTURE_MAX_DECISIONS:
         stats["skipped_limit"] += 1
         return None
+    if not _capture_pace_allows():
+        stats["skipped_busy"] += 1
+        return None
     stats["attempted"] += 1
     try:
         builder = _load_capture_builder(game_root)
@@ -103,7 +116,8 @@ def capture_decision(
             public_history=list(getattr(room, "_ai_training_public_history", []) or []),
             seed=0,
         )
-        snapshot = _json_safe(snapshot)
+        # 这里不再做 _json_safe 双往返：嵌入回放时 record_room_replay_action
+        # 已经用 _replay_json_safe 清洗过一次，重复往返只是白烧 CPU。
         if not isinstance(snapshot, dict):
             raise TypeError("capture builder returned a non-object")
         stats["captured"] += 1
@@ -203,6 +217,7 @@ def room_capture_summary(room: Any) -> dict[str, Any]:
             "captured": 0,
             "failed": 0,
             "skipped_limit": 0,
+            "skipped_busy": 0,
             "failure_reasons": {},
         }
     return {
@@ -212,6 +227,7 @@ def room_capture_summary(room: Any) -> dict[str, Any]:
         "captured": int(stats.get("captured", 0) or 0),
         "failed": int(stats.get("failed", 0) or 0),
         "skipped_limit": int(stats.get("skipped_limit", 0) or 0),
+        "skipped_busy": int(stats.get("skipped_busy", 0) or 0),
         "failure_reasons": dict(sorted((stats.get("failure_reasons") or {}).items())),
     }
 
@@ -241,6 +257,19 @@ def _room_selected_for_capture(room: Any) -> bool:
     return bool(selected)
 
 
+def _capture_pace_allows() -> bool:
+    """全局节流：距离上一次快照构建不足 CAPTURE_MIN_INTERVAL 就跳过。"""
+    global _LAST_CAPTURE_MONOTONIC
+    if CAPTURE_MIN_INTERVAL <= 0.0:
+        return True
+    with _CAPTURE_PACE_LOCK:
+        now = time.monotonic()
+        if now - _LAST_CAPTURE_MONOTONIC < CAPTURE_MIN_INTERVAL:
+            return False
+        _LAST_CAPTURE_MONOTONIC = now
+        return True
+
+
 def _room_stats(room: Any) -> dict[str, Any]:
     stats = getattr(room, "_ai_training_capture_stats", None)
     if not isinstance(stats, dict):
@@ -249,6 +278,7 @@ def _room_stats(room: Any) -> dict[str, Any]:
             "captured": 0,
             "failed": 0,
             "skipped_limit": 0,
+            "skipped_busy": 0,
             "failure_reasons": Counter(),
             "last_error": "",
         }

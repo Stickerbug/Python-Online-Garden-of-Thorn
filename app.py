@@ -22563,9 +22563,15 @@ def _sync_story_discoveries(user_id, run):
         or not isinstance(run.get('state'), dict)
     ):
         return []
+    # 记录图鉴是 SQLite 写：留在主循环会在写锁竞争时 C 层阻塞整个 hub，
+    # 挪进 tpool（纯函数，返回值不受影响）。
     try:
-        discoveries = collect_story_discoveries(run.get('state') or {})
-        return record_story_discoveries(user_id, discoveries, run.get('id'))
+        discoveries = run_off_event_loop(
+            collect_story_discoveries, run.get('state') or {},
+        )
+        return run_off_event_loop(
+            record_story_discoveries, user_id, discoveries, run.get('id'),
+        )
     except sqlite3.OperationalError as exc:
         if 'locked' not in str(exc).lower():
             raise
@@ -22578,8 +22584,11 @@ def _sync_story_discoveries(user_id, run):
 
 
 def _list_story_discoveries_without_blocking(user_id):
+    # 名副其实的「不阻塞」：SQLite 读在 eventlet 主循环（绿色线程）里 C 层
+    # 阻塞时不会让出协程，写锁竞争下整个 hub 会冻结数秒（2026-10-04 实测
+    # 8 个故事旅程并行时 event loop lag 6137ms）。这里把读挪进 tpool。
     try:
-        return list_story_discoveries(user_id)
+        return run_off_event_loop(list_story_discoveries, user_id)
     except sqlite3.OperationalError as exc:
         if 'locked' not in str(exc).lower():
             raise
@@ -22592,7 +22601,7 @@ def _list_story_discoveries_without_blocking(user_id):
 
 def _story_progress_without_blocking(user_id):
     try:
-        return get_story_progress(user_id)
+        return run_off_event_loop(get_story_progress, user_id)
     except sqlite3.OperationalError as exc:
         if 'locked' not in str(exc).lower():
             raise
@@ -22891,7 +22900,18 @@ def api_story_run_action():
                 run=_story_run_with_compatibility(updated),
             )
         if outcome == 'committed':
-            set_story_bank(user_id, int(next_state.get('event_bank') or 0))
+            # SQLite 写同样不能留在主循环：写锁竞争下 busy 等待是 C 层阻塞，
+            # eventlet 不会让出协程（这正是 lag 6137ms 的形状）。挪进 tpool。
+            try:
+                run_off_event_loop(
+                    set_story_bank,
+                    user_id,
+                    int(next_state.get('event_bank') or 0),
+                )
+            except Exception as exc:
+                app.logger.warning(
+                    'story bank persist deferred user=%s: %s', user_id, exc,
+                )
         updated = _story_run_with_compatibility(updated)
         new_discoveries = (
             [] if outcome == 'duplicate'
