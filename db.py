@@ -14411,7 +14411,7 @@ def preview_rank_match_result(mode, player_ids, viewer_user_id=None):
         return {'applied': False, 'reason': 'viewer_not_in_match'}
     with get_db_connection() as conn:
         rows = conn.execute(
-            f"SELECT id, rank_tier, rank_points, rank_special FROM users WHERE id IN ({','.join(['?'] * len(ids))})",
+            f"SELECT id, rank_tier, rank_points, rank_special, rank_shield_armed, rank_double_armed FROM users WHERE id IN ({','.join(['?'] * len(ids))})",
             ids,
         ).fetchall()
         by_id = {int(row['id']): row for row in rows}
@@ -14426,15 +14426,48 @@ def preview_rank_match_result(mode, player_ids, viewer_user_id=None):
     opp_avg = _rank.opponent_tier_average([int(o['rank_tier'] or 1) for o in opponents])
     special_total = global_special + float(own['rank_special'] or 0.0)
     payload = _rank.rank_payload(own_tier, int(own['rank_points'] or 0))
+    shield_armed = int(own['rank_shield_armed'] or 0) if 'rank_shield_armed' in (own.keys() if hasattr(own, 'keys') else {}) else 0
+    double_armed = int(own['rank_double_armed'] or 0) if 'rank_double_armed' in (own.keys() if hasattr(own, 'keys') else {}) else 0
+    win_gain = _rank.match_gain(own_tier, opp_avg, special_total)
+    loss_amount = _rank.match_loss(own_tier, opp_avg, special_total)
+    # 消耗卡修正：双倍卡胜时×2，保分卡败时归零
+    double_active = bool(double_armed)
+    if double_active:
+        win_gain *= 2
+    loss_shielded = bool(shield_armed)
+    if loss_shielded:
+        loss_amount = 0
+    own_points = int(own['rank_points'] or 0)
+    # 胜后/负后的段位投影（走 apply_match_result 保留升降段语义）
+    win_result = _rank.apply_match_result(own_tier, own_points, 0,
+                                          outcome='win', opponent_tier_avg=opp_avg,
+                                          special_total=special_total, double_card=double_active)
+    loss_result = _rank.apply_match_result(own_tier, own_points, 0,
+                                           outcome='loss', opponent_tier_avg=opp_avg,
+                                           special_total=special_total, loss_shield=loss_shielded)
+    win_after = _rank.rank_payload(int(win_result['tier_index']), int(win_result['points']))
+    loss_after = _rank.rank_payload(int(loss_result['tier_index']), int(loss_result['points']))
     return {
         'applied': True,
         'viewer': {
             'label': payload['label'],
             'points': payload['points'],
             'cap': payload['cap'],
-            'win_delta': _rank.match_gain(own_tier, opp_avg, special_total),
+            'win_delta': win_gain,
             'draw_delta': 0,
-            'loss_delta': _rank.match_loss(own_tier, opp_avg, special_total),
+            'loss_delta': loss_amount,
+            'double_card_active': double_active,
+            'shield_card_active': loss_shielded,
+            'win_after': {
+                'label': win_after['label'],
+                'points': win_after['points'],
+                'cap': win_after['cap'],
+            },
+            'loss_after': {
+                'label': loss_after['label'],
+                'points': loss_after['points'],
+                'cap': loss_after['cap'],
+            },
         },
     }
 

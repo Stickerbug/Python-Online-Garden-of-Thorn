@@ -2664,6 +2664,47 @@ a.title-shop-afdian-go:hover {
   margin: 4px 0;
 }
 
+/* 段位预估三列（当前/胜/负） */
+.invite-gr-badges {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  justify-content: center;
+  margin: 6px 0;
+}
+
+.invite-gr-badge-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 56px;
+}
+
+.invite-gr-badge-label {
+  font-size: 11px;
+  opacity: 0.65;
+}
+
+.invite-gr-delta {
+  font-size: 12px;
+}
+
+.invite-gr-cards {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.invite-gr-card-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(255, 217, 74, 0.15);
+  color: var(--accent, #ffd94a);
+}
+
 .account-gr-chart-svg {
   display: block;
   width: 100%;

@@ -11782,6 +11782,60 @@ def _story_event_presentation(event):
     return result
 
 
+
+def _extract_deck_log(state, events):
+    """建议 #332：从事件流提取卡组变更日志（最近20条）。
+
+    追踪 card_gained / card_removed / card_upgraded / card_created /
+    card_modified / card_exiled 六类事件，按发生顺序记录卡名与动作，
+    写入 state['player']['deck_log']——客户端在卡组查看器底部渲染。
+    """
+    player = state.get('player')
+    if not isinstance(player, dict):
+        return
+    log = player.get('deck_log')
+    if not isinstance(log, list):
+        log = []
+    from collections import OrderedDict as _OD
+    card_names = _OD()
+    for ev in events:
+        if not isinstance(ev, dict):
+            continue
+        et = str(ev.get('type') or '')
+        if et == 'card_gained':
+            card_id = str(ev.get('card_id') or '')
+            name = STORY_CARDS.get(card_id, {}).get('name', {}).get('zh', card_id)
+            if ev.get('upgraded'):
+                name += '+'
+            log.append({'action': 'gain', 'card': name, 'source': str(ev.get('source') or '')})
+        elif et == 'card_created':
+            card_id = str(ev.get('def_id') or '')
+            name = STORY_CARDS.get(card_id, {}).get('name', {}).get('zh', card_id)
+            log.append({'action': 'create', 'card': name, 'source': str(ev.get('source') or '')})
+        elif et == 'card_removed':
+            card_id = str(ev.get('def_id') or '')
+            name = STORY_CARDS.get(card_id, {}).get('name', {}).get('zh', card_id)
+            log.append({'action': 'remove', 'card': name, 'source': str(ev.get('source') or '')})
+        elif et == 'card_upgraded':
+            inst_id = ev.get('card_instance_id')
+            card = next((c for c in player.get('deck', []) if c.get('instance_id') == inst_id), None)
+            if card:
+                name = STORY_CARDS.get(card.get('def_id', ''), {}).get('name', {}).get('zh', card.get('def_id', '?'))
+                log.append({'action': 'upgrade', 'card': name, 'source': str(ev.get('source') or '')})
+        elif et == 'card_modified':
+            card_id = str(ev.get('def_id') or '')
+            name = STORY_CARDS.get(card_id, {}).get('name', {}).get('zh', card_id)
+            log.append({'action': 'modify', 'card': name, 'source': str(ev.get('source') or '')})
+        elif et == 'card_exiled':
+            card_id = str(ev.get('def_id') or '')
+            name = STORY_CARDS.get(card_id, {}).get('name', {}).get('zh', card_id)
+            log.append({'action': 'exile', 'card': name, 'source': str(ev.get('source') or '')})
+    if log:
+        player['deck_log'] = log[-20:]
+    elif 'deck_log' not in player:
+        player['deck_log'] = []
+
+
 def _finalize_story_events(state, events):
     counter = int(state.get('presentation_event_counter') or 0)
     finalized = []
@@ -11887,6 +11941,7 @@ def apply_story_action(source_state, action_type, payload, seed):
     # A checkpoint restored by this action can itself come from an older run.
     _normalize_legacy_story_state(state)
     _refresh_combat_projections(state)
+    _extract_deck_log(state, events)
     phase = str(state.get('phase') or '')
     if action_type in ('enter_node', 'dev_jump_node') and phase in ('combat', 'room', 'reward'):
         _capture_floor_entry_checkpoint(state)

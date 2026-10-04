@@ -12686,7 +12686,13 @@ def gr_preview_payload_for_sids(mode, sids, viewer_sid):
         return {}
     win_delta = int(viewer_preview.get('win_delta') or 0)
     loss_delta = int(viewer_preview.get('loss_delta') or 0)
-    text = f"段位预估：{viewer_preview.get('label', '')} 胜 +{win_delta} / 负 -{loss_delta}"
+    mods = []
+    if viewer_preview.get('double_card_active'):
+        mods.append('双倍卡×2')
+    if viewer_preview.get('shield_card_active'):
+        mods.append('保分卡')
+    mod_text = f"（{'，'.join(mods)}）" if mods else ''
+    text = f"段位预估{mod_text}：胜 +{win_delta} / 负 -{loss_delta}"
     return {
         'applied': True,
         'text': text,
@@ -12697,6 +12703,10 @@ def gr_preview_payload_for_sids(mode, sids, viewer_sid):
             'win_delta': win_delta,
             'draw_delta': 0,
             'loss_delta': loss_delta,
+            'double_card_active': bool(viewer_preview.get('double_card_active')),
+            'shield_card_active': bool(viewer_preview.get('shield_card_active')),
+            'win_after': viewer_preview.get('win_after') or {},
+            'loss_after': viewer_preview.get('loss_after') or {},
         },
     }
 
@@ -18372,6 +18382,30 @@ def start_random_deck_room(room):
     _broadcast_game_state_now(room)
     emit_initial_pending_interaction(room)
     broadcast_lobby()
+    # 反馈 #341：天梯对局开始时向每位玩家发送段位预估（三列前后徽章+消耗卡）
+    if getattr(room, 'match_mode', '') in RANKED_MATCH_MODES:
+        try:
+            all_sids = list(room.player_sids)
+            user_ids = []
+            for s in all_sids:
+                p = players.get(s) or {}
+                user_ids.append(p.get('user_id') if p.get('is_registered_user') else None)
+            if all(uid is not None for uid in user_ids):
+                for pidx, s in enumerate(all_sids):
+                    if s not in players:
+                        continue
+                    p = players[s]
+                    try:
+                        preview = gr_preview_payload_for_sids(room.mode, all_sids, s)
+                        if preview.get('text'):
+                            socketio.emit('invite_gr_preview', {
+                                'text': preview.get('text'),
+                                'gr_preview': preview,
+                            }, room=s)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
 
 
 def _build_solo_card(entry):

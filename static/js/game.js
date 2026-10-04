@@ -37889,28 +37889,46 @@ function renderInviteGrPreview(data = {}) {
         return text ? `<p class="invite-gr-preview is-neutral">${escapeHtml(text)}</p>` : '';
     }
     const viewer = preview.viewer || {};
-    // 2026-10-02：邀请预览展示段位（标签来自服务端，平局恒为 ±0 不再单列）。
-    const badge = viewer.label
-        ? `<div class="invite-gr-rank">${renderRankBadgeHtml({
-            label: viewer.label,
-            points: viewer.points,
-            cap: viewer.cap,
-        })}</div>`
+    const zh = currentLang === 'zh';
+    // 反馈 #341：前后双徽章 + 消耗卡加成标注
+    const beforeBadge = viewer.label
+        ? renderRankBadgeHtml({ label: viewer.label, points: viewer.points, cap: viewer.cap })
         : '';
-    const rows = [
-        [currentLang === 'zh' ? '胜利' : 'Win', viewer.win_delta],
-        [currentLang === 'zh' ? '失败' : 'Loss', viewer.loss_delta],
-    ];
+    const winAfter = viewer.win_after || {};
+    const lossAfter = viewer.loss_after || {};
+    const winBadge = winAfter.label
+        ? renderRankBadgeHtml({ label: winAfter.label, points: winAfter.points, cap: winAfter.cap })
+        : '';
+    const lossBadge = lossAfter.label
+        ? renderRankBadgeHtml({ label: lossAfter.label, points: lossAfter.points, cap: lossAfter.cap })
+        : '';
+    const cards = [];
+    if (viewer.double_card_active) cards.push(zh ? '双倍卡×2' : 'Double Card ×2');
+    if (viewer.shield_card_active) cards.push(zh ? '保分卡' : 'Shield Card');
+    const cardsNote = cards.length
+        ? `<div class="invite-gr-cards">${cards.map(c => `<span class="invite-gr-card-tag">${escapeHtml(c)}</span>`).join('')}</div>`
+        : '';
+    const fmtDelta = d => `${Number(d) >= 0 ? '+' : ''}${Number(d || 0)}`;
     return `
         <div class="invite-gr-preview-card">
-            <div class="invite-gr-title">${escapeHtml(currentLang === 'zh' ? '段位预估' : 'Rank Preview')}</div>
-            ${badge}
-            ${rows.map(([label, delta]) => `
-                <div class="invite-gr-row">
-                    <span>${escapeHtml(label)}</span>
-                    <b class="${escapeHtml(grDeltaClass(delta))}">${escapeHtml((Number(delta) >= 0 ? '+' : '') + String(delta))}</b>
+            <div class="invite-gr-title">${escapeHtml(zh ? '段位预估' : 'Rank Preview')}</div>
+            <div class="invite-gr-badges">
+                <div class="invite-gr-badge-col">
+                    <div class="invite-gr-badge-label">${escapeHtml(zh ? '当前' : 'Current')}</div>
+                    ${beforeBadge}
                 </div>
-            `).join('')}
+                <div class="invite-gr-badge-col">
+                    <div class="invite-gr-badge-label">${escapeHtml(zh ? '胜' : 'Win')}</div>
+                    ${winBadge}
+                    <b class="invite-gr-delta ${escapeHtml(grDeltaClass(viewer.win_delta))}">${escapeHtml(fmtDelta(viewer.win_delta))}</b>
+                </div>
+                <div class="invite-gr-badge-col">
+                    <div class="invite-gr-badge-label">${escapeHtml(zh ? '负' : 'Loss')}</div>
+                    ${lossBadge}
+                    <b class="invite-gr-delta ${escapeHtml(grDeltaClass(viewer.loss_delta))}">${escapeHtml(fmtDelta(-Number(viewer.loss_delta || 0)))}</b>
+                </div>
+            </div>
+            ${cardsNote}
         </div>
     `;
 }
