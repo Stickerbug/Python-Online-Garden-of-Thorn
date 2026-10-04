@@ -2596,6 +2596,31 @@ a.title-shop-afdian-go:hover {
 }
 
 /* 段位消耗卡（保分/双倍）：商店「段位卡」页签 */
+.lobby-rank-cards {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 12px;
+    margin-bottom: 8px;
+    border: 1px solid var(--line-soft, #d8d4c8);
+    border-radius: 7px;
+    background: rgba(127, 140, 141, 0.07);
+    font-size: 12px;
+}
+.lobby-rank-cards.hidden { display: none; }
+.lobby-rank-cards-note { font-weight: 700; opacity: 0.65; }
+.lobby-rank-card-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: rgba(127, 140, 141, 0.1);
+}
+.lobby-rank-card-name { font-weight: 700; }
+.lobby-rank-card-state { opacity: 0.75; white-space: nowrap; }
+.lobby-rank-cards-shop { margin-left: auto; }
 .rank-cards-shop-rank {
     display: flex;
     flex-direction: column;

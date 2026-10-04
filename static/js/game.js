@@ -19988,12 +19988,88 @@ async function rankCardsApi(path, body) {
     return res.json().catch(() => ({}));
 }
 
+/* 大厅天梯模式页签下的段位卡激活条：玩家在要打排位的地方直接武装保分/双倍卡，
+ * 不用再绕去商店。只在 ranked_1v1 / ranked_2v2 模式显示。 */
+let lobbyRankCardsFetchPending = false;
+function updateLobbyRankCardsStrip() {
+    const strip = $('lobby-rank-cards');
+    if (!strip) return;
+    const ranked = ['ranked_1v1', 'ranked_2v2'].includes(normalizeMatchModeKey(activePvpMatchMode));
+    if (!ranked || !currentAccount) {
+        strip.classList.add('hidden');
+        strip.innerHTML = '';
+        return;
+    }
+    const cards = currentAccount.rank_cards;
+    if (!cards || typeof cards !== 'object') {
+        strip.classList.remove('hidden');
+        strip.innerHTML = `<span class="lobby-rank-cards-note">${escapeHtml(lt({ zh: '段位卡', en: 'Rank Cards', fr: 'Cartes de rang', ja: 'ランクカード' }))}</span>`;
+        if (!lobbyRankCardsFetchPending) {
+            lobbyRankCardsFetchPending = true;
+            fetch('/api/rank/cards', { credentials: 'same-origin' })
+                .then(res => res.json().catch(() => ({})))
+                .then(data => {
+                    if (data && data.success && data.cards && currentAccount) {
+                        currentAccount.rank_cards = data.cards;
+                        updateLobbyRankCardsStrip();
+                    }
+                })
+                .catch(() => {})
+                .finally(() => { lobbyRankCardsFetchPending = false; });
+        }
+        return;
+    }
+    const labels = {
+        shield: lt({ zh: '保分卡', en: 'Shield Card', fr: 'Carte Bouclier', ja: '保分カード' }),
+        double: lt({ zh: '双倍卡', en: 'Double Card', fr: 'Carte Double', ja: '倍増カード' }),
+    };
+    const chips = ['shield', 'double'].map(kind => {
+        const info = cards[kind] || { owned: 0, armed: false };
+        const stateLabel = info.armed
+            ? lt({ zh: '已激活', en: 'Armed', fr: 'Activée', ja: '発動中' })
+            : lt({ zh: '库存', en: 'Owned', fr: 'Stock', ja: '所持' }) + ' ' + info.owned;
+        const btn = info.armed
+            ? `<button type="button" class="mini-btn" disabled>${escapeHtml(lt({ zh: '已激活', en: 'Armed', fr: 'Activée', ja: '発動中' }))}</button>`
+            : `<button type="button" class="mini-btn" data-lobby-rank-card-use="${kind}" ${info.owned > 0 ? '' : 'disabled'}>${escapeHtml(lt({ zh: '激活', en: 'Arm', fr: 'Activer', ja: '使う' }))}</button>`;
+        return `<span class="lobby-rank-card-chip" data-rank-card="${kind}">
+            <span class="lobby-rank-card-name">${escapeHtml(labels[kind])}</span>
+            <span class="lobby-rank-card-state">${escapeHtml(stateLabel)}</span>
+            ${btn}
+        </span>`;
+    }).join('');
+    strip.classList.remove('hidden');
+    strip.innerHTML = `<span class="lobby-rank-cards-note">${escapeHtml(lt({ zh: '段位卡', en: 'Rank Cards', fr: 'Cartes de rang', ja: 'ランクカード' }))}</span>${chips}` +
+        `<button type="button" class="mini-btn lobby-rank-cards-shop" data-lobby-rank-cards-shop>${escapeHtml(lt({ zh: '商店购买', en: 'Buy in Shop', fr: 'Acheter en boutique', ja: 'ショップで購入' }))}</button>`;
+    strip.querySelectorAll('[data-lobby-rank-card-use]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const kind = btn.dataset.lobbyRankCardUse;
+            if (!kind) return;
+            btn.disabled = true;
+            const data = await rankCardsApi('/api/rank/cards/use', { card_type: kind });
+            btn.disabled = false;
+            if (data && data.success) {
+                if (currentAccount) currentAccount.rank_cards = data.cards;
+                flashStatus(lt({ zh: '已激活，下一局生效', en: 'Armed for next match', fr: 'Activée pour le prochain match', ja: '次の対局で発動します' }));
+                updateLobbyRankCardsStrip();
+            } else {
+                flashStatus((data && data.error) || lt({ zh: '激活失败', en: 'Failed', fr: 'Échec', ja: '失敗しました' }));
+            }
+        });
+    });
+    const shopBtn = strip.querySelector('[data-lobby-rank-cards-shop]');
+    if (shopBtn) shopBtn.addEventListener('click', () => {
+        toggleTitleShopPopover(true);
+        switchTitleShopTab('rank-cards');
+    });
+}
+
 function bindRankCardsShop() {
     const panel = $('rank-cards-shop-panel');
     if (!panel) return;
     const refresh = async () => {
         rankCardsShopBusy = false;
         await loadRankCardsShop();
+        updateLobbyRankCardsStrip();
     };
     panel.querySelectorAll('[data-rank-card-buy]').forEach(btn => {
         btn.addEventListener('click', async () => {
@@ -28030,6 +28106,7 @@ function renderLobby(data) {
         : normalizeMatchModeKey(localStorage.getItem('preferred_mode') || 'casual_1v1');
     updateAi1v1TestEntry(currentMode);
     void refreshAi1v1TestAvailability();
+    updateLobbyRankCardsStrip();
 
     const playerBySid = new Map(lobbyPlayers.map(p => [p.sid, p]));
     const adminSort = (a, b) => {
