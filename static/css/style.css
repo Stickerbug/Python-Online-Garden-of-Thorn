@@ -14846,7 +14846,8 @@ html[data-home-ui="touhou"] .home-floating-cards {
   left: var(--hfc-left);
   width: var(--hfc-size);
   height: calc(var(--hfc-size) * 1.4);
-  animation: homeCardRise var(--hfc-duration) linear infinite;
+  /* 单程上升（连续随机流）：飞出顶部后由 JS 移除节点，位置让给不断出生的新卡 */
+  animation: homeCardRise var(--hfc-duration) linear 1 forwards;
   animation-delay: var(--hfc-delay);
   will-change: transform, opacity;
 }
