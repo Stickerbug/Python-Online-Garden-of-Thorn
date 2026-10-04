@@ -17927,6 +17927,17 @@ function connectSocket(serverUrl) {
             }
         };
     });
+    bindSocketEvent('ai_match_force_closed', (data = {}) => {
+        // 服务器强制结束了 AI 对局（挂起期间投降/退出，或运算硬超时自愈）
+        debugLog('[client] ai_match_force_closed:', data.reason);
+        allowLobbyTransition('ai_match_force_closed');
+        clearNetworkMatchStateForLobby();
+        if (typeof hideModal === 'function') hideModal();
+        showView('view-lobby');
+        phase = 'lobby';
+        soloMode = false;
+        flashStatus(translateServerMessage(data.message) || lt({ zh: 'AI 对局已结束', en: 'AI match ended', fr: 'Le match IA est terminé', ja: 'AI対局が終了しました' }), 3600, 'warning');
+    });
     bindSocketEvent('server_error', (data) => {
         debugLog('[client] server_error:', data.message);
         const errorCode = data && (data.code || data.error_code || data.reason);

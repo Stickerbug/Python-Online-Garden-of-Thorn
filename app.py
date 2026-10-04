@@ -1484,6 +1484,12 @@ PHELREN_CAPACITY_MAX_RECOVERIES = max(
     0,
     _env_int('GTN_PHELREN_CAPACITY_MAX_RECOVERIES', 2),
 )
+# 原生运算完成项的硬超时：到期仍未完成就强制终结该 AI 对局会话，
+# 保证玩家永远能投降/退出（运算繁忙或 worker 卡死不再锁人）。
+PHELREN_COMPLETION_HARD_DEADLINE_SECONDS = max(
+    30.0,
+    _env_float('GTN_PHELREN_COMPLETION_HARD_DEADLINE_SECONDS', 120.0),
+)
 SOLO_ACTION_SLOW_MS = max(1.0, _env_float('GTN_SOLO_ACTION_SLOW_MS', 250))
 SOLO_ACTION_WORK_BUDGET = max(1000, _env_int('GTN_SOLO_ACTION_WORK_BUDGET', 20000))
 SOLO_LOG_LIMIT = max(200, _env_int('GTN_SOLO_LOG_LIMIT', 1200))
@@ -19006,6 +19012,70 @@ def _drop_solo_session_locked(sid):
         )
 
 
+def _force_abandon_ai_test_session(sid, *, reason='abandoned', notify_message=None):
+    """立即终结 AI 对局会话（投降中断 / 原生运算硬超时自愈）。
+
+    不强行杀正在跑的原生线程：完成项标记 ABANDONED 并解除会话守卫，
+    迟到的结果经身份校验后丢弃；引擎随会话作废，玩家不会再触达，
+    不存在并发写风险。必须在 hub 绿色线程上调用。"""
+    with _lock:
+        meta = ai_test_sessions.get(sid)
+        if not isinstance(meta, dict):
+            return False
+        completion = meta.get('_phelren_native_completion')
+        if isinstance(completion, dict):
+            if not completion['done'].is_set():
+                completion['status'] = _PHELREN_CALL_ABANDONED
+                completion['value'] = None
+                completion['done'].set()
+            meta.pop('_phelren_native_completion', None)
+        _drop_solo_session_locked(sid)
+        if sid in players:
+            players[sid]['status'] = 'lobby'
+            players[sid]['room_id'] = None
+    broadcast_lobby()
+    try:
+        socketio.emit('ai_match_force_closed', {
+            'reason': str(reason or 'abandoned'),
+            'message': str(notify_message or 'AI 对局已结束'),
+        }, room=sid)
+    except Exception:
+        pass
+    admin_event('game', f'AI session force-abandoned sid={sid} reason={reason}', sid=sid)
+    return True
+
+
+def _watch_phelren_completion_deadline(identity, completion):
+    """原生运算硬超时看门狗：到期仍未完成即强制终结会话，让玩家脱困。"""
+    deadline = float(completion.get('deadline') or 0.0)
+    if deadline <= 0.0:
+        return
+    while not completion['done'].is_set():
+        socketio.sleep(1.0)
+        if completion['done'].is_set():
+            return
+        with _lock:
+            current = _find_phelren_identity_locked(identity)
+            if current is None:
+                return
+            sid, meta, _engine, _room = current
+            if meta.get('_phelren_native_completion') is not completion:
+                return
+        if time.monotonic() >= deadline:
+            _force_abandon_ai_test_session(
+                sid,
+                reason='completion_hard_timeout',
+                notify_message='AI 运算超时，对局已自动结束，请重新开始',
+            )
+            return
+
+
+def _arm_phelren_completion_watchdog(identity, completion):
+    if completion is None or not completion.get('deadline'):
+        return
+    _start_socket_background_task(_watch_phelren_completion_deadline, identity, completion)
+
+
 def _drop_orphaned_ai_room_locked(room):
     """Remove an AI room that has no connected player or spectator anymore."""
     if room is None or not getattr(room, 'ai_match', False):
@@ -19494,6 +19564,8 @@ def _new_phelren_call_completion():
         'owner_greenlet_id': None,
         'refresh_after_finalize': False,
         'finalization_retry_scheduled': False,
+        # 硬超时死线：_watch_phelren_completion_deadline 到期强制终结会话
+        'deadline': time.monotonic() + PHELREN_COMPLETION_HARD_DEADLINE_SECONDS,
     }
 
 
@@ -19738,6 +19810,8 @@ def _solo_safe_cpu_call(sid, event_name, fn, *, offload=True):
             else:
                 phelren_completion = _new_phelren_call_completion()
                 meta['_phelren_native_completion'] = phelren_completion
+    if phelren_completion is not None:
+        _arm_phelren_completion_watchdog(phelren_identity, phelren_completion)
     scope = 'phelren' if is_phelren else 'training'
     if is_phelren and phelren_identity is None:
         soft_reject(
@@ -34172,6 +34246,7 @@ def _record_ai_test_human_action(sid, engine, action_kind, payload=None):
         completion['owner_greenlet_id'] = threading.get_ident()
         meta['_phelren_native_completion'] = completion
         meta['_pending_human_replay_action'] = staged_action
+        _arm_phelren_completion_watchdog(identity, completion)
 
     if eventlet is not None:
         owner_greenlet = eventlet.getcurrent()
@@ -36278,6 +36353,17 @@ def on_surrender(data):
     if data is None:
         return
     if sid in ai_test_sessions:
+        # AI 原生运算挂起期间也必须能投降：直接强制终结会话，
+        # 迟到的运算结果会被身份校验丢弃——不再把玩家锁死在对局里。
+        with _lock:
+            _pending_meta = ai_test_sessions.get(sid)
+        if _phelren_native_completion_pending(_pending_meta):
+            _force_abandon_ai_test_session(
+                sid,
+                reason='surrender_during_native_call',
+                notify_message='已投降，对局结束',
+            )
+            return
         action_lock = _try_acquire_solo_action(sid, 'surrender')
         if action_lock is None:
             return
@@ -36635,6 +36721,16 @@ def on_return_lobby(data=None):
             and (sid in ai_test_sessions or sid in ai_test_starting)
         )
     if ai_context:
+        # 原生运算挂起期间也必须能退出对局——强制终结，别把玩家锁死。
+        with _lock:
+            _pending_meta = ai_test_sessions.get(sid)
+        if _phelren_native_completion_pending(_pending_meta):
+            _force_abandon_ai_test_session(
+                sid,
+                reason='return_lobby_during_native_call',
+                notify_message='已退出对局',
+            )
+            return
         action_lock = _try_acquire_solo_action(sid, 'return_lobby')
         if action_lock is None:
             return
