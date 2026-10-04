@@ -577,6 +577,7 @@
             journeyCompleteCopy: 'You crossed every stage of the journey.', journeyFailed: 'Journey ended',
             journeyFailedCopy: 'Your route ends here, but the next map is waiting.', newJourney: 'New Journey',
             requestFailed: 'Story data is temporarily unavailable', stateUpdated: 'State synchronized',
+            networkResync: 'Unstable network — syncing latest progress (the last action may have taken effect)',
             upgraded: 'Upgraded', shield: 'Shield', power: 'Power', weak: 'Weak', vulnerable: 'Vulnerable',
             summon: 'Summon', defeated: 'Defeated', allies: 'All creatures', playerSide: 'Player side', self: 'Self', addCard: 'Add card', consume: 'Consume',
             developerMode: 'Developer Mode', devJump: 'Jump to Level', devFloor: 'Floor', devRoom: 'Room',
@@ -690,6 +691,7 @@
             journeyComplete: '旅程完成', journeyCompleteCopy: '你已经穿过了旅程的全部阶段。', journeyFailed: '旅程结束',
             journeyFailedCopy: '本次路线止步于此，下一张地图仍在等待。', newJourney: '开始新旅程',
             requestFailed: '故事记录暂时不可用', stateUpdated: '状态已同步', upgraded: '已升级',
+            networkResync: '网络不稳，正在同步最新进度（刚才的操作可能已生效）',
             shield: '护盾', power: '力量', weak: '虚弱', vulnerable: '易损', floor: (value) => `第 ${value} 层`,
             summon: '召唤', defeated: '阵亡', allies: '全体生物', playerSide: '玩家方', self: '自己', addCard: '加入卡牌', consume: '吞噬',
             developerMode: '开发人员模式', devJump: '关卡跳转', devFloor: '层数', devRoom: '房间',
@@ -824,6 +826,7 @@
             journeyFailed: 'Voyage terminé',
             journeyFailedCopy: 'Votre route s’arrête ici, mais une prochaine carte vous attend.',
             requestFailed: 'Les données de l’histoire sont temporairement indisponibles',
+            networkResync: 'Réseau instable — synchronisation de la progression (la dernière action a peut-être été appliquée)',
             stateUpdated: 'État synchronisé',
             shield: 'Bouclier', power: 'Puissance', weak: 'Faiblesse',
             vulnerable: 'Vulnérable', damagePrediction: 'Dégâts',
@@ -953,6 +956,7 @@
             journeyFailed: '旅の終了',
             journeyFailedCopy: 'このルートはここで終わりですが、次のマップが待っています。',
             requestFailed: 'ストーリーデータを一時的に利用できません', stateUpdated: '状態を同期しました',
+            networkResync: 'ネットワークが不安定です。最新の進行を同期しています（直前の操作は適用済みの可能性があります）',
             shield: 'シールド', power: '威力', weak: '虚弱',
             vulnerable: '脆弱', damagePrediction: 'ダメージ予測',
             chooseCardHint: 'カードを1枚選択', chooseCards: 'カードを選択',
@@ -1536,6 +1540,9 @@
             return payload;
         } catch (error) {
             if (error?.name === 'AbortError') throw new StoryApiError(t.requestFailed, 408, {});
+            /* 网络层失败（TypeError: Failed to fetch 等）：请求可能已到达服务端并生效，
+             * 只是响应没送回来。用 status=0 标记，storyAction 会提示并自动重同步进度。 */
+            if (error instanceof TypeError) throw new StoryApiError(t.networkResync, 0, {});
             throw error;
         } finally {
             clearTimeout(timeout);
@@ -6574,6 +6581,13 @@
         } catch (error) {
             if (error.message === 'AUTH_REQUIRED') return null;
             if (error.payload?.run) renderRun(error.payload.run);
+            /* 网络层失败：操作很可能已在服务端生效（响应丢失）。提示后自动拉取
+             * 最新进度，玩家看到真实状态而不是停留在旧画面里重复操作。 */
+            if (error.status === 0) {
+                showToast(error.message || t.networkResync);
+                void resyncStoryRunAfterNetworkError();
+                return null;
+            }
             showToast(error.message || t.requestFailed);
             return null;
         } finally {
@@ -6583,6 +6597,13 @@
             updateStoryManualSaveControls();
             updateStorySurrenderControl();
         }
+    }
+
+    async function resyncStoryRunAfterNetworkError() {
+        try {
+            const data = await requestStoryLoadJson('/api/story/run');
+            if (data?.run) renderRun(data.run);
+        } catch (_) { /* 拉取也失败就保持现状；下一次操作会走 409 重同步 */ }
     }
 
     function renderLegend() {
