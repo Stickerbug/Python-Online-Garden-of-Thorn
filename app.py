@@ -12969,7 +12969,9 @@ def gr_preview_payload_for_sids(mode, sids, viewer_sid):
     win_delta = int(viewer_preview.get('win_delta') or 0)
     loss_delta = int(viewer_preview.get('loss_delta') or 0)
     mods = []
-    if viewer_preview.get('double_card_active'):
+    if viewer_preview.get('daily_double_active'):
+        mods.append('今日双倍×2' if not viewer_preview.get('double_card_active') else '今日双倍+双倍卡×3')
+    elif viewer_preview.get('double_card_active'):
         mods.append('双倍卡×2')
     if viewer_preview.get('shield_card_active'):
         mods.append('保分卡')
@@ -12989,6 +12991,7 @@ def gr_preview_payload_for_sids(mode, sids, viewer_sid):
             'draw_delta': 0,
             'loss_delta': loss_delta,
             'double_card_active': bool(viewer_preview.get('double_card_active')),
+            'daily_double_active': bool(viewer_preview.get('daily_double_active')),
             'shield_card_active': bool(viewer_preview.get('shield_card_active')),
             'win_after': viewer_preview.get('win_after') or {},
             'loss_after': viewer_preview.get('loss_after') or {},

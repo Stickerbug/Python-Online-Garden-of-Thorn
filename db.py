@@ -14441,13 +14441,14 @@ def preview_rank_match_result(mode, player_ids, viewer_user_id=None):
         return {'applied': False, 'reason': 'viewer_not_in_match'}
     with get_db_connection() as conn:
         rows = conn.execute(
-            f"SELECT id, rank_tier, rank_points, rank_special, rank_shield_armed, rank_double_armed FROM users WHERE id IN ({','.join(['?'] * len(ids))})",
+            f"SELECT id, rank_tier, rank_points, rank_special, rank_shield_armed, rank_double_armed, rank_daily_key, rank_daily_count FROM users WHERE id IN ({','.join(['?'] * len(ids))})",
             ids,
         ).fetchall()
         by_id = {int(row['id']): row for row in rows}
         if len(by_id) != len(set(ids)):
             return {'applied': False, 'reason': 'unknown_user'}
         global_special = get_rank_global_special(conn)
+        rank_daily_key = str(_rank.beijing_day_key(datetime.now(timezone.utc)))
     own = by_id[viewer_uid]
     own_tier = int(own['rank_tier'] or 1)
     opponents = [by_id[uid] for uid in ids if uid != viewer_uid]
@@ -14460,10 +14461,17 @@ def preview_rank_match_result(mode, player_ids, viewer_user_id=None):
     double_armed = int(own['rank_double_armed'] or 0) if 'rank_double_armed' in (own.keys() if hasattr(own, 'keys') else {}) else 0
     win_gain = _rank.match_gain(own_tier, opp_avg, special_total)
     loss_amount = _rank.match_loss(own_tier, opp_avg, special_total)
-    # 消耗卡修正：双倍卡胜时×2，保分卡败时归零
+    # 消耗卡修正：双倍卡胜时×2，保分卡败时归零。
+    # 反馈 #351：每日前 5 局胜利双倍同样要算进预估（与双倍卡叠加时合计×3，
+    # 与结算口径 apply_match_result 一致）。
+    prev_daily_key = str(own['rank_daily_key'] or '') if 'rank_daily_key' in (own.keys() if hasattr(own, 'keys') else {}) else ''
+    prev_daily_count = int(own['rank_daily_count'] or 0) if 'rank_daily_count' in (own.keys() if hasattr(own, 'keys') else {}) else 0
+    next_daily_count = prev_daily_count + 1 if prev_daily_key == rank_daily_key else 1
+    daily_double_active = next_daily_count <= _rank.DAILY_DOUBLE_GAMES
     double_active = bool(double_armed)
-    if double_active:
-        win_gain *= 2
+    multiplier = 3 if (daily_double_active and double_active) else 2 if (daily_double_active or double_active) else 1
+    if multiplier > 1:
+        win_gain *= multiplier
     loss_shielded = bool(shield_armed)
     if loss_shielded:
         loss_amount = 0
@@ -14471,7 +14479,9 @@ def preview_rank_match_result(mode, player_ids, viewer_user_id=None):
     # 胜后/负后的段位投影（走 apply_match_result 保留升降段语义）
     win_result = _rank.apply_match_result(own_tier, own_points, 0,
                                           outcome='win', opponent_tier_avg=opp_avg,
-                                          special_total=special_total, double_card=double_active)
+                                          special_total=special_total,
+                                          daily_double=daily_double_active,
+                                          double_card=double_active)
     loss_result = _rank.apply_match_result(own_tier, own_points, 0,
                                            outcome='loss', opponent_tier_avg=opp_avg,
                                            special_total=special_total, loss_shield=loss_shielded)
@@ -14490,6 +14500,7 @@ def preview_rank_match_result(mode, player_ids, viewer_user_id=None):
             'draw_delta': 0,
             'loss_delta': loss_amount,
             'double_card_active': double_active,
+            'daily_double_active': daily_double_active,
             'shield_card_active': loss_shielded,
             'win_after': {
                 'label': win_after['label'],

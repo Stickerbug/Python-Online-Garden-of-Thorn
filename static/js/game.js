@@ -38205,7 +38205,12 @@ function renderInviteGrPreview(data = {}) {
         ? renderRankBadgeHtml({ label: lossAfter.label, tier: lossAfter.tier, sub_tier: lossAfter.sub_tier, color: lossAfter.color, points: lossAfter.points, cap: lossAfter.cap })
         : '';
     const cards = [];
-    if (viewer.double_card_active) cards.push(zh ? '双倍卡×2' : 'Double Card ×2');
+    if (viewer.daily_double_active && viewer.double_card_active) {
+        cards.push(zh ? '今日双倍+双倍卡×3' : 'Daily + Double Card ×3');
+    } else {
+        if (viewer.daily_double_active) cards.push(zh ? '今日双倍×2' : 'Daily Double ×2');
+        if (viewer.double_card_active) cards.push(zh ? '双倍卡×2' : 'Double Card ×2');
+    }
     if (viewer.shield_card_active) cards.push(zh ? '保分卡' : 'Shield Card');
     const cardsNote = cards.length
         ? `<div class="invite-gr-cards">${cards.map(c => `<span class="invite-gr-card-tag">${escapeHtml(c)}</span>`).join('')}</div>`
