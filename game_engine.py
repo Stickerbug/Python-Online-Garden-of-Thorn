@@ -21846,6 +21846,10 @@ class GameEngine:
             value = clamp_card_extra_hits(value)
         elif prop == 'power_value':
             value = clamp_card_power(value)
+        elif prop == 'power_base':
+            # 反馈 #346（三角形）：「此牌获得1层威力（非暂时）」需要写留存位——
+            # 打出后 reset_card_after_play 回落 power_base，只写 power_value 会被清零。
+            value = clamp_card_power(value)
         elif prop in ('mimic_discount', 'cost_e_override', 'cost_m_override', 'bonus_damage', 'return_to_hand_turns',
                       'held_turns', 'swift_value', 'magic_swift_value', 'heavy_value', 'temp_swift_value', 'temp_heavy_value', 'temp_magic_heavy_value'):
             value = max(0, value)
@@ -21871,13 +21875,28 @@ class GameEngine:
             value = min(builtin_cap, value)
         if prop in ('fusion_level', 'fission_level', 'extra_hits', 'mimic_discount', 'cost_e_override', 'cost_m_override',
                     'bonus_damage', 'return_to_hand_turns', 'held_turns', 'swift_value', 'magic_swift_value', 'heavy_value',
-                    'power_value', 'temp_swift_value', 'temp_heavy_value', 'temp_magic_heavy_value',
+                    'power_value', 'power_base', 'temp_swift_value', 'temp_heavy_value', 'temp_magic_heavy_value',
                     'charge_value', 'hand_blind_turns', 'blind_level', 'durability',
                     'play_count', 'equip_turns'):
             # 双加数体系：威力/裂变写入走路由（不灭标签的增量进基线），其余属性直写。
             if prop == 'power_value':
                 apply_card_power_value(target_card, value, sync_flag=False)
                 if value != 0:
+                    target_card.instance_flags.add('power')
+                    target_card.disabled_flags.discard('power')
+                else:
+                    target_card.instance_flags.discard('power')
+                    target_card.disabled_flags.add('power')
+            elif prop == 'power_base':
+                # 留存位写入（反馈 #346）：基线抬高的同时同步当前显示值同量抬高，
+                # 打出后 reset 回落基线时天然保留增量。
+                prev_base = clamp_card_power(int(getattr(target_card, 'power_base', 0) or 0))
+                target_card.power_base = clamp_card_power(value)
+                delta = target_card.power_base - prev_base
+                target_card.power_value = clamp_card_power(
+                    int(getattr(target_card, 'power_value', 0) or 0) + delta,
+                )
+                if target_card.power_value != 0:
                     target_card.instance_flags.add('power')
                     target_card.disabled_flags.discard('power')
                 else:

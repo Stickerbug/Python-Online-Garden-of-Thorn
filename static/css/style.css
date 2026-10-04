@@ -5252,7 +5252,13 @@ a.title-shop-afdian-go:hover {
   transition: transform 120ms ease, filter 120ms ease;
 }
 
-.gallery-card-tile:hover .card,
+@media (hover: hover) {
+  .gallery-card-tile:hover .card {
+    transform: translateY(-3px);
+    filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.18));
+  }
+}
+
 .gallery-card-tile:focus-visible .card {
   transform: translateY(-3px);
   filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.18));
@@ -8213,13 +8219,17 @@ a.title-shop-afdian-go:hover {
   z-index: 8;
 }
 
-.card:not(.card-disabled):hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
-}
+/* #348：触屏的粘滞 :hover 会让卡牌在滚动/点按时反复位移（选牌颤抖）。
+   悬停位移只给真正有悬停能力的指针设备。 */
+@media (hover: hover) {
+  .card:not(.card-disabled):hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+  }
 
-.hand-area .card:not(.card-disabled):hover {
-  transform: translateY(-1px) scale(1.01);
+  .hand-area .card:not(.card-disabled):hover {
+    transform: translateY(-1px) scale(1.01);
+  }
 }
 
 .card.tutorial-card-target {

@@ -2680,6 +2680,14 @@ let touchDblclickIntro = localStorage.getItem('gtn_touch_dblclick_intro') === '1
 function touchDblclickEnabled() {
     try { return localStorage.getItem('gtn_touch_dblclick_intro') === '1'; } catch (_) { return false; }
 }
+/* 反馈 #347：触屏上单击会先触发 click 打开介绍，随后的 dblclick 又把它关上，
+ * 表现为"双击打不开"。记录最近的触摸时刻，触控双击模式下抑制单击打开。 */
+let lastTouchAt = 0;
+document.addEventListener('touchend', () => { lastTouchAt = Date.now(); }, true);
+document.addEventListener('touchstart', () => { lastTouchAt = Date.now(); }, true);
+function suppressTouchSingleClick() {
+    return touchDblclickEnabled() && Date.now() - lastTouchAt < 700;
+}
 let landscapeModeEnabled = localStorage.getItem('gtn_landscape_mode') === '1';
 let storyCardBordersHidden = localStorage.getItem('gtn_story_hide_card_borders') === '1';
 /* 主页UI（2026-10-03，反馈单#326 概念）：simple=现状简约版（默认）；
@@ -8201,7 +8209,10 @@ function bindRulesCardChips(root) {
             }
             showIntro();
         };
-        chip.addEventListener('click', showIntro);
+        chip.addEventListener('click', (event) => {
+            if (suppressTouchSingleClick()) return;
+            showIntro();
+        });
         chip.addEventListener('contextmenu', toggleIntro);
         chip.addEventListener('dblclick', (event) => {
             if (!touchDblclickEnabled()) return;
@@ -9749,7 +9760,10 @@ function renderCardGallery() {
                     }
                     openGalleryTermIntro(ids, i, wrap);
                 };
-                wrap.addEventListener('click', openIntro);
+                wrap.addEventListener('click', (event) => {
+                    if (suppressTouchSingleClick()) return;
+                    openIntro();
+                });
                 wrap.addEventListener('contextmenu', toggleIntro);
                 wrap.addEventListener('dblclick', (event) => {
                     if (!touchDblclickEnabled()) return;
@@ -12654,7 +12668,7 @@ function cardSkinById(skinId) {
 
 /* 卡面/卡背美术修订号：换图时 bump（与 GTN_STATIC_VERSION 独立，
    服务端 card_skins.py 的 URL 同步带参，避免旧 SVG 被浏览器缓存） */
-const CARD_SKIN_ART_REVISION = 10;
+const CARD_SKIN_ART_REVISION = 11;
 
 function cardSkinBackUrl(skinId) {
     const id = cardSkinById(skinId);

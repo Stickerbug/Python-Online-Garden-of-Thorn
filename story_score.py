@@ -103,6 +103,8 @@ def settle_story_clear_conn(conn, *, user_id, run_id, state):
     """通关事务内：清银行 → 算分 → 发荆露 → 记账。
 
     conn 由调用方持有 IMMEDIATE 事务。
+    开发模式（#331）：本次旅程用过任何 dev_* 操作则不发荆露——开发模式可以
+    直接改金币/塞卡/跳层，正常算分等于无限刷荆露。
     """
     from db import _thorn_dew_now  # noqa: F401  (保持与 db 模块一致的时间源)
 
@@ -124,8 +126,18 @@ def settle_story_clear_conn(conn, *, user_id, run_id, state):
     ).fetchone()
     load_count = int(run_row['manual_load_count'] or 0) if run_row is not None else 0
 
-    # 3) 分数与荆露
+    # 2.5) 开发模式检测：旅程动作日志里出现过 dev_* 操作
+    dev_row = conn.execute(
+        "SELECT COUNT(*) AS n FROM story_run_actions "
+        "WHERE run_id = ? AND substr(action_type, 1, 4) = 'dev_'",
+        (str(run_id or ''),),
+    ).fetchone()
+    dev_used = int(dev_row['n'] or 0) > 0 if dev_row is not None else False
+
+    # 3) 分数与荆露（开发模式不发）
     total, base = compute_score(state, difficulty, load_count)
+    if dev_used:
+        total = 0
     if total > 0:
         user_row = conn.execute(
             'SELECT thorn_dew_free, thorn_dew_paid FROM users WHERE id = ?', (int(user_id),),
@@ -161,19 +173,26 @@ def settle_story_clear_conn(conn, *, user_id, run_id, state):
             total_score INTEGER NOT NULL,
             load_count INTEGER NOT NULL,
             bank_cleared INTEGER NOT NULL DEFAULT 0,
+            dev_used INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
         ''',
     )
+    # 旧库补列（#331 上线时生产库已存在该表）
+    try:
+        conn.execute('ALTER TABLE story_reward_ledger ADD COLUMN dev_used INTEGER NOT NULL DEFAULT 0')
+    except Exception:
+        pass  # 列已存在
     conn.execute(
         '''
         INSERT INTO story_reward_ledger
-            (user_id, run_id, difficulty, base_score, total_score, load_count, bank_cleared)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+            (user_id, run_id, difficulty, base_score, total_score, load_count, bank_cleared, dev_used)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ''',
         (
             int(user_id), str(run_id or ''), difficulty,
             int(base), int(total), int(load_count), 1 if bank_before > 0 else 0,
+            1 if dev_used else 0,
         ),
     )
     return {
@@ -182,4 +201,5 @@ def settle_story_clear_conn(conn, *, user_id, run_id, state):
         'difficulty': difficulty,
         'load_count': load_count,
         'bank_cleared': bank_before,
+        'dev_used': dev_used,
     }

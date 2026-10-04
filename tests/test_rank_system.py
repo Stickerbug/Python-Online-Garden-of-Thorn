@@ -217,8 +217,10 @@ class RankSettlementIntegrationTests(unittest.TestCase):
         self.assertTrue(preview['applied'])
         viewer = preview['viewer']
         self.assertEqual('rare golden_nazar', viewer['label'])
-        self.assertEqual(2, viewer['win_delta'])
-        self.assertEqual(5, viewer['loss_delta'])    # 3+3 → 封顶 5（2026-10-02 上限）
+        # 新账号当日首胜 → 每日双倍 ×2（#351 预估口径与结算对齐）
+        self.assertTrue(viewer.get('daily_double_active'))
+        self.assertEqual(4, viewer['win_delta'])
+        self.assertEqual(5, viewer['loss_delta'])    # 3+3 → 封顶 5（2026-10-02 上限）；输不参与双倍
 
     def test_user_payload_has_rank_no_gr_leak(self):
         payload = self.db.user_rank_payload(self.uid1)

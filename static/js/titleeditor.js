@@ -779,6 +779,17 @@
       state.hasServerDraft = Boolean(workspace.draft);
       state.staleDraft = Boolean(workspace.draft?.stale);
       state.catalog = clone(workspace.draft?.catalog || workspace.catalog || { schema_version: 1, titles: [] });
+      // 反馈 #350：历史数据（旧授予路径无花括号校验）里样式段文字可能带 { }，
+      // 会卡死整个目录编译；载入时自动清洗，让管理员保存后即完成数据修复。
+      for (const catalog of [state.liveCatalog, state.catalog]) {
+        for (const title of catalog.titles || []) {
+          for (const segment of title.style?.segments || []) {
+            if (/[{}]/.test(String(segment.text || ''))) {
+              segment.text = String(segment.text || '').replace(/[{}]/g, '');
+            }
+          }
+        }
+      }
       state.baseRevisionId = workspace.draft?.base_revision_id || workspace.current_revision?.revision_id || null;
       state.serverDiff = workspace.draft?.diff || null;
       state.history = workspace.history || [];

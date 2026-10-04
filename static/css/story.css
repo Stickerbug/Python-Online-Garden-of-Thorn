@@ -1632,6 +1632,14 @@ a { font: inherit; }
 
 .story-dev-heading strong { font-size: 15px; }
 
+/* #331：开发模式不发通关荆露的提示 */
+.story-dev-warning {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--story-muted);
+}
+
 .story-dev-close {
   width: 28px;
   height: 28px;
