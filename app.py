@@ -11123,7 +11123,7 @@ ADMIN_COMMAND_TREE = {
     },
     'account': {
         'summary': '账号与持久数据',
-        'usage': 'account <list|get|username|password|achievement|dew|rating|reputation|identity|title|ban|unban> ...',
+        'usage': 'account <list|get|username|password|achievement|dew|rating|rank|rankmod|reputation|identity|title|ban|unban> ...',
         'children': {
             'list': {'summary': '搜索注册账号', 'usage': 'account list [搜索] [数量]'},
             'get': {'summary': '查看注册账号详情', 'usage': 'account get <ID|注册顺序|用户名>'},
@@ -11205,6 +11205,41 @@ ADMIN_COMMAND_TREE = {
             'ban': {'summary': '封禁账号并踢下线', 'usage': 'account ban <账号> [时长] [原因]'},
             'unban': {'summary': '解除账号封禁', 'usage': 'account unban <账号>'},
             'restore': {'summary': '恢复已注销账号（数据保留，原密码可登录）', 'usage': 'account restore <账号>'},
+            'rank': {
+                'summary': '段位系统（玩家可见的进度）',
+                'usage': 'account rank <info|set|reset|list|find|history|settle|next>',
+                'children': {
+                    'info': {'summary': '查看账号段位与特殊修正', 'usage': 'account rank info <ID|注册顺序|用户名>'},
+                    'set': {'summary': '直接设置段位与段位分', 'usage': 'account rank set <ID|注册顺序|用户名> <段位序号1-44> [段位分]'},
+                    'reset': {'summary': '重置账号段位到初始（Common Basic 0分）', 'usage': 'account rank reset <ID|注册顺序|用户名>'},
+                    'list': {'summary': '段位排行榜前N', 'usage': 'account rank list [数量]'},
+                    'find': {'summary': '按昵称/用户名模糊搜索段位', 'usage': 'account rank find <关键词>'},
+                    'history': {'summary': '查看账号月度结算历史', 'usage': 'account rank history <ID|注册顺序|用户名> [数量]'},
+                    'settle': {'summary': '手动触发段位月度结算（幂等）', 'usage': 'account rank settle [月份YYYY-MM]'},
+                    'next': {'summary': '查看下次月度结算时间与上次结算月份', 'usage': 'account rank next'},
+                },
+            },
+            'rankmod': {
+                'summary': '段位特殊修正（胜加负减公式里的附加项，全局与玩家可叠加）',
+                'usage': 'account rankmod <global|player|view> ...',
+                'children': {
+                    'global': {
+                        'summary': '设置全局特殊修正',
+                        'usage': 'account rankmod global <数值|clear>',
+                        'children': {
+                            'set': {'summary': '设置全局特殊修正', 'usage': 'account rankmod global <数值|clear>'},
+                        },
+                    },
+                    'player': {
+                        'summary': '设置玩家特殊修正',
+                        'usage': 'account rankmod player <账号> <数值|clear>',
+                        'children': {
+                            'set': {'summary': '设置玩家特殊修正', 'usage': 'account rankmod player <账号> <数值|clear>'},
+                        },
+                    },
+                    'view': {'summary': '查看全局/玩家特殊修正', 'usage': 'account rankmod view [账号]'},
+                },
+            },
         },
     },
     'story': {
@@ -11704,43 +11739,6 @@ ADMIN_COMMAND_TREE = {
             'rebuild': {'summary': '用历史 matches 摘要重建初始花阶分', 'usage': 'rating rebuild <preview|confirm>'},
         },
     },
-    'rank': {
-        'hidden': True,
-        'summary': '段位系统（玩家可见的进度）',
-        'usage': 'rank <info|set|reset|list|find|history|settle|next>',
-        'children': {
-            'info': {'summary': '查看账号段位与特殊修正', 'usage': 'rank info <ID|注册顺序|用户名>'},
-            'set': {'summary': '直接设置段位与段位分', 'usage': 'rank set <ID|注册顺序|用户名> <段位序号1-44> [段位分]'},
-            'reset': {'summary': '重置账号段位到初始（Common Basic 0分）', 'usage': 'rank reset <ID|注册顺序|用户名>'},
-            'list': {'summary': '段位排行榜前N', 'usage': 'rank list [数量]'},
-            'find': {'summary': '按昵称/用户名模糊搜索段位', 'usage': 'rank find <关键词>'},
-            'history': {'summary': '查看账号月度结算历史', 'usage': 'rank history <ID|注册顺序|用户名> [数量]'},
-            'settle': {'summary': '手动触发段位月度结算（幂等）', 'usage': 'rank settle [月份YYYY-MM]'},
-            'next': {'summary': '查看下次月度结算时间与上次结算月份', 'usage': 'rank next'},
-        },
-    },
-    'rankmod': {
-        'hidden': True,
-        'summary': '段位特殊修正（胜加负减公式里的附加项，全局与玩家可叠加）',
-        'usage': 'rankmod <global|player|view> ...',
-        'children': {
-            'global': {
-                'summary': '设置全局特殊修正',
-                'usage': 'rankmod global <数值|clear>',
-                'children': {
-                    'set': {'summary': '设置全局特殊修正', 'usage': 'rankmod global <数值|clear>'},
-                },
-            },
-            'player': {
-                'summary': '设置玩家特殊修正',
-                'usage': 'rankmod player <账号> <数值|clear>',
-                'children': {
-                    'set': {'summary': '设置玩家特殊修正', 'usage': 'rankmod player <账号> <数值|clear>'},
-                },
-            },
-            'view': {'summary': '查看全局/玩家特殊修正', 'usage': 'rankmod view [账号]'},
-        },
-    },
     'chat': {
         'hidden': True,
         'summary': '聊天与广播',
@@ -11838,17 +11836,17 @@ ADMIN_COMMAND_DIRECT_TRANSLATIONS = {
     ('account', 'rating', 'set'): 'rating-set',
     ('account', 'rating', 'add'): 'rating-add',
     ('account', 'rating', 'snapshot'): 'rating-snapshot',
-    ('rankmod', 'global', 'set'): 'rankmod',
-    ('rankmod', 'player', 'set'): 'rankmod',
-    ('rankmod', 'view'): 'rankmod',
-    ('rank', 'info'): 'rank-info',
-    ('rank', 'set'): 'rankset',
-    ('rank', 'reset'): 'rank-reset',
-    ('rank', 'list'): 'rank-list',
-    ('rank', 'find'): 'rank-find',
-    ('rank', 'history'): 'rank-history',
-    ('rank', 'settle'): 'rank-settle',
-    ('rank', 'next'): 'rank-next',
+    ('account', 'rank', 'info'): 'rank-info',
+    ('account', 'rank', 'set'): 'rankset',
+    ('account', 'rank', 'reset'): 'rank-reset',
+    ('account', 'rank', 'list'): 'rank-list',
+    ('account', 'rank', 'find'): 'rank-find',
+    ('account', 'rank', 'history'): 'rank-history',
+    ('account', 'rank', 'settle'): 'rank-settle',
+    ('account', 'rank', 'next'): 'rank-next',
+    ('account', 'rankmod', 'global', 'set'): 'rankmod',
+    ('account', 'rankmod', 'player', 'set'): 'rankmod',
+    ('account', 'rankmod', 'view'): 'rankmod',
     ('account', 'reputation', 'info'): 'reputation-info',
     ('account', 'reputation', 'ledger'): 'reputation-ledger',
     ('account', 'reputation', 'add'): 'reputation-add',
@@ -12026,16 +12024,17 @@ def render_admin_help(parts=None):
         return '\n'.join(lines)
     visible_roots = {name: meta for name, meta in ADMIN_COMMAND_TREE.items() if not meta.get('hidden')}
     first = parts[0]
-    if first not in visible_roots:
+    # 显式查询允许命中隐藏命令（帮助列表不展示，但 /help <名字> 可查用法）
+    meta = ADMIN_COMMAND_TREE.get(first)
+    if meta is None:
         suggestion = difflib.get_close_matches(first, visible_roots.keys(), n=1)
         extra = f"\n你是不是想输入：/{suggestion[0]}" if suggestion else ''
         return f"未知命令：/{first}{extra}"
-    meta = visible_roots[first]
     path = [first]
     for token in parts[1:]:
         children = meta.get('children', {})
         child = children.get(token)
-        if not child or child.get('hidden'):
+        if not child:
             visible_children = [name for name, item in children.items() if not item.get('hidden')]
             suggestion = difflib.get_close_matches(token, visible_children, n=1)
             extra = f"\n你是不是想输入：/{' '.join(path + [suggestion[0]])}" if suggestion else ''
@@ -12044,6 +12043,8 @@ def render_admin_help(parts=None):
         path.append(token)
     command_path = ' '.join(path)
     lines = [f"/{command_path} - {meta.get('summary', '')}", '', f"用法：/{meta.get('usage', command_path)}"]
+    if meta.get('hidden'):
+        lines.extend(['（该命令为隐藏/兼容命令，不出现在帮助列表中）'])
     children = {name: item for name, item in meta.get('children', {}).items() if not item.get('hidden')}
     if children:
         lines.extend(['', '子命令：'])
@@ -25406,7 +25407,7 @@ def api_rank_cards_status():
     user = _current_account_user()
     if not user:
         return jsonify({'success': False, 'error': '请先登录账号'}), 401
-    return jsonify({'success': True, 'cards': db.rank_cards_payload(user['id'])})
+    return jsonify({'success': True, 'cards': db_module.rank_cards_payload(user['id'])})
 
 
 @app.route('/api/rank/cards/purchase', methods=['POST'])
@@ -25419,7 +25420,7 @@ def api_rank_cards_purchase():
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         data = {}
-    cards, error = db.purchase_rank_card(user['id'], str(data.get('card_type') or ''))
+    cards, error = db_module.purchase_rank_card(user['id'], str(data.get('card_type') or ''))
     if error:
         return jsonify({'success': False, 'error': error}), 400
     return jsonify({'success': True, 'cards': cards})
@@ -25435,7 +25436,7 @@ def api_rank_cards_use():
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         data = {}
-    cards, error = db.use_rank_card(user['id'], str(data.get('card_type') or ''))
+    cards, error = db_module.use_rank_card(user['id'], str(data.get('card_type') or ''))
     if error:
         return jsonify({'success': False, 'error': error}), 400
     return jsonify({'success': True, 'cards': cards})

@@ -19455,9 +19455,11 @@ let cardSkinShopActive = false;
 let cardSkinShopData = null;
 let cardSkinShopBusy = false;
 
+let rankCardsShopActive = false;
 function switchTitleShopTab(tab) {
     titleShopAfdianTabActive = tab === 'afdian';
     cardSkinShopActive = tab === 'card-skins';
+    rankCardsShopActive = tab === 'rank-cards';
     const tabs = document.querySelectorAll('#title-shop-popover [data-shop-tab]');
     tabs.forEach((btn) => btn.classList.toggle('active', btn.dataset.shopTab === tab));
     const toolbar = document.querySelector('#title-shop-popover .title-shop-toolbar');
@@ -19465,15 +19467,18 @@ function switchTitleShopTab(tab) {
     const status = $('title-shop-status');
     const afdianPanel = $('title-shop-afdian-panel');
     const skinPanel = $('card-skin-shop-panel');
-    const showTitles = !titleShopAfdianTabActive && !cardSkinShopActive;
+    const rankCardsPanelEl = $('rank-cards-shop-panel');
+    const showTitles = !titleShopAfdianTabActive && !cardSkinShopActive && !rankCardsShopActive;
     if (toolbar) toolbar.classList.toggle('hidden', !cardSkinShopActive ? !showTitles : true);
     if (grid) grid.classList.toggle('hidden', !showTitles);
     if (status) status.classList.toggle('hidden', !showTitles);
     if (afdianPanel) afdianPanel.classList.toggle('hidden', !titleShopAfdianTabActive);
     if (skinPanel) skinPanel.classList.toggle('hidden', !cardSkinShopActive);
+    if (rankCardsPanelEl) rankCardsPanelEl.classList.toggle('hidden', !rankCardsShopActive);
     const countdown = $('title-shop-countdown');
     if (countdown && !showTitles) countdown.textContent = '';
     if (cardSkinShopActive) void loadCardSkinShop();
+    if (rankCardsShopActive) void loadRankCardsShop();
 }
 
 async function loadCardSkinShop(force = false) {
@@ -19878,18 +19883,27 @@ function renderAccountInfoPanel(user) {
             <span class="account-info-label">${escapeHtml(currentLang === 'zh' ? '段位进度' : 'Rank Progress')}</span>
             ${renderRankProgressHtml(user.rank)}
         </div>
-        ${renderRankCardsPanelHtml(user)}
     `;
-    bindRankCardsPanel(user);
+    /* 段位卡（保分/双倍）的购买与激活已迁到商店「段位卡」页签；
+     * 账号页只保留段位与进度展示。 */
 }
 
-// ===== 段位消耗卡（保分/双倍，设计 2026-10-02）：购买/激活 =====
-let rankCardsPanelState = null;
+// ===== 段位消耗卡（保分/双倍，设计 2026-10-02）：购买/激活（商店「段位卡」页签） =====
+let rankCardsShopBusy = false;
 
-function renderRankCardsPanelHtml(user) {
+function renderRankCardsShop(user) {
+    const rankEl = $('rank-cards-shop-rank');
+    const bodyEl = $('rank-cards-shop-body');
+    if (!rankEl || !bodyEl) return;
+    rankEl.innerHTML = `
+        <span class="rank-cards-shop-rank-label">${escapeHtml(lt({ zh: '当前段位', en: 'Current Rank', fr: 'Rang actuel', ja: '現在のランク' }))}</span>
+        ${renderRankProgressHtml(user?.rank)}
+    `;
     const cards = user?.rank_cards;
-    if (!cards || typeof cards !== 'object') return '';
-    rankCardsPanelState = { userId: user?.id ?? null, cards };
+    if (!cards || typeof cards !== 'object') {
+        bodyEl.innerHTML = '';
+        return;
+    }
     const labels = {
         shield: lt({ zh: '保分卡', en: 'Shield Card', fr: 'Carte Bouclier', ja: '保分カード' }),
         double: lt({ zh: '双倍卡', en: 'Double Card', fr: 'Carte Double', ja: '倍増カード' }),
@@ -19926,15 +19940,42 @@ function renderRankCardsPanelHtml(user) {
         fr: ' (monte à chaque achat, réinitialisé chaque jour)',
         ja: '（購入ごとに値上がり、毎日リセット）',
     });
-    return `<div class="account-info-item account-rank-cards-item">
-        <span class="account-info-label">${escapeHtml(lt({ zh: '段位卡', en: 'Rank Cards', fr: 'Cartes de rang', ja: 'ランクカード' }))}</span>
-        <div class="rank-cards-panel">
-            ${rows}
-            <div class="rank-card-buy">
-                <span class="rank-card-note">${escapeHtml(lt({ zh: '一场对局只能激活一张；激活后下一局消耗。今日价格', en: 'One card per match; armed card is consumed next game. Today’s price', fr: 'Une carte par partie ; la carte activée est consommée au prochain match. Prix du jour', ja: '1対局1枚のみ。発動カードは次の対局で消費。本日の価格' }))} ${escapeHtml(priceLabel)}${escapeHtml(buyTitleSuffix)}</span>
-            </div>
+    bodyEl.innerHTML = `<div class="rank-cards-panel">
+        ${rows}
+        <div class="rank-card-buy">
+            <span class="rank-card-note">${escapeHtml(lt({ zh: '一场对局只能激活一张；激活后下一局消耗。今日价格', en: 'One card per match; armed card is consumed next game. Today’s price', fr: 'Une carte par partie ; la carte activée est consommée au prochain match. Prix du jour', ja: '1対局1枚のみ。発動カードは次の対局で消費。本日の価格' }))} ${escapeHtml(priceLabel)}${escapeHtml(buyTitleSuffix)}</span>
         </div>
     </div>`;
+    bindRankCardsShop();
+}
+
+async function loadRankCardsShop() {
+    const statusEl = $('rank-cards-shop-status');
+    if (!currentAccount) {
+        if (statusEl) statusEl.textContent = UI.account_need_login || '请先登录账号';
+        const rankEl = $('rank-cards-shop-rank');
+        const bodyEl = $('rank-cards-shop-body');
+        if (rankEl) rankEl.innerHTML = '';
+        if (bodyEl) bodyEl.innerHTML = '';
+        return;
+    }
+    if (rankCardsShopBusy) return;
+    rankCardsShopBusy = true;
+    try {
+        if (typeof refreshAuthMe === 'function') await refreshAuthMe();
+        const res = await fetch('/api/rank/cards', { credentials: 'same-origin' });
+        const data = await res.json().catch(() => ({}));
+        if (data && data.success && data.cards && currentAccount) {
+            currentAccount.rank_cards = data.cards;
+        }
+        if (statusEl) statusEl.textContent = '';
+        renderRankCardsShop(currentAccount);
+    } catch (_) {
+        /* 账号数据已在 currentAccount 里，直接渲染 */
+        renderRankCardsShop(currentAccount);
+    } finally {
+        rankCardsShopBusy = false;
+    }
 }
 
 async function rankCardsApi(path, body) {
@@ -19947,20 +19988,14 @@ async function rankCardsApi(path, body) {
     return res.json().catch(() => ({}));
 }
 
-function bindRankCardsPanel(user) {
-    const item = document.querySelector('.account-rank-cards-item');
-    if (!item) return;
+function bindRankCardsShop() {
+    const panel = $('rank-cards-shop-panel');
+    if (!panel) return;
     const refresh = async () => {
-        try {
-            const res = await fetch('/api/rank/cards', { credentials: 'same-origin' });
-            const data = await res.json().catch(() => ({}));
-            if (data && data.success && data.cards && currentAccount) {
-                currentAccount.rank_cards = data.cards;
-                renderAccountInfoPanel(currentAccount);
-            }
-        } catch (_) {}
+        rankCardsShopBusy = false;
+        await loadRankCardsShop();
     };
-    item.querySelectorAll('[data-rank-card-buy]').forEach(btn => {
+    panel.querySelectorAll('[data-rank-card-buy]').forEach(btn => {
         btn.addEventListener('click', async () => {
             const kind = btn.dataset.rankCardBuy;
             if (!kind || !currentAccount) return;
@@ -19971,7 +20006,7 @@ function bindRankCardsPanel(user) {
             else flashStatus((data && data.error) || lt({ zh: '购买失败', en: 'Purchase failed', fr: 'Échec de l’achat', ja: '購入に失敗しました' }));
         });
     });
-    item.querySelectorAll('[data-rank-card-use]').forEach(btn => {
+    panel.querySelectorAll('[data-rank-card-use]').forEach(btn => {
         btn.addEventListener('click', async () => {
             const kind = btn.dataset.rankCardUse;
             if (!kind) return;

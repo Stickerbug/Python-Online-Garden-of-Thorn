@@ -2595,8 +2595,22 @@ a.title-shop-afdian-go:hover {
   font-style: normal;
 }
 
-/* 段位消耗卡（保分/双倍）：账号信息面板内嵌区块 */
-.account-rank-cards-item { grid-column: 1 / -1; }
+/* 段位消耗卡（保分/双倍）：商店「段位卡」页签 */
+.rank-cards-shop-rank {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 10px;
+    margin-bottom: 8px;
+    border: 1px solid var(--line-soft, #d8d4c8);
+    border-radius: 7px;
+    background: rgba(127, 140, 141, 0.07);
+}
+.rank-cards-shop-rank-label {
+    font-size: 11px;
+    font-weight: 700;
+    opacity: 0.65;
+}
 .rank-cards-panel {
     display: flex;
     flex-direction: column;
