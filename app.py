@@ -26768,6 +26768,7 @@ def api_public_feedback_comment_create(issue_id):
             body,
             normalized_body=normalized_body,
             risk_level=risk_level,
+            parent_comment_id=data.get('parent_comment_id'),
         )
         return jsonify({'success': True, 'comment': payload})
     except public_feedback.PublicFeedbackError as exc:

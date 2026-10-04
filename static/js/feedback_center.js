@@ -1027,7 +1027,13 @@
       if (state.account && comment.author && Number(comment.author.user_id) !== Number(state.account.id)) {
         actions += `<button type="button" class="fc-button fc-button-secondary fc-button-small" data-action="report-comment" data-comment="${comment.id}" data-author="${comment.author.user_id || ''}">${esc(t('report_comment'))}</button>`;
       }
-      commentSection += `<div class="fc-comment" data-comment-root="${comment.id}">` +
+      // 反馈 #329：回复按钮（登录用户可用）
+      if (logged) {
+        actions += `<button type="button" class="fc-button fc-button-secondary fc-button-small" data-action="comment-reply" data-comment="${comment.id}">${esc(t('reply', '回复'))}</button>`;
+      }
+      const isReply = comment.parent_comment_id != null;
+      const replyCls = isReply ? ' fc-comment-reply' : '';
+      commentSection += `<div class="fc-comment${replyCls}" data-comment-root="${comment.id}"${isReply ? ` data-parent="${comment.parent_comment_id}"` : ''}>` +
         `<div class="fc-comment-head">${userHtml(comment.author)}<span class="fc-comment-time">${esc(fmt(comment.created_at))}</span></div>` +
         `<div class="fc-comment-body">` +
         `<div class="fc-comment-text" data-comment-text="${comment.id}">${esc(comment.body)}</div>` +
@@ -1146,10 +1152,28 @@
     const input = $('fc-comment-input');
     const body = input ? input.value.trim() : '';
     if (!body || !state.detail) return;
+    const parentId = input ? input.dataset.replyTo || null : null;
     try {
-      await api(`/api/public-feedback/issues/${state.detail.id}/comments`, { method: 'POST', body: { body } });
+      await api(`/api/public-feedback/issues/${state.detail.id}/comments`, { method: 'POST', body: { body, parent_comment_id: parentId ? Number(parentId) : null } });
       await openIssue(state.detail.id);
     } catch (err) { alert(err.message); }
+  }
+
+  // 反馈 #329：回复评论——在目标评论下方展开内嵌输入框
+  function commentReply(commentId) {
+    const root = issueContainer().querySelector(`[data-comment-root="${commentId}"]`);
+    if (!root) return;
+    // 切换：已打开就关掉
+    const existing = root.querySelector('.fc-reply-box');
+    if (existing) { existing.remove(); return; }
+    document.querySelectorAll('.fc-reply-box').forEach((b) => b.remove());
+    const box = document.createElement('div');
+    box.className = 'fc-reply-box';
+    box.innerHTML = `<textarea class="fc-comment-textarea" id="fc-comment-input" data-reply-to="${commentId}" maxlength="1000" placeholder="${esc(t('reply_placeholder', '回复…'))}" style="width:100%;min-height:48px"></textarea>` +
+      `<div class="fc-inline-actions"><button type="button" class="fc-button fc-button-primary fc-button-small" data-action="comment-send">${esc(t('send'))}</button>` +
+      `<button type="button" class="fc-button fc-button-secondary fc-button-small" data-action="comment-reply-cancel">${esc(t('cancel'))}</button></div>`;
+    root.querySelector('.fc-comment-body')?.append(box);
+    box.querySelector('textarea')?.focus();
   }
 
   async function privateSend() {
@@ -1575,6 +1599,8 @@
       if (action === 'back') closeIssue();
       if (action === 'vote') vote();
       if (action === 'comment-send') commentSend();
+      if (action === 'comment-reply') commentReply(Number(event.target.closest('[data-action]').dataset.comment));
+      if (action === 'comment-reply-cancel') commentReply(Number(event.target.closest('[data-comment-root]')?.dataset.commentRoot || 0));
       if (action === 'comment-edit') commentEdit(Number(event.target.closest('[data-action]').dataset.comment));
       if (action === 'comment-cancel') renderDetail();
       if (action === 'comment-save') commentSave(Number(event.target.closest('[data-action]').dataset.comment));

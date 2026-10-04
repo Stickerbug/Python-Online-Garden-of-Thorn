@@ -2314,10 +2314,16 @@ def init_db(
                 hidden_at TEXT,
                 created_at TEXT NOT NULL,
                 edited_at TEXT,
+                parent_comment_id INTEGER,
                 FOREIGN KEY(issue_id) REFERENCES public_issues(id) ON DELETE CASCADE
             )
             '''
         )
+        # 反馈 #329：回复评论——已存在的表补列
+        try:
+            conn.execute('ALTER TABLE public_issue_comments ADD COLUMN parent_comment_id INTEGER')
+        except Exception:
+            pass
         conn.execute(
             'CREATE INDEX IF NOT EXISTS idx_public_issue_comments_issue '
             'ON public_issue_comments(issue_id, created_at)'

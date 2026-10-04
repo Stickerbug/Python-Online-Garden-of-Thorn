@@ -653,6 +653,8 @@ def _comment_payload_conn(conn, row, *, viewer_user_id=None, now=None):
         'created_at': created_at,
         'edited_at': row['edited_at'],
         'editable': editable,
+        # 反馈 #329：回复评论——返回父评论 id（None = 顶层评论）
+        'parent_comment_id': row['parent_comment_id'] if 'parent_comment_id' in (row.keys() if hasattr(row, 'keys') else ()) else None,
     }
 
 
@@ -818,10 +820,18 @@ def post_public_comment(
     *,
     normalized_body='',
     risk_level=0,
+    parent_comment_id=None,
 ):
     uid = _positive_id(author_user_id, label='作者')
     issue_id = _positive_id(issue_id, label='问题')
     body = _bounded_text(body, label='评论', maximum=COMMENT_MAX)
+    # 反馈 #329：回复——校验父评论存在且属于同一 issue
+    parent_id = None
+    if parent_comment_id is not None:
+        try:
+            parent_id = int(parent_comment_id)
+        except (TypeError, ValueError):
+            parent_id = None
     now = _utc_now()
     now_iso = _iso(now)
     with closing(db.get_db_connection()) as conn:
@@ -834,12 +844,19 @@ def post_public_comment(
         if user is None or db._user_row_is_deleted(user):
             conn.rollback()
             raise PublicFeedbackError('AUTH_REQUIRED', '请先登录账号', 401)
+        if parent_id is not None:
+            parent = conn.execute(
+                'SELECT id, issue_id FROM public_issue_comments WHERE id = ?',
+                (parent_id,),
+            ).fetchone()
+            if parent is None or int(parent['issue_id']) != int(issue_id):
+                parent_id = None
         cursor = conn.execute(
             '''
             INSERT INTO public_issue_comments(
                 issue_id, author_user_id, body, normalized_body,
-                risk_level, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?)
+                risk_level, created_at, parent_comment_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
             ''',
             (
                 issue_id,
@@ -848,6 +865,7 @@ def post_public_comment(
                 str(normalized_body or '')[:COMMENT_MAX * 2],
                 max(0, min(5, int(risk_level or 0))),
                 now_iso,
+                parent_id,
             ),
         )
         conn.execute(
