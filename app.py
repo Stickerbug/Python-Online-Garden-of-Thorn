@@ -32620,6 +32620,31 @@ AI_TEST_PREGAME_DELAY_MAX_SECONDS = max(
 )
 AI_TEST_RECENT_DECISION_LIMIT = max(3, min(12, _env_int('GTN_AI_RECENT_DECISION_LIMIT', 8)))
 AI_TEST_MAX_CHAIN_ACTIONS = max(4, _env_int('GTN_AI_MAX_CHAIN_ACTIONS', 64))
+# AI 死机防护网：连续这么多个 AI 动作后引擎状态指纹仍无变化（回合、日志、
+# 选择窗口都没动），就用默认选项强制结算当前窗口。动作间有 ~450ms 可见
+# 延迟，默认 12 意味着最快约 5 秒后自救，玩家不会再看到无限卡住的 AI 回合。
+AI_TEST_STALL_ACTION_LIMIT = max(4, _env_int('GTN_AI_STALL_ACTION_LIMIT', 12))
+
+
+def _ai_test_stall_fingerprint(engine):
+    """AI 回合停滞检测指纹：任何真正推进对局的动作都会改变其中至少一项。"""
+    pending = getattr(engine, 'pending_choice', None)
+    if isinstance(pending, dict):
+        pending_key = (
+            str(pending.get('player_id') or ''),
+            str(pending.get('choice_type') or ''),
+            str(pending.get('choice_id') or pending.get('id') or ''),
+        )
+    else:
+        pending_key = ()
+    current = getattr(engine, 'current_player', None)
+    current = int(current) if current in (0, 1) else -1
+    return (
+        int(getattr(engine, 'round_num', 0) or 0),
+        current,
+        len(getattr(engine, 'log', None) or []),
+        pending_key,
+    )
 
 
 def _ai_test_action_target(action):
@@ -34161,6 +34186,38 @@ def _run_ai_test_turn(sid):
                     engine_result,
                     engine=updated_engine,
                 )
+                # AI 死机防护网：worker 侧已修掉 selection-only 跨请求丢进度
+                # 的死循环根因，这里再兜一层——无论 worker 将来出什么回归，
+                # 连续无进展的动作到达阈值后强制用默认选项推进，对局绝不
+                # 可能永远卡在 AI 回合。
+                stall_fp = _ai_test_stall_fingerprint(engine)
+                with _lock:
+                    if meta.get('_ai_stall_fp') == stall_fp:
+                        meta['_ai_stall_count'] = int(meta.get('_ai_stall_count', 0)) + 1
+                    else:
+                        meta['_ai_stall_fp'] = stall_fp
+                        meta['_ai_stall_count'] = 0
+                    stalled = int(meta.get('_ai_stall_count', 0)) >= AI_TEST_STALL_ACTION_LIMIT
+                if stalled:
+                    admin_event('warning', 'AI 回合长时间无进展，已用默认选项强制推进', sid=sid)
+                    try:
+                        fallback_result, fallback_kind, fallback_payload = _ai_test_fallback_action(
+                            engine, ai_player_id,
+                        )
+                        _record_ai_test_replay_action(
+                            sid,
+                            fallback_kind,
+                            ai_player_id,
+                            fallback_payload,
+                            fallback_result,
+                            engine=engine,
+                        )
+                        with _lock:
+                            meta['action_index'] = int(meta.get('action_index', 0)) + 1
+                            meta['_ai_stall_fp'] = None
+                            meta['_ai_stall_count'] = 0
+                    except Exception as stall_exc:
+                        admin_event('error', f'AI stall force-progress failed: {stall_exc}', sid=sid)
             except Exception as exc:
                 admin_event('error', f'AI local decision failed: {type(exc).__name__}: {exc}', sid=sid)
                 try:
@@ -34211,9 +34268,37 @@ def _run_ai_test_turn(sid):
             send_solo_state(sid)
         with _lock:
             meta = ai_test_sessions.get(sid)
+            engine = solo_sessions.get(sid)
             if meta:
                 meta['thinking'] = False
-        socketio.emit('server_error', {'message': 'AI 连续操作过多，已暂停本次行动'}, room=sid)
+        # 连击上限耗尽时若仍是 AI 的决策回合，不能只「暂停」——那等于把对局
+        # 永久卡死（玩家点任何操作都会被 AI_THINKING 拒绝之外还无 AI 推进）。
+        # 用默认选项强推一步再提示，让对局总能继续。
+        if (
+            isinstance(meta, dict)
+            and engine is not None
+            and not getattr(engine, 'game_over', False)
+            and _solo_decision_player(engine) == int(meta.get('ai_player_id', 1))
+        ):
+            try:
+                fallback_result, fallback_kind, fallback_payload = _ai_test_fallback_action(
+                    engine, int(meta.get('ai_player_id', 1)),
+                )
+                _record_ai_test_replay_action(
+                    sid,
+                    fallback_kind,
+                    int(meta.get('ai_player_id', 1)),
+                    fallback_payload,
+                    fallback_result,
+                    engine=engine,
+                )
+                with _lock:
+                    meta['action_index'] = int(meta.get('action_index', 0)) + 1
+                # 锁外调度下一轮（schedule_ai_test_turn 自身取 _lock，不可重入）
+                schedule_ai_test_turn(sid)
+            except Exception as cap_exc:
+                admin_event('error', f'AI chain-cap force-progress failed: {cap_exc}', sid=sid)
+        socketio.emit('server_error', {'message': 'AI 连续操作过多，已强制推进当前行动'}, room=sid)
         send_solo_state(sid)
     finally:
         if action_lock is not None:
