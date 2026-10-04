@@ -3159,6 +3159,11 @@ function isModDrawMatchMode(mode) {
     return ['ranked_1v1', 'ranked_2v2'].includes(normalizeMatchModeKey(mode || ''));
 }
 
+/* 天梯对局判定（与 isModDrawMatchMode 同口径，语义化命名）。 */
+function isRankedMatchMode(mode) {
+    return isModDrawMatchMode(mode);
+}
+
 function isTwoVsTwoMatchMode(mode) {
     return engineModeForMatchMode(mode) === '2v2';
 }
@@ -20006,32 +20011,38 @@ async function rankCardsApi(path, body) {
 
 /* 大厅天梯模式页签下的段位卡激活条：玩家在要打排位的地方直接武装保分/双倍卡，
  * 不用再绕去商店。只在 ranked_1v1 / ranked_2v2 模式显示。 */
-let lobbyRankCardsFetchPending = false;
-function updateLobbyRankCardsStrip() {
-    const strip = $('lobby-rank-cards');
+let rankCardsStripFetchPending = false;
+
+/* 通用段位卡激活条渲染（大厅天梯页签 & 对局结算界面共用）。
+ * modeKey 必须是天梯模式才显示；cards 缺失或 alwaysFetch 时拉最新状态。 */
+function renderRankCardsStrip(strip, modeKey, opts = {}) {
     if (!strip) return;
-    const ranked = ['ranked_1v1', 'ranked_2v2'].includes(normalizeMatchModeKey(activePvpMatchMode));
-    if (!ranked || !currentAccount) {
+    const isGameover = !!opts.isGameover;
+    const rerender = () => (isGameover
+        ? updateGameoverRankCardsStrip()
+        : updateLobbyRankCardsStrip());
+    const noteLabel = opts.noteLabel || lt({ zh: '段位卡', en: 'Rank Cards', fr: 'Cartes de rang', ja: 'ランクカード' });
+    if (!isRankedMatchMode(modeKey) || !currentAccount) {
         strip.classList.add('hidden');
         strip.innerHTML = '';
         return;
     }
     const cards = currentAccount.rank_cards;
-    if (!cards || typeof cards !== 'object') {
+    if (!cards || typeof cards !== 'object' || opts.alwaysFetch) {
         strip.classList.remove('hidden');
-        strip.innerHTML = `<span class="lobby-rank-cards-note">${escapeHtml(lt({ zh: '段位卡', en: 'Rank Cards', fr: 'Cartes de rang', ja: 'ランクカード' }))}</span>`;
-        if (!lobbyRankCardsFetchPending) {
-            lobbyRankCardsFetchPending = true;
+        strip.innerHTML = `<span class="lobby-rank-cards-note">${escapeHtml(noteLabel)}</span>`;
+        if (!rankCardsStripFetchPending) {
+            rankCardsStripFetchPending = true;
             fetch('/api/rank/cards', { credentials: 'same-origin' })
                 .then(res => res.json().catch(() => ({})))
                 .then(data => {
                     if (data && data.success && data.cards && currentAccount) {
                         currentAccount.rank_cards = data.cards;
-                        updateLobbyRankCardsStrip();
+                        rerender();
                     }
                 })
                 .catch(() => {})
-                .finally(() => { lobbyRankCardsFetchPending = false; });
+                .finally(() => { rankCardsStripFetchPending = false; });
         }
         return;
     }
@@ -20056,7 +20067,7 @@ function updateLobbyRankCardsStrip() {
     const stripPrice = Number(cards.price_today);
     const stripPriceKnown = Number.isFinite(stripPrice) && stripPrice > 0;
     strip.classList.remove('hidden');
-    strip.innerHTML = `<span class="lobby-rank-cards-note">${escapeHtml(lt({ zh: '段位卡', en: 'Rank Cards', fr: 'Cartes de rang', ja: 'ランクカード' }))}</span>${chips}` +
+    strip.innerHTML = `<span class="lobby-rank-cards-note">${escapeHtml(noteLabel)}</span>${chips}` +
         `<button type="button" class="mini-btn lobby-rank-cards-shop" data-lobby-rank-cards-shop>${escapeHtml(lt({ zh: '商店购买', en: 'Buy in Shop', fr: 'Acheter en boutique', ja: 'ショップで購入' }))}${stripPriceKnown ? ` · ${escapeHtml(String(stripPrice))}` : ''}</button>`;
     strip.querySelectorAll('[data-lobby-rank-card-use]').forEach(btn => {
         btn.addEventListener('click', async () => {
@@ -20068,7 +20079,7 @@ function updateLobbyRankCardsStrip() {
             if (data && data.success) {
                 if (currentAccount) currentAccount.rank_cards = data.cards;
                 flashStatus(lt({ zh: '已激活，下一局生效', en: 'Armed for next match', fr: 'Activée pour le prochain match', ja: '次の対局で発動します' }));
-                updateLobbyRankCardsStrip();
+                rerender();
             } else {
                 flashStatus((data && data.error) || lt({ zh: '激活失败', en: 'Failed', fr: 'Échec', ja: '失敗しました' }));
             }
@@ -20078,6 +20089,32 @@ function updateLobbyRankCardsStrip() {
     if (shopBtn) shopBtn.addEventListener('click', () => {
         toggleTitleShopPopover(true);
         switchTitleShopTab('rank-cards');
+    });
+}
+
+function updateLobbyRankCardsStrip() {
+    renderRankCardsStrip($('lobby-rank-cards'), normalizeMatchModeKey(activePvpMatchMode), {});
+}
+
+/* 结算界面：玩家可能直接点“再来一局”，激活入口也要在这里。
+ * 对局刚消耗过激活卡，首次渲染总是拉最新状态；内部重渲染（激活后）
+ * 不再强制刷新，避免 fetch→render→fetch 死循环。 */
+let gameoverRankCardsModeKey = null;
+function updateGameoverRankCardsStrip(gs) {
+    const strip = $('gameover-rank-cards');
+    if (!strip) return;
+    let modeKey = gameoverRankCardsModeKey || '';
+    let alwaysFetch = false;
+    if (gs) {
+        const spectating = !!(gs.spectating || gs.your_id === -1) || isSpectating;
+        modeKey = spectating ? '' : String(gs.match_mode || '');
+        gameoverRankCardsModeKey = modeKey;
+        alwaysFetch = true;
+    }
+    renderRankCardsStrip(strip, modeKey, {
+        isGameover: true,
+        alwaysFetch,
+        noteLabel: lt({ zh: '下一局段位卡', en: 'Rank Cards for next match', fr: 'Cartes pour le prochain match', ja: '次の対局用ランクカード' }),
     });
 }
 
@@ -38356,6 +38393,7 @@ function renderGameOver(data) {
     }
     renderGameOverGr(gs);
     renderGameOverDew(gs);
+    updateGameoverRankCardsStrip(gs);
     const replayBox = $('gameover-replay');
     const replayCopy = $('btn-copy-gameover-replay');
     const replayId = Number((gs.match_summary || gs.summary || {}).replay_id || gs.replay_id || 0);
