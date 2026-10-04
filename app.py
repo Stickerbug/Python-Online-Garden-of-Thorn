@@ -859,6 +859,7 @@ GTN_STATIC_VERSION += '-card-tag-dedup-1'
 GTN_STATIC_VERSION += '-rank-system-4'
 GTN_STATIC_VERSION += '-home-ui-touhou-23'
 GTN_STATIC_VERSION += '-cards-desc-1'
+GTN_STATIC_VERSION += '-yggdrasil-desc-1'
 GTN_STATIC_VERSION += '-feedback-batch4-1'
 GTN_STATIC_VERSION += '-guest-chat-phelren-rate-1'
 GTN_STATIC_VERSION += '-hfc-dedup-3'
@@ -11217,6 +11218,7 @@ ADMIN_COMMAND_TREE = {
                     'history': {'summary': '查看账号月度结算历史', 'usage': 'account rank history <ID|注册顺序|用户名> [数量]'},
                     'settle': {'summary': '手动触发段位月度结算（幂等）', 'usage': 'account rank settle [月份YYYY-MM]'},
                     'next': {'summary': '查看下次月度结算时间与上次结算月份', 'usage': 'account rank next'},
+                    'recalc': {'summary': '段位分重算：花阶分新口径(−800)×4、每小段+10成本，叠加上线以来的段位净变化', 'usage': 'account rank recalc preview [since=YYYY-MM-DD] [权重0-1] | account rank recalc confirm [since] [权重]'},
                 },
             },
             'rankmod': {
@@ -12764,6 +12766,63 @@ def _rank_console_command(cmd, parts, raw):
             **console_out(
                 ('下次月度结算：', ''), (next_run.strftime('%Y-%m-%d %H:%M'), 'time'), ' UTC\n', *last_segs,
             ),
+        }
+    if cmd == 'rank-recalc':
+        if len(parts) < 2 or parts[1].lower() not in ('preview', 'confirm'):
+            return {'success': False, 'output': command_error(
+                raw, len(raw),
+                'account rank recalc preview [since=YYYY-MM-DD] [权重0-1] | account rank recalc confirm [since] [权重]')}
+        mode = parts[1].lower()
+        since = parts[2] if len(parts) >= 3 and re.match(r'^\d{4}-\d{2}-\d{2}$', parts[2]) else None
+        weight = 1.0
+        weight_raw = parts[3] if len(parts) >= 4 else (parts[2] if len(parts) >= 3 and not since else None)
+        if weight_raw is not None:
+            try:
+                weight = max(0.0, min(1.0, float(weight_raw)))
+            except (TypeError, ValueError):
+                return {'success': False, 'output': '权重必须是 0-1 之间的数字'}
+        try:
+            summary, rows = db_module.recalc_ranks_from_gr(
+                since_iso=since,
+                dry_run=(mode == 'preview'),
+                recent_weight=weight,
+            )
+        except Exception as exc:
+            return {'success': False, 'output': f'重算失败：{exc}'}
+        if mode == 'confirm':
+            admin_event(
+                'admin',
+                f'rank-recalc confirm since={summary["since"]} weight={summary["recent_weight"]} '
+                f'players={summary["players"]} changed={summary["changed"]}',
+            )
+        moved = sorted(rows, key=lambda row: (row['final']['tier'], row['final']['points']), reverse=True)
+        lines = [console_out(
+            ('段位分重算 ', 'strong'), ('（', ''), (mode, 'rank'), ('）\n', ''),
+            ('口径：P=(花阶分−800)×4，每小段 +10 成本；', 'muted'),
+            (f"近期权重 {summary['recent_weight']:g}", 'num'),
+            ('（since ', 'muted'), (summary['since'], 'time'), ('）\n', 'muted'),
+            (f"{summary['players']}", 'num'), (' 个账号，', ''),
+            (f"{summary['recent_affected']}", 'num'), (' 个有上线后段位净变化，', ''),
+            (f"{summary['changed']}", 'num'), (' 个段位将变动', ''),
+            ('（预览不落库）\n', 'muted') if mode == 'preview' else ('（已写入）\n', 'strong'),
+        )['output_segments']]
+        for row in moved[: int(20)]:
+            old_label = rank_system.rank_payload(row['old']['tier'], row['old']['points'])['label']
+            lines.append(console_out(
+                (row['username'], 'player'), (f" #{row['id']}", 'id'),
+                ('  花阶 ', ''), (f"{row['season_gr']:.1f}", 'num'),
+                ('  ', ''), (old_label, 'muted'), (f" {row['old']['points']}", 'muted'),
+                (' → ', ''), (row['final']['label'], 'rank'),
+                (f" {row['final']['points']}/{row['cap']}", 'num'),
+                (f"  Δ近期{row['delta_recent']:+d}", 'num'),
+            )['output_segments'])
+        if len(rows) > 20:
+            lines.append(console_out((f'…… 其余 {len(rows) - 20} 个账号略', 'muted'))['output_segments'])
+        return {
+            'success': True,
+            'output': '\n'.join(''.join(seg['text'] for seg in line) for line in lines),
+            'output_segments': [seg for i, line in enumerate(lines) for seg in
+                                ([{'text': '\n', 'kind': ''}] if i else []) + line],
         }
     if cmd == 'rankmod':
         if len(parts) < 2:

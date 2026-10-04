@@ -392,6 +392,9 @@ class PlayerState:
         self.invincible_until_player: Optional[int] = None
         self.invincible_granted_round: int = -1
         self.invincible_granted_turn_marker: int = -1
+        # 无敌是否在 until_player 的下个回合开始时到期（世界树型专用；
+        # R-29467：随授予/清除一起维护，防止残留污染后续"到回合结束"型无敌）
+        self.invincible_expire_on_turn_start: bool = False
         # 2v2 血盾（设计 9.29 改为按玩家各自持有/衰减）：floor(2/3×最大生命)
         # → 自己回合开始 → floor(1/3×最大生命) → 再下个自己回合 → 0。
         self.blood_shield: int = 0
@@ -520,6 +523,7 @@ class PlayerState:
             'invincible_until_player': self.invincible_until_player,
             'invincible_granted_round': self.invincible_granted_round,
             'invincible_granted_turn_marker': self.invincible_granted_turn_marker,
+            'invincible_expire_on_turn_start': bool(getattr(self, 'invincible_expire_on_turn_start', False)),
             'blood_shield': self.blood_shield,
             'skip_turn': self.skip_turn,
             'forced_skip_turn': self.forced_skip_turn,
@@ -639,6 +643,7 @@ class PlayerState:
         ps.invincible_until_player = d.get('invincible_until_player', None)
         ps.invincible_granted_round = int(d.get('invincible_granted_round', -1) if d.get('invincible_granted_round', -1) is not None else -1)
         ps.invincible_granted_turn_marker = int(d.get('invincible_granted_turn_marker', -1) if d.get('invincible_granted_turn_marker', -1) is not None else -1)
+        ps.invincible_expire_on_turn_start = bool(d.get('invincible_expire_on_turn_start', False))
         ps.skip_turn = int(d.get('skip_turn', 0))
         ps.forced_skip_turn = int(d.get('forced_skip_turn', 0))
         ps.damage_multiplier = d.get('damage_multiplier', 1.0)
@@ -1373,6 +1378,8 @@ class GameEngine:
         ps.invincible_until_player = player_id
         ps.invincible_granted_round = int(getattr(self, 'round_num', 0) or 0)
         ps.invincible_granted_turn_marker = self._current_turn_marker()
+        # R-29467：覆盖旧的世界树型残留标志，确保本型无敌只在回合结束时到期。
+        ps.invincible_expire_on_turn_start = False
 
     def _note_achievement_health(self, player_id: int):
         if not (0 <= player_id < len(self.players)):
@@ -1669,6 +1676,9 @@ class GameEngine:
         ps.invincible_until_player = None
         ps.invincible_granted_round = -1
         ps.invincible_granted_turn_marker = -1
+        # R-29467：世界树型无敌的"回合开始到期"标志必须随状态一起复位——
+        # 残留时，之后绷带等"到回合结束"型无敌会在自己回合开始被误清除。
+        ps.invincible_expire_on_turn_start = False
 
     def _should_expire_invincible_on_turn_start(self, player_id: int) -> bool:
         """该玩家回合开始时，是否有"无敌到该玩家下个回合开始"的效果到期
@@ -7417,15 +7427,16 @@ class GameEngine:
             elif exile_played_card:
                 card.instance_flags.add('exile')
         # 反馈 #335：战报归属按牌主人（target）——source_player_id 只决定无敌
-        # 持续到谁的回合（9.29 设计），旧文案把它当牌主人，对手的绝境求生牌
-        # 触发时误报"我的世界树之叶使其复活"。
-        actor_text = f"{self.pn(target_id)}的世界树之叶"
+        # 持续到谁的回合（9.29 设计）。R-29467：自触发时不再重复人名
+        # （旧文案"{A}的世界树之叶{A}复活"读起来像显示了错误昵称）。
+        revive_text = '复活，' if was_dead else ''
         if source_player_id is not None and source_player_id != target_id:
+            actor_text = f"{self.pn(target_id)}的世界树之叶（由{self.pn(source_player_id)}触发）发动！使其"
             invincible_text = f"无敌直到{self.pn(source_player_id)}的下一个回合开始！"
         else:
+            actor_text = f"{self.pn(target_id)}的世界树之叶发动！"
             invincible_text = '无敌直到自己的下一个回合开始！'
-        revive_text = '复活，' if was_dead else ''
-        self.log_msg(f"{actor_text}{self.pn(target_id)}{revive_text}生命值设为5，抽{len(drawn)}张牌，清除所有效果，{invincible_text}")
+        self.log_msg(f"{actor_text}{revive_text}生命值设为5，抽{len(drawn)}张牌，清除所有效果，{invincible_text}")
         return True
 
     def _check_yggdrasil(self, player_id: int):
@@ -7459,13 +7470,18 @@ class GameEngine:
                             params = effect_params
                             log = effect.get('log', '') if isinstance(effect, dict) else ''
                             health_amount = params.get('health', 5)
+                            # _trigger_yggdrasil_effect 已写入完整战报；这里只在
+                            # 卡牌自带文案或自定义血量与默认5不同时补充，避免双日志。
                             self._trigger_yggdrasil_effect(
                                 player_id, card, exile_from_hand=True,
                                 source_player_id=int(getattr(self, 'current_player', player_id)),
                             )
                             ps.health = health_amount
                             self._note_achievement_health(player_id)
-                            self.log_msg(log or f"{self.pn(player_id)}的{card.name_cn}发动！清除己方所有效果，生命值设为{health_amount}，无敌直到下一个自己回合结束！")
+                            if log:
+                                self.log_msg(log)
+                            elif health_amount != 5:
+                                self.log_msg(f"{self.pn(player_id)}的{card.name_cn}将生命值设为{health_amount}")
                             self._check_game_over()
                             return
 
@@ -22720,7 +22736,7 @@ class GameEngine:
                 self.log_msg(log or f"{self.pn(player_id)}受到致命伤害时将H设为1并获得无敌；自己回合结束时死亡")
                 return
             health_amount = params.get('health', 5)
-            self.log_msg(log or f"{self.pn(player_id)}的{card.name_cn}被动效果：受到致命伤害时清除所有效果，生命值设为{health_amount}，无敌直到下一个自己回合结束")
+            self.log_msg(log or f"{self.pn(player_id)}的{card.name_cn}被动效果：受到致命伤害时清除所有效果，生命值设为{health_amount}，无敌直到触发者的下一个回合开始")
             return
 
         # ``mode`` 缺省 = 旧的 ``heal``。
