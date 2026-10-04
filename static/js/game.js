@@ -2868,23 +2868,30 @@ function spawnHomeFloatingCards() {
     if (reduced) return;
     /* 来源：CARD_DEFS＝当前启用模组合并后的全部卡牌定义（官方＋模组），
      * 预过滤出有卡面图的，避免分层列因无图定义而空缺 */
-    const artDefIds = Object.keys(CARD_DEFS || {}).filter(id => {
-        const d = CARD_DEFS[id];
-        return !!(d && (d.image_url || d.image));
-    });
-    if (!artDefIds.length) return;
+    const artDefs = Object.keys(CARD_DEFS || {})
+        .map(id => CARD_DEFS[id])
+        .filter(d => !!(d && (d.image_url || d.image)));
+    if (!artDefs.length) return;
     const total = Math.min(22, Math.max(10, Math.round(window.innerWidth / 96)));
-    /* 固定种子：同一用户每次刷新拿到完全相同的卡牌/位置/速度；
-     * 相位用绝对时间（Date.now）计算，刷新后漂移进程无缝延续 */
+    /* 会话种子（sessionStorage）：同一标签页内刷新沿用同一批卡牌/位置/速度，
+     * 相位用绝对时间（Date.now）计算，刷新后漂移过程无缝衔接；
+     * 新会话（新标签页/重开浏览器）重新随机——同一账号不再永远看同一批卡。
+     * 注意：本文件里裸写的 localStorage 是包装器，removeItem 会连带清
+     * sessionStorage——清旧永久种子必须走 window.localStorage 原生接口，
+     * 且只在旧键确实存在时执行，否则每次刷新都会把会话种子一起抹掉。 */
     let seedText = '';
     try {
-        seedText = String((currentAccount && (currentAccount.id || currentAccount.username)) || '')
-            || localStorage.getItem('gtn_home_hfc_seed') || '';
+        try {
+            if (window.localStorage.getItem('gtn_home_hfc_seed') !== null) {
+                window.localStorage.removeItem('gtn_home_hfc_seed');
+            }
+        } catch (_) {}
+        seedText = String(sessionStorage.getItem('gtn_home_hfc_seed') || '');
         if (!seedText) {
-            seedText = 'hfc-' + Math.random().toString(36).slice(2, 10);
-            localStorage.setItem('gtn_home_hfc_seed', seedText);
+            seedText = 'hfc-' + Math.random().toString(36).slice(2, 12);
+            sessionStorage.setItem('gtn_home_hfc_seed', seedText);
         }
-    } catch (_) { seedText = 'hfc-default'; }
+    } catch (_) { seedText = 'hfc-' + Math.random().toString(36).slice(2, 12); }
     let seedHash = 1779033703;
     for (let i = 0; i < seedText.length; i++) {
         seedHash = Math.imul(seedHash ^ seedText.charCodeAt(i), 3432918353);
@@ -2897,10 +2904,26 @@ function spawnHomeFloatingCards() {
         return (seedHash >>> 0) / 4294967296;
     };
     const nowSec = Date.now() / 1000;
-    for (let i = 0; i < total; i++) {
-        const def = CARD_DEFS[artDefIds[Math.floor(rand() * artDefIds.length)]];
-        const url = def ? getCardArtUrl({}, def) : '';
-        if (!url) continue;
+    /* 先整池洗牌再按卡面 URL 去重取前 total 张：
+     * 抽样均匀且同一批里不会出现完全相同的卡面（不同卡共用图也不重复）。 */
+    for (let i = artDefs.length - 1; i > 0; i--) {
+        const j = Math.floor(rand() * (i + 1));
+        const swap = artDefs[i];
+        artDefs[i] = artDefs[j];
+        artDefs[j] = swap;
+    }
+    const seenUrls = new Set();
+    const picked = [];
+    for (const def of artDefs) {
+        if (picked.length >= total) break;
+        const url = getCardArtUrl({}, def);
+        if (!url || seenUrls.has(url)) continue;
+        seenUrls.add(url);
+        picked.push({ def, url });
+    }
+    if (!picked.length) return;
+    for (let i = 0; i < picked.length; i++) {
+        const url = picked[i].url;
         const depth = 0.35 + rand() * 0.65;
         const riseDuration = 34 + rand() * 30;
         const swayDuration = 6 + rand() * 9;
@@ -2908,7 +2931,7 @@ function spawnHomeFloatingCards() {
         const rise = document.createElement('div');
         rise.className = 'home-floating-card';
         /* 分层取样保证水平分布均匀：每卡一列，列内抖动，杜绝局部密集 */
-        const column = (i + rand() * 0.72) / total;
+        const column = (i + rand() * 0.72) / picked.length;
         rise.style.setProperty('--hfc-depth', String(depth));
         rise.style.setProperty('--hfc-left', `${(column * 96).toFixed(2)}%`);
         rise.style.setProperty('--hfc-size', `${44 + Math.round(depth * 58)}px`);
