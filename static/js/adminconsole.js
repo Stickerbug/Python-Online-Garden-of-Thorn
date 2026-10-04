@@ -128,7 +128,21 @@ function appendColoredText(parent, text) {
   }
 }
 
-function appendEntry(kind, text, prefix = '') {
+function appendSegments(parent, segments) {
+  for (const seg of segments) {
+    if (!seg || seg.text === '') continue;
+    if (seg.text === '\n') {
+      parent.appendChild(document.createElement('br'));
+      continue;
+    }
+    const span = document.createElement('span');
+    span.className = 'console-token' + (seg.kind ? ' ' + seg.kind : '');
+    span.textContent = seg.text;
+    parent.appendChild(span);
+  }
+}
+
+function appendEntry(kind, text, prefix = '', segments = null) {
   const output = $('console-output');
   const entry = document.createElement('div');
   entry.className = `console-entry ${kind}`;
@@ -139,7 +153,11 @@ function appendEntry(kind, text, prefix = '') {
     entry.appendChild(prefixSpan);
     entry.appendChild(document.createTextNode(' '));
   }
-  appendColoredText(entry, String(text || ''));
+  if (Array.isArray(segments) && segments.length) {
+    appendSegments(entry, segments);
+  } else {
+    appendColoredText(entry, String(text || ''));
+  }
   output.appendChild(entry);
   while (output.children.length > MAX_OUTPUT_ENTRIES) {
     output.removeChild(output.firstElementChild);
@@ -334,6 +352,7 @@ async function processCommandQueue() {
         data.success ? 'ok' : 'err',
         data.output || (data.success ? 'OK' : 'ERR'),
         `${data.success ? '[OK]' : '[ERR]'} #${trace} ${Math.max(0, elapsed).toFixed(0)}ms`,
+        Array.isArray(data.output_segments) ? data.output_segments : null,
       );
     }
   } catch (err) {
@@ -437,7 +456,8 @@ function renderCompletions(items) {
     button.type = 'button';
     button.className = `completion-item ${index === completionIndex ? 'active' : ''}`;
     const valueNode = document.createElement('span');
-    valueNode.className = 'completion-value';
+    const itemKind = typeof item === 'object' ? String(item.kind || '') : '';
+    valueNode.className = 'completion-value' + (itemKind ? ` kind-${itemKind}` : '');
     valueNode.textContent = value;
     const detailNode = document.createElement('span');
     detailNode.className = 'completion-detail';

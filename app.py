@@ -12055,6 +12055,28 @@ def unknown_command_error(command, cmd):
     return f'未知命令：/{cmd}{extra}\n输入 /help 查看可用命令。'
 
 
+# —— 控制台结构化输出（2026-10-04）——
+# 涂色语义 kind 与客户端 .console-token.* 类名对应：
+#   cmd 命令路径 / player 玩家名 / rank 段位 / num 数值 / id 账号ID /
+#   ok 成功 / err 错误 / warn 警告 / muted 弱化
+def console_out(*chunks):
+    """接受 str（无语义）或 (文本, kind) 元组，返回
+    {'output': 纯文本, 'output_segments': [{'text','kind'}, ...]}。
+    处理器用 **console_out(...) 展开进返回 dict；客户端优先渲染 segments，
+    旧客户端/无 segments 时回退纯文本正则涂色。"""
+    segments = []
+    for chunk in chunks:
+        if isinstance(chunk, tuple):
+            text, kind = chunk
+            segments.append({'text': str(text), 'kind': str(kind or '')})
+        else:
+            segments.append({'text': str(chunk), 'kind': ''})
+    return {
+        'output': ''.join(segment['text'] for segment in segments),
+        'output_segments': segments,
+    }
+
+
 def redact_admin_command_line(line):
     raw = str(line or '').strip()
     try:
@@ -12601,16 +12623,18 @@ def _rank_console_command(cmd, parts, raw):
         user = find_user_for_admin(parts[1])
         if not user:
             return {'success': False, 'output': '账号不存在'}
-        payload = db_module.user_rank_payload(parts[1], include_special=True)
+        payload = db_module.user_rank_payload(int(user['id']), include_special=True)
         global_special = db_module.get_rank_global_special()
         return {
             'success': True,
-            'output': (
-                f"{user.get('username')} (ID:{user.get('player_id') or '-'})\n"
-                f"段位：{payload['label']} {payload['points']}/{payload['cap']}"
-                f"（序号 {payload['tier_index']}/44，连胜 {payload['streak']}）\n"
-                f"特殊修正：玩家 {payload['special']:+g} / 全局 {global_special:+g}"
-                f"（合计 {payload['special'] + global_special:+g}）"
+            **console_out(
+                (user.get('username'), 'player'), (f" (ID:{user.get('player_id') or '-'})\n", 'id'),
+                ('段位：', ''), (payload['label'], 'rank'),
+                (f" {payload['points']}/{payload['cap']}", 'num'),
+                (f"（序号 {payload['tier_index']}/44，连胜 {payload['streak']}）\n", 'num'),
+                ('特殊修正：玩家 ', ''), (f"{payload['special']:+g}", 'num'),
+                (' / 全局 ', ''), (f"{global_special:+g}", 'num'),
+                    ('（合计 ', ''), (f"{payload['special'] + global_special:+g}", 'num'), ('）', ''),
             ),
         }
     if cmd == 'rank-list':
@@ -12626,17 +12650,21 @@ def _rank_console_command(cmd, parts, raw):
                 (limit,),
             ).fetchall()
         if not rows:
-            return {'success': True, 'output': '暂无段位数据'}
+            return {'success': True, **console_out(('暂无段位数据', 'muted'))}
         lines = []
         for index, row in enumerate(rows, 1):
             payload = rank_system.rank_payload(int(row['rank_tier']), int(row['rank_points']),
                                                streak=int(row['rank_streak'] or 0))
-            lines.append(
-                f"{index}. {row['username']} (ID:{row['id']}) {payload['label']} "
-                f"{payload['points']}/{payload['cap']} "
-                f"W/L/D={row['wins']}/{row['losses']}/{row['draws']}"
-            )
-        return {'success': True, 'output': '\n'.join(lines)}
+            lines.append(console_out(
+                (f"{index}. ", 'num'), (row['username'], 'player'),
+                (f" (ID:{row['id']}) ", 'id'), (payload['label'], 'rank'),
+                (f" {payload['points']}/{payload['cap']} ", 'num'),
+                (f"W/L/D={row['wins']}/{row['losses']}/{row['draws']}", 'num'),
+            )['output_segments'])
+        return {'success': True, 'output': '\n'.join(
+            ''.join(seg['text'] for seg in line) for line in lines
+        ), 'output_segments': [seg for i, line in enumerate(lines) for seg in
+                               ([{'text': '\n', 'kind': ''}] if i else []) + line]}
     if cmd == 'rank-find':
         if len(parts) < 2:
             return {'success': False, 'output': command_error(raw, len(raw), 'account rank find <昵称/用户名关键词>')}
@@ -12649,13 +12677,19 @@ def _rank_console_command(cmd, parts, raw):
                 (keyword, keyword.lower()),
             ).fetchall()
         if not rows:
-            return {'success': True, 'output': '没有匹配的玩家'}
+            return {'success': True, **console_out(('没有匹配的玩家', 'muted'))}
         lines = []
         for row in rows:
             payload = rank_system.rank_payload(int(row['rank_tier']), int(row['rank_points']),
                                                streak=int(row['rank_streak'] or 0))
-            lines.append(f"{row['username']} (ID:{row['id']}) {payload['label']} {payload['points']}/{payload['cap']}")
-        return {'success': True, 'output': '\n'.join(lines)}
+            lines.append(console_out(
+                (row['username'], 'player'), (f" (ID:{row['id']}) ", 'id'),
+                (payload['label'], 'rank'), (f" {payload['points']}/{payload['cap']}", 'num'),
+            )['output_segments'])
+        return {'success': True, 'output': '\n'.join(
+            ''.join(seg['text'] for seg in line) for line in lines
+        ), 'output_segments': [seg for i, line in enumerate(lines) for seg in
+                               ([{'text': '\n', 'kind': ''}] if i else []) + line]}
     if cmd == 'rank-reset':
         if len(parts) < 2:
             return {'success': False, 'output': command_error(raw, len(raw), 'account rank reset <ID|注册顺序|用户名>')}
@@ -12670,7 +12704,10 @@ def _rank_console_command(cmd, parts, raw):
             conn.commit()
         admin_event('admin', f'rank-reset {user["username"]}#{user["id"]}')
         payload = rank_system.rank_payload(1, 0)
-        return {'success': True, 'output': f'{user["username"]} 段位已重置为 {payload["label"]} 0/{payload["cap"]}'}
+        return {'success': True, **console_out(
+            (user["username"], 'player'), (' 段位已重置为 ', ''),
+            (payload["label"], 'rank'), (f" 0/{payload['cap']}", 'num'),
+        )}
     if cmd == 'rank-history':
         if len(parts) < 2:
             return {'success': False, 'output': command_error(raw, len(raw), 'account rank history <ID|注册顺序|用户名> [数量]')}
@@ -12688,8 +12725,10 @@ def _rank_console_command(cmd, parts, raw):
                 (int(user['id']), limit),
             ).fetchall()
         if not rows:
-            return {'success': True, 'output': f'{user["username"]} 暂无月度结算记录'}
-        lines = [f'{user["username"]} 月度结算历史：']
+            return {'success': True, **console_out(
+                (user["username"], 'player'), (' 暂无月度结算记录', 'muted'),
+            )}
+        lines = [console_out((user['username'], 'player'), (' 月度结算历史：', ''))['output_segments']]
         for row in rows:
             try:
                 before = json.loads(row['before_json'])
@@ -12698,10 +12737,15 @@ def _rank_console_command(cmd, parts, raw):
                 after_label = after.get('label') or '-'
             except Exception:
                 before_label = after_label = '?'
-            lines.append(
-                f"{row['month_key']}：{before_label} → {after_label}，荆露 +{row['dew_granted']}（{row['created_at']}）"
-            )
-        return {'success': True, 'output': '\n'.join(lines)}
+            lines.append(console_out(
+                (f"{row['month_key']}：", 'time'), (before_label, 'rank'), ' → ',
+                (after_label, 'rank'), ('，荆露 +', ''), (str(row['dew_granted']), 'num'),
+                (f"（{row['created_at']}）", 'muted'),
+            )['output_segments'])
+        return {'success': True, 'output': '\n'.join(
+            ''.join(seg['text'] for seg in line) for line in lines
+        ), 'output_segments': [seg for i, line in enumerate(lines) for seg in
+                               ([{'text': '\n', 'kind': ''}] if i else []) + line]}
     if cmd == 'rank-next':
         next_run = _rank_monthly_next_run_utc()
         with db_module.get_db_connection() as conn:
@@ -12709,12 +12753,17 @@ def _rank_console_command(cmd, parts, raw):
                 'SELECT month_key, COUNT(*) AS entries, created_at FROM rank_monthly_settlements '
                 'GROUP BY month_key ORDER BY month_key DESC LIMIT 1',
             ).fetchone()
-        last_line = '尚无月度结算记录'
+        last_segs = [('尚无月度结算记录', 'muted')]
         if row:
-            last_line = f"上次结算：{row['month_key']}（{row['entries']} 人，{row['created_at']}）"
+            last_segs = [
+                ('上次结算：', ''), (row['month_key'], 'time'),
+                ('（', ''), (str(row['entries']), 'num'), (' 人，', ''), (row['created_at'], 'muted'), ('）', ''),
+            ]
         return {
             'success': True,
-            'output': f"下次月度结算：{next_run.strftime('%Y-%m-%d %H:%M')} UTC\n{last_line}",
+            **console_out(
+                ('下次月度结算：', ''), (next_run.strftime('%Y-%m-%d %H:%M'), 'time'), ' UTC\n', *last_segs,
+            ),
         }
     if cmd == 'rankmod':
         if len(parts) < 2:
@@ -12724,17 +12773,21 @@ def _rank_console_command(cmd, parts, raw):
         sub = parts[1].lower()
         if sub == 'view':
             global_special = db_module.get_rank_global_special()
-            lines = [f'全局特殊修正：{global_special:+g}']
+            lines = [console_out(('全局特殊修正：', ''), (f'{global_special:+g}', 'num'))['output_segments']]
             if len(parts) >= 3:
                 user = find_user_for_admin(parts[2])
                 if not user:
                     return {'success': False, 'output': '账号不存在'}
-                payload = db_module.user_rank_payload(parts[2], include_special=True)
-                lines.append(
-                    f"{user.get('username')}：玩家修正 {payload['special']:+g}"
-                    f"（合计 {payload['special'] + global_special:+g}）"
-                )
-            return {'success': True, 'output': '\n'.join(lines)}
+                payload = db_module.user_rank_payload(int(user['id']), include_special=True)
+                lines.append(console_out(
+                    (user.get('username'), 'player'), ('：玩家修正 ', ''),
+                    (f"{payload['special']:+g}", 'num'),
+                    ('（合计 ', ''), (f"{payload['special'] + global_special:+g}", 'num'), ('）', ''),
+                )['output_segments'])
+            return {'success': True, 'output': '\n'.join(
+                ''.join(seg['text'] for seg in line) for line in lines
+            ), 'output_segments': [seg for i, line in enumerate(lines) for seg in
+                                   ([{'text': '\n', 'kind': ''}] if i else []) + line]}
         if sub == 'global':
             if len(parts) < 3:
                 return {'success': False, 'output': command_error(raw, len(raw), 'account rankmod global <数值|clear>')}
@@ -12743,7 +12796,9 @@ def _rank_console_command(cmd, parts, raw):
             if error:
                 return {'success': False, 'output': error}
             admin_event('admin', f'rankmod global {parts[2]}')
-            return {'success': True, 'output': f'全局特殊修正已设置为 {result["special_correction"]:+g}'}
+            return {'success': True, **console_out(
+                ('全局特殊修正已设置为 ', 'ok'), (f"{result['special_correction']:+g}", 'num'),
+            )}
         if sub == 'player':
             if len(parts) < 4:
                 return {'success': False, 'output': command_error(raw, len(raw), 'account rankmod player <账号> <数值|clear>')}
@@ -12752,7 +12807,10 @@ def _rank_console_command(cmd, parts, raw):
             if error:
                 return {'success': False, 'output': error}
             admin_event('admin', f'rankmod player {result["username"]}#{result["id"]} {parts[3]}')
-            return {'success': True, 'output': f'{result["username"]} 的特殊修正已设置为 {result["rank_special"]:+g}'}
+            return {'success': True, **console_out(
+                (result["username"], 'player'), (' 的特殊修正已设置为 ', 'ok'),
+                (f"{result['rank_special']:+g}", 'num'),
+            )}
         return {'success': False, 'output': command_error(raw, len(raw), 'account rankmod global|player|view …')}
     if cmd == 'rankset':
         if len(parts) < 3:
@@ -12778,7 +12836,10 @@ def _rank_console_command(cmd, parts, raw):
             conn.commit()
         admin_event('admin', f'rankset {user["username"]}#{user["id"]} tier={tier} points={points}')
         payload = rank_system.rank_payload(tier, points)
-        return {'success': True, 'output': f'已设置：{payload["label"]} {payload["points"]}/{payload["cap"]}'}
+        return {'success': True, **console_out(
+            ('已设置：', 'ok'), (payload["label"], 'rank'),
+            (f" {payload['points']}/{payload['cap']}", 'num'),
+        )}
     return {'success': False, 'output': '未知段位命令'}
 
 
@@ -15355,7 +15416,7 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
             return {'success': False, 'output': error}
         admin_event('admin', f"GR snapshot written for {user.get('username')}#{user.get('id')}")
         return {'success': True, 'output': f'已写入今天的花阶分曲线快照。\n{format_rating_user(user)}'}
-    if cmd in ('rankmod', 'rankset', 'rank-info'):
+    if cmd in ('rankmod', 'rankset', 'rank-info', 'rank-list', 'rank-find', 'rank-reset', 'rank-history', 'rank-next'):
         return _rank_console_command(cmd, parts, raw)
     if cmd == 'rank-settle':
         # 手动触发段位月度结算（默认结算上个月；幂等）。
@@ -16903,6 +16964,32 @@ def admin_completions(line):
                 return filtered(account_values())
             if position == 4 and len(parts) > 2 and parts[2].lower() in ('set', 'add'):
                 return filtered(['season', 'total', 'both'])
+        if sub == 'rank':
+            if position == 2:
+                return filtered(['info', 'set', 'reset', 'list', 'find', 'history', 'settle', 'next'])
+            action = parts[2].lower() if len(parts) > 2 else ''
+            if action in ('info', 'set', 'reset', 'history') and position == 3:
+                return filtered(account_values())
+            if action == 'set' and position == 4:
+                return filtered([str(tier) for tier in range(1, 45)])
+            if action == 'set' and position == 5:
+                return filtered(['0'])
+            if action == 'list' and position == 3:
+                return filtered(['5', '10', '20', '50'])
+            if action == 'history' and position == 4:
+                return filtered(['6', '12', '24'])
+        if sub == 'rankmod':
+            if position == 2:
+                return filtered(['global', 'player', 'view'])
+            action = parts[2].lower() if len(parts) > 2 else ''
+            if action == 'global' and position == 3:
+                return filtered(['clear'])
+            if action == 'player' and position == 3:
+                return filtered(account_values())
+            if action == 'player' and position == 4:
+                return filtered(['clear'])
+            if action == 'view' and position == 3:
+                return filtered(account_values())
         if sub == 'reputation':
             if position == 2:
                 return filtered(['info', 'ledger', 'add', 'set', 'recover'])
@@ -17281,7 +17368,10 @@ def admin_console_completion_items(line):
         name: meta for name, meta in ADMIN_COMMAND_TREE.items()
         if not meta.get('hidden')
     }}
-    for token in parts[:position]:
+    # help 路径：定位到 help 的展示子树（help <命令> <子命令>…）
+    is_help = bool(parts) and str(parts[0]).lower() == 'help'
+    walk_parts = parts[1:position] if is_help else parts[:position]
+    for token in walk_parts:
         child = (node.get('children', {}) or {}).get(str(token).lower())
         if child and not child.get('hidden'):
             node = child
@@ -17304,6 +17394,9 @@ def admin_console_completion_items(line):
         elif '=' in text_value:
             detail = '可选参数'
             kind = 'option'
+        elif db_module.PLAYER_ID_RE.fullmatch(text_value.upper()):
+            detail = '已注销账号' if text_value in deleted_tokens else '玩家ID'
+            kind = 'player'
         else:
             detail = '已注销账号' if text_value in deleted_tokens else ''
             kind = 'value'

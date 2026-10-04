@@ -260,6 +260,45 @@ a {
   color: #aeb8c2;
 }
 
+/* 结构化输出（2026-10-04）：服务端 segments 的语义 kind */
+.console-token.player {
+  color: #7ee787;
+}
+
+.console-token.rank {
+  color: #d2a8ff;
+}
+
+.console-token.ok {
+  color: #56d364;
+}
+
+.console-token.muted {
+  color: #8b949e;
+}
+
+/* 补全候选按 kind 着色（与服务端 admin_console_completion_items 对应） */
+.completion-value.kind-command {
+  color: var(--cyan);
+}
+
+.completion-value.kind-player {
+  color: #7ee787;
+}
+
+.completion-value.kind-number {
+  color: var(--orange);
+}
+
+.completion-value.kind-replay {
+  color: #d2a8ff;
+}
+
+.completion-item.active .completion-value,
+.completion-item:hover .completion-value {
+  color: #fff;
+}
+
 .console-completions {
   max-height: 180px;
   overflow: auto;
