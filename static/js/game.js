@@ -19912,6 +19912,10 @@ function renderRankCardsShop(user) {
         shield: lt({ zh: '下一局失败不扣分不降段', en: 'Next loss costs no points and no demotion', fr: 'La prochaine défaite ne coûte rien', ja: '次の負けで減点・降段なし' }),
         double: lt({ zh: '下一局胜利得分×2', en: 'Next win gains ×2', fr: 'La prochaine victoire rapporte ×2', ja: '次の勝利で獲得×2' }),
     };
+    const dewLabel = lt({ zh: '荆露', en: 'dew', fr: 'brume', ja: '荊露' });
+    const price = Number(cards.price_today);
+    const priceKnown = Number.isFinite(price) && price > 0;
+    const priceLabel = priceKnown ? `${price} ${dewLabel}` : '';
     const rows = ['shield', 'double'].map(kind => {
         const info = cards[kind] || { owned: 0, armed: false };
         const stateLabel = info.armed
@@ -19920,30 +19924,31 @@ function renderRankCardsShop(user) {
         const useBtn = info.armed
             ? `<button type="button" class="mini-btn" disabled>${escapeHtml(lt({ zh: '已激活', en: 'Armed', fr: 'Activée', ja: '発動中' }))}</button>`
             : `<button type="button" class="mini-btn" data-rank-card-use="${kind}" ${info.owned > 0 ? '' : 'disabled'}>${escapeHtml(lt({ zh: '激活', en: 'Arm', fr: 'Activer', ja: '使う' }))}</button>`;
+        /* 价格未知（载荷未带价格）时禁买，避免“看不见价格就买下” */
+        const buyBtn = `<button type="button" class="mini-btn" data-rank-card-buy="${kind}" ${priceKnown ? '' : 'disabled'}>${escapeHtml(lt({ zh: '购买', en: 'Buy', fr: 'Acheter', ja: '購入' }))}${priceKnown ? ` · ${escapeHtml(priceLabel)}` : ''}</button>`;
         return `<div class="rank-card-row" data-rank-card="${kind}">
             <div class="rank-card-info">
                 <span class="rank-card-name">${escapeHtml(labels[kind])}</span>
                 <span class="rank-card-desc">${escapeHtml(descs[kind])}</span>
             </div>
             <span class="rank-card-state">${escapeHtml(stateLabel)}</span>
-            <button type="button" class="mini-btn" data-rank-card-buy="${kind}">${escapeHtml(lt({ zh: '购买', en: 'Buy', fr: 'Acheter', ja: '購入' }))}</button>
+            ${buyBtn}
             ${useBtn}
         </div>`;
     }).join('');
-    const price = Number(cards.price_today);
-    const priceLabel = Number.isFinite(price) && price > 0
-        ? `${price} ${lt({ zh: '荆露', en: 'dew', fr: 'brume', ja: '荊露' })}`
-        : '';
     const buyTitleSuffix = lt({
         zh: '（每买一张涨价，每日重置）',
         en: ' (rises per purchase, resets daily)',
         fr: ' (monte à chaque achat, réinitialisé chaque jour)',
         ja: '（購入ごとに値上がり、毎日リセット）',
     });
+    const noteText = priceKnown
+        ? lt({ zh: '一场对局只能激活一张；激活后下一局消耗。今日价格', en: 'One card per match; armed card is consumed next game. Today’s price', fr: 'Une carte par partie ; la carte activée est consommée au prochain match. Prix du jour', ja: '1対局1枚のみ。発動カードは次の対局で消費。本日の価格' }) + ' ' + priceLabel + buyTitleSuffix
+        : lt({ zh: '价格加载中……', en: 'Loading price…', fr: 'Chargement du prix…', ja: '価格読み込み中…' });
     bodyEl.innerHTML = `<div class="rank-cards-panel">
         ${rows}
         <div class="rank-card-buy">
-            <span class="rank-card-note">${escapeHtml(lt({ zh: '一场对局只能激活一张；激活后下一局消耗。今日价格', en: 'One card per match; armed card is consumed next game. Today’s price', fr: 'Une carte par partie ; la carte activée est consommée au prochain match. Prix du jour', ja: '1対局1枚のみ。発動カードは次の対局で消費。本日の価格' }))} ${escapeHtml(priceLabel)}${escapeHtml(buyTitleSuffix)}</span>
+            <span class="rank-card-note">${escapeHtml(noteText)}</span>
         </div>
     </div>`;
     bindRankCardsShop();
@@ -20037,9 +20042,11 @@ function updateLobbyRankCardsStrip() {
             ${btn}
         </span>`;
     }).join('');
+    const stripPrice = Number(cards.price_today);
+    const stripPriceKnown = Number.isFinite(stripPrice) && stripPrice > 0;
     strip.classList.remove('hidden');
     strip.innerHTML = `<span class="lobby-rank-cards-note">${escapeHtml(lt({ zh: '段位卡', en: 'Rank Cards', fr: 'Cartes de rang', ja: 'ランクカード' }))}</span>${chips}` +
-        `<button type="button" class="mini-btn lobby-rank-cards-shop" data-lobby-rank-cards-shop>${escapeHtml(lt({ zh: '商店购买', en: 'Buy in Shop', fr: 'Acheter en boutique', ja: 'ショップで購入' }))}</button>`;
+        `<button type="button" class="mini-btn lobby-rank-cards-shop" data-lobby-rank-cards-shop>${escapeHtml(lt({ zh: '商店购买', en: 'Buy in Shop', fr: 'Acheter en boutique', ja: 'ショップで購入' }))}${stripPriceKnown ? ` · ${escapeHtml(String(stripPrice))}` : ''}</button>`;
     strip.querySelectorAll('[data-lobby-rank-card-use]').forEach(btn => {
         btn.addEventListener('click', async () => {
             const kind = btn.dataset.lobbyRankCardUse;
@@ -20063,6 +20070,70 @@ function updateLobbyRankCardsStrip() {
     });
 }
 
+/* 购买段位卡必须过确认弹窗：明示卡名、当前价格、余额变化与下一张涨价，
+ * 防止误点连买（曾经的无价格显示 + 单击即买让玩家一口气囤了十几张）。 */
+function confirmRankCardPurchase(kind, onDone) {
+    if (!currentAccount) return;
+    const cards = currentAccount.rank_cards;
+    const price = Number(cards && cards.price_today);
+    if (!Number.isFinite(price) || price <= 0) {
+        flashStatus(lt({ zh: '价格加载中，请稍后再试', en: 'Price is loading, please retry', fr: 'Prix en cours de chargement, réessayez', ja: '価格読み込み中です。しばらくしてから再試行してください' }));
+        void loadRankCardsShop();
+        return;
+    }
+    const priceNext = Number(cards.price_next);
+    const labels = {
+        shield: lt({ zh: '保分卡', en: 'Shield Card', fr: 'Carte Bouclier', ja: '保分カード' }),
+        double: lt({ zh: '双倍卡', en: 'Double Card', fr: 'Carte Double', ja: '倍増カード' }),
+    };
+    const descs = {
+        shield: lt({ zh: '下一局失败不扣分不降段', en: 'Next loss costs no points and no demotion', fr: 'La prochaine défaite ne coûte rien', ja: '次の負けで減点・降段なし' }),
+        double: lt({ zh: '下一局胜利得分×2', en: 'Next win gains ×2', fr: 'La prochaine victoire rapporte ×2', ja: '次の勝利で獲得×2' }),
+    };
+    const dewLabel = lt({ zh: '荆露', en: 'dew', fr: 'brume', ja: '荊露' });
+    const balance = Number(currentAccount.thorn_dew_total);
+    const balanceKnown = Number.isFinite(balance);
+    const afterText = balanceKnown ? (balance - price) : '';
+    const balanceLine = balanceKnown
+        ? lt({ zh: '当前余额', en: 'Balance', fr: 'Solde', ja: '所持' }) + ` ${balance} ${dewLabel}` + (balance - price < 0 ? ` → ` + lt({ zh: '不足', en: 'insufficient', fr: 'insuffisant', ja: '不足' }) : ` → ${afterText} ${dewLabel}`)
+        : '';
+    const nextLine = Number.isFinite(priceNext) && priceNext > price
+        ? lt({ zh: '买后下一张', en: 'Next one costs', fr: 'La suivante coûte', ja: '次の一枚は' }) + ` ${priceNext} ${dewLabel}（` + lt({ zh: '每日重置', en: 'resets daily', fr: 'réinitialisé chaque jour', ja: '毎日リセット' }) + `）`
+        : '';
+    showModal(`
+        <h3>${escapeHtml(lt({ zh: '确认购买', en: 'Confirm Purchase', fr: 'Confirmer l’achat', ja: '購入の確認' }))}</h3>
+        <p><strong>${escapeHtml(labels[kind] || kind)}</strong> — ${escapeHtml(descs[kind] || '')}</p>
+        <p>${escapeHtml(lt({ zh: '价格', en: 'Price', fr: 'Prix', ja: '価格' }))}：<strong>${escapeHtml(String(price))} ${escapeHtml(dewLabel)}</strong></p>
+        ${balanceLine ? `<p class="muted">${escapeHtml(balanceLine)}</p>` : ''}
+        ${nextLine ? `<p class="muted">${escapeHtml(nextLine)}</p>` : ''}
+        <div class="modal-buttons">
+            <button class="btn btn-secondary" id="rank-card-confirm-cancel">${escapeHtml(UI.cancel || lt({ zh: '取消', en: 'Cancel', fr: 'Annuler', ja: 'キャンセル' }))}</button>
+            <button class="btn btn-primary" id="rank-card-confirm-ok">${escapeHtml(lt({ zh: '购买', en: 'Buy', fr: 'Acheter', ja: '購入' }))} · ${escapeHtml(String(price))} ${escapeHtml(dewLabel)}</button>
+        </div>
+    `);
+    const cancelBtn = $('rank-card-confirm-cancel');
+    const okBtn = $('rank-card-confirm-ok');
+    if (cancelBtn) cancelBtn.onclick = hideModal;
+    if (okBtn) okBtn.onclick = async () => {
+        okBtn.disabled = true;
+        const data = await rankCardsApi('/api/rank/cards/purchase', { card_type: kind });
+        if (data && data.success) {
+            if (currentAccount) {
+                if (data.cards) currentAccount.rank_cards = data.cards;
+                const newBal = Number(currentAccount.thorn_dew_total);
+                if (Number.isFinite(newBal)) currentAccount.thorn_dew_total = newBal - price;
+            }
+            hideModal();
+            flashStatus(lt({ zh: '购买成功', en: 'Purchased', fr: 'Achetée', ja: '購入しました' }));
+            if (onDone) await onDone();
+        } else {
+            okBtn.disabled = false;
+            hideModal();
+            flashStatus((data && data.error) || lt({ zh: '购买失败', en: 'Purchase failed', fr: 'Échec de l’achat', ja: '購入に失敗しました' }), 3200, 'error');
+        }
+    };
+}
+
 function bindRankCardsShop() {
     const panel = $('rank-cards-shop-panel');
     if (!panel) return;
@@ -20072,14 +20143,10 @@ function bindRankCardsShop() {
         updateLobbyRankCardsStrip();
     };
     panel.querySelectorAll('[data-rank-card-buy]').forEach(btn => {
-        btn.addEventListener('click', async () => {
+        btn.addEventListener('click', () => {
             const kind = btn.dataset.rankCardBuy;
             if (!kind || !currentAccount) return;
-            btn.disabled = true;
-            const data = await rankCardsApi('/api/rank/cards/purchase', { card_type: kind });
-            btn.disabled = false;
-            if (data && data.success) { flashStatus(lt({ zh: '购买成功', en: 'Purchased', fr: 'Achetée', ja: '購入しました' })); await refresh(); }
-            else flashStatus((data && data.error) || lt({ zh: '购买失败', en: 'Purchase failed', fr: 'Échec de l’achat', ja: '購入に失敗しました' }));
+            confirmRankCardPurchase(kind, refresh);
         });
     });
     panel.querySelectorAll('[data-rank-card-use]').forEach(btn => {

@@ -5379,11 +5379,35 @@ def row_to_user(row):
                 'owned': int(row['rank_double_cards'] or 0) if 'rank_double_cards' in row.keys() else 0,
                 'armed': bool(int(row['rank_double_armed'] or 0)) if 'rank_double_armed' in row.keys() else False,
             },
+            # 价格字段必须随账号下发：客户端多处渲染（商店/大厅条）依赖它，
+            # 否则会显示成“无价格”，玩家误以为免费。
+            **_rank_card_price_fields_from_row(row),
         },
         'keybindings': _keybindings_from_row(row),
     }
     data['thorn_dew_total'] = data['thorn_dew_free'] + data['thorn_dew_paid']
     return data
+
+
+def _rank_card_price_fields_from_row(row):
+    """从 users 行内联计算段位卡当日价格字段（row_to_user 用，免额外查库）。
+
+    与 rank_cards_payload 保持同一口径：当日 buys 阶梯定价，跨日归零。"""
+    import rank_system as _rank
+    today = _rank.beijing_day_key(datetime.now(timezone.utc))
+    buys = 0
+    if 'rank_card_buys' in row.keys() and 'rank_card_day' in row.keys() \
+            and str(row['rank_card_day'] or '') == today:
+        try:
+            buys = max(0, int(row['rank_card_buys'] or 0))
+        except (TypeError, ValueError):
+            buys = 0
+    return {
+        'price_today': rank_card_price(buys),
+        'price_next': rank_card_price(buys + 1),
+        'buys_today': buys,
+        'day_key': today,
+    }
 
 
 def row_to_admin_user(row):
@@ -15428,11 +15452,22 @@ def purchase_rank_card(user_id, card_type: str) -> tuple:
             (buys + 1, today, uid),
         )
         conn.commit()
-    spend_user_thorn_dew(
+    spend_result, spend_err = spend_user_thorn_dew(
         uid, price,
         reason=f'购买段位{"保分" if kind == "shield" else "双倍"}卡（今日第{buys + 1}张）',
         source_type='rank_card', source_id=f'buy:{kind}:{today}:{buys + 1}',
     )
+    if spend_err:
+        # 授卡与扣费非同一事务：极小概率余额在窗口内变化导致扣费失败。
+        # 必须回收卡片和当日购买计数，避免出现免费卡。
+        with get_db_connection() as conn:
+            conn.execute(
+                f'UPDATE users SET {col} = MAX(COALESCE({col}, 0) - 1, 0),'
+                ' rank_card_buys = ?, rank_card_day = ? WHERE id = ?',
+                (buys, today, uid),
+            )
+            conn.commit()
+        return None, spend_err
     return rank_cards_payload(uid), None
 
 
