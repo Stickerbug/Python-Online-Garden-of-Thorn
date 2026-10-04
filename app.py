@@ -863,6 +863,13 @@ GTN_STATIC_VERSION += '-yggdrasil-desc-1'
 GTN_STATIC_VERSION += '-feedback-batch4-1'
 GTN_STATIC_VERSION += '-guest-chat-phelren-rate-1'
 GTN_STATIC_VERSION += '-hfc-dedup-3'
+# 2026-10-04 修复：上面历史累积的版本后缀把静态资源 URL 的 ?v= 撑到近 6KB，
+# 过长的请求行在部分浏览器/中间网络（新接入的 Cloudflare、杀软 HTTPS 扫描、
+# 某些代理）下会被丢弃，表现为页面加载不出 CSS。这里统一收敛为短版本；
+# 今后需要让客户端换缓存时，只改 static_version.txt（免重启热加载），
+# 不要再往上面追加 tag。
+GTN_STATIC_CACHE_BUST = 'static-20261004-urlshorten'
+GTN_STATIC_VERSION = f'{_GTN_STATIC_VERSION_BASE}-{GTN_STATIC_CACHE_BUST}'
 # —— 纯静态部署免重启机制 ——
 # 上面这串是“启动时基线”。日常静态改动把增量后缀写进 static_version.txt
 # （随 git 部署），下面这个 before_request 钩子检测到文件变化后直接改写
