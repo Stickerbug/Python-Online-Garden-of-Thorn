@@ -33589,7 +33589,7 @@ def schedule_ai_test_pregame(sid):
     return True
 
 
-def _create_ai_test_engine(sid, human_player_id, seed=0):
+def _create_ai_test_engine(sid, human_player_id, seed=0, ai_health=None):
     player = players.get(sid) or {}
     loadout, enabled_mods = _ai_test_loadout_for_player(sid)
     allowed_ids = set(loadout.get('allowed_card_ids') or ())
@@ -33604,6 +33604,10 @@ def _create_ai_test_engine(sid, human_player_id, seed=0):
     apply_v2_loadout_to_engine(engine, loadout, '1v1')
     engine.allowed_card_ids = apply_runtime_content_filter(allowed_ids, '1v1')
     engine.player_names = names
+    # AI 入口自选血量（仅 AI 一侧；start_game 初始化血量时生效）
+    validated_health = _validate_ai_test_health(ai_health)
+    if validated_health is not None:
+        engine.player_health_overrides = {1 - int(human_player_id): validated_health}
     engine.start_event_select_first()
     ai_player_id = 1 - int(human_player_id)
     ai_options = [event for event in (engine.opening_event_options[ai_player_id] or []) if event]
@@ -34295,7 +34299,7 @@ def _record_ai_test_human_action(sid, engine, action_kind, payload=None):
     return True
 
 
-def _start_ai_test_session(sid):
+def _start_ai_test_session(sid, ai_health=None):
     global _next_room_id
     action_lock = _try_acquire_solo_action(sid, 'ai_1v1_start')
     if action_lock is None:
@@ -34323,6 +34327,7 @@ def _start_ai_test_session(sid):
             sid,
             human_player_id,
             seed,
+            ai_health=ai_health,
         )
         session_id = f'ai-{int(time.time())}-{secrets.token_hex(4)}'
         created_at_ts = time.time()
@@ -34334,6 +34339,7 @@ def _start_ai_test_session(sid):
             'ai_player_id': 1 - human_player_id,
             'human_name': human_name,
             'ai_name': ai_name,
+            'ai_health': _validate_ai_test_health(ai_health),
             'enabled_mods': enabled_mods,
             'action_index': 0,
             'thinking': False,
@@ -34348,6 +34354,7 @@ def _start_ai_test_session(sid):
                 'human_seat': human_player_id,
                 'official_mods': enabled_mods,
                 'loadout_hash': str(loadout.get('loadout_hash') or ''),
+                'ai_health': _validate_ai_test_health(ai_health),
             },
         }
         with _lock:
@@ -34404,10 +34411,10 @@ def _start_ai_test_session(sid):
         action_lock.release()
 
 
-def _start_ai_test_background_task(sid):
+def _start_ai_test_background_task(sid, ai_health=None):
     thread = threading.Thread(
         target=_start_ai_test_session,
-        args=(sid,),
+        args=(sid, ai_health),
         name=f'ai-test-start-{str(sid)[-8:]}',
         daemon=True,
     )
@@ -34447,7 +34454,18 @@ def _emit_ai_public_entry_disabled(sid):
     }, room=sid)
 
 
-def _queue_ai_test_start(sid):
+def _validate_ai_test_health(value):
+    """AI 入口自选血量：80-500 整数，非法输入返回 None。"""
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    if 80 <= parsed <= 500:
+        return parsed
+    return None
+
+
+def _queue_ai_test_start(sid, ai_health=None):
     if not _ai_public_match_enabled():
         _emit_ai_public_entry_disabled(sid)
         return False
@@ -34477,7 +34495,7 @@ def _queue_ai_test_start(sid):
         ai_test_starting.add(sid)
     socketio.emit('ai_1v1_status', {'status': 'loading'}, room=sid)
     try:
-        _start_ai_test_background_task(sid)
+        _start_ai_test_background_task(sid, ai_health=_validate_ai_test_health(ai_health))
     except Exception as exc:
         with _lock:
             ai_test_starting.discard(sid)
@@ -34514,7 +34532,14 @@ def on_ai_1v1_start(data=None):
             'message': '服务器正在更新，暂时不能开始新对局',
         }, room=sid)
         return
-    _queue_ai_test_start(sid)
+    ai_health_raw = (data or {}).get('ai_health')
+    if ai_health_raw is not None and _validate_ai_test_health(ai_health_raw) is None:
+        socketio.emit('ai_1v1_status', {
+            'status': 'error',
+            'message': 'AI 血量必须是 80-500 的整数',
+        }, room=sid)
+        return
+    _queue_ai_test_start(sid, ai_health=ai_health_raw)
 
 
 @socketio.on('ai_1v1_rematch')
@@ -34563,7 +34588,14 @@ def on_ai_1v1_rematch(data=None):
     finally:
         action_lock.release()
     if should_queue:
-        _queue_ai_test_start(sid)
+        ai_health_raw = (data or {}).get('ai_health')
+        if ai_health_raw is not None and _validate_ai_test_health(ai_health_raw) is None:
+            socketio.emit('ai_1v1_status', {
+                'status': 'error',
+                'message': 'AI 血量必须是 80-500 的整数',
+            }, room=sid)
+            return
+        _queue_ai_test_start(sid, ai_health=ai_health_raw)
 
 
 @socketio.on('ai_1v1_mark_decision')

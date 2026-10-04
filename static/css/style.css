@@ -15465,8 +15465,42 @@ html[data-theme="dark"].home-touhou-active .home-id-top {
 
 .ai-1v1-test-entry {
     display: flex;
+    align-items: center;
     justify-content: center;
+    gap: 8px;
     width: 100%;
+}
+
+/* AI 入口自选血量输入（80-500）。用 em：跟随移动端密度缩放，
+   与旁边的对战按钮保持同高。 */
+.ai-1v1-test-health {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4em;
+    font-size: 0.92em;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.ai-1v1-test-health input {
+    width: 4.4em;
+    min-height: 2.1em;
+    padding: 0.1em 0.45em;
+    border: 1px solid color-mix(in srgb, var(--magic) 40%, var(--border-color));
+    border-radius: 6px;
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-size: 1em;
+    font-variant-numeric: tabular-nums;
+}
+
+.ai-1v1-test-health input:focus {
+    outline: none;
+    border-color: var(--magic);
+}
+
+.ai-1v1-test-health input:disabled {
+    opacity: 0.55;
 }
 
 .ai-1v1-test-button {

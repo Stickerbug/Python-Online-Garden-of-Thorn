@@ -3671,6 +3671,9 @@ class GameEngine:
         self.round_num: int = 0
         self.phase: str = 'waiting'
         self._game_start_applied: bool = False
+        # AI 入口自选血量（80-500，仅 AI 一侧）：{player_id: hp}，
+        # start_game 初始化血量时覆盖默认 100。空 dict = 全部默认。
+        self.player_health_overrides: Dict[int, int] = {}
         self.log: List[str] = []
         self.draft_pool: List[CardInstance] = []
         self.allowed_card_ids: Optional[Set[str]] = None
@@ -5592,6 +5595,15 @@ class GameEngine:
                 ps.health = SECOND_PLAYER_HEALTH
                 ps.max_health = SECOND_PLAYER_HEALTH
                 ps.base_max_health = SECOND_PLAYER_HEALTH
+                self._reset_achievement_match_stats(i)
+        # AI 入口自选血量：在快照与内置开局效果之前覆盖，
+        # 使回复/「回到对局开始时数值」类效果与新血量一致。
+        for i, override_hp in (getattr(self, 'player_health_overrides', None) or {}).items():
+            if i in (0, 1) and isinstance(override_hp, int) and override_hp > 0:
+                ps = self.players[i]
+                ps.health = override_hp
+                ps.max_health = override_hp
+                ps.base_max_health = override_hp
                 self._reset_achievement_match_stats(i)
         # Built-in setup effects are applied before the opening draw. This lets
         # deck conversions such as Light trigger normal draw-time rules.
