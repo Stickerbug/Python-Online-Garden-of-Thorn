@@ -1,1 +1,1 @@
--gameover-rank-cards-1
+-rank-card-disarm-1

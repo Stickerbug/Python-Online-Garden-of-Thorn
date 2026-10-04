@@ -19938,7 +19938,7 @@ function renderRankCardsShop(user) {
             ? lt({ zh: '已激活', en: 'Armed', fr: 'Activée', ja: '発動中' })
             : lt({ zh: '库存', en: 'Owned', fr: 'Stock', ja: '所持' }) + ' ' + info.owned;
         const useBtn = info.armed
-            ? `<button type="button" class="mini-btn" disabled>${escapeHtml(lt({ zh: '已激活', en: 'Armed', fr: 'Activée', ja: '発動中' }))}</button>`
+            ? `<button type="button" class="mini-btn" data-rank-card-disarm="${kind}">${escapeHtml(lt({ zh: '取消激活', en: 'Disarm', fr: 'Désactiver', ja: '解除' }))}</button>`
             : `<button type="button" class="mini-btn" data-rank-card-use="${kind}" ${info.owned > 0 ? '' : 'disabled'}>${escapeHtml(lt({ zh: '激活', en: 'Arm', fr: 'Activer', ja: '使う' }))}</button>`;
         /* 价格未知（载荷未带价格）时禁买，避免“看不见价格就买下” */
         const buyBtn = `<button type="button" class="mini-btn" data-rank-card-buy="${kind}" ${priceKnown ? '' : 'disabled'}>${escapeHtml(lt({ zh: '购买', en: 'Buy', fr: 'Acheter', ja: '購入' }))}${priceKnown ? ` · ${escapeHtml(priceLabel)}` : ''}</button>`;
@@ -20056,7 +20056,7 @@ function renderRankCardsStrip(strip, modeKey, opts = {}) {
             ? lt({ zh: '已激活', en: 'Armed', fr: 'Activée', ja: '発動中' })
             : lt({ zh: '库存', en: 'Owned', fr: 'Stock', ja: '所持' }) + ' ' + info.owned;
         const btn = info.armed
-            ? `<button type="button" class="mini-btn" disabled>${escapeHtml(lt({ zh: '已激活', en: 'Armed', fr: 'Activée', ja: '発動中' }))}</button>`
+            ? `<button type="button" class="mini-btn" data-lobby-rank-card-disarm="${kind}">${escapeHtml(lt({ zh: '取消激活', en: 'Disarm', fr: 'Désactiver', ja: '解除' }))}</button>`
             : `<button type="button" class="mini-btn" data-lobby-rank-card-use="${kind}" ${info.owned > 0 ? '' : 'disabled'}>${escapeHtml(lt({ zh: '激活', en: 'Arm', fr: 'Activer', ja: '使う' }))}</button>`;
         return `<span class="lobby-rank-card-chip" data-rank-card="${kind}">
             <span class="lobby-rank-card-name">${escapeHtml(labels[kind])}</span>
@@ -20082,6 +20082,22 @@ function renderRankCardsStrip(strip, modeKey, opts = {}) {
                 rerender();
             } else {
                 flashStatus((data && data.error) || lt({ zh: '激活失败', en: 'Failed', fr: 'Échec', ja: '失敗しました' }));
+            }
+        });
+    });
+    strip.querySelectorAll('[data-lobby-rank-card-disarm]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const kind = btn.dataset.lobbyRankCardDisarm;
+            if (!kind) return;
+            btn.disabled = true;
+            const data = await rankCardsApi('/api/rank/cards/disarm', { card_type: kind });
+            btn.disabled = false;
+            if (data && data.success) {
+                if (currentAccount) currentAccount.rank_cards = data.cards;
+                flashStatus(lt({ zh: '已取消激活，卡已退回库存', en: 'Disarmed; card returned to inventory', fr: 'Désactivée ; carte rendue à l’inventaire', ja: '発動を解除し、カードを返却しました' }));
+                rerender();
+            } else {
+                flashStatus((data && data.error) || lt({ zh: '取消失败', en: 'Failed', fr: 'Échec', ja: '失敗しました' }));
             }
         });
     });
@@ -20206,6 +20222,22 @@ function bindRankCardsShop() {
             btn.disabled = false;
             if (data && data.success) { flashStatus(lt({ zh: '已激活，下一局生效', en: 'Armed for next match', fr: 'Activée pour le prochain match', ja: '次の対局で発動します' })); await refresh(); }
             else flashStatus((data && data.error) || lt({ zh: '激活失败', en: 'Failed', fr: 'Échec', ja: '失敗しました' }));
+        });
+    });
+    panel.querySelectorAll('[data-rank-card-disarm]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const kind = btn.dataset.rankCardDisarm;
+            if (!kind) return;
+            btn.disabled = true;
+            const data = await rankCardsApi('/api/rank/cards/disarm', { card_type: kind });
+            btn.disabled = false;
+            if (data && data.success) {
+                if (currentAccount) currentAccount.rank_cards = data.cards;
+                flashStatus(lt({ zh: '已取消激活，卡已退回库存', en: 'Disarmed; card returned to inventory', fr: 'Désactivée ; carte rendue à l’inventaire', ja: '発動を解除し、カードを返却しました' }));
+                await refresh();
+            } else {
+                flashStatus((data && data.error) || lt({ zh: '取消失败', en: 'Failed', fr: 'Échec', ja: '失敗しました' }));
+            }
         });
     });
 }

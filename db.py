@@ -15526,6 +15526,39 @@ def use_rank_card(user_id, card_type: str) -> tuple:
     return rank_cards_payload(uid), None
 
 
+def disarm_rank_card(user_id, card_type: str) -> tuple:
+    """取消激活：把已激活的卡退回库存（激活后再点一次即取消）。
+
+    互斥机制不受影响——只是把当前激活的卡放回库存。返回 (payload, error)。"""
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None, '账号无效'
+    kind = str(card_type or '').strip().lower()
+    if kind not in RANK_CARD_TYPES:
+        return None, '卡类型无效'
+    with get_db_connection() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        if kind == 'shield':
+            owned_col, armed_col = 'rank_shield_cards', 'rank_shield_armed'
+        else:
+            owned_col, armed_col = 'rank_double_cards', 'rank_double_armed'
+        row = conn.execute(f'SELECT {armed_col} AS armed FROM users WHERE id = ?', (uid,)).fetchone()
+        if row is None:
+            conn.rollback()
+            return None, '账号不存在'
+        if not int(row['armed'] or 0):
+            conn.rollback()
+            return None, '该卡未激活'
+        conn.execute(
+            f'UPDATE users SET {owned_col} = COALESCE({owned_col}, 0) + 1,'
+            f' {armed_col} = 0 WHERE id = ?',
+            (uid,),
+        )
+        conn.commit()
+    return rank_cards_payload(uid), None
+
+
 def user_rank_payload(user_or_id, *, include_special=False):
     """玩家段位展示载荷（对玩家可见；花阶分不再出现在其中）。"""
     import rank_system as _rank

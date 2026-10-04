@@ -25687,6 +25687,22 @@ def api_rank_cards_use():
     return jsonify({'success': True, 'cards': cards})
 
 
+@app.route('/api/rank/cards/disarm', methods=['POST'])
+def api_rank_cards_disarm():
+    if not DB_AVAILABLE:
+        return db_unavailable_response()
+    user = _current_account_user()
+    if not user:
+        return jsonify({'success': False, 'error': '请先登录账号'}), 401
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        data = {}
+    cards, error = db_module.disarm_rank_card(user['id'], str(data.get('card_type') or ''))
+    if error:
+        return jsonify({'success': False, 'error': error}), 400
+    return jsonify({'success': True, 'cards': cards})
+
+
 @app.route('/api/auth/me')
 def api_auth_me():
     if not DB_AVAILABLE:
