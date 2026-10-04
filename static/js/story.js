@@ -8484,6 +8484,51 @@
             dialog.dataset.pileKind = kind;
             dialog.showModal();
         }
+        // 建议 #332：卡组查看器底部展示最近卡组变更日志
+        renderStoryDeckLog(kind);
+    }
+
+    function renderStoryDeckLog(kind) {
+        const el = $('story-deck-log');
+        if (!el) return;
+        if (kind !== 'deck') {
+            el.classList.add('hidden');
+            el.replaceChildren();
+            return;
+        }
+        const log = activeRun?.state?.player?.deck_log;
+        if (!Array.isArray(log) || !log.length) {
+            el.classList.add('hidden');
+            el.replaceChildren();
+            return;
+        }
+        el.classList.remove('hidden');
+        el.replaceChildren();
+        const title = document.createElement('div');
+        title.className = 'story-deck-log-title';
+        title.textContent = lang === 'zh' ? '卡组变更' : 'Deck Changes';
+        el.append(title);
+        const list = document.createElement('div');
+        list.className = 'story-deck-log-list';
+        const actionLabels = lang === 'zh'
+            ? { gain: '加入', remove: '删去', upgrade: '升级', modify: '变化', create: '生成', exile: '放逐' }
+            : { gain: 'Added', remove: 'Removed', upgrade: 'Upgraded', modify: 'Modified', create: 'Created', exile: 'Exiled' };
+        const actionColors = { gain: '#4a9e5c', remove: '#c75450', upgrade: '#4a7fc1', modify: '#b8862f', create: '#7b68ae', exile: '#888' };
+        // 最新在上
+        [...log].reverse().forEach((entry) => {
+            const row = document.createElement('div');
+            row.className = 'story-deck-log-row';
+            const tag = document.createElement('span');
+            tag.className = 'story-deck-log-tag';
+            tag.textContent = actionLabels[entry.action] || entry.action;
+            tag.style.color = actionColors[entry.action] || '#888';
+            const name = document.createElement('span');
+            name.className = 'story-deck-log-name';
+            name.textContent = String(entry.card || '?');
+            row.append(tag, name);
+            list.append(row);
+        });
+        el.append(list);
     }
 
     function storyEnchantmentBookDefinition(bookOrId) {

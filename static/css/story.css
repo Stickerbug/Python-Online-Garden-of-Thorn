@@ -4126,6 +4126,38 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   line-height: 1;
   cursor: pointer;
 }
+/* 建议 #332：卡组变更日志（卡组查看器底部） */
+.story-deck-log {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--story-line-soft, #d8d4c8);
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.story-deck-log-title {
+  font: 700 12px/1.3 var(--font-main);
+  color: var(--story-muted, #6b8e6e);
+  margin-bottom: 4px;
+}
+
+.story-deck-log-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 400 12px/1.6 var(--font-main);
+}
+
+.story-deck-log-tag {
+  flex-shrink: 0;
+  font-weight: 700;
+  min-width: 36px;
+}
+
+.story-deck-log-name {
+  color: var(--story-text, #333);
+}
+
 .story-pile-grid {
   max-height: min(62vh, 460px);
   display: grid;
