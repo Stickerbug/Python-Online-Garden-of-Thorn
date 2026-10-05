@@ -9811,7 +9811,7 @@ def get_ongoing_games(beta_mode=None):
                 game_info.update({
                     'ai_match': True,
                     'match_kind': 'phelren',
-                    'ai_policy_label': str(getattr(room, 'ai_policy_label', None) or 'Phelren V2'),
+                    'ai_policy_label': str(getattr(room, 'ai_policy_label', None) or 'Phelren V2.1'),
                 })
             if room.mode == '2v2':
                 game_info['player3'] = player_names[2] if len(player_names) > 2 else '?'
@@ -20377,7 +20377,7 @@ def send_solo_state(sid, perspective=None, *, broadcast_spectators=True):
         state['ai_test'] = True
         state['ai_player_id'] = int(ai_meta.get('ai_player_id', 1))
         state['ai_thinking'] = bool(ai_meta.get('thinking'))
-        state['ai_policy_label'] = str(ai_meta.get('policy_label') or 'Phelren V2')
+        state['ai_policy_label'] = str(ai_meta.get('policy_label') or 'Phelren V2.1')
         state['ai_diagnostic_session_id'] = str(ai_meta.get('session_id') or '')
         if engine.game_over and isinstance(ai_meta.get('match_summary'), dict):
             state['match_summary'] = dict(ai_meta['match_summary'])
@@ -21339,7 +21339,7 @@ def build_spectate_state(room, perspective=0):
         base['ai_match'] = True
         base['ai_test'] = True
         base['ai_player_id'] = int(getattr(room, 'ai_player_id', 1))
-        base['ai_policy_label'] = str(getattr(room, 'ai_policy_label', None) or 'Phelren V2')
+        base['ai_policy_label'] = str(getattr(room, 'ai_policy_label', None) or 'Phelren V2.1')
     if getattr(engine, 'game_over', False) or getattr(engine, 'phase', None) == 'game_over':
         base['match_summary'] = getattr(room, '_match_summary', None)
     try:
@@ -32810,7 +32810,7 @@ def _create_ai_test_replay_room(sid, engine, meta, room_id=None):
     room.ai_human_player_id = human_player_id
     room.ai_player_id = ai_player_id
     room.ai_sid = ai_sid
-    room.ai_policy_label = str(meta.get('policy_label') or 'Phelren V2')
+    room.ai_policy_label = str(meta.get('policy_label') or 'Phelren V2.1')
     room.action_lock = _solo_action_lock_for_sid(sid)
     room.record_pregame_stats = False
     room.match_mod_profile = copy.deepcopy(_ai_test_mod_payload(sid))
@@ -33945,7 +33945,7 @@ def _finalize_ai_test_replay(sid, engine, meta, reason='game_over'):
             'match_kind': 'phelren',
             'ai_match': True,
             'ai_name': str(meta.get('ai_name') or 'Phelren'),
-            'ai_policy_label': str(meta.get('policy_label') or 'Phelren V2'),
+            'ai_policy_label': str(meta.get('policy_label') or 'Phelren V2.1'),
             'players': names[:2],
             'player_ids': player_ids,
             'winner_name': winner_name,
@@ -34433,7 +34433,7 @@ def _start_ai_test_session(sid, ai_health=None):
             'pregame_ai_running': False,
             'recent_ai_decisions': [],
             'latest_ai_decision_id': None,
-            'policy_label': 'Phelren V2',
+            'policy_label': 'Phelren V2.1',
             'diagnostic_metadata': {
                 'mode': 'formal_1v1_local_test',
                 'human_seat': human_player_id,

@@ -1018,7 +1018,7 @@ const I18N = {
         mod_selection_force_vanilla: 'Enabled the vanilla card mod because the selected mods must contain at least one Thorn, Bloom, Root, and Guard card.',
     mode_select: 'Mode', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: 'Infinite Fire', mode_random_deck: 'Random Deck',
         mode_casual_1v1: 'Casual 1v1', mode_casual_2v2: 'Casual 2v2', mode_ranked_1v1: 'Ranked 1v1', mode_ranked_2v2: 'Ranked 2v2', mode_casual_urf: 'Infinite Fire', mode_casual_random_deck: 'Random Deck',
-        ai_1v1_test: 'Battle Phelren V2', ai_1v1_test_title: 'Battle Phelren V2', ai_1v1_test_pending: 'Confirm a 1v1 match against Phelren? This match does not affect Garden Rating and uses the vanilla card set only.', ai_1v1_test_loading: 'Loading Phelren V2...',
+        ai_1v1_test: 'Battle Phelren V2.1', ai_1v1_test_title: 'Battle Phelren V2.1', ai_1v1_test_pending: 'Confirm a 1v1 match against Phelren? This match does not affect Garden Rating and uses the vanilla card set only.', ai_1v1_test_loading: 'Loading Phelren V2.1...',
         ai_1v1_test_health_label: 'AI HP', ai_1v1_test_health_note: 'AI HP',
         form_team: 'Form Team', leave_team: 'Leave Team', invite_team: 'Invite Team',
         team_invite_msg: '{0} invites you to form a team', team_formed_msg: 'Team formed with {0}',
@@ -1140,7 +1140,7 @@ I18N.zh = { ...I18N.en,
     gallery_type: '类型', gallery_cost: '费用', gallery_tags_label: '标签', gallery_description: '描述', gallery_effect: '效果', gallery_trigger: '触发',
     mode_select: '模式', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '无限火力', mode_random_deck: '随机卡组',
     mode_casual_1v1: '娱乐 1v1', mode_casual_2v2: '娱乐 2v2', mode_ranked_1v1: '天梯 1v1', mode_ranked_2v2: '天梯 2v2', mode_casual_urf: '无限火力', mode_casual_random_deck: '随机卡组',
-    ai_1v1_test: '对战 Phelren V2', ai_1v1_test_title: '对战 Phelren V2', ai_1v1_test_pending: '确认与 Phelren 进行 1v1 对局？本场对局不计段位，且仅使用原版模组。', ai_1v1_test_loading: '正在加载 Phelren V2…',
+    ai_1v1_test: '对战 Phelren V2.1', ai_1v1_test_title: '对战 Phelren V2.1', ai_1v1_test_pending: '确认与 Phelren 进行 1v1 对局？本场对局不计段位，且仅使用原版模组。', ai_1v1_test_loading: '正在加载 Phelren V2.1…',
     ai_1v1_test_health_label: 'AI 血量', ai_1v1_test_health_note: 'AI 血量',
     form_team: '组队', leave_team: '离开队伍', invite_team: '邀请队伍',
     team_invite_msg: '{0} 邀请你组队', team_formed_msg: '已与 {0} 组队',
@@ -1227,7 +1227,7 @@ I18N.fr = { ...I18N.en,
     choose_light_cards: 'Choisissez les cartes Attaque à convertir', choose_yggdrasil_card: 'Carte Arbre-Monde', opening_sequence_title: 'Arrangement floral', opening_sequence_message: 'Faites glisser les cartes pour réorganiser votre pioche. La carte du haut sera piochée en premier.', convert_label: 'Convertir', convert_per_type: 'Max {0} par type',
     selected_count: 'Sélectionné {0}/{1}', max_selection_warning: 'Ne peut pas dépasser {0}', deck_total: 'Deck : {0} cartes', view_deck_title: 'Voir le deck',
     mode_select: 'Mode', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: 'Feu infini', mode_random_deck: 'Deck aléatoire',
-    ai_1v1_test: 'Affronter Phelren V2', ai_1v1_test_title: 'Affronter Phelren V2', ai_1v1_test_pending: 'Confirmer un duel 1v1 contre Phelren ? Cette partie ne modifie pas le Garden Rating et utilise uniquement le jeu de base Vanilla.', ai_1v1_test_loading: 'Chargement de Phelren V2…',
+    ai_1v1_test: 'Affronter Phelren V2.1', ai_1v1_test_title: 'Affronter Phelren V2.1', ai_1v1_test_pending: 'Confirmer un duel 1v1 contre Phelren ? Cette partie ne modifie pas le Garden Rating et utilise uniquement le jeu de base Vanilla.', ai_1v1_test_loading: 'Chargement de Phelren V2.1…',
     ai_1v1_test_health_label: 'PV de l’IA', ai_1v1_test_health_note: 'PV de l’IA',
     hand_deck_info_opp: 'Main:{0} Deck:{1}', hand_deck_discard_info: 'Main:{0} Deck:{1} Défausse:{2}', round_status: 'Tour {0} - {1}',
     server_broadcast: 'Serveur : {0}', error_msg: 'Erreur : {0}', lobby_status: 'Salon - {0}', no_counter_countdown: 'Pas de contre({0})',
@@ -1316,7 +1316,7 @@ I18N.ja = { ...I18N.en,
     choose_light_cards: '変化させる攻撃カードを選択', choose_yggdrasil_card: '世界樹変換カードを選択', opening_sequence_title: '花序編成', opening_sequence_message: 'カードをドラッグして山札の順序を変更します。一番上のカードから引きます。', convert_label: '変換', convert_per_type: 'タイプごとに最大{0}枚',
     selected_count: '選択済み {0}/{1}', max_selection_warning: '{0}を超えることはできません', deck_total: 'デッキ: {0}枚', view_deck_title: 'デッキ確認',
     mode_select: 'モード', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '無限火力', mode_random_deck: 'ランダムデッキ',
-        ai_1v1_test: 'Phelren V2 と対戦', ai_1v1_test_title: 'Phelren V2 と対戦', ai_1v1_test_pending: 'Phelren との1v1対戦を開始しますか？この対戦では Garden Rating は変動せず、Vanilla カードのみを使用します。', ai_1v1_test_loading: 'Phelren V2 を読み込んでいます…',
+        ai_1v1_test: 'Phelren V2.1 と対戦', ai_1v1_test_title: 'Phelren V2.1 と対戦', ai_1v1_test_pending: 'Phelren との1v1対戦を開始しますか？この対戦では Garden Rating は変動せず、Vanilla カードのみを使用します。', ai_1v1_test_loading: 'Phelren V2.1 を読み込んでいます…',
         ai_1v1_test_health_label: 'AI HP', ai_1v1_test_health_note: 'AI HP',
     hand_deck_info_opp: '手札:{0} デッキ:{1}', hand_deck_discard_info: '手札:{0} デッキ:{1} 捨て札:{2}', round_status: '第{0}ターン - {1}',
     server_broadcast: 'サーバー: {0}', error_msg: 'エラー: {0}', lobby_status: 'ロビー - {0}', no_counter_countdown: 'カウンターなし({0})',
@@ -6692,7 +6692,7 @@ function setAi1v1TestLoading(loading) {
     if (healthInput) healthInput.disabled = ai1v1StartPending;
     if (label) {
         label.textContent = ai1v1StartPending
-            ? (UI.ai_1v1_test_loading || '正在加载 Phelren V2…')
+            ? (UI.ai_1v1_test_loading || '正在加载 Phelren V2.1…')
             : UI.ai_1v1_test;
     }
 }
@@ -7005,7 +7005,7 @@ function updateStaticText() {
     const aiTestLabel = $('ai-1v1-test-label');
     if (aiTestLabel) {
         aiTestLabel.textContent = ai1v1StartPending
-            ? (UI.ai_1v1_test_loading || '正在加载 Phelren V2…')
+            ? (UI.ai_1v1_test_loading || '正在加载 Phelren V2.1…')
             : UI.ai_1v1_test;
     }
     const aiHealthLabel = $('ai-1v1-test-health-label');
@@ -38565,7 +38565,7 @@ function renderGameOver(data) {
                 const aiHealth = readAi1v1TestHealthInput();
                 setAi1v1TestLoading(true);
                 rematchBtn.disabled = true;
-                rematchBtn.textContent = UI.ai_1v1_test_loading || '正在加载 Phelren V2…';
+                rematchBtn.textContent = UI.ai_1v1_test_loading || '正在加载 Phelren V2.1…';
                 socket.emit('ai_1v1_rematch', { ai_health: aiHealth });
             };
         } else if (isTutorialGameOver && isWin) {

@@ -8486,6 +8486,50 @@ class GameEngine:
                 return reason
         return ''
 
+    def _sewage_destroyable_target_exists(self, player_id: int, card) -> bool:
+        """污水门槛：场上（任意玩家）至少存在一件可摧毁装备。"""
+        for pid in range(len(self.players)):
+            for eq in self.players[pid].equipment:
+                if 'indestructible' not in self._effective_card_flags(eq.card_instance):
+                    return True
+        return False
+
+    def _fission_selectable_attacks_exist(self, player_id: int, card) -> bool:
+        """裂变门槛：手中至少有一张可选（非超然）攻击牌。"""
+        ps = self.players[player_id]
+        return any(
+            getattr(c, 'card_type', '') == 'thorn' and self._card_selectable_by_action(c)
+            for c in ps.hand
+        )
+
+    def _fusion_same_name_pair_exists(self, player_id: int, card) -> bool:
+        """聚变门槛：手中存在2张同名可选攻击牌。"""
+        ps = self.players[player_id]
+        counts: dict = {}
+        for c in ps.hand:
+            if getattr(c, 'card_type', '') == 'thorn' and self._card_selectable_by_action(c):
+                counts[c.def_id] = counts.get(c.def_id, 0) + 1
+        return any(n >= 2 for n in counts.values())
+
+    def _mimic_copyable_target_exists(self, player_id: int, card) -> bool:
+        """拟态门槛：手中存在另一张可复制（非超然、非唯一）的牌。"""
+        ps = self.players[player_id]
+        own_instance_id = getattr(card, 'instance_id', None)
+        for c in ps.hand:
+            if c is card or c.instance_id == own_instance_id:
+                continue
+            if not self._card_selectable_by_action(c):
+                continue
+            if 'unique' in self._effective_card_flags(c):
+                continue
+            return True
+        return False
+
+    def _chromosome_selectable_discard_exists(self, player_id: int, card) -> bool:
+        """染色体门槛：弃牌堆存在可选（非超然）目标牌。"""
+        ps = self.players[player_id]
+        return any(self._card_selectable_by_action(c) for c in ps.discard)
+
     def _equipment_uses_non_stack_rule(self, eq: Optional[EquipmentInstance]) -> bool:
         if eq is None:
             return False
@@ -13601,30 +13645,46 @@ class GameEngine:
         self.log_msg(f"{self.pn(player_id)}使用了{card.name_cn}，但未找到目标")
 
     def _effect_sewage(self, player_id: int, card: CardInstance, choice=None):
-        opp = self.players[1 - player_id]
+        # 玩家反馈：污水有时打出后什么都不摧毁。UI 允许把任意存活玩家（含
+        # 自己）选为目标，旧实现只在 players[1-player_id] 里找 instance_id，
+        # 选自己 / 2v2 选非正对面玩家必然落空。现在按 instance_id 在全场找，
+        # 装备在谁身上就摧毁谁的；自动兜底（无选择路径）仍只打敌方一侧。
+        def _try_destroy(owner_id: int, eq) -> bool:
+            eq_name = eq.card_def.name_cn
+            destroyed = self._destroy_equipment(owner_id, eq, source_id=player_id)
+            if destroyed:
+                self.log_msg(f"{self.pn(player_id)}使用污水！摧毁了{self.pn(owner_id)}的{eq_name}")
+            else:
+                self.log_msg(f"{self.pn(player_id)}使用污水，但装备保护抵消了摧毁")
+            return destroyed
+
         if choice and 'target_instance_id' in choice:
-            eq = opp.find_equipment(choice['target_instance_id'])
-            if eq and 'indestructible' not in eq.card_instance.flags:
-                eq_name = eq.card_def.name_cn
-                destroyed = self._destroy_equipment(1 - player_id, eq, source_id=player_id)
-                if destroyed:
-                    self.log_msg(f"{self.pn(player_id)}使用污水！摧毁了敌方的{eq_name}")
-                else:
-                    self.log_msg(f"{self.pn(player_id)}使用污水，但装备保护抵消了摧毁")
-            else:
-                self.log_msg(f"{self.pn(player_id)}使用污水，但没有可摧毁的装备")
-        else:
-            destroyable = [e for e in opp.equipment if 'indestructible' not in e.card_instance.flags]
+            for pid in range(len(self.players)):
+                eq = self.players[pid].find_equipment(choice['target_instance_id'])
+                if eq is None:
+                    continue
+                if 'indestructible' in self._effective_card_flags(eq.card_instance):
+                    self.log_msg(f"{self.pn(player_id)}使用污水，但没有可摧毁的装备")
+                    return
+                _try_destroy(pid, eq)
+                return
+            self.log_msg(f"{self.pn(player_id)}使用污水，但没有可摧毁的装备")
+            return
+        team_of = getattr(self, 'team_of', None)
+        own_team = team_of(player_id) if callable(team_of) else None
+        for pid in range(len(self.players)):
+            if pid == player_id:
+                continue
+            if callable(team_of) and team_of(pid) == own_team:
+                continue
+            destroyable = [
+                e for e in self.players[pid].equipment
+                if 'indestructible' not in self._effective_card_flags(e.card_instance)
+            ]
             if destroyable:
-                eq = destroyable[0]
-                eq_name = eq.card_def.name_cn
-                destroyed = self._destroy_equipment(1 - player_id, eq, source_id=player_id)
-                if destroyed:
-                    self.log_msg(f"{self.pn(player_id)}使用污水！摧毁了敌方的{eq_name}")
-                else:
-                    self.log_msg(f"{self.pn(player_id)}使用污水，但装备保护抵消了摧毁")
-            else:
-                self.log_msg(f"{self.pn(player_id)}使用污水，但没有可摧毁的装备")
+                _try_destroy(pid, destroyable[0])
+                return
+        self.log_msg(f"{self.pn(player_id)}使用污水，但没有可摧毁的装备")
 
     def _effect_magicsewage(self, player_id: int, card: CardInstance, choice=None):
         destroyed_count = 0

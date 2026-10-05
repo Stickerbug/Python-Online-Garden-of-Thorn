@@ -164,6 +164,14 @@ BUILTIN_ENGINE_EFFECTS: Dict[str, str] = {"yggdrasil": "_effect_yggdrasil"}
 BUILTIN_PLAY_REQUIREMENT_FALLBACKS: Tuple[Tuple[str, str, str], ...] = (
     ("ocean:sapphire", "_ocean_sapphire_selectable_attacks", "手中没有可选择的攻击牌"),
     ("arctic:ruby", "_arctic_ruby_selectable_attacks", "手中没有可支付消耗的攻击牌"),
+    # 玩家反馈：空场也能打出污水白付费用 —— UI 拦了但服务端没有门槛。
+    # 同类目标选择牌一并补上服务端门槛（UI 已有对应提示，此处兜底协议端/AI 路径）。
+    ("sewage", "_sewage_destroyable_target_exists", "场上没有可摧毁的装备"),
+    ("magicsewage", "_sewage_destroyable_target_exists", "场上没有可摧毁的装备"),
+    ("fission", "_fission_selectable_attacks_exist", "手中没有可选择的目标牌"),
+    ("fusion", "_fusion_same_name_pair_exists", "手中没有2张同名攻击牌"),
+    ("mimic", "_mimic_copyable_target_exists", "手中没有可复制的牌"),
+    ("chromosome", "_chromosome_selectable_discard_exists", "弃牌堆没有可选择的目标牌"),
 )
 
 
