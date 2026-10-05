@@ -3671,7 +3671,7 @@ class GameEngine:
         self.round_num: int = 0
         self.phase: str = 'waiting'
         self._game_start_applied: bool = False
-        # AI 入口自选血量（80-500，仅 AI 一侧）：{player_id: hp}，
+        # AI 入口自选血量（50-1000，仅 AI 一侧）：{player_id: hp}，
         # start_game 初始化血量时覆盖默认 100。空 dict = 全部默认。
         self.player_health_overrides: Dict[int, int] = {}
         self.log: List[str] = []

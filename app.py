@@ -34540,12 +34540,12 @@ def _emit_ai_public_entry_disabled(sid):
 
 
 def _validate_ai_test_health(value):
-    """AI 入口自选血量：80-500 整数，非法输入返回 None。"""
+    """AI 入口自选血量：50-1000 整数，非法输入返回 None。"""
     try:
         parsed = int(value)
     except (TypeError, ValueError):
         return None
-    if 80 <= parsed <= 500:
+    if 50 <= parsed <= 1000:
         return parsed
     return None
 
@@ -34621,7 +34621,7 @@ def on_ai_1v1_start(data=None):
     if ai_health_raw is not None and _validate_ai_test_health(ai_health_raw) is None:
         socketio.emit('ai_1v1_status', {
             'status': 'error',
-            'message': 'AI 血量必须是 80-500 的整数',
+            'message': 'AI 血量必须是 50-1000 的整数',
         }, room=sid)
         return
     _queue_ai_test_start(sid, ai_health=ai_health_raw)
@@ -34677,7 +34677,7 @@ def on_ai_1v1_rematch(data=None):
         if ai_health_raw is not None and _validate_ai_test_health(ai_health_raw) is None:
             socketio.emit('ai_1v1_status', {
                 'status': 'error',
-                'message': 'AI 血量必须是 80-500 的整数',
+                'message': 'AI 血量必须是 50-1000 的整数',
             }, room=sid)
             return
         _queue_ai_test_start(sid, ai_health=ai_health_raw)

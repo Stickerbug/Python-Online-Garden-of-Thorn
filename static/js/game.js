@@ -6672,9 +6672,9 @@ function setAi1v1TestLoading(loading) {
     }
 }
 
-/* AI 入口自选血量（仅 AI 一侧）：80-500 整数，默认 100，记住上次输入 */
-const AI_1V1_HEALTH_MIN = 80;
-const AI_1V1_HEALTH_MAX = 500;
+/* AI 入口自选血量（仅 AI 一侧）：50-1000 整数，默认 100，记住上次输入 */
+const AI_1V1_HEALTH_MIN = 50;
+const AI_1V1_HEALTH_MAX = 1000;
 
 function readAi1v1TestHealthInput() {
     const input = $('ai-1v1-test-health-input');

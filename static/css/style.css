@@ -15471,7 +15471,7 @@ html[data-theme="dark"].home-touhou-active .home-id-top {
     width: 100%;
 }
 
-/* AI 入口自选血量输入（80-500）。用 em：跟随移动端密度缩放，
+/* AI 入口自选血量输入（50-1000）。用 em：跟随移动端密度缩放，
    与旁边的对战按钮保持同高。 */
 .ai-1v1-test-health {
     display: inline-flex;

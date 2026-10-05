@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""AI 入口自选血量（80-500，仅 AI 一侧）：引擎 start_game 覆写生效。"""
+"""AI 入口自选血量（50-1000，仅 AI 一侧）：引擎 start_game 覆写生效。"""
 
 import os
 import sys
@@ -60,13 +60,13 @@ class AiHealthOverrideTest(unittest.TestCase):
                 parsed = int(value)
             except (TypeError, ValueError):
                 return None
-            return parsed if 80 <= parsed <= 500 else None
+            return parsed if 50 <= parsed <= 1000 else None
 
-        self.assertEqual(validate(80), 80)
-        self.assertEqual(validate(500), 500)
+        self.assertEqual(validate(50), 50)
+        self.assertEqual(validate(1000), 1000)
         self.assertEqual(validate(100), 100)
-        self.assertIsNone(validate(79))
-        self.assertIsNone(validate(501))
+        self.assertIsNone(validate(49))
+        self.assertIsNone(validate(1001))
         self.assertIsNone(validate('abc'))
         self.assertIsNone(validate(None))
         self.assertIsNone(validate('100.5'))
