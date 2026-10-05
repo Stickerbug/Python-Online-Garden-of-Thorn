@@ -13907,6 +13907,12 @@ function cardHasSublimeFlag(cardDict, cardDef = null) {
     return effective.has('sublime') || effective.has('vanilla:sublime') || effective.has('tag_sublime') || effective.has('tag_vanilla:sublime');
 }
 
+function cardHasUniqueFlag(cardDict, cardDef = null) {
+    const resolvedDef = cardDef || getCardDef(cardDict && cardDict.def_id);
+    const { effective } = getEffectiveCardFlagSets(cardDict || {}, resolvedDef || {});
+    return effective.has('unique') || effective.has('tag_unique');
+}
+
 function isOceanSapphireCard(cardDict, cardDef = null) {
     const resolvedDef = cardDef || getCardDef(cardDict && cardDict.def_id);
     return cardMatchesAnyLocalId(cardDict || {}, resolvedDef || {}, ['Sapphire', 'ocean:sapphire']);
@@ -22051,6 +22057,11 @@ function cacheAccount(user) {
                 username: user.username,
                 player_id: user.player_id || '',
                 display_name: user.display_name || user.username,
+                /* 反馈（管理员撤回）：角色字段必须随缓存保留——刷新页面后
+                   currentAccount 从这里恢复，丢了 role_type 会让 admin 的
+                   聊天撤回退化成普通玩家的 2 分钟窗口。 */
+                role_type: typeof user.role_type === 'string' ? user.role_type : '',
+                is_admin_player: user.is_admin_player === true,
                 games_played: user.games_played || 0,
                 wins: user.wins || 0,
                 losses: user.losses || 0,
@@ -36751,7 +36762,7 @@ async function getCardChoice(cardDict, targetPlayerId = -1) {
         if (!selectedCards) return false;
         return { target_instance_ids: selectedCards.map(c => c.instance_id) };
     } else if (isMimicCardDict(cardDict)) {
-        const others = hand.filter(c => c.instance_id !== cardDict.instance_id && !cardHasSublimeFlag(c));
+        const others = hand.filter(c => c.instance_id !== cardDict.instance_id && !cardHasSublimeFlag(c) && !cardHasUniqueFlag(c));
         if (!others.length) { gameAlert(UI.notice, UI.no_attack_cards); return false; }
         const options = others.map(c => mimicCardChoiceOption(c, cardDict, gameState && gameState.you));
         const sel = await simpleChoice(UI.choose_hand_for.replace('{0}', sourceCardName), options);
