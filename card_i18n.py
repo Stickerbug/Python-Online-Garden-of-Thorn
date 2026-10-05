@@ -77,7 +77,7 @@ CARD_I18N = {
     'Triangle': {
         'name': _t('三角形', 'Triangle', 'Triangle', 'Triângulo', 'Треугольник', '三角形'),
         'desc': _t('量变引起质变。', 'Quantitative change leads to qualitative change.', 'Le changement quantitatif mène au changement qualitatif.', 'Mudança quantitativa leva a mudança qualitativa.', 'Количество переходит в качество.', '量の変化が質の変化を生む。'),
-        'effect': _t('造成(6+3×三角形层数)D；造成伤害时获得1层三角形，上限4层', 'Deal (6+3×Triangle stacks)D; when damage is dealt, gain 1 Triangle stack, up to 4', 'Inflige (6+3×charges de Triangle)D ; si des dégâts sont infligés, gagne 1 charge de Triangle, max 4', 'Causa (6+3×camadas de Triângulo)D; ao causar dano, ganha 1 camada de Triângulo, máximo 4', 'Наносит (6+3×слои Треугольника)D; при нанесении урона получает 1 слой Треугольника, максимум 4', '(6+3×三角形層数)Dを与える。ダメージを与えた時、三角形を1層得る。上限4層'),
+        'effect': _t('造成8D；造成伤害时，手牌、抽牌堆、弃牌堆中的攻击牌+1暂时威力（含本牌）', 'Deal 8D; when damage is dealt, attack cards in your hand, deck and discard gain +1 temporary Power (this card included)', 'Inflige 8D ; si des dégâts sont infligés, les cartes d’attaque de votre main, pioche et défausse gagnent +1 Puissance temporaire (cette carte incluse)', 'Causa 8D; ao causar dano, cartas de ataque da sua mão, deck e descarte ganham +1 Poder temporário (esta carta incluída)', 'Наносит 8D; при нанесении урона карты атак в вашей руке, колоде и сбросе получают +1 временную Мощь (включая эту карту)', '8Dを与える。ダメージを与えた時、手札・山札・捨て札の攻撃カード+1の一時威力を得る（このカードを含む）'),
     },
     'Fries': {
         'name': _t('薯条', 'Fries', 'Frites', 'Batatas fritas', 'Картофель фри', 'フライドポテト'),

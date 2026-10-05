@@ -528,7 +528,7 @@ _reg(CardDef('Fang', 'Fang', '尖牙', 2, 0, 'thorn', 5, 'Common',
              '吸取对手的生命来为你回复。', '对目标造成8D；造成实际伤害时，回复自己向下取整(实际伤害×80%)的H'))
 
 _reg(CardDef('Triangle', 'Triangle', '三角形', 2, 0, 'thorn', 8, 'Common',
-             '量变引起质变。', '造成(6+3×三角形层数)D；造成伤害时获得1层三角形，上限4层'))
+             '量变引起质变。', '造成8D；造成伤害时，手牌、抽牌堆、弃牌堆中的攻击牌+1暂时威力（含本牌）'))
 
 _reg(CardDef('MagicBone', 'Magic Bone', '魔法骨头', 0, 4, 'thorn', 5, 'Common',
              '魔力凝聚的骨头，穿透力更强。', '造成15D'))
@@ -538,13 +538,13 @@ _reg(CardDef('MagicStinger', 'Magic Stinger', '魔法刺', 0, 8, 'thorn', 5, 'Co
 
 _reg(CardDef('Fission', 'Fission', '裂变', 0, 0, 'bloom', 4, 'Common',
              '将一次攻击分裂为多次。', '选择一张手中的攻击牌，将其裂变层数增加2',
-             flags={'exile', 'self_only'},
+             flags={'exile', 'self_only', 'mark:fission'},
              image='card-art/Fission.svg', image_url='card-art/Fission.svg',
              upgraded_image='assets/cards/fission+1.svg', upgraded_image_url='assets/cards/fission+1.svg'))
 
 _reg(CardDef('Fusion', 'Fusion', '聚变', 0, 0, 'bloom', 4, 'Common',
              '将相同的攻击聚合为一击。', '选择自己手中2张同名攻击牌，将其聚变层数相加，其他特殊效果层数分别保留最大值，合并为1张牌；每层额外聚变使原始花费增加50%（向下取整）',
-             flags={'self_only'},
+             flags={'self_only', 'mark:fusion'},
              image='card-art/Fusion.svg', image_url='card-art/Fusion.svg'))
 
 _reg(CardDef('Iris', 'Iris', '鸢尾', 3, 0, 'bloom', 3, 'Common',
@@ -571,18 +571,20 @@ _reg(CardDef('Chilli', 'Chilli', '辣椒', 0, 0, 'bloom', 5, 'Common',
              flags={'self_only'}))
 
 _reg(CardDef('Chromosome', 'Chromosome', '染色体', 1, 0, 'bloom', 2, 'Common',
-             '从基因中提取记忆，寻找所需之牌。', '从弃牌堆中选择一张牌将其加入手中，并使其获得共生'))
+             '从基因中提取记忆，寻找所需之牌。', '从弃牌堆中选择一张牌将其加入手中，并使其获得共生',
+             flags={'mark:chromosome'}))
 
 _reg(CardDef('Sewage', 'Sewage', '污水', 2, 0, 'bloom', 10, 'Common',
-             '腐蚀一切装备。', '选择目标一张装备摧毁'))
+             '腐蚀一切装备。', '选择目标一张装备摧毁',
+             flags={'mark:sewage'}))
 
 _reg(CardDef('MagicSewage', 'Magic Sewage', '魔法污水', 0, 6, 'bloom', 3, 'Common',
              '至死方休！', '摧毁场上所有装备；每摧毁1张装备，回复自己1E',
-             flags={'self_only'}))
+             flags={'self_only', 'mark:magicsewage'}))
 
 _reg(CardDef('Mimic', 'Mimic', '拟态', 0, 0, 'bloom', 2, 'Common',
              '完美模仿。', '选择自己1张手牌，额外消耗其特殊效果超出初始值的层数总和一半的E（向上取整）；将其费用不变、特殊效果层数减半（向上取整）的复制加入手中',
-             flags={'exile', 'self_only'}))
+             flags={'exile', 'self_only', 'mark:mimic'}))
 
 _reg(CardDef('Yggdrasil', 'Yggdrasil', '世界树之叶', 2, 0, 'bloom', 0, 'Super',
              '神奇的树叶。可以使人死而复生。',
