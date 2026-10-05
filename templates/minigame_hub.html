@@ -11,7 +11,9 @@
     const read = (key) => {
       try { return window.localStorage.getItem(key); } catch (_) { return null; }
     };
-    const theme = read('gtn_theme') === 'dark' || read('gtn_beta_theme') === 'dark' ? 'dark' : 'light';
+    /* 反馈 #372：gtn_beta_theme 是废弃的 beta 键，老用户残留 dark 会压过
+       主站当前主题选择，休闲花园因此不跟随亮/暗切换。 */
+    const theme = read('gtn_theme') === 'dark' ? 'dark' : 'light';
     document.documentElement.setAttribute('data-theme', theme);
   })();
   </script>

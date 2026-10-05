@@ -1697,8 +1697,21 @@ class GameEngine:
                 continue
             if not getattr(ps, 'invincible_expire_on_turn_start', False):
                 continue
-            if getattr(ps, 'invincible_until_player', None) != player_id:
-                continue
+            until_player = getattr(ps, 'invincible_until_player', None)
+            try:
+                until_player = int(until_player) if until_player is not None else -1
+            except (TypeError, ValueError):
+                until_player = -1
+            if until_player == player_id:
+                pass  # 计时对象就是本回合玩家：正常到期
+            else:
+                # 反馈 #367：计时对象（触发者）已阵亡时，他的"下回合开始"永远
+                # 不会到来，无敌会变成永久。触发者阵亡即视为计时完成——任意
+                # 回合开始结算时清掉这类挂账。
+                if not (0 <= until_player < len(self.players)):
+                    continue
+                if int(self.players[until_player].health or 0) > 0:
+                    continue
             grant_round = int(getattr(ps, 'invincible_granted_round', -1) or -1)
             grant_marker = int(getattr(ps, 'invincible_granted_turn_marker', -1) or -1)
             if grant_round == current_round and grant_marker == current_marker:

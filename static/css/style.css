@@ -2707,26 +2707,27 @@ a.title-shop-afdian-go:hover {
 .invite-gr-badges {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 18px;
   justify-content: center;
-  margin: 6px 0;
+  margin: 8px 0;
 }
 
 .invite-gr-badge-col {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
-  min-width: 56px;
+  gap: 4px;
+  min-width: 86px;
+  flex: 1;
 }
 
 .invite-gr-badge-label {
-  font-size: 11px;
+  font-size: 12px;
   opacity: 0.65;
 }
 
 .invite-gr-delta {
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .invite-gr-cards {
@@ -2955,8 +2956,9 @@ a.title-shop-afdian-go:hover {
 
 .invite-gr-preview-card {
   margin: 10px auto 4px;
-  padding: 10px 12px;
-  max-width: 260px;
+  padding: 12px 14px;
+  /* 反馈 #366：旧 260px 塞三列徽章会把段位徽章压得很小 */
+  width: min(420px, calc(100vw - 64px));
   border: 1px solid var(--border-light);
   border-radius: var(--radius-sm);
   background: var(--bg-secondary);

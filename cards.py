@@ -586,7 +586,7 @@ _reg(CardDef('Mimic', 'Mimic', '拟态', 0, 0, 'bloom', 2, 'Common',
 
 _reg(CardDef('Yggdrasil', 'Yggdrasil', '世界树之叶', 2, 0, 'bloom', 0, 'Super',
              '神奇的树叶。可以使人死而复生。',
-             f'回复目标{YGGDRASIL_HEAL}H；自己受到致命伤害时，将自己H设为5，抽3张牌，清除所有效果，无敌直到触发者的下一个回合开始，并放逐此牌；打出时可以选择阵亡玩家，使其复活并触发上述效果',
+             f'回复目标{YGGDRASIL_HEAL}H；自己受到致命伤害时，将自己H设为5，抽3张牌，清除所有效果，无敌直到触发者的下一个回合开始或其阵亡，并放逐此牌；打出时可以选择阵亡玩家，使其复活并触发上述效果',
              flags={'sublime'}))
 
 _reg(CardDef('Leaf', 'Leaf', '叶子', 1, 0, 'root', 5, 'Common',
