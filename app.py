@@ -37842,7 +37842,12 @@ def api_leisure_ticket_enter():
         if payload.get('free_entry'):
             # 免费时段：无会话也放行（不限时；不发奖励流程外的额外东西）
             return jsonify({'success': True, 'mode': 'free', **payload})
-        session_info = leisure_ticket.start_play_session(user.get('id'))
+        # #371：resume_only 用于「tab 切回/刷新」的静默恢复——有剩余时间的
+        # 暂停会话则恢复，否则不动（绝不因此扣票）。
+        resume_only = bool((request.get_json(silent=True) or {}).get('resume_only'))
+        session_info = leisure_ticket.start_play_session(user.get('id'), resume_only=resume_only)
+        if session_info is None:
+            return jsonify({'success': True, 'mode': 'none'})
         with get_db_connection() as conn:
             payload = leisure_ticket.ticket_payload(conn, user.get('id'))
         return jsonify({'success': True, 'mode': 'ticket', 'session': session_info, **payload})

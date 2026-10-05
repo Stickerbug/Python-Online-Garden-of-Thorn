@@ -250,8 +250,13 @@ def _session_table(conn):
     )
 
 
-def start_play_session(user_id):
-    """消耗一张门票开启 10 分钟游玩期。返回会话信息。"""
+def start_play_session(user_id, resume_only=False):
+    """消耗一张门票开启 10 分钟游玩期。返回会话信息。
+
+    反馈 #371：存在「暂停中且还有剩余时间」的会话时恢复它，而不是另扣一张
+    票并把剩余时间清零（旧逻辑下刷新/离开再回来 = 白丢剩余时间 + 多扣票）。
+    resume_only=True（tab 切回时的静默恢复）：无可恢复会话时返回 None，不扣票。
+    """
     now = db.utc_now()
     with db.get_db_connection() as conn:
         conn.execute('BEGIN IMMEDIATE')
@@ -263,6 +268,24 @@ def start_play_session(user_id):
             # 已有活动会话：不重复扣票（断线重连恢复）。
             conn.commit()
             return session_payload_from_row(existing)
+        if existing is not None and float(existing['elapsed_seconds'] or 0) < PLAY_SESSION_SECONDS:
+            # 暂停中的会话还有剩余时间：恢复倒计时，不扣票。
+            conn.execute(
+                '''
+                UPDATE leisure_play_sessions
+                SET started_at = ?, active = 1, updated_at = ?
+                WHERE user_id = ?
+                ''',
+                (now, now, int(user_id)),
+            )
+            conn.commit()
+            row = conn.execute(
+                'SELECT * FROM leisure_play_sessions WHERE user_id = ?', (int(user_id),),
+            ).fetchone()
+            return session_payload_from_row(row)
+        if resume_only:
+            conn.commit()
+            return None
         if not consume_ticket(conn, user_id):
             conn.rollback()
             raise TicketError('门票不足', 'NO_TICKET')
@@ -373,7 +396,10 @@ def finish_play_session(user_id):
             elapsed += (db.utc_now_dt() - started).total_seconds()
         conn.execute(
             'UPDATE leisure_play_sessions SET elapsed_seconds = ?, active = 0, updated_at = ? WHERE user_id = ?',
-            (min(elapsed, PLAY_SESSION_SECONDS), now, int(user_id)),
+            # #371：结算后的会话视为时间已用尽（elapsed 记满），与「暂停」
+            # （保留真实 elapsed 供恢复）区分——否则 finish 过的会话还能被
+            # start_play_session 的恢复分支免费续时间。
+            (max(elapsed, PLAY_SESSION_SECONDS), now, int(user_id)),
         )
         conn.commit()
         return session_payload_from_row(conn.execute(

@@ -1183,6 +1183,13 @@ async function boot() {
       declined: !!local.declined,
       lastSyncLabel: '已从本机续局（联网后校验）',
     };
+    // 反馈 #371：恢复存档时把本地限速时钟按历史操作数回拨对齐（与服务端
+    // 「2×本局经过秒」同口径）。否则 ops.length=300 对着刚归零的时钟，
+    // 允许上限只有 4，所有输入被永久静默拒绝——表现就是「回来后盘面
+    // 卡死无法操作」，退出再进还是死局。
+    if (Array.isArray(state.ops) && state.ops.length > OPS_RATE_BURST_ALLOWANCE) {
+      opsRateStartAt = Date.now() - (state.ops.length / OPS_RATE_LIMIT_PER_SECOND) * 1000;
+    }
     renderBoard(false);
   }
   try {

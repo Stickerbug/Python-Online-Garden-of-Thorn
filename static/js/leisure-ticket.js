@@ -8,6 +8,41 @@
   let timerHandle = null;
   let warned = new Set();
   let settled = false;
+  let ticketMode = false;            // 本次进入走的是门票（免费时段不需要暂停/恢复）
+
+  /* 反馈 #371：切走/关页时暂停倒计时（keepalive 信标），切回时静默恢复。
+     服务端本就有 pause/resume，此前客户端从未调用——10 分钟按墙钟硬烧，
+     玩家中途离开回来不是时间没了就是重进被多扣一张票。 */
+  function pauseBeacon() {
+    if (!ticketMode || settled) return;
+    try {
+      fetch('/api/leisure/ticket/leave', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+        keepalive: true,
+      }).catch(() => {});
+    } catch (_) { /* 忽略：无会话时服务端本来也是 no-op */ }
+  }
+
+  function resumeAfterHidden() {
+    if (!ticketMode || settled) return;
+    try {
+      fetch('/api/leisure/ticket/enter', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resume_only: true }),
+      }).catch(() => {});
+    } catch (_) { /* 忽略 */ }
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) pauseBeacon();
+    else resumeAfterHidden();
+  });
+  window.addEventListener('pagehide', pauseBeacon);
 
   function banner() {
     let el = document.getElementById('leisure-timer-banner');
@@ -68,10 +103,12 @@
       return false;
     }
     if (data.mode === 'free') {
+      ticketMode = false;
       showBanner('免费时段（不限时）', 'ok');
       window.setTimeout(hideBanner, 4000);
       return true;
     }
+    ticketMode = data.mode !== 'none';
     return true;
   }
 
