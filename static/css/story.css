@@ -3510,10 +3510,13 @@ button.story-settings-row:hover:not(:disabled) { border-color: var(--story-green
 .story-card.card.guard { --story-card-type-color: var(--guard); }
 .story-card.card.curse { --story-card-type-color: var(--curse); }
 .story-card.card.infect { --story-card-type-color: var(--infect); }
-.story-card.card.card-blinded-deep {
+/* 反馈 #362：失明卡必须全灰——旧 grayscale(.82) 漏 18% 颜色，
+   诅咒红、感染灰绿、E黄/M蓝费用球都能肉眼区分卡牌类别。 */
+.story-card.card.card-blinded-deep,
+.story-pile-tile.card-blinded-deep {
   --card-frame-color: #7f8c8d;
   --story-card-type-color: #7f8c8d;
-  filter: grayscale(.82);
+  filter: grayscale(1) brightness(.94);
 }
 .story-card.card.card-blinded .card-type-label-wrap {
   position: absolute;

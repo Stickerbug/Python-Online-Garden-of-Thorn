@@ -596,7 +596,9 @@
   opacity: .9;
 }
 
-.gtn-lobby-chat-log .chat-recall-btn {
+/* 反馈 #360：撤回按钮样式原先只挂 .gtn-lobby-chat-log 作用域，对战内聊天
+   （没有该容器）里渲染成无样式裸按钮。与举报按钮同款、全局生效。 */
+.chat-recall-btn {
   display: inline-flex;
   align-items: center;
   margin-left: 5px;
@@ -615,8 +617,8 @@
   transition: color 150ms ease, border-color 150ms ease, background 150ms ease, opacity 150ms ease;
 }
 
-.gtn-lobby-chat-log .chat-recall-btn:hover,
-.gtn-lobby-chat-log .chat-recall-btn:focus-visible {
+.chat-recall-btn:hover,
+.chat-recall-btn:focus-visible {
   color: var(--damage, #c0392b);
   border-color: color-mix(in srgb, var(--damage, #c0392b) 48%, transparent);
   background: color-mix(in srgb, var(--damage-bg, rgba(192, 57, 43, .12)) 70%, transparent);

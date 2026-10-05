@@ -2692,6 +2692,31 @@ document.addEventListener('touchstart', () => { lastTouchAt = Date.now(); }, tru
 function suppressTouchSingleClick() {
     return touchDblclickEnabled() && Date.now() - lastTouchAt < 700;
 }
+/* #359 反馈 #347 仍打不开：部分移动浏览器在 touch-action: manipulation 下
+ * 不派发 dblclick 事件（单击已被抑制 → 双击毫无反应）。改为在 touchend 上
+ * 手动检测双击，不依赖 dblclick；仍派发 dblclick 的设备通过时间戳去重。 */
+let lastManualTouchToggleAt = 0;
+function bindTouchDblclickToggle(el, toggle) {
+    if (!el || el.dataset.gtnTouchDbl === '1') return;
+    el.dataset.gtnTouchDbl = '1';
+    let lastTapAt = 0;
+    el.addEventListener('touchend', (event) => {
+        if (!touchDblclickEnabled()) return;
+        const now = Date.now();
+        if (now - lastTapAt <= 350) {
+            lastTapAt = 0;
+            lastManualTouchToggleAt = now;
+            event.preventDefault();
+            event.stopPropagation();
+            toggle(event);
+        } else {
+            lastTapAt = now;
+        }
+    }, { capture: true, passive: false });
+}
+function touchDblclickHandledManually() {
+    return Date.now() - lastManualTouchToggleAt < 600;
+}
 let landscapeModeEnabled = localStorage.getItem('gtn_landscape_mode') === '1';
 let storyCardBordersHidden = localStorage.getItem('gtn_story_hide_card_borders') === '1';
 /* 主页UI（2026-10-03，反馈单#326 概念）：simple=现状简约版（默认）；
@@ -8250,8 +8275,10 @@ function bindRulesCardChips(root) {
             showIntro();
         });
         chip.addEventListener('contextmenu', toggleIntro);
+        bindTouchDblclickToggle(chip, toggleIntro);
         chip.addEventListener('dblclick', (event) => {
             if (!touchDblclickEnabled()) return;
+            if (touchDblclickHandledManually()) return;
             event.preventDefault();
             event.stopPropagation();
             toggleIntro(event);
@@ -9801,8 +9828,10 @@ function renderCardGallery() {
                     openIntro();
                 });
                 wrap.addEventListener('contextmenu', toggleIntro);
+                bindTouchDblclickToggle(wrap, toggleIntro);
                 wrap.addEventListener('dblclick', (event) => {
                     if (!touchDblclickEnabled()) return;
+                    if (touchDblclickHandledManually()) return;
                     event.preventDefault();
                     event.stopPropagation();
                     toggleIntro(event);
@@ -36847,6 +36876,9 @@ function multiChoice(title, options, config = {}) {
     });
 }
 
+/* #375：同一反制窗口里「没有可支付的反制牌」只提示一次——状态刷新会反复
+ * 重渲染面板，玩家点击反制后再弹这条提示会被误读为"反制失败的原因"。 */
+let responseUiInsufficientKey = '';
 function showResponseUI(data) {
     if (isSpectating) return;
     removeFloatingCardPreview();
@@ -36901,7 +36933,11 @@ function showResponseUI(data) {
         }
     });
     if (!hasAffordable) {
-        flashStatus(UI.counter_insufficient, 3000);
+        const windowKey = String(data.request_id || data.window_id || data.seq || (data.card && data.card.instance_id) || counterCards.map(cc => cc.instance_id).join(','));
+        if (windowKey && windowKey !== responseUiInsufficientKey) {
+            responseUiInsufficientKey = windowKey;
+            flashStatus(UI.counter_insufficient, 3000);
+        }
     }
     const container = $('response-panel');
     if (!container) { onRespond(null); return; }

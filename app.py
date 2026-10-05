@@ -35771,6 +35771,37 @@ def on_play_card(data):
                 choice.setdefault('target_player_id', target_player_id)
                 choice.setdefault('target_id', target_player_id)
             result = engine.play_card(pidx, card_instance_id, choice)
+        # 反馈 #374 诊断：root 装备牌完整打出（无待选/待响应）后既没进装备区、
+        # 反而出现在弃牌堆——偶发「装备被吞」目前无迹可查，先留痕定位路径。
+        # 自毁型装备正常走这里也会记一条 warning，量小可接受。
+        try:
+            if (
+                result.get('success')
+                and not result.get('needs_choice')
+                and not result.get('needs_response')
+                and not result.get('needs_v2_ui')
+                and not result.get('needs_ally_consent')
+                and isinstance(result.get('card'), dict)
+                and str(result['card'].get('card_type') or '') == 'root'
+            ):
+                played_iid = result['card'].get('instance_id')
+                ps = engine.players[pidx]
+                in_equip = any(
+                    getattr(getattr(eq, 'card_instance', None), 'instance_id', None) == played_iid
+                    for eq in (ps.equipment or [])
+                )
+                in_discard = any(
+                    getattr(c, 'instance_id', None) == played_iid for c in (ps.discard or [])
+                )
+                if in_discard and not in_equip:
+                    admin_event(
+                        'warning',
+                        f'root card landed in discard after play def={result["card"].get("def_id")!r} '
+                        f'room={getattr(room, "room_id", "?")} player={pidx}',
+                        room_id=getattr(room, 'room_id', None),
+                    )
+        except Exception:
+            pass
         _stamp_pending_interactions(room)
     finally:
         busy_lock.release()

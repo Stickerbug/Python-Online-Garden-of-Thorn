@@ -752,6 +752,19 @@ def _card_def(card):
         return copy.deepcopy(generated)
     definition = STORY_CARDS.get(str(card.get('def_id') or ''))
     if not definition:
+        # 反馈 #368：泰坦锻造卡（titan:XXXX 依赖 generated 字段）在个别流转
+        # 路径丢掉 generated 后，硬报 UNKNOWN_CARD 会把对局卡死。退化为一张
+        # 无效果占位牌，对局可以继续。
+        if str(card.get('def_id') or '').startswith('titan:'):
+            return {
+                'name': {'zh': '残缺的锻造卡', 'en': 'Damaged Forged Card'},
+                'effects': (),
+                'tags': (),
+                'description': {
+                    'zh': '锻造数据受损的卡牌，效果无法读取。',
+                    'en': 'A forged card with damaged data; its effects are unreadable.',
+                },
+            }
         _fail('UNKNOWN_CARD', '未知故事卡牌')
     return definition
 
@@ -11819,15 +11832,19 @@ def _story_event_presentation(event):
 
 
 
-def _extract_deck_log(state, events):
+def _extract_deck_log(state, events, combat_scoped=False):
     """建议 #332：从事件流提取卡组变更日志（最近20条）。
 
     追踪 card_gained / card_removed / card_upgraded / card_created /
     card_modified / card_exiled 六类事件，按发生顺序记录卡名与动作，
     写入 state['player']['deck_log']——客户端在卡组查看器底部渲染。
+    combat_scoped=True（#363）：战斗内动作的获取/放逐是战斗机制（虚无放逐、
+    魔法球临时入组等），不写入卡组变化日志。
     """
     player = state.get('player')
     if not isinstance(player, dict):
+        return
+    if combat_scoped:
         return
     log = player.get('deck_log')
     if not isinstance(log, list):
@@ -11982,7 +11999,10 @@ def apply_story_action(source_state, action_type, payload, seed):
     # A checkpoint restored by this action can itself come from an older run.
     _normalize_legacy_story_state(state)
     _refresh_combat_projections(state)
-    _extract_deck_log(state, events)
+    # 反馈 #363：卡组变化日志只记旅程级变化。战斗内的获取/放逐（虚无放逐、
+    # 魔法球等临时入手牌）是战斗机制，写进去会把 20 条上限刷爆，真正有用
+    # 的卡组变化被挤掉。
+    _extract_deck_log(state, events, combat_scoped=str(state.get('phase') or '') == 'combat')
     phase = str(state.get('phase') or '')
     if action_type in ('enter_node', 'dev_jump_node') and phase in ('combat', 'room', 'reward'):
         _capture_floor_entry_checkpoint(state)
