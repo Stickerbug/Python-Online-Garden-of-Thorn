@@ -37653,7 +37653,8 @@ def api_minigame_suika_state():
         return _json_error('操作太频繁，请稍后再试', 429)
     try:
         with get_db_connection() as conn:
-            game = minigame_suika_service.load_state(conn, identity[0])
+            game = minigame_suika_service.load_state(
+                conn, identity[0], play_mode=_leisure_play_mode_for(identity[0]))
             me = minigame_suika_service.self_entry(conn, identity[0], window='14d')
     except Exception as exc:
         admin_event('error', f'suika state failed: {exc}')
@@ -37723,7 +37724,8 @@ def api_minigame_suika_restart():
         seed = 1
     try:
         with get_db_connection() as conn:
-            game = minigame_suika_service.restart_game(conn, identity[0], seed=seed)
+            game = minigame_suika_service.restart_game(
+                conn, identity[0], seed=seed, play_mode=_leisure_play_mode_for(identity[0]))
     except Exception as exc:
         admin_event('error', f'suika restart failed: {exc}')
         return _json_error('重新开始失败，本地进度已保留', 500)
@@ -37840,7 +37842,13 @@ def api_leisure_ticket_enter():
         with get_db_connection() as conn:
             payload = leisure_ticket.ticket_payload(conn, user.get('id'))
         if payload.get('free_entry'):
-            # 免费时段：无会话也放行（不限时；不发奖励流程外的额外东西）
+            # 免费时段：无会话也放行（不限时；不发奖励流程外的额外东西）。
+            # 顺手暂停残留的活动门票会话（如关页时暂停信标没送达）——
+            # 否则 _leisure_play_mode_for 会把免费时段的成绩记进限时档。
+            try:
+                leisure_ticket.pause_play_session(user.get('id'))
+            except Exception:
+                pass
             return jsonify({'success': True, 'mode': 'free', **payload})
         # #371：resume_only 用于「tab 切回/刷新」的静默恢复——有剩余时间的
         # 暂停会话则恢复，否则不动（绝不因此扣票）。
@@ -37939,7 +37947,8 @@ def api_minigame_2048_state():
         return _json_error('请求过于频繁，请稍后再试', 429)
     try:
         with get_db_connection() as conn:
-            state = minigame_2048_service.load_state(conn, identity[0])
+            state = minigame_2048_service.load_state(
+                conn, identity[0], play_mode=_leisure_play_mode_for(identity[0]))
         return jsonify({'success': True, **state})
     except Exception as exc:
         admin_event('error', f'2048 state failed: {exc}')
@@ -38014,7 +38023,8 @@ def api_minigame_2048_sync():
         state = None
         try:
             with get_db_connection() as conn:
-                state = minigame_2048_service.load_state(conn, identity[0])
+                state = minigame_2048_service.load_state(
+                conn, identity[0], play_mode=_leisure_play_mode_for(identity[0]))
         except Exception:
             state = None
         return jsonify({'success': False, 'conflict': True, **result,
@@ -38038,7 +38048,8 @@ def api_minigame_2048_restart():
     try:
         with get_db_connection() as conn:
             state = minigame_2048_service.restart_game(
-                conn, identity[0], seed=seed, source=source)
+                conn, identity[0], seed=seed, source=source,
+                play_mode=_leisure_play_mode_for(identity[0]))
         return jsonify({'success': True, **state})
     except Exception as exc:
         admin_event('error', f'2048 restart failed: {exc}')

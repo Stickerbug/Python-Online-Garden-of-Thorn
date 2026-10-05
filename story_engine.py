@@ -712,6 +712,25 @@ def _outgoing_node_ids(state, node_id):
     ]
 
 
+def _copy_card_instance(state, card):
+    """按原卡复制新实例（反馈 #368 根因：锻造卡 def_id 是 titan:XXXX 且依赖
+    generated 字段，走 _new_card 会报「未知故事卡牌」把对局卡死——generated
+    卡直接深拷贝原卡并换新 instance_id；普通卡维持旧行为按 def_id 重建）。"""
+    if isinstance((card or {}).get('generated'), dict):
+        copied = copy.deepcopy(card)
+        serial = int(state['player'].get('next_card_serial') or 1)
+        state['player']['next_card_serial'] = serial + 1
+        copied['instance_id'] = f'sc-{serial:05d}'
+        copied.pop('track_persistent', None)
+        copied.pop('track_captured', None)
+        return copied
+    return _new_card(
+        state,
+        str((card or {}).get('def_id') or ''),
+        bool((card or {}).get('upgraded')),
+    )
+
+
 def _new_card(state, def_id, upgraded=False, modifiers=None):
     if def_id not in STORY_CARDS:
         _fail('UNKNOWN_CARD', '未知故事卡牌')
@@ -3850,7 +3869,7 @@ def _resolve_effect(state, card, values, effect, targets, payload, seed, events,
         if attacks and int(effect.get('elixir') or 0):
             _gain_elixir(state, int(effect['elixir']), events)
     elif effect_type == 'create_discard_copy':
-        created = _new_card(state, card['def_id'], bool(card.get('upgraded')))
+        created = _copy_card_instance(state, card)
         combat['discard_pile'].append(created)
         events.append({
             'type': 'card_created',
@@ -7095,7 +7114,7 @@ def _resolve_mechanical_track_card(state, enemy, card, seed, events):
                     amount,
                 )
             elif effect_type == 'create_discard_copy':
-                copied = _new_card(state, card['def_id'], bool(card.get('upgraded')))
+                copied = _copy_card_instance(state, card)
                 copied['track_persistent'] = False
                 enemy.setdefault('mechanical_track', []).append(copied)
                 events.append({

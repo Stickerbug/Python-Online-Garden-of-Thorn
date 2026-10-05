@@ -153,6 +153,11 @@ def ensure_schema(conn) -> None:
     if "play_mode" not in record_columns:
         conn.execute("ALTER TABLE minigame_2048_records ADD COLUMN play_mode TEXT NOT NULL DEFAULT 'normal'")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_mg_records_play_mode ON minigame_2048_records(rules_version, verified_at, play_mode)")
+    # 反馈（休闲分档存档）：活动局也带 play_mode——免费时段(normal)与门票
+    # 限时(ticket)各自有独立的活动局，互不关闭互不清除；成绩记录按对局归属
+    # 计分，不再按同步时刻的会话状态（防止免费记录被计进限时榜或反之）。
+    if "play_mode" not in game_columns:
+        conn.execute("ALTER TABLE minigame_2048_games ADD COLUMN play_mode TEXT NOT NULL DEFAULT 'normal'")
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_mg_records_game_window"
         " ON minigame_2048_records(game_key, rules_version, verified_at, score DESC, max_tile DESC)"
@@ -236,16 +241,18 @@ def _game_state(row) -> Dict[str, object]:
         "reached_2048": bool(row["reached_2048"]),
         "continued": bool(row["continued"]),
         "source": row["source"],
+        "play_mode": str(row["play_mode"] or "normal") if "play_mode" in row.keys() else "normal",
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
 
 
-def _active_game(conn, user_id: int):
+def _active_game(conn, user_id: int, play_mode: str = "normal"):
+    mode = play_mode if play_mode in PLAY_MODES else "normal"
     return conn.execute(
-        "SELECT * FROM minigame_2048_games WHERE user_id = ? AND status = 'active'"
+        "SELECT * FROM minigame_2048_games WHERE user_id = ? AND status = 'active' AND play_mode = ?"
         " ORDER BY id DESC LIMIT 1",
-        (int(user_id),),
+        (int(user_id), mode),
     ).fetchone()
 
 
@@ -285,10 +292,11 @@ def _replay_state(state: Dict[str, object]) -> Dict[str, object]:
 
 
 def create_game(conn, user_id: int, *, seed=None, source: str = "online", now=None,
-                game_uid: Optional[str] = None) -> Dict[str, object]:
-    """开新局：关闭旧活动局（旧局记录与未同步操作都保留，不被删除）。"""
+                game_uid: Optional[str] = None, play_mode: str = "normal") -> Dict[str, object]:
+    """开新局：只关闭**同模式**的旧活动局（另一模式的存档不受影响；旧局记录与未同步操作都保留）。"""
 
     source = source if source in SYNC_SOURCES else "online"
+    mode = play_mode if play_mode in PLAY_MODES else "normal"
     stamp = now_iso(now)
     if seed is None:
         seed = g.seed_from_text(f"{user_id}:{stamp}:{os.urandom(8).hex()}")
@@ -306,21 +314,22 @@ def create_game(conn, user_id: int, *, seed=None, source: str = "online", now=No
                 break
     conn.execute(
         "UPDATE minigame_2048_games SET status='closed', closed_at=?, updated_at=?"
-        " WHERE user_id=? AND status='active'",
-        (stamp, stamp, int(user_id)),
+        " WHERE user_id=? AND status='active' AND play_mode = ?",
+        (stamp, stamp, int(user_id), mode),
     )
     conn.execute(
         """INSERT INTO minigame_2048_games
            (user_id, game_uid, seed, rules_version, save_version, ops, op_index,
             checkpoint_index, checkpoint_cells, checkpoint_score, checkpoint_rng_state,
-            score, max_tile, status, reached_2048, continued, source, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, '', 0, 0, ?, 0, ?, 0, ?, 'active', 0, 0, ?, ?, ?)""",
+            score, max_tile, status, reached_2048, continued, source, created_at, updated_at,
+            play_mode)
+           VALUES (?, ?, ?, ?, ?, '', 0, 0, ?, 0, ?, 0, ?, 'active', 0, 0, ?, ?, ?, ?)""",
         (int(user_id), uid, seed_value, g.RULES_VERSION, g.SAVE_VERSION,
          json.dumps(initial["cells"]), int(initial["rng_state"]),
-         g.max_tile(initial["cells"]), source, stamp, stamp),
+         g.max_tile(initial["cells"]), source, stamp, stamp, mode),
     )
     conn.commit()
-    return load_state(conn, user_id)
+    return load_state(conn, user_id, play_mode=mode)
 
 
 def _archive_outdated_game(conn, user_id: int, row, *, now=None) -> bool:
@@ -343,10 +352,10 @@ def _archive_outdated_game(conn, user_id: int, row, *, now=None) -> bool:
     return True
 
 
-def load_state(conn, user_id: int, *, create: bool = True) -> Dict[str, object]:
-    """读当前活动局（没有就开一局）；顺带给出棋盘快照与已验证进度。"""
+def load_state(conn, user_id: int, *, create: bool = True, play_mode: str = "normal") -> Dict[str, object]:
+    """读当前模式的活动局（没有就开一局）；顺带给出棋盘快照与已验证进度。"""
 
-    row = _active_game(conn, user_id)
+    row = _active_game(conn, user_id, play_mode)
     upgraded = _archive_outdated_game(conn, user_id, row)
     if upgraded:
         row = None
@@ -354,8 +363,8 @@ def load_state(conn, user_id: int, *, create: bool = True) -> Dict[str, object]:
         if not create:
             return {"game": None, "board": None, "verified": {"op_index": 0, "score": 0},
                     "rules_upgraded": upgraded}
-        create_game(conn, user_id)
-        row = _active_game(conn, user_id)
+        create_game(conn, user_id, play_mode=play_mode)
+        row = _active_game(conn, user_id, play_mode)
     state = _game_state(row)
     board = _replay_state(state)
     verified_index, verified_score = _progress_at(conn, state["game_id"])
@@ -424,18 +433,30 @@ def sync_progress(conn, user_id: int, game_uid: str, from_index: int, ops,
     返回 ``{"status": "ok"|"conflict"|"gap"|"rejected"|"stale_game", ...}``。
     """
 
-    row = _active_game(conn, user_id)
+    # 反馈（休闲分档存档）：优先按客户端带来的 game_uid 精确对局——分档后
+    # 两种模式各有一局活动局，按"当前模式活动局"解析会把另一模式的同步
+    # 误判成 stale_game。uid 对不上才回退到当前模式的活动局。
+    if game_uid:
+        row = conn.execute(
+            "SELECT * FROM minigame_2048_games WHERE user_id = ? AND game_uid = ? AND status = 'active'",
+            (int(user_id), str(game_uid)[:80]),
+        ).fetchone()
+    else:
+        row = None
+    if row is None:
+        row = _active_game(conn, user_id, play_mode)
     if _archive_outdated_game(conn, user_id, row, now=now):
         # 规则升级（4×4 → 5×5 + 合并失败）：旧局作废、直接开新局，
         # 客户端拿到 stale_game 后会用返回的新状态继续（本地老档由它自己丢弃）。
-        create_game(conn, user_id, now=now)
-        fresh = _active_game(conn, user_id)
+        create_game(conn, user_id, now=now, play_mode=play_mode)
+        fresh = _active_game(conn, user_id, play_mode)
         return {"status": "stale_game", "rules_upgraded": True,
                 "active_game_uid": str(fresh["game_uid"]) if fresh is not None else ""}
     if row is None and new_game and seed is not None and game_uid:
         # 全新账号/没活动局时的离线开局补传：直接按客户端种子建档。
-        create_game(conn, user_id, seed=seed, source=source, now=now, game_uid=str(game_uid))
-        row = _active_game(conn, user_id)
+        create_game(conn, user_id, seed=seed, source=source, now=now,
+                    game_uid=str(game_uid), play_mode=play_mode)
+        row = _active_game(conn, user_id, play_mode)
     if row is None:
         return {"status": "no_game"}
     state = _game_state(row)
@@ -449,8 +470,9 @@ def sync_progress(conn, user_id: int, game_uid: str, from_index: int, ops,
             or int(state.get("score") or 0) > 0
         )
         if new_game and seed is not None and (replace_active or not server_has_progress):
-            create_game(conn, user_id, seed=seed, source=source, now=now, game_uid=str(game_uid))
-            row = _active_game(conn, user_id)
+            create_game(conn, user_id, seed=seed, source=source, now=now,
+                        game_uid=str(game_uid), play_mode=play_mode)
+            row = _active_game(conn, user_id, play_mode)
             state = _game_state(row)
             _audit(conn, user_id, state["game_id"], "adopt_client_game",
                    {"game_uid": str(game_uid)[:80], "source": source,
@@ -553,9 +575,15 @@ def sync_progress(conn, user_id: int, game_uid: str, from_index: int, ops,
         state["score"] = int(board["score"])
         state["max_tile"] = int(board["max_tile"])
         _checkpoint_after_append(conn, state, board)
-    # 限时（门票）模式：play_mode 必须一路传到记录写入，否则门票局的分数
-    # 会被记成 normal，门票榜（r.play_mode='ticket'）永远为空。
-    record = _record_progress(conn, state, board, source=source, now=now, play_mode=play_mode)
+    # 限时（门票）模式：记录的模式归属取**对局自身的 play_mode**（建档时
+    # 已定档），而不是同步时刻的会话状态——免费局跨到限时时段继续玩，
+    # 成绩仍归免费档，反之亦然（反馈：分档存档防串档计分）。老局行没有
+    # play_mode 时回退到调用方传的当前模式。
+    game_mode = str(row["play_mode"] or "").strip() if "play_mode" in row.keys() else ""
+    record = _record_progress(
+        conn, state, board, source=source, now=now,
+        play_mode=game_mode if game_mode in PLAY_MODES else play_mode,
+    )
     conn.commit()
     verified_index, verified_score = _progress_at(conn, state["game_id"])
     return {
@@ -574,10 +602,11 @@ def sync_progress(conn, user_id: int, game_uid: str, from_index: int, ops,
     }
 
 
-def restart_game(conn, user_id: int, *, seed=None, source: str = "online", now=None) -> Dict[str, object]:
-    """重新开始：关旧局、开新局（旧局记录/未同步操作保留）。"""
+def restart_game(conn, user_id: int, *, seed=None, source: str = "online", now=None,
+                 play_mode: str = "normal") -> Dict[str, object]:
+    """重新开始：只关当前模式的旧局、开新局（旧局记录/未同步操作保留）。"""
 
-    return create_game(conn, user_id, seed=seed, source=source, now=now)
+    return create_game(conn, user_id, seed=seed, source=source, now=now, play_mode=play_mode)
 
 
 # ---------------------------------------------------------------- 偏好

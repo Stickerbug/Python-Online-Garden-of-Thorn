@@ -83,6 +83,11 @@ def ensure_schema(conn) -> None:
         "CREATE INDEX IF NOT EXISTS idx_mg_records_game_window"
         " ON minigame_2048_records(game_key, rules_version, verified_at, score DESC, max_tile DESC)"
     )
+    # 休闲分档存档：suika 活动局也带 play_mode（normal=免费时段 / ticket=门票
+    # 限时），两种模式各自独立活动局，互不关闭互不清除。
+    game_columns = {row[1] for row in conn.execute("PRAGMA table_info(minigame_suika_games)").fetchall()}
+    if "play_mode" not in game_columns:
+        conn.execute("ALTER TABLE minigame_suika_games ADD COLUMN play_mode TEXT NOT NULL DEFAULT 'normal'")
     conn.commit()
 
 
@@ -106,15 +111,17 @@ def _game_state(row) -> Optional[Dict[str, object]]:
         "max_tier": int(row["max_tier"]),
         "status": row["status"],
         "source": row["source"],
+        "play_mode": str(row["play_mode"] or "normal") if "play_mode" in row.keys() else "normal",
         "updated_at": row["updated_at"],
     }
 
 
-def _active_game(conn, user_id: int):
+def _active_game(conn, user_id: int, play_mode: str = "normal"):
+    mode = play_mode if play_mode in base.PLAY_MODES else "normal"
     return conn.execute(
-        "SELECT * FROM minigame_suika_games WHERE user_id = ? AND status = 'active'"
+        "SELECT * FROM minigame_suika_games WHERE user_id = ? AND status = 'active' AND play_mode = ?"
         " ORDER BY id DESC LIMIT 1",
-        (int(user_id),),
+        (int(user_id), mode),
     ).fetchone()
 
 
@@ -123,39 +130,44 @@ def _make_uid(user_id: int, now=None) -> str:
     return f"suika-{int(user_id)}-{uuid.uuid4().hex[:16]}"
 
 
-def create_game(conn, user_id: int, *, seed: int = 1, source: str = "online", now=None) -> Dict[str, object]:
+def create_game(conn, user_id: int, *, seed: int = 1, source: str = "online", now=None,
+                play_mode: str = "normal") -> Dict[str, object]:
     stamp = base.now_iso(now)
     uid = _make_uid(user_id, now)
+    mode = play_mode if play_mode in base.PLAY_MODES else "normal"
     conn.execute(
         "INSERT INTO minigame_suika_games"
         " (user_id, game_uid, seed, rules_version, save_version, drops, drop_index, score, max_tier,"
-        "  status, source, created_at, updated_at)"
-        " VALUES (?, ?, ?, ?, ?, '[]', 0, 0, 0, 'active', ?, ?, ?)",
+        "  status, source, created_at, updated_at, play_mode)"
+        " VALUES (?, ?, ?, ?, ?, '[]', 0, 0, 0, 'active', ?, ?, ?, ?)",
         (int(user_id), uid, int(seed) & 0xFFFFFFFF, RULES_VERSION, SAVE_VERSION,
-         source if source in base.SYNC_SOURCES else "online", stamp, stamp),
+         source if source in base.SYNC_SOURCES else "online", stamp, stamp, mode),
     )
     conn.commit()
-    return _game_state(_active_game(conn, user_id))
+    return _game_state(_active_game(conn, user_id, mode))
 
 
-def load_state(conn, user_id: int, *, source: str = "online", seed: int = 1, now=None) -> Dict[str, object]:
+def load_state(conn, user_id: int, *, source: str = "online", seed: int = 1, now=None,
+               play_mode: str = "normal") -> Dict[str, object]:
     ensure_schema(conn)
-    row = _active_game(conn, user_id)
+    row = _active_game(conn, user_id, play_mode)
     if row is None:
-        return create_game(conn, user_id, seed=seed, source=source, now=now)
+        return create_game(conn, user_id, seed=seed, source=source, now=now, play_mode=play_mode)
     return _game_state(row)
 
 
-def restart_game(conn, user_id: int, *, seed: int = 1, source: str = "online", now=None) -> Dict[str, object]:
+def restart_game(conn, user_id: int, *, seed: int = 1, source: str = "online", now=None,
+                 play_mode: str = "normal") -> Dict[str, object]:
     ensure_schema(conn)
     stamp = base.now_iso(now)
+    mode = play_mode if play_mode in base.PLAY_MODES else "normal"
     conn.execute(
         "UPDATE minigame_suika_games SET status = 'closed', closed_at = ?, updated_at = ?"
-        " WHERE user_id = ? AND status = 'active'",
-        (stamp, stamp, int(user_id)),
+        " WHERE user_id = ? AND status = 'active' AND play_mode = ?",
+        (stamp, stamp, int(user_id), mode),
     )
     conn.commit()
-    return create_game(conn, user_id, seed=seed, source=source, now=now)
+    return create_game(conn, user_id, seed=seed, source=source, now=now, play_mode=mode)
 
 
 def _normalize_drops(raw) -> List[Dict[str, float]]:
@@ -229,9 +241,17 @@ def sync_progress(conn, user_id: int, game_uid: str, from_index: int, drops,
     """把"这一批新增投放 + 新的总分"立刻落库，并按启发式判断能不能计入榜单。"""
 
     ensure_schema(conn)
-    row = _active_game(conn, user_id)
+    # 分档存档：优先按客户端带来的 game_uid 精确对局（两模式各有活动局），
+    # 对不上再回退当前模式的活动局。
+    row = conn.execute(
+        "SELECT * FROM minigame_suika_games WHERE user_id = ? AND game_uid = ? AND status = 'active'",
+        (int(user_id), str(game_uid)[:80]),
+    ).fetchone()
+    if row is None:
+        row = _active_game(conn, user_id, play_mode)
     if row is None or str(row["game_uid"]) != str(game_uid):
-        return {"status": "stale_game", "game": load_state(conn, user_id, source=source, now=now)}
+        return {"status": "stale_game", "game": load_state(conn, user_id, source=source, now=now,
+                                                            play_mode=play_mode)}
     state = _game_state(row)
     start = int(from_index or 0)
     if start > int(state["drop_index"]):
@@ -274,6 +294,10 @@ def sync_progress(conn, user_id: int, game_uid: str, from_index: int, drops,
          next_max_tier, source if source in base.SYNC_SOURCES else "online", stamp, int(state["game_id"])),
     )
     verified_score = None
+    # 分档存档：记录的模式归属取对局自身 play_mode（建档定档），
+    # 老局行没有该列时回退到调用方传的当前模式。
+    game_mode = str(row["play_mode"] or "").strip() if "play_mode" in row.keys() else ""
+    record_mode = game_mode if game_mode in base.PLAY_MODES else (play_mode if play_mode in base.PLAY_MODES else "normal")
     if ok:
         verified_row = conn.execute(
             "SELECT MAX(score) AS best FROM minigame_2048_records WHERE game_id = ? AND game_key = ?",
@@ -287,11 +311,11 @@ def sync_progress(conn, user_id: int, game_uid: str, from_index: int, drops,
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (int(user_id), int(state["game_id"]), int(score), max_tier, len(merged),
                  RULES_VERSION, stamp, source if source in base.SYNC_SOURCES else "online", stamp, GAME_KEY,
-                 play_mode if play_mode in base.PLAY_MODES else "normal"),
+                 record_mode),
             )
             verified_score = int(score)
     conn.commit()
-    fresh = _game_state(_active_game(conn, user_id))
+    fresh = _game_state(row)
     return {
         "status": "ok",
         "verified": bool(ok),
