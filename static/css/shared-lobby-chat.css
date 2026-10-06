@@ -456,6 +456,32 @@
   color: #74b9ff;
 }
 
+/* 回放编号 chip（R-12345 / P-12345）：点击弹确认后进入回放。
+   与链接区分开——用紫色 + 点状下划线 + 编号等宽。选择器不限定容器，
+   四个聊天面（大厅/对局/故事/休闲花园）都生效。 */
+.chat-replay-link {
+  color: #6c5ce7;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.chat-replay-link:hover,
+.chat-replay-link:focus-visible {
+  color: #4834d4;
+  text-decoration-style: solid;
+}
+
+:root[data-theme='dark'] .chat-replay-link {
+  color: #a29bfe;
+}
+
+:root[data-theme='dark'] .chat-replay-link:hover {
+  color: #c8c3ff;
+}
+
 :root[data-theme='dark'] .chat-msg a.chat-link:hover,
 :root[data-theme='dark'] .story-chat-message a.chat-link:hover,
 :root[data-theme='dark'] .chat-msg a.chat-link:focus-visible,

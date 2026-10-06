@@ -376,6 +376,12 @@ function createChatActionButtons(entry = {}, viewer = {}, labels = {}, options =
    域名段禁止全角字符；站内域 = 任意 *.stickerbug.top 子域。 */
 const CHAT_URL_PATTERN = /https?:\/\/[^\s<>"'\u3000-\u9fff\uff00-\uffef]+/gi;
 
+/* 回放编号（R-12345 / P-12345）：可点击的 chip（见 game.js 的委托处理——
+   弹确认框显示双方与胜负后进入回放）。只在纯文本段里识别，前后不能是
+   字母数字或连字符（避免误伤 RP-12345 / ABCR-1 之类的普通词）；
+   只认 5 位数字（当前量级 ~2 万/年，一年内不会到 6 位）。 */
+const CHAT_REPLAY_REF_PATTERN = /(?<![\w-])[RP]-\d{5}(?![\w-])/gi;
+
 /* 常用顶级域白名单（小写）。覆盖主流 gTLD/ccTLD 与游戏社区常见域；
    不在名单里的裸域名不会被识别（带 http(s):// 的不受限）。 */
 const CHAT_KNOWN_TLDS = new Set((
@@ -447,10 +453,10 @@ function chatSplitLinkSegments(text) {
   pushPlain(raw);
 
   const scanWith = (pattern, toPiece) => {
-    // 只在「纯文本段」里扫描；已识别的 URL 不再二次处理。
+    // 只在「纯文本段」里扫描；已识别的 URL/回放编号不再二次处理。
     for (let si = 0; si < segments.length; si += 1) {
       const segment = segments[si];
-      if (segment.url !== undefined) continue;
+      if (segment.url !== undefined || segment.replayRef !== undefined) continue;
       const source = segment.text;
       pattern.lastIndex = 0;
       let match;
@@ -460,7 +466,7 @@ function chatSplitLinkSegments(text) {
       while ((match = pattern.exec(source)) !== null) {
         const piece = toPiece(match);
         const start = match.index;
-        if (piece && piece.url) {
+        if (piece && (piece.url !== undefined || piece.replayRef !== undefined)) {
           changed = true;
           if (start > cursor) pieces.push({ text: source.slice(cursor, start) });
           pieces.push(piece);
@@ -507,19 +513,35 @@ function chatSplitLinkSegments(text) {
       external: !chatLinkTargetAllowed(full),
     };
   });
+  scanWith(CHAT_REPLAY_REF_PATTERN, (match) => {
+    const ref = String(match[0] || '').toUpperCase();
+    return {
+      replayRef: ref,
+      display: ref,
+      matchedLength: ref.length,
+    };
+  });
 
-  // 相邻同型段合并；空段丢弃
+  // 相邻同型段合并；空段丢弃（只合并文本段——URL/回放编号段直接透传）
   const out = [];
   segments.forEach((segment) => {
     if (segment.text !== undefined && !segment.text) return;
     const prev = out[out.length - 1];
-    if (prev && prev.url === undefined && segment.url === undefined) prev.text += segment.text;
+    if (prev && prev.text !== undefined && segment.text !== undefined) prev.text += segment.text;
     else out.push(segment);
   });
   return out;
 }
 
 function chatAppendSegment(parent, segment, confirmExternal) {
+  if (segment.replayRef !== undefined) {
+    const chip = document.createElement('span');
+    chip.className = 'chat-replay-link';
+    chip.textContent = segment.display || segment.replayRef;
+    chip.dataset.replayRef = segment.replayRef;
+    parent.appendChild(chip);
+    return;
+  }
   if (segment.url === undefined) {
     parent.appendChild(document.createTextNode(segment.text));
     return;
@@ -550,7 +572,7 @@ function chatAppendSegment(parent, segment, confirmExternal) {
 function appendChatTextWithLinks(parent, text, options = {}) {
   const confirmExternal = typeof options.confirmExternal === 'function' ? options.confirmExternal : null;
   chatSplitLinkSegments(text).forEach((segment) => {
-    if (segment.url === undefined && typeof options.appendPlain === 'function') {
+    if (segment.url === undefined && segment.replayRef === undefined && typeof options.appendPlain === 'function') {
       options.appendPlain(parent, segment.text);
     } else {
       chatAppendSegment(parent, segment, confirmExternal);
@@ -561,6 +583,9 @@ function appendChatTextWithLinks(parent, text, options = {}) {
 /* HTML 版（小游戏页）：返回 HTML 字符串；输入必须已是 escapeHtml 后的文本。 */
 function chatLinkHtml(escapedText) {
   return chatSplitLinkSegments(escapedText).map((segment) => {
+    if (segment.replayRef !== undefined) {
+      return `<span class="chat-replay-link" data-replay-ref="${segment.replayRef}">${segment.display || segment.replayRef}</span>`;
+    }
     if (segment.url === undefined) return segment.text;
     const external = segment.external || !chatLinkTargetAllowed(segment.url);
     return `<a href="${segment.url}" target="_blank" rel="noopener noreferrer" class="chat-link"`
@@ -602,6 +627,7 @@ window.GtnChatRecall = {
 /* 聊天链接化入口（同上：一份实现，四处接入）。 */
 window.GtnChatLinks = {
   pattern: CHAT_URL_PATTERN,
+  replayPattern: CHAT_REPLAY_REF_PATTERN,
   urlFromMatch: chatUrlFromMatch,
   internalAllowed: chatLinkTargetAllowed,
   appendTextWithLinks: appendChatTextWithLinks,

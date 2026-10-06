@@ -35926,6 +35926,66 @@ function appendChatLinkSegment(parent, slice) {
     parent.appendChild(document.createTextNode(slice));
 }
 
+/* 聊天里的回放编号（R-12345 / P-12345）chip：点击查公开摘要 →
+   确认弹窗（双方名称 + 胜负）→ 进入回放查看器。
+   可见性与主页公开搜索同口径：31 天公开保留，登录后可查。 */
+async function confirmOpenChatReplay(ref) {
+    const replayRef = String(ref || '').trim().toUpperCase();
+    if (!/^[RP]-\d{5}$/.test(replayRef)) return;
+    if (!currentAccount) {
+        flashStatus(lt({ zh: '查看回放需要登录账号', en: 'Log in to view replays', fr: 'Connectez-vous pour voir les replays', ja: 'リプレイの閲覧にはログインが必要です' }), 3200);
+        return;
+    }
+    let data;
+    try {
+        data = await authRequest(`/api/replays?scope=public&limit=1&replay_id=${encodeURIComponent(replayRef)}`);
+    } catch (err) {
+        flashStatus(lt({ zh: '回放信息读取失败', en: 'Failed to load replay info', fr: 'Échec du chargement de la replay', ja: 'リプレイ情報の取得に失敗しました' }), 3200);
+        return;
+    }
+    const item = (data && Array.isArray(data.items) ? data.items : [])[0];
+    if (!item || String(item.replay_ref || '').toUpperCase() !== replayRef) {
+        flashStatus(lt({ zh: '回放不存在或已超出公开保留期（31 天）', en: 'Replay not found or outside the 31-day public window', fr: 'Replay introuvable ou hors de la fenêtre publique de 31 jours', ja: 'リプレイが見つからないか、公開期間（31日）を過ぎています' }), 3600);
+        return;
+    }
+    const players = Array.isArray(item.players) && item.players.length
+        ? item.players.join(' ⚔ ')
+        : lt({ zh: '未知玩家', en: 'Unknown players', fr: 'Joueurs inconnus', ja: '不明なプレイヤー' });
+    const resultText = item.winner_name
+        ? `${item.winner_name} ${lt({ zh: '获胜', en: 'won', fr: 'a gagné', ja: 'の勝ち' })}`
+        : lt({ zh: '平局', en: 'Draw', fr: 'Égalité', ja: '引き分け' });
+    const modeLabel = String(item.mode || '').toUpperCase() === '2V2' ? '2v2' : '1v1';
+    const dateText = item.created_at
+        ? new Date(item.created_at).toLocaleDateString(currentLang === 'zh' ? 'zh-CN' : (currentLang === 'ja' ? 'ja-JP' : (currentLang === 'fr' ? 'fr-FR' : 'en-US')))
+        : '';
+    showModal(`
+        <h3>${escapeHtml(lt({ zh: '进入回放？', en: 'Open replay?', fr: 'Ouvrir la replay ?', ja: 'リプレイを開きますか？' }))}</h3>
+        <p><strong>${escapeHtml(players)}</strong></p>
+        <p>${escapeHtml(resultText)}</p>
+        <p class="muted">${escapeHtml(modeLabel)}${dateText ? ` · ${escapeHtml(dateText)}` : ''}${item.round_num ? ` · ${escapeHtml(String(item.round_num))}${escapeHtml(lt({ zh: '回合', en: ' rounds', fr: ' tours', ja: 'ターン' }))}` : ''}</p>
+        <p class="muted">${escapeHtml(replayRef)}</p>
+        <div class="modal-buttons">
+            <button class="btn btn-secondary" id="chat-replay-cancel">${escapeHtml(UI.cancel || lt({ zh: '取消', en: 'Cancel', fr: 'Annuler', ja: 'キャンセル' }))}</button>
+            <button class="btn btn-primary" id="chat-replay-open">${escapeHtml(lt({ zh: '进入回放', en: 'Open replay', fr: 'Ouvrir la replay', ja: 'リプレイを開く' }))}</button>
+        </div>
+    `);
+    const cancelBtn = $('chat-replay-cancel');
+    const openBtn = $('chat-replay-open');
+    if (cancelBtn) cancelBtn.onclick = hideModal;
+    if (openBtn) openBtn.onclick = () => {
+        hideModal();
+        openAccountReplay(item.replay_ref);
+    };
+}
+
+document.addEventListener('click', (ev) => {
+    const chip = ev.target && typeof ev.target.closest === 'function' ? ev.target.closest('.chat-replay-link') : null;
+    if (!chip || !chip.dataset.replayRef) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    void confirmOpenChatReplay(chip.dataset.replayRef);
+});
+
 function parseChatTimeValue(value) {
     if (!value) return null;
     const date = value instanceof Date ? value : new Date(value);
