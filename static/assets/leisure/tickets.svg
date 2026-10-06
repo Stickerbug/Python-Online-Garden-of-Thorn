@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_1" data-name="图层_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 283.46 283.46">
+  <!-- Generator: Adobe Illustrator 29.0.0. SVG Export Plug-In. SVG Version: 2.1.0 Build 186)  -->
+  <defs>
+    <style>
+      .st0 {
+        stroke-dasharray: 10.72 10.72;
+      }
+
+      .st0, .st1, .st2 {
+        stroke-linejoin: round;
+      }
+
+      .st0, .st2 {
+        fill: none;
+        stroke: #231815;
+        stroke-linecap: round;
+        stroke-width: 5px;
+      }
+
+      .st3 {
+        fill: #984e9a;
+      }
+
+      .st3, .st4, .st5 {
+        opacity: .5;
+      }
+
+      .st1 {
+        fill: #fff;
+        stroke: #bde1f7;
+        stroke-width: 10px;
+      }
+
+      .st4 {
+        fill: #eb5c1c;
+      }
+
+      .st5 {
+        fill: #87c67e;
+      }
+    </style>
+  </defs>
+  <rect class="st1" x="45.81" y="98.22" width="191.84" height="87.03" transform="translate(-56.73 113.62) rotate(-36.94)"/>
+  <g>
+    <line class="st2" x1="151.95" y1="79.61" x2="155.56" y2="84.4"/>
+    <line class="st0" x1="162" y1="92.97" x2="197.43" y2="140.09"/>
+    <line class="st2" x1="200.65" y1="144.37" x2="204.25" y2="149.17"/>
+  </g>
+  <rect class="st5" x="84.63" y="141.54" width="37.92" height="57.74" rx="7.2" ry="7.2" transform="translate(-81.62 96.45) rotate(-36.94)"/>
+  <rect class="st3" x="113.57" y="117.32" width="33.08" height="23.7" rx="7.2" ry="7.2" transform="translate(-51.51 104.12) rotate(-36.94)"/>
+  <rect class="st4" x="132.67" y="140.46" width="33.08" height="28.23" rx="7.2" ry="7.2" transform="translate(-62.94 120.69) rotate(-36.94)"/>
+</svg>

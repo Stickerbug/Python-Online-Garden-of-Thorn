@@ -49,9 +49,13 @@
     if (!el) {
       el = document.createElement('div');
       el.id = 'leisure-timer-banner';
+      // 主题跟随：优先页面主题变量（suika 页 --bg-card 系），2048 页回落 --g-* 系
       el.style.cssText = 'position:fixed;top:10px;right:10px;z-index:9999;'
         + 'padding:8px 14px;border-radius:8px;font-weight:700;font-size:14px;'
-        + 'background:rgba(30,40,30,.9);color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.3);'
+        + 'background:var(--bg-card, var(--g-bg, rgba(30,40,30,.9)));'
+        + 'color:var(--text-primary, var(--g-text, #fff));'
+        + 'border:1px solid var(--border-color, rgba(0,0,0,.15));'
+        + 'box-shadow:0 2px 8px rgba(0,0,0,.25);'
         + 'display:none;pointer-events:none;';
       document.body.appendChild(el);
     }
@@ -62,11 +66,16 @@
     const el = banner();
     el.textContent = text;
     el.style.display = 'block';
-    el.style.background = level === 'warn'
-      ? 'rgba(160,60,30,.92)'
-      : level === 'end'
-        ? 'rgba(120,20,20,.94)'
-        : 'rgba(30,40,30,.9)';
+    if (level === 'warn') {
+      el.style.background = 'rgba(160,60,30,.92)';
+      el.style.color = '#fff';
+    } else if (level === 'end') {
+      el.style.background = 'rgba(150,40,40,.94)';
+      el.style.color = '#fff';
+    } else {
+      el.style.background = 'var(--bg-card, var(--g-bg, rgba(30,40,30,.9)))';
+      el.style.color = 'var(--text-primary, var(--g-text, #fff))';
+    }
   }
 
   function hideBanner() {
@@ -94,7 +103,7 @@
       data = await response.json().catch(() => ({}));
       if (!response.ok || !data.success) {
         showGateScreen(data.error || '进入失败', data.code === 'NO_TICKET'
-          ? '门票不足：每天签到可得 1 张（连续 7 天再得 1 张）；工作日 8:00-10:00、15:00-17:00 免费开放。'
+          ? '门票不足：每天签到 +1（连续 7 天再 +1）；故事模式非 EZ 难度通关每日 +1；工作日 8:00–10:00、15:00–17:00 免费开放。'
           : '');
         return false;
       }
@@ -113,17 +122,27 @@
   }
 
   function showGateScreen(title, detail) {
+    /* 拦截提示跟随页面主题（亮/暗）：全部取自各页 CSS 变量并带回落，
+     * 不再写死深色配色。 */
     const screen = document.createElement('div');
     screen.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;'
-      + 'align-items:center;justify-content:center;background:rgba(10,14,10,.94);';
+      + 'align-items:center;justify-content:center;padding:16px;'
+      + 'background:rgba(10,14,10,.55);';
     const box = document.createElement('div');
-    box.style.cssText = 'max-width:420px;padding:28px;border-radius:12px;'
-      + 'background:#1c261c;color:#e8f0e8;text-align:center;';
-    box.innerHTML = `<div style="font-size:20px;font-weight:800;margin-bottom:12px">🌸 ${title}</div>`
-      + (detail ? `<div style="font-size:14px;line-height:1.6;opacity:.85">${detail}</div>` : '')
+    box.style.cssText = 'max-width:420px;width:100%;padding:26px 28px;border-radius:12px;'
+      + 'background:var(--bg-card, var(--g-bg, #fff));'
+      + 'color:var(--text-primary, var(--g-text, #2c3e50));'
+      + 'border:1px solid var(--border-color, rgba(0,0,0,.12));'
+      + 'box-shadow:0 10px 30px rgba(0,0,0,.3);text-align:center;';
+    box.innerHTML = '<img src="/static/assets/leisure/tickets.svg" alt="门票"'
+      + ' style="width:96px;height:96px;display:block;margin:0 auto 8px">'
+      + `<div style="font-size:20px;font-weight:800;margin-bottom:12px">🌸 ${title}</div>`
+      + (detail ? `<div style="font-size:14px;line-height:1.7;opacity:.8">${detail}</div>` : '')
       + '<div style="margin-top:18px"><button id="leisure-gate-back" '
-      + 'style="padding:8px 24px;border-radius:8px;border:0;background:#3a7d44;color:#fff;'
-      + 'font-size:15px;cursor:pointer">返回大厅</button></div>';
+      + 'style="padding:9px 28px;border-radius:8px;border:0;'
+      + 'background:var(--leisure-accent, var(--g-btn, #3a7d44));'
+      + "color:var(--g-btn-text, #fff);font-size:15px;font-weight:700;"
+      + 'cursor:pointer">返回大厅</button></div>';
     screen.appendChild(box);
     document.body.appendChild(screen);
     screen.querySelector('#leisure-gate-back').addEventListener('click', () => {

@@ -28,6 +28,20 @@
   <h1 class="mh-title" data-i18n="title">休闲花园</h1>
   <p class="mh-sub" data-i18n="sub">这里放轻松向的小游戏，成绩会照常自动同步。</p>
   {% if user_id %}
+  <div class="mh-ticket-bar" id="mh-ticket-bar" hidden>
+    <img class="mh-ticket-icon" src="/static/assets/leisure/tickets.svg" alt="门票">
+    <div class="mh-ticket-main">
+      <div class="mh-ticket-line">
+        <span class="mh-ticket-count" id="mh-ticket-count">–</span>
+        <span class="mh-ticket-free" id="mh-ticket-free" hidden data-i18n="free_now">现在免费开放</span>
+        <span class="mh-ticket-session" id="mh-ticket-session" hidden></span>
+      </div>
+      <div class="mh-ticket-hint" data-i18n="ticket_hint">
+        获取方式：每日签到 +1（连续 7 天再 +1）；故事模式非 EZ 难度通关每日 +1；
+        工作日 8:00–10:00 / 15:00–17:00 免费开放，无需门票。
+      </div>
+    </div>
+  </div>
   {% else %}
   <div class="mh-guest-bar">
     <span data-i18n="guest">游客模式：可以玩，但成绩不会上榜。</span>
@@ -71,16 +85,22 @@
     en: { tag: 'Casual Garden', title: 'Casual Garden', sub: 'Relaxing mini-games — scores sync automatically.',
           guest: 'Guest mode: playable, but scores do not rank.', login: 'Sign up / Log in',
           play: 'Play', back: '← Back',
+          free_now: 'Free entry now',
+          ticket_hint: 'How to get: daily check-in +1 (7-day streak → +1 extra); beat a story stage on non-EZ difficulty once a day +1; weekdays 8:00–10:00 & 15:00–17:00 free entry, no ticket needed.',
           desc_2048: 'Merge tiles to reach 2048 and beyond. Same tile values collide and add up; the board ends when no move is left.',
           desc_suika: 'Merge bubbles all the way to the Mecha Flower and the Player: two alike collide and level up; the run ends when the stack crosses the lose line. All 11 tiers use story-mode bugs and props, the last one is your own skin.' },
     fr: { tag: 'Jardin décontracté', title: 'Jardin décontracté', sub: 'Mini-jeux détente — les scores se synchronisent automatiquement.',
           guest: 'Mode visiteur : jouable, mais les scores ne sont pas classés.', login: 'Inscription / Connexion',
           play: 'Jouer', back: '← Retour',
+          free_now: 'Entrée libre actuellement',
+          ticket_hint: 'Comment en obtenir : connexion quotidienne +1 (7 jours d’affilée → +1 en plus) ; terminer une étape du mode histoire hors difficulté EZ +1/jour ; en semaine 8h–10h et 15h–17h, entrée libre sans ticket.',
           desc_2048: 'Fusionnez jusqu’à 2048 et au-delà. Les tuiles identiques fusionnent ; la partie s’arrête sans mouvement possible.',
           desc_suika: 'Fusionnez jusqu’à la Fleur Méca et au Joueur : deux identiques fusionnent ; la partie s’arrête au-delà de la ligne de défaite. Les 11 paliers utilisent les insectes du mode histoire, le dernier est votre propre skin.' },
     ja: { tag: 'カジュアルガーデン', title: 'カジュアルガーデン', sub: '気軽なミニゲーム。スコアは自動で同期されます。',
           guest: 'ゲストモード：プレイ可能ですが、ランキングには載りません。', login: 'ログイン / 登録',
           play: 'プレイ', back: '← 戻る',
+          free_now: '現在無料開放中',
+          ticket_hint: '入手方法：毎日ログイン +1（7日連続でさらに +1）；ストーリーモードを EZ 以外の難易度でクリア +1/日；平日 8:00–10:00・15:00–17:00 は無料開放（チケット不要）。',
           desc_2048: 'タイルを合わせて2048以上を目指す。同じ数値は合体し、動かせなくなったら終了です。',
           desc_suika: '泡を合成して機械花とプレイヤーまで育てよう：同じものが触れるとレベルアップ。敗北ラインを超えると終了。全11段階はストーリーモードの虫と小物、最後はあなた自身のスキンです。' },
   }[lang];
@@ -90,6 +110,41 @@
     if (T[key]) el.innerHTML = T[key];
   });
   document.title = T.title + ' · Garden of Thorn';
+})();
+</script>
+<script nonce="{{ csp_nonce }}">
+/* 门票状态条：余额 / 免费时段 / 游玩期倒计时（服务端 /api/leisure/ticket）。 */
+(() => {
+  const bar = document.getElementById('mh-ticket-bar');
+  if (!bar) return;
+  let lang = 'zh';
+  try { lang = localStorage.getItem('gtn_lang') || 'zh'; } catch (_) {}
+  const dict = {
+    zh: { count: (n, cap) => `门票 ×${n}（上限 ${cap}）`, session: (s) => `游玩中 ${s}` },
+    en: { count: (n, cap) => `Tickets ×${n} (cap ${cap})`, session: (s) => `Playing ${s}` },
+    fr: { count: (n, cap) => `Tickets ×${n} (max ${cap})`, session: (s) => `En jeu ${s}` },
+    ja: { count: (n, cap) => `チケット ×${n}（上限 ${cap}）`, session: (s) => `プレイ中 ${s}` },
+  }[lang] || { count: (n, cap) => `门票 ×${n}（上限 ${cap}）`, session: (s) => `游玩中 ${s}` };
+  fetch('/api/leisure/ticket', { credentials: 'same-origin' })
+    .then((r) => r.json())
+    .then((d) => {
+      if (!d || !d.success) return;   // 未登录/失败：保持隐藏
+      bar.hidden = false;
+      const countEl = document.getElementById('mh-ticket-count');
+      if (countEl) countEl.textContent = dict.count(d.tickets || 0, d.cap || 5);
+      if (d.free_entry) {
+        const freeEl = document.getElementById('mh-ticket-free');
+        if (freeEl) freeEl.hidden = false;
+      }
+      const remaining = d.session && Number(d.session.remaining);
+      if (Number.isFinite(remaining) && remaining > 0) {
+        const el = document.getElementById('mh-ticket-session');
+        const m = Math.floor(remaining / 60);
+        const s = Math.round(remaining % 60);
+        if (el) { el.textContent = dict.session(`${m}:${String(s).padStart(2, '0')}`); el.hidden = false; }
+      }
+    })
+    .catch(() => {});
 })();
 </script>
 </body>

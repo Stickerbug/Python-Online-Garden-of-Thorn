@@ -229,3 +229,66 @@ a.mh-login-link {
 a.mh-login-link:hover {
   text-decoration: underline;
 }
+
+/* 门票状态条：余额 / 免费时段 / 游玩期倒计时 + 获取方式（跟随亮暗主题） */
+.mh-ticket-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-card);
+  margin: 0 0 16px;
+}
+
+.mh-ticket-bar[hidden] { display: none; }
+
+.mh-ticket-icon {
+  width: 44px;
+  height: 44px;
+  flex: none;
+}
+
+.mh-ticket-main { min-width: 0; }
+
+.mh-ticket-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.mh-ticket-count {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.mh-ticket-free {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(87, 198, 126, 0.16);
+  color: #2e7d4f;
+}
+
+:root[data-theme='dark'] .mh-ticket-free {
+  background: rgba(87, 198, 126, 0.2);
+  color: #7fd99b;
+}
+
+.mh-ticket-session {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--leisure-accent);
+}
+
+.mh-ticket-hint {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  margin-top: 6px;
+}
