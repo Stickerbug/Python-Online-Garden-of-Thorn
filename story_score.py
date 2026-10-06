@@ -136,6 +136,7 @@ def settle_story_clear_conn(conn, *, user_id, run_id, state):
 
     # 3) 分数与荆露（开发模式不发）
     total, base = compute_score(state, difficulty, load_count)
+    difficulty_mult = DIFFICULTY_MULTIPLIERS.get(str(difficulty or '').lower(), 1.0)
     if dev_used:
         total = 0
     if total > 0:
@@ -155,7 +156,7 @@ def settle_story_clear_conn(conn, *, user_id, run_id, state):
                 ''',
                 (
                     int(user_id), total,
-                    f'故事通关奖励 难度{difficulty} 基础{base} SL×{compute_multiplier(load_count):g}',
+                    f'故事通关奖励 难度{difficulty}×{difficulty_mult:g} 基础{base} SL×{compute_multiplier(load_count):g}',
                     f'story:{run_id}',
                     free, paid,
                 ),

@@ -296,11 +296,16 @@ function clampClientCardLayer(value) {
 // M=0 时省略 M；N、M 均为零时整个芯片隐藏；负数 N 直接带符号，负 M 的加号改减号。
 // 裂变/聚变特例：N=1 且 M=0 时整个隐藏；M≠0 时 N 必须显示（裂变:1+1）。
 // 「不灭:属性」标签把该属性对暂时位的一切写操作改为对留存位。
-function formatDualAddendValue(baseValue, extraValue) {
+function formatDualAddendValue(baseValue, extraValue, asHtml = false) {
     const n = Math.trunc(Number(baseValue || 0));
     const m = Math.trunc(Number(extraValue || 0));
     if (!m) return `${n}`;
-    return `${n}${m < 0 ? '-' : '+'}${Math.abs(m)}`;
+    const sign = m < 0 ? '-' : '+';
+    const abs = Math.abs(m);
+    // 补充（双加数涂色）：暂时位 +M 用暂时色（与暂时迅捷同款蓝），
+    // 与留存位 N 区分；asHtml=false 时保持纯文本（日志/纯文本场景）。
+    if (asHtml) return `${n}<span class="dual-temp-addend">${sign}${abs}</span>`;
+    return `${n}${sign}${abs}`;
 }
 
 function getDualAddendCardValues(cardDict, cardDef) {
@@ -13766,25 +13771,25 @@ function createCardElement(cardDict, options = {}) {
     // internal id, matching the card description規範.
     const specialEffectEntries = [];
     if (dual.fusionN > 1 || dual.fusionM !== 0) {
-        specialEffectEntries.push(['fusion_layer', `<span class="card-flag fusion-layer">${escapeHtml(UI.fusion_layer || 'Fusion')}:${formatDualAddendValue(dual.fusionN, dual.fusionM)}</span>`]);
+        specialEffectEntries.push(['fusion_layer', `<span class="card-flag fusion-layer">${escapeHtml(UI.fusion_layer || 'Fusion')}:${formatDualAddendValue(dual.fusionN, dual.fusionM, true)}</span>`]);
     }
     if (dual.fissionN > 1 || dual.fissionM !== 0) {
-        specialEffectEntries.push(['fission_layer', `<span class="card-flag fission-layer">${escapeHtml(UI.fission_layer || 'Fission')}:${formatDualAddendValue(dual.fissionN, dual.fissionM)}</span>`]);
+        specialEffectEntries.push(['fission_layer', `<span class="card-flag fission-layer">${escapeHtml(UI.fission_layer || 'Fission')}:${formatDualAddendValue(dual.fissionN, dual.fissionM, true)}</span>`]);
     }
     if (dual.swiftN > 0 || dual.swiftM > 0) {
-        specialEffectEntries.push(['swift', `<span class="card-flag swift">${escapeHtml(UI.tag_swift || 'Swift')}:${formatDualAddendValue(dual.swiftN, dual.swiftM)}</span>`]);
+        specialEffectEntries.push(['swift', `<span class="card-flag swift">${escapeHtml(UI.tag_swift || 'Swift')}:${formatDualAddendValue(dual.swiftN, dual.swiftM, true)}</span>`]);
     }
     if (dual.heavyN > 0 || dual.heavyM > 0) {
-        specialEffectEntries.push(['heavy', `<span class="card-flag heavy">${escapeHtml(UI.tag_heavy || lt({ zh: '沉重', en: 'Heavy', fr: 'Lourdeur', ja: '重化' }))}:${formatDualAddendValue(dual.heavyN, dual.heavyM)}</span>`]);
+        specialEffectEntries.push(['heavy', `<span class="card-flag heavy">${escapeHtml(UI.tag_heavy || lt({ zh: '沉重', en: 'Heavy', fr: 'Lourdeur', ja: '重化' }))}:${formatDualAddendValue(dual.heavyN, dual.heavyM, true)}</span>`]);
     }
     if (dual.magicSwiftN > 0) {
         specialEffectEntries.push(['magic_swift', `<span class="card-flag magic-swift">${escapeHtml(UI.tag_magic_swift || 'Magic Swift')}:${dual.magicSwiftN}</span>`]);
     }
     if (dual.tempMagicHeavyM > 0) {
-        specialEffectEntries.push(['magic_heavy', `<span class="card-flag temp-magic-heavy">${escapeHtml(UI.tag_magic_heavy || lt({ zh: '魔力沉重', en: 'Magic Heavy', fr: 'Lourdeur magique', ja: '魔力重化' }))}:${formatDualAddendValue(0, dual.tempMagicHeavyM)}</span>`]);
+        specialEffectEntries.push(['magic_heavy', `<span class="card-flag temp-magic-heavy">${escapeHtml(UI.tag_magic_heavy || lt({ zh: '魔力沉重', en: 'Magic Heavy', fr: 'Lourdeur magique', ja: '魔力重化' }))}:${formatDualAddendValue(0, dual.tempMagicHeavyM, true)}</span>`]);
     }
     if (dual.powerN !== 0 || dual.powerM !== 0) {
-        specialEffectEntries.push(['power', `<span class="card-flag power">${escapeHtml(UI.tag_power || 'Power')}:${formatDualAddendValue(dual.powerN, dual.powerM)}</span>`]);
+        specialEffectEntries.push(['power', `<span class="card-flag power">${escapeHtml(UI.tag_power || 'Power')}:${formatDualAddendValue(dual.powerN, dual.powerM, true)}</span>`]);
     }
     if (copyCount > 0) {
         specialEffectEntries.push(['copy', `<span class="card-flag copy">${escapeHtml(UI.tag_copy || 'Copy')}:${copyCount}</span>`]);
@@ -14045,12 +14050,13 @@ function cardFlagHtml(flag, text = null) {
     if (!normalized) return '';
     if (getCustomTagDef(normalized)) return customTagHtml(normalized, text);
     if (normalized === 'fusion_layer') {
+        // text 只含内部 i18n 标签 + 数字（含暂时位涂色 span），不 escapeHtml。
         const label = text || `${UI.fusion_layer || 'Fusion'}`;
-        return `<span class="card-flag fusion-layer">${escapeHtml(label)}</span>`;
+        return `<span class="card-flag fusion-layer">${label}</span>`;
     }
     if (normalized === 'fission_layer') {
         const label = text || `${UI.fission_layer || 'Fission'}`;
-        return `<span class="card-flag fission-layer">${escapeHtml(label)}</span>`;
+        return `<span class="card-flag fission-layer">${label}</span>`;
     }
     const style = CARD_FLAG_STYLES[normalized];
     const label = text || UI['flag_' + normalized] || UI['tag_' + normalized] || normalized;
@@ -14107,23 +14113,23 @@ function buildInstanceOnlyFlagHtml(cardDict, cardDef, options = {}) {
         parts.push(cardFlagHtml(flag));
     });
     if (includeLayers) {
-        if (dual.fusionN > 1 || dual.fusionM !== 0) parts.push(cardFlagHtml('fusion_layer', `${UI.fusion_layer || 'Fusion'}:${formatDualAddendValue(dual.fusionN, dual.fusionM)}`));
-        if (dual.fissionN > 1 || dual.fissionM !== 0) parts.push(cardFlagHtml('fission_layer', `${UI.fission_layer || 'Fission'}:${formatDualAddendValue(dual.fissionN, dual.fissionM)}`));
+        if (dual.fusionN > 1 || dual.fusionM !== 0) parts.push(cardFlagHtml('fusion_layer', `${UI.fusion_layer || 'Fusion'}:${formatDualAddendValue(dual.fusionN, dual.fusionM, true)}`));
+        if (dual.fissionN > 1 || dual.fissionM !== 0) parts.push(cardFlagHtml('fission_layer', `${UI.fission_layer || 'Fission'}:${formatDualAddendValue(dual.fissionN, dual.fissionM, true)}`));
     }
     if (dual.swiftN > 0 || dual.swiftM > 0) {
-        parts.push(cardFlagHtml('swift', `${UI.tag_swift || 'Swift'}:${formatDualAddendValue(dual.swiftN, dual.swiftM)}`));
+        parts.push(cardFlagHtml('swift', `${UI.tag_swift || 'Swift'}:${formatDualAddendValue(dual.swiftN, dual.swiftM, true)}`));
     }
     if (dual.heavyN > 0 || dual.heavyM > 0) {
-        parts.push(cardFlagHtml('heavy', `${UI.tag_heavy || lt({ zh: '沉重', en: 'Heavy', fr: 'Lourdeur', ja: '重化' })}:${formatDualAddendValue(dual.heavyN, dual.heavyM)}`));
+        parts.push(cardFlagHtml('heavy', `${UI.tag_heavy || lt({ zh: '沉重', en: 'Heavy', fr: 'Lourdeur', ja: '重化' })}:${formatDualAddendValue(dual.heavyN, dual.heavyM, true)}`));
     }
     if (dual.magicSwiftN > 0) {
         parts.push(cardFlagHtml('magic_swift', `${UI.tag_magic_swift || 'Magic Swift'}:${dual.magicSwiftN}`));
     }
     if (dual.tempMagicHeavyM > 0) {
-        parts.push(cardFlagHtml('magic_heavy', `${UI.tag_magic_heavy || lt({ zh: '魔力沉重', en: 'Magic Heavy', fr: 'Lourdeur magique', ja: '魔力重化' })}:${formatDualAddendValue(0, dual.tempMagicHeavyM)}`));
+        parts.push(cardFlagHtml('magic_heavy', `${UI.tag_magic_heavy || lt({ zh: '魔力沉重', en: 'Magic Heavy', fr: 'Lourdeur magique', ja: '魔力重化' })}:${formatDualAddendValue(0, dual.tempMagicHeavyM, true)}`));
     }
     if (dual.powerN !== 0 || dual.powerM !== 0) {
-        parts.push(cardFlagHtml('power', `${UI.tag_power || 'Power'}:${formatDualAddendValue(dual.powerN, dual.powerM)}`));
+        parts.push(cardFlagHtml('power', `${UI.tag_power || 'Power'}:${formatDualAddendValue(dual.powerN, dual.powerM, true)}`));
     }
     if (copyCount > 0) {
         parts.push(cardFlagHtml('copy', `${UI.tag_copy || 'Copy'}:${copyCount}`));

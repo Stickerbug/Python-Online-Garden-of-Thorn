@@ -57,6 +57,11 @@ class StoryDevNoDewTest(unittest.TestCase):
         self.assertFalse(result['dev_used'])
         dew = conn.execute('SELECT thorn_dew_free FROM users WHERE id = 1').fetchone()['thorn_dew_free']
         self.assertEqual(dew, result['total'])
+        tx = conn.execute(
+            'SELECT reason FROM user_currency_transactions ORDER BY id DESC LIMIT 1'
+        ).fetchone()
+        # 反馈 #378：结算文案要显示难度全局乘数
+        self.assertIn('难度normal×1', tx['reason'])
         ledger = conn.execute('SELECT * FROM story_reward_ledger').fetchone()
         self.assertEqual(ledger['dev_used'], 0)
         self.assertEqual(ledger['total_score'], result['total'])

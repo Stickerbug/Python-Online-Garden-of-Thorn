@@ -10212,6 +10212,12 @@ html.blind-level-4 .card-prediction-part.magic {
   border-color: rgba(122, 92, 255, 0.34);
 }
 
+/* 双加数暂时位 +M 的涂色（与暂时迅捷同款蓝）：威力/裂变/聚变/迅捷/沉重
+   芯片里「N+M」的 +M 部分标为暂时，与留存位 N 区分。 */
+.card-flag .dual-temp-addend {
+  color: #0EA5E9;
+}
+
 .card-flag.unfading {
   color: #B54708;
   background: rgba(181, 71, 8, 0.12);

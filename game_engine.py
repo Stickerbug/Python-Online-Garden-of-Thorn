@@ -8756,9 +8756,15 @@ class GameEngine:
         copy_card.fusion_multiplier = float(copy_card.fusion_level)
         copy_card.fission_level = clamp_card_layer(half_layer(getattr(target, 'fission_level', 1)))
         copy_card.fission_count = max(0, copy_card.fission_level - 1)
-        # 双加数体系：复制件的减半层数即其基线（复制件打出后回落到减半值）。
-        copy_card.fission_base = copy_card.fission_level
-        copy_card.fusion_base = copy_card.fusion_level
+        # 双加数口径修正：复制件的减半层数记**暂时位**——留存位回落到复制件
+        # 卡面（打出后恢复卡面层数，与聚变/裂变「进弃牌堆恢复默认」规则一致），
+        # 显示为「裂变:卡面+N」。旧行为把减半值记进基线（打出不回落）。
+        copy_card.fission_base = clamp_card_layer(
+            getattr(getattr(copy_card, 'card_def', None), 'fission_level', 1) or 1
+        )
+        copy_card.fusion_base = clamp_card_layer(
+            getattr(getattr(copy_card, 'card_def', None), 'fusion_level', 1) or 1
+        )
         copy_card.power_base = clamp_card_power(
             int(math.ceil(int(getattr(target, 'power_base', 0) or 0) / 2))
         )
@@ -20350,8 +20356,13 @@ class GameEngine:
             copied.fission_level = clamp_card_layer(self._eval_int(player_id, params['fission_level'], card, 1))
             copied.fission_count = max(0, copied.fission_level - 1)
             copied.fission_hit = 0
-            # 造卡指定的裂变层数即该复制件的卡面基线。
-            copied.fission_base = copied.fission_level
+            # 双加数口径修正：造卡授予的裂变层数记**暂时位**——留存位回落到该
+            # 复制件卡面（reset_card_after_play 打出后恢复卡面层数，与「进入
+            # 弃牌堆后恢复默认裂变」规则一致），显示为「裂变:卡面+N」。
+            # 旧行为把授予值直接记进基线，打出后不回落且涂色显示为全留存。
+            copied.fission_base = clamp_card_layer(
+                getattr(getattr(copied, 'card_def', None), 'fission_level', 1) or 1
+            )
         if params.get('swift_value') is not None:
             copied.swift_value = max(0, self._eval_int(player_id, params['swift_value'], card, 0))
         if params.get('unique_copy_penalty'):
