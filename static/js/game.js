@@ -5524,7 +5524,7 @@ function translateLogLine(line) {
     }
     let m;
     const lp = localizeCanonicalPlayerName;
-    const postUse = parseBattlePostUseLogForCompact(line);
+    const postUse = memoizedCompactParse('p:', line, parseBattlePostUseLogForCompact);
     if (postUse) {
         const localizedPostUse = formatLocalizedBattlePostUseLog(postUse);
         if (localizedPostUse) return localizedPostUse;
@@ -6417,6 +6417,7 @@ let renderedTimelineDomCount = 0;
 let renderedBattleLogSnapshot = [];
 let renderedBattleLogSnapshotStart = 0;
 let renderedTimelineLastSig = '';
+let renderedBattleLogChatSig = '';
 let renderedBattleLogMatchKey = '';
 let renderedClassicLogSignature = '';
 let lastRenderedTurnKey = '';
@@ -34930,6 +34931,7 @@ function resetBattleLogState(content) {
     renderedBattleLogSnapshot = [];
     renderedBattleLogSnapshotStart = 0;
     renderedTimelineLastSig = '';
+    renderedBattleLogChatSig = '';
     const classicContent = $('classic-log-content');
     if (classicContent) {
         classicContent.dataset.renderSignature = '';
@@ -35009,21 +35011,64 @@ function stripBattleLogCardMarkers(text) {
     return String(text || '').replace(BATTLE_LOG_CARD_MARKER_RE, '');
 }
 
+/* 卡牌标记解码记忆化：同一条日志行的标记在每次状态渲染都会被重复
+   atob+JSON.parse（长对局全量构建实测 ~200ms/次）。解码是纯函数，
+   按标记串缓存即可；上限防无限增长。 */
+const battleLogCardMarkerCache = new Map();
+const BATTLE_LOG_MARKER_CACHE_CAP = 800;
+
+/* 行解析记忆化：日志压缩走查每行要试 4 个正则解析器，长对局每次状态
+   全量走查 ~200ms。解析器都是纯函数（只依赖行文本），按 行文本 缓存
+   分类结果后，稳态下只有新行需要真正解析。 */
+const battleCompactParseCache = new Map();
+const BATTLE_COMPACT_PARSE_CAP = 2400;
+
+function memoizedCompactParse(tag, line, parse) {
+    const key = tag + String(line || '');
+    if (battleCompactParseCache.has(key)) {
+        const hit = battleCompactParseCache.get(key);
+        battleCompactParseCache.delete(key);
+        battleCompactParseCache.set(key, hit);
+        return hit;
+    }
+    const value = parse(line);
+    battleCompactParseCache.set(key, value);
+    if (battleCompactParseCache.size > BATTLE_COMPACT_PARSE_CAP) {
+        battleCompactParseCache.delete(battleCompactParseCache.keys().next().value);
+    }
+    return value;
+}
+
 function decodeBattleLogCardMarker(text) {
     const source = String(text || '');
     const match = source.match(/\u2063CARD:([A-Za-z0-9_-]+)\u2063/);
     if (!match) return null;
+    const key = match[1];
+    if (battleLogCardMarkerCache.has(key)) {
+        const hit = battleLogCardMarkerCache.get(key);
+        // LRU：命中即续期
+        battleLogCardMarkerCache.delete(key);
+        battleLogCardMarkerCache.set(key, hit);
+        return hit;
+    }
+    let data = null;
     try {
-        const b64 = match[1].replace(/-/g, '+').replace(/_/g, '/');
+        const b64 = key.replace(/-/g, '+').replace(/_/g, '/');
         const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
         const binary = atob(padded);
         const bytes = Uint8Array.from(binary, ch => ch.charCodeAt(0));
         const jsonText = new TextDecoder('utf-8').decode(bytes);
-        const data = JSON.parse(jsonText);
-        return data && typeof data === 'object' ? data : null;
+        const parsed = JSON.parse(jsonText);
+        data = parsed && typeof parsed === 'object' ? parsed : null;
     } catch (err) {
-        return null;
+        data = null;
     }
+    battleLogCardMarkerCache.set(key, data);
+    if (battleLogCardMarkerCache.size > BATTLE_LOG_MARKER_CACHE_CAP) {
+        const oldest = battleLogCardMarkerCache.keys().next().value;
+        battleLogCardMarkerCache.delete(oldest);
+    }
+    return data;
 }
 
 function normalizeBattleLogCardLookupText(cardText) {
@@ -35109,8 +35154,7 @@ function parseBattleUseLogForCompact(line) {
     };
 }
 
-function parseBattleCounterLogForCompact(line) {
-    const rawLine = String(line || '');
+function parseBattleCounterLogForCompact(line) {    const rawLine = String(line || '');
     const cardDict = decodeBattleLogCardMarker(rawLine);
     const cleanLine = stripBattleLogCardMarkers(rawLine);
     const match = cleanLine.match(/^(.+?)使用了?(.+?)进行反制[！!]?(?:\s*×(\d+))?$/);
@@ -35411,7 +35455,7 @@ function compactBattleLogLinesForDisplay(log) {
     const output = [];
     const rawLines = Array.isArray(log) ? log.map(line => String(line || '')) : [];
     rawLines.forEach((line, rawIndex) => {
-        const counter = parseBattleCounterLogForCompact(line);
+        const counter = memoizedCompactParse('c:', line, parseBattleCounterLogForCompact);
         if (counter) {
             const last = output[output.length - 1];
             if (last && last.kind === 'counter' && last.actor === counter.actor) {
@@ -35422,7 +35466,7 @@ function compactBattleLogLinesForDisplay(log) {
             output.push({ kind: 'counter', ...counter, rawStart: rawIndex, rawEnd: rawIndex });
             return;
         }
-        const use = parseBattleUseLogForCompact(line);
+        const use = memoizedCompactParse('u:', line, parseBattleUseLogForCompact);
         if (use) {
             const last = output[output.length - 1];
             const previous = output[output.length - 2];
@@ -35445,7 +35489,7 @@ function compactBattleLogLinesForDisplay(log) {
             output.push({ kind: 'use', ...use, rawStart: rawIndex, rawEnd: rawIndex });
             return;
         }
-        const damage = parseBattleDamageLogForCompact(line);
+        const damage = memoizedCompactParse('d:', line, parseBattleDamageLogForCompact);
         if (damage) {
             const last = output[output.length - 1];
             if (last && last.kind === 'damage' && last.target === damage.target) {
@@ -35464,7 +35508,7 @@ function compactBattleLogLinesForDisplay(log) {
             output.push({ kind: 'damage', ...damage, rawStart: rawIndex, rawEnd: rawIndex });
             return;
         }
-        const postUse = parseBattlePostUseLogForCompact(line);
+        const postUse = memoizedCompactParse('p:', line, parseBattlePostUseLogForCompact);
         if (postUse) {
             const last = output[output.length - 1];
             if (last && last.kind === 'post_use' && mergeBattlePostUseForCompact(last, postUse)) {
@@ -35511,7 +35555,7 @@ function compactBattleLogEntriesForDisplay(log) {
     const output = [];
     const rawLines = Array.isArray(log) ? log.map(line => String(line || '')) : [];
     rawLines.forEach((line, rawIndex) => {
-        const counter = parseBattleCounterLogForCompact(line);
+        const counter = memoizedCompactParse('c:', line, parseBattleCounterLogForCompact);
         if (counter) {
             const last = output[output.length - 1];
             if (last && last.kind === 'counter' && last.actor === counter.actor) {
@@ -35522,7 +35566,7 @@ function compactBattleLogEntriesForDisplay(log) {
             output.push({ kind: 'counter', ...counter, rawStart: rawIndex, rawEnd: rawIndex });
             return;
         }
-        const use = parseBattleUseLogForCompact(line);
+        const use = memoizedCompactParse('u:', line, parseBattleUseLogForCompact);
         if (use) {
             const last = output[output.length - 1];
             const previous = output[output.length - 2];
@@ -35545,7 +35589,7 @@ function compactBattleLogEntriesForDisplay(log) {
             output.push({ kind: 'use', ...use, rawStart: rawIndex, rawEnd: rawIndex });
             return;
         }
-        const damage = parseBattleDamageLogForCompact(line);
+        const damage = memoizedCompactParse('d:', line, parseBattleDamageLogForCompact);
         if (damage) {
             const last = output[output.length - 1];
             if (last && last.kind === 'damage' && last.target === damage.target) {
@@ -35564,7 +35608,7 @@ function compactBattleLogEntriesForDisplay(log) {
             output.push({ kind: 'damage', ...damage, rawStart: rawIndex, rawEnd: rawIndex });
             return;
         }
-        const postUse = parseBattlePostUseLogForCompact(line);
+        const postUse = memoizedCompactParse('p:', line, parseBattlePostUseLogForCompact);
         if (postUse) {
             const last = output[output.length - 1];
             if (last && last.kind === 'post_use' && mergeBattlePostUseForCompact(last, postUse)) {
@@ -35684,6 +35728,20 @@ function renderLog(log, logStart = 0, logTotal = null) {
     const rawLog = log.map(line => String(line || ''));
     logTotal = Number(logTotal == null ? logStart + rawLog.length : logTotal);
     playAudioForNewBattleLogs(rawLog, logStart, logTotal, matchKey);
+    // 短路：日志窗口、语言、聊天都没变时，时间线与 DOM 必然与上次一致——
+    // 直接跳过（长对局全量构建 ~200ms/次，很多状态包并不带新日志行）。
+    if (
+        renderedBattleLogSnapshot.length === rawLog.length
+        && renderedBattleLogSnapshotStart === logStart
+        && renderedBattleLogTotal === logTotal
+        && renderedTimelineDomCount === gameTimelineEntries.length
+        && rawLog.length > 0
+        && rawLog[rawLog.length - 1] === renderedBattleLogSnapshot[renderedBattleLogSnapshot.length - 1]
+        && roomChatHistorySignature === renderedBattleLogChatSig
+    ) {
+        return;
+    }
+    renderedBattleLogChatSig = roomChatHistorySignature;
     if (logTotal < renderedBattleLogTotal || logStart > renderedBattleLogTotal) {
         resetBattleLogState(content);
         renderedBattleLogTotal = logStart;

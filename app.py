@@ -21270,13 +21270,19 @@ def emit_room_v2_ui_request(room):
 
 
 def broadcast_spectate_state(room, *, action_lock_held=False):
+    # 每轮广播只构建一次观战基础状态（引擎/双方牌区快照对所有观战者
+    # 相同），逐观战者仅做浅拷贝 + 私有字段（聊天历史、增量日志）。
+    base_state = None
     for spid in list(room.spectators):
         if not room_spectator_session_is_current(room, spid):
             continue
+        if base_state is None:
+            base_state = build_spectate_state(room)
         send_spectate_state_to(
             room,
             spid,
             action_lock_held=action_lock_held,
+            prebuilt_base=base_state,
         )
 
 
@@ -21300,7 +21306,7 @@ def _defer_phelren_spectate_state(room, *, action_lock_held=False):
     return True
 
 
-def send_spectate_state_to(room, sid, *, action_lock_held=False, force_full_log=False):
+def send_spectate_state_to(room, sid, *, action_lock_held=False, force_full_log=False, prebuilt_base=None):
     if not room_spectator_session_is_current(room, sid):
         return
     if _defer_phelren_spectate_state(
@@ -21309,7 +21315,12 @@ def send_spectate_state_to(room, sid, *, action_lock_held=False, force_full_log=
     ):
         return False
     perspective = players[sid].get('spectate_perspective', 0)
-    state = build_spectate_state(room, perspective=perspective)
+    if isinstance(prebuilt_base, dict):
+        # 浅拷贝共享基础态：逐观战者的字段都是顶层赋值（日志切片也是换新表），
+        # 不会改动共享的嵌套结构。
+        state = dict(prebuilt_base)
+    else:
+        state = build_spectate_state(room, perspective=perspective)
     _slice_state_log_for_recipient(state, room.engine, f'spec:{sid}', force_full=force_full_log)
     state['your_id'] = -1
     state['spectating'] = True
