@@ -6415,10 +6415,49 @@ let renderedBattleLogCount = 0;
 let renderedBattleLogTotal = 0;
 let renderedTimelineDomCount = 0;
 let renderedBattleLogSnapshot = [];
+let renderedBattleLogSnapshotStart = 0;
+let renderedTimelineLastSig = '';
 let renderedBattleLogMatchKey = '';
 let renderedClassicLogSignature = '';
 let lastRenderedTurnKey = '';
 const lastStatusSignatures = new Map();
+
+/* 战斗日志本地累积（长对局性能）：服务端按接收方只发增量行
+   （长对局全量日志含卡牌快照可达数百 KB），客户端拼成完整数组
+   再进渲染管线；窗口对不上（新对局/重连/服务端全量）时整体替换。 */
+let battleLogAccum = [];
+let battleLogAccumStart = 0;
+const BATTLE_LOG_ACCUM_CAP = 1500;
+
+function mergeIncomingBattleLog(data) {
+    if (!data || !Array.isArray(data.log)) return data;
+    const start = Math.max(0, Number(data.log_start || 0));
+    const total = data.log_total != null && Number.isFinite(Number(data.log_total))
+        ? Number(data.log_total) : start + data.log.length;
+    const accTotal = battleLogAccumStart + battleLogAccum.length;
+    if (!battleLogAccum.length || start > accTotal || total < battleLogAccumStart) {
+        battleLogAccum = data.log.map(line => String(line || ''));
+        battleLogAccumStart = start;
+    } else if (total >= accTotal) {
+        const skip = Math.max(0, accTotal - start);
+        const delta = data.log.slice(skip);
+        for (let i = 0; i < delta.length; i++) battleLogAccum.push(String(delta[i] || ''));
+        if (battleLogAccum.length > BATTLE_LOG_ACCUM_CAP) {
+            const cut = battleLogAccum.length - BATTLE_LOG_ACCUM_CAP;
+            battleLogAccum.splice(0, cut);
+            battleLogAccumStart += cut;
+        }
+    }
+    data.log = battleLogAccum;
+    data.log_start = battleLogAccumStart;
+    data.log_total = battleLogAccumStart + battleLogAccum.length;
+    return data;
+}
+
+function resetBattleLogAccumulator() {
+    battleLogAccum = [];
+    battleLogAccumStart = 0;
+}
 const GALLERY_MECHANIC_FLAGS = new Set(['fusion_layer', 'fission_layer']);
 const bootLoader = {
     el: null, stepEl: null, value: 0,
@@ -17666,6 +17705,7 @@ function connectSocket(serverUrl) {
         const previousPhase = phase;
         const previousGameState = gameState;
         data = preserveGameOverLogState(data, previousGameState);
+        data = mergeIncomingBattleLog(data);
         rememberTurnTimerSnapshot(data);
         prepareRuntimeForBattleEntry(previousPhase, data.phase);
         clearTargetPickUi();
@@ -17764,6 +17804,7 @@ function connectSocket(serverUrl) {
         const previousPhase = phase;
         const previousGameState = gameState;
         data = preserveGameOverLogState(data, previousGameState);
+        data = mergeIncomingBattleLog(data);
         if (data && data.ai_test) rememberActiveMatchRoute(data, 'solo_state');
         rememberTurnTimerSnapshot(data);
         prepareRuntimeForBattleEntry(previousPhase, data.phase);
@@ -29754,6 +29795,7 @@ function syncBattleLogMatch(ctx) {
             resetMatchRuntimeState({ clearGameState: true });
         }
         resetBattleLogState(content);
+        resetBattleLogAccumulator();
         renderedBattleLogMatchKey = key;
         activeBattlePanelTab = 'log';
         lastDraftOptionsSignature = '';
@@ -34886,6 +34928,8 @@ function resetBattleLogState(content) {
     renderedBattleLogTotal = 0;
     renderedClassicLogSignature = '';
     renderedBattleLogSnapshot = [];
+    renderedBattleLogSnapshotStart = 0;
+    renderedTimelineLastSig = '';
     const classicContent = $('classic-log-content');
     if (classicContent) {
         classicContent.dataset.renderSignature = '';
@@ -35645,8 +35689,14 @@ function renderLog(log, logStart = 0, logTotal = null) {
         renderedBattleLogTotal = logStart;
     }
     const nextBattleSnapshot = rawLog.map(line => String(line || ''));
-    const canAppendBattleLog = renderedBattleLogSnapshot.length <= nextBattleSnapshot.length
-        && renderedBattleLogSnapshot.every((line, index) => line === nextBattleSnapshot[index]);
+    // 对齐前缀判定：旧快照在新窗口内逐行一致（允许头部截断+尾部追加）→ 可增量
+    const prevSnapshot = renderedBattleLogSnapshot;
+    const alignOffset = logStart >= renderedBattleLogSnapshotStart
+        ? logStart - renderedBattleLogSnapshotStart
+        : -1;
+    const canAppendBattleLog = alignOffset >= 0
+        && prevSnapshot.length + alignOffset <= nextBattleSnapshot.length
+        && prevSnapshot.every((line, index) => line === nextBattleSnapshot[index + alignOffset]);
     if (!canAppendBattleLog) {
         resetBattleLogState(content);
         renderedBattleLogTotal = logStart;
@@ -35655,13 +35705,25 @@ function renderLog(log, logStart = 0, logTotal = null) {
     renderedBattleLogCount = rawLog.length;
     renderedBattleLogTotal = logTotal;
     renderedBattleLogSnapshot = nextBattleSnapshot;
-    resetBattleLogDom(content);
-    if (gameTimelineEntries.length) {
-        const fragment = document.createDocumentFragment();
-        gameTimelineEntries.forEach(entry => fragment.appendChild(createBattleLogElement(entry)));
-        content.appendChild(fragment);
-        renderedTimelineDomCount = gameTimelineEntries.length;
+    renderedBattleLogSnapshotStart = logStart;
+    // DOM 增量：时间线前缀不变时只追加新条目；边界条目签名变了就全量重建
+    let domStart = renderedTimelineDomCount;
+    if (domStart > gameTimelineEntries.length) domStart = 0;
+    if (domStart > 0 && renderedTimelineLastSig) {
+        const boundarySig = JSON.stringify(gameTimelineEntries[domStart - 1] || null);
+        if (boundarySig !== renderedTimelineLastSig) domStart = 0;
     }
+    if (domStart === 0) resetBattleLogDom(content);
+    const newEntries = gameTimelineEntries.slice(domStart);
+    if (newEntries.length) {
+        const fragment = document.createDocumentFragment();
+        newEntries.forEach(entry => fragment.appendChild(createBattleLogElement(entry)));
+        content.appendChild(fragment);
+    }
+    renderedTimelineDomCount = gameTimelineEntries.length;
+    renderedTimelineLastSig = gameTimelineEntries.length
+        ? JSON.stringify(gameTimelineEntries[gameTimelineEntries.length - 1])
+        : '';
     if (wasAtBottom) content.scrollTop = content.scrollHeight;
 }
 

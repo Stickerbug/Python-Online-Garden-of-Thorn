@@ -18103,6 +18103,7 @@ def _broadcast_game_state_now(room, *, action_lock_held=False):
         state['mode'] = room.mode
         state['room_id'] = room.room_id
         state['match_key'] = room_match_key(room)
+        _slice_state_log_for_recipient(state, room.engine, f'p:{sid}')
         state['spectator_count'] = room_spectator_count(room)
         state['spectator_players'] = room_spectator_players(room)
         state['room_chat_history'] = room_chat_history_for_sid(room, sid)
@@ -18375,7 +18376,7 @@ def _cancel_game_over_cleanup_timer(room):
         room._game_over_cleanup_timer = None
 
 
-def send_game_state_to(room, pidx, recover_pending=True):
+def send_game_state_to(room, pidx, recover_pending=True, force_full_log=False):
     sid = room.player_sids[pidx]
     if not room_player_session_is_current(room, sid):
         return
@@ -18400,6 +18401,7 @@ def send_game_state_to(room, pidx, recover_pending=True):
         state['room_chat_history'] = room_chat_history_for_sid(room, sid)
         state.update(_room_timer_payload(room))
         state.update(room_mod_payload(room))
+        _slice_state_log_for_recipient(state, room.engine, f'p:{sid}', force_full=force_full_log)
         state.update(_room_disconnect_state_payload(room, sid))
         if room.engine.phase == 'game_over':
             state.update(room_rematch_payload(room, sid))
@@ -18594,7 +18596,7 @@ def on_request_game_state(data=None):
     if data is None:
         return
     if sid in ai_test_sessions and sid in solo_sessions:
-        send_solo_state_with_pending(sid)
+        send_solo_state_with_pending(sid, force_full_log=True)
         return
     room = None
     pidx = -1
@@ -18615,9 +18617,9 @@ def on_request_game_state(data=None):
     if room is None:
         return
     if spectating:
-        send_spectate_state_to(room, sid)
+        send_spectate_state_to(room, sid, force_full_log=True)
     elif pidx >= 0:
-        send_game_state_to(room, pidx)
+        send_game_state_to(room, pidx, force_full_log=True)
 
 
 def emit_initial_pending_interaction(room):
@@ -20191,8 +20193,8 @@ def _solo_emit_pending_after_state(sid, engine, response_payload=None):
             admin_event('error', f'solo pending v2 emit failed: {exc}')
 
 
-def send_solo_state_with_pending(sid, perspective=None, response_payload=None):
-    if send_solo_state(sid, perspective) is False:
+def send_solo_state_with_pending(sid, perspective=None, response_payload=None, force_full_log=False):
+    if send_solo_state(sid, perspective, force_full_log=force_full_log) is False:
         return False
     _solo_emit_pending_after_state(
         sid,
@@ -20338,7 +20340,37 @@ def _ai_test_pending_is_human(sid, engine):
     return human_player is None or _solo_decision_player(engine) == human_player
 
 
-def send_solo_state(sid, perspective=None, *, broadcast_spectators=True):
+def _slice_state_log_for_recipient(state, engine, recipient_key, *, force_full=False):
+    """状态日志增量下发：只发该接收方尚未收到的行。
+
+    长对局日志（含每张牌的 base64 快照）可达数百 KB，此前每次操作/
+    每个 AI 动作都全量重发给玩家和每名观战者——高血量 Phelren 与观战
+    卡顿的主要来源。客户端本就按 log_start/log_total 做差量合并
+    （getNewBattleLogLines / mergeIncomingBattleLog），这里按接收方
+    记账剪掉已发部分；窗口对不上（首发/重连/换对局/主动请求）时回退
+    全量并重置记账。"""
+    log = state.get('log')
+    if not isinstance(log, list) or not log:
+        return
+    start = max(0, int(state.get('log_start') or 0))
+    total = start + len(log)
+    sent = getattr(engine, '_log_sent_totals', None)
+    if not isinstance(sent, dict):
+        sent = {}
+        try:
+            engine._log_sent_totals = sent
+        except Exception:
+            return
+    last = sent.get(recipient_key)
+    if not force_full and isinstance(last, int) and start <= last <= total:
+        skip = last - start
+        if skip:
+            state['log'] = log[skip:]
+            state['log_start'] = last
+    sent[recipient_key] = total
+
+
+def send_solo_state(sid, perspective=None, *, broadcast_spectators=True, force_full_log=False):
     with _lock:
         engine = solo_sessions.get(sid)
         if not engine:
@@ -20361,6 +20393,7 @@ def send_solo_state(sid, perspective=None, *, broadcast_spectators=True):
     log_offset = max(0, int(getattr(engine, '_solo_log_offset', 0) or 0))
     state['log_start'] = log_offset
     state['log_total'] = log_offset + len(state.get('log') or [])
+    _slice_state_log_for_recipient(state, engine, f'owner:{sid}', force_full=force_full_log)
     state['your_id'] = perspective
     state['match_key'] = _ai_test_match_key(ai_meta) if ai_meta else f"solo:{id(engine)}"
     ai_room = _ai_test_replay_room(sid) if ai_meta else None
@@ -21267,7 +21300,7 @@ def _defer_phelren_spectate_state(room, *, action_lock_held=False):
     return True
 
 
-def send_spectate_state_to(room, sid, *, action_lock_held=False):
+def send_spectate_state_to(room, sid, *, action_lock_held=False, force_full_log=False):
     if not room_spectator_session_is_current(room, sid):
         return
     if _defer_phelren_spectate_state(
@@ -21277,6 +21310,7 @@ def send_spectate_state_to(room, sid, *, action_lock_held=False):
         return False
     perspective = players[sid].get('spectate_perspective', 0)
     state = build_spectate_state(room, perspective=perspective)
+    _slice_state_log_for_recipient(state, room.engine, f'spec:{sid}', force_full=force_full_log)
     state['your_id'] = -1
     state['spectating'] = True
     if room.engine.phase == 'game_over' or room.engine.game_over:
