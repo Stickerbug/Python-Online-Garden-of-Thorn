@@ -35793,10 +35793,23 @@ def on_play_card(data):
                 in_discard = any(
                     getattr(c, 'instance_id', None) == played_iid for c in (ps.discard or [])
                 )
+                in_hand = any(
+                    getattr(c, 'instance_id', None) == played_iid for c in (ps.hand or [])
+                )
                 if in_discard and not in_equip:
                     admin_event(
                         'warning',
                         f'root card landed in discard after play def={result["card"].get("def_id")!r} '
+                        f'room={getattr(room, "room_id", "?")} player={pidx}',
+                        room_id=getattr(room, 'room_id', None),
+                    )
+                elif not in_equip and not in_discard and not in_hand:
+                    # R-29183 类问题（使用了花朵但不装备、卡也无去向）：
+                    # 完整打出后装备区/弃牌堆/手牌都找不到——比"被吞"更严重，
+                    # 必须留痕定位。
+                    admin_event(
+                        'warning',
+                        f'root card vanished after play def={result["card"].get("def_id")!r} '
                         f'room={getattr(room, "room_id", "?")} player={pidx}',
                         room_id=getattr(room, 'room_id', None),
                     )
