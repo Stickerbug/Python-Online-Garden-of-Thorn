@@ -3,6 +3,8 @@ import json
 import os
 import sqlite3
 import struct
+import threading
+import time
 import uuid
 import zlib
 from collections import OrderedDict
@@ -10,6 +12,51 @@ from datetime import datetime, timedelta, timezone
 
 import db as db_module
 from db import DB_PATH, get_db_connection, utc_now
+
+
+# 玩家→对局 id 集合的短 TTL 缓存（见 _user_match_ids_cached）。
+_USER_MATCH_IDS_TTL_SECONDS = 60.0
+_USER_MATCH_IDS_CACHE = OrderedDict()   # uid -> (expires_at_monotonic, frozenset)
+_USER_MATCH_IDS_LOCK = threading.Lock()
+_USER_MATCH_IDS_CACHE_CAP = 2000
+
+
+def _user_match_ids_cached(conn, user_id, *, ttl=None):
+    """某玩家参与过的全部 match id。
+
+    归属只存在 matches.player_ids_json（JSON 字符串），无法建索引；
+    list_replays 此前对 match_replays 每行做 EXISTS 子查询 + 字符串拼接
+    LIKE——冷页时零结果用户也要全表随机扫（实测 7s+）。这里把"玩家的
+    对局集合"单独一次扫出（单表顺序扫描），短 TTL 缓存后按 id 反查
+    match_replays（走 idx_match_replays_match_id）。
+    """
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return frozenset()
+    if uid <= 0:
+        return frozenset()
+    now = time.monotonic()
+    with _USER_MATCH_IDS_LOCK:
+        hit = _USER_MATCH_IDS_CACHE.get(uid)
+        if hit is not None and hit[0] > now:
+            _USER_MATCH_IDS_CACHE.move_to_end(uid)
+            return hit[1]
+    rows = conn.execute(
+        '''
+        SELECT id FROM matches
+        WHERE (',' || TRIM(REPLACE(COALESCE(player_ids_json, ''), ' ', ''), '[]') || ',') LIKE ?
+        ''',
+        (f'%,{uid},%',),
+    ).fetchall()
+    ids = frozenset(int(r['id']) for r in rows)
+    expires = now + (ttl if ttl is not None else _USER_MATCH_IDS_TTL_SECONDS)
+    with _USER_MATCH_IDS_LOCK:
+        _USER_MATCH_IDS_CACHE[uid] = (expires, ids)
+        _USER_MATCH_IDS_CACHE.move_to_end(uid)
+        while len(_USER_MATCH_IDS_CACHE) > _USER_MATCH_IDS_CACHE_CAP:
+            _USER_MATCH_IDS_CACHE.popitem(last=False)
+    return ids
 
 
 REPLAY_VERSION = 2
@@ -810,16 +857,22 @@ def list_replays(
         except (TypeError, ValueError):
             safe_user_id = 0
         if safe_user_id > 0:
+            # 玩家归属查询走缓存集合 + json_each 反查（见 _user_match_ids_cached）。
+            # 集合为空（大多数休闲玩家）直接短路返回，不再触碰 match_replays。
+            with get_db_connection() as conn:
+                user_match_ids = _user_match_ids_cached(conn, safe_user_id)
+            if not user_match_ids:
+                return {
+                    'items': [],
+                    'next_offset': safe_offset,
+                    'has_more': False,
+                    'limit': safe_limit,
+                    'offset': safe_offset,
+                }
             where.append(
-                '''
-                EXISTS (
-                    SELECT 1 FROM matches m
-                    WHERE m.id = match_replays.match_id
-                      AND (',' || TRIM(REPLACE(COALESCE(m.player_ids_json, ''), ' ', ''), '[]') || ',') LIKE ?
-                )
-                '''
+                'match_id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))'
             )
-            params.append(f'%,{safe_user_id},%')
+            params.append(json.dumps(sorted(user_match_ids)))
     if mod_source:
         where.append('COALESCE(mod_source, ?) = ?')
         params.extend(['official', str(mod_source)])
