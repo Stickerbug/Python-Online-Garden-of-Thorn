@@ -302,9 +302,8 @@ function formatDualAddendValue(baseValue, extraValue, asHtml = false) {
     if (!m) return `${n}`;
     const sign = m < 0 ? '-' : '+';
     const abs = Math.abs(m);
-    // 补充（双加数涂色）：暂时位 +M 用暂时色（与暂时迅捷同款蓝），
-    // 与留存位 N 区分；asHtml=false 时保持纯文本（日志/纯文本场景）。
-    if (asHtml) return `${n}<span class="dual-temp-addend">${sign}${abs}</span>`;
+    // 涂色口径（设计确认）：暂时位不用单独的"暂时色"，直接随所属属性
+    // 的颜色（暂时威力＝威力红）；asHtml 参数保留但不再输出标记。
     return `${n}${sign}${abs}`;
 }
 
@@ -3842,8 +3841,10 @@ const CARD_FLAG_STYLES = {
     unique: { label: '', fg: '#fdcb6e', bg: 'rgba(253,203,110,0.15)', cls: 'unique' },
     swift: { label: '', fg: '#0984e3', bg: 'rgba(9,132,227,0.15)', cls: 'swift' },
     heavy: { label: '', fg: '#8D6E63', bg: 'rgba(141,110,99,0.16)', cls: 'heavy' },
-    temp_swift: { label: '', fg: '#0EA5E9', bg: 'rgba(14,165,233,0.15)', cls: 'temp-swift' },
-    temp_heavy: { label: '', fg: '#795548', bg: 'rgba(121,85,72,0.15)', cls: 'temp-heavy' },
+    /* 涂色口径（设计确认）：暂时标签直接用所属属性的颜色——暂时迅捷=迅捷、
+       暂时沉重=沉重；不再另设"暂时色"。 */
+    temp_swift: { label: '', fg: '#0984e3', bg: 'rgba(9,132,227,0.15)', cls: 'temp-swift' },
+    temp_heavy: { label: '', fg: '#8D6E63', bg: 'rgba(141,110,99,0.16)', cls: 'temp-heavy' },
     temp_magic_heavy: { label: '', fg: '#7A5CFF', bg: 'rgba(122,92,255,0.16)', cls: 'temp-magic-heavy' },
     floating: { label: '', fg: '#1687B8', bg: 'rgba(22,135,184,0.15)', cls: 'floating' },
     magic_swift: { label: '', fg: '#6C5CE7', bg: 'rgba(108,92,231,0.15)', cls: 'magic-swift' },
@@ -14050,13 +14051,12 @@ function cardFlagHtml(flag, text = null) {
     if (!normalized) return '';
     if (getCustomTagDef(normalized)) return customTagHtml(normalized, text);
     if (normalized === 'fusion_layer') {
-        // text 只含内部 i18n 标签 + 数字（含暂时位涂色 span），不 escapeHtml。
         const label = text || `${UI.fusion_layer || 'Fusion'}`;
-        return `<span class="card-flag fusion-layer">${label}</span>`;
+        return `<span class="card-flag fusion-layer">${escapeHtml(label)}</span>`;
     }
     if (normalized === 'fission_layer') {
         const label = text || `${UI.fission_layer || 'Fission'}`;
-        return `<span class="card-flag fission-layer">${label}</span>`;
+        return `<span class="card-flag fission-layer">${escapeHtml(label)}</span>`;
     }
     const style = CARD_FLAG_STYLES[normalized];
     const label = text || UI['flag_' + normalized] || UI['tag_' + normalized] || normalized;

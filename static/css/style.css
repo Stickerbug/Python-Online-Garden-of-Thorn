@@ -10194,28 +10194,24 @@ html.blind-level-4 .card-prediction-part.magic {
   border-color: rgba(141, 110, 99, 0.32);
 }
 
+/* 涂色口径（设计确认）：暂时标签直接用所属属性的颜色——
+   暂时迅捷=迅捷、暂时沉重=沉重，不另设"暂时色"。 */
 .card-flag.temp-swift {
-  color: #0EA5E9;
-  background: rgba(14, 165, 233, 0.15);
-  border-color: rgba(14, 165, 233, 0.3);
+  color: #0984e3;
+  background: rgba(9, 132, 227, 0.15);
+  border-color: rgba(9, 132, 227, 0.3);
 }
 
 .card-flag.temp-heavy {
-  color: #795548;
-  background: rgba(121, 85, 72, 0.15);
-  border-color: rgba(121, 85, 72, 0.3);
+  color: #8D6E63;
+  background: rgba(141, 110, 99, 0.16);
+  border-color: rgba(141, 110, 99, 0.3);
 }
 
 .card-flag.temp-magic-heavy {
   color: #7A5CFF;
   background: rgba(122, 92, 255, 0.16);
   border-color: rgba(122, 92, 255, 0.34);
-}
-
-/* 双加数暂时位 +M 的涂色（与暂时迅捷同款蓝）：威力/裂变/聚变/迅捷/沉重
-   芯片里「N+M」的 +M 部分标为暂时，与留存位 N 区分。 */
-.card-flag .dual-temp-addend {
-  color: #0EA5E9;
 }
 
 .card-flag.unfading {
@@ -22183,8 +22179,8 @@ html[data-ui-style="minimal"][data-theme="dark"] .card,
 [data-theme="dark"] .card-flag.unique { color: #F8D67B; }
 [data-theme="dark"] .card-flag.swift { color: #72BEF2; }
 [data-theme="dark"] .card-flag.heavy { color: #C8A79C; }
-[data-theme="dark"] .card-flag.temp-swift { color: #70D1F5; }
-[data-theme="dark"] .card-flag.temp-heavy { color: #D0AAA0; }
+[data-theme="dark"] .card-flag.temp-swift { color: #72BEF2; }
+[data-theme="dark"] .card-flag.temp-heavy { color: #C8A79C; }
 [data-theme="dark"] .card-flag.temp-magic-heavy { color: #B4A1FF; }
 [data-theme="dark"] .card-flag.unfading { color: #E8A25C; }
 [data-theme="dark"] .card-flag.stand-ready { color: #8FB4E8; }
