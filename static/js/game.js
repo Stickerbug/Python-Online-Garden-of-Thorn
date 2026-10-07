@@ -31015,6 +31015,9 @@ function renderClassicFighter(container, player, side, selectedCard = null, mask
     const isSoftTarget = (!!selectedCard && !selfOnly && role === 'equip' && side === 'self') || isSelfOnlyTarget;
     container.classList.toggle('is-current', !!player.isCurrent);
     container.classList.toggle('is-defeated', !!player.isDefeated);
+    // GB-409：HP 归零即挂死亡演出类——正常渲染路径持有它的开关，换局/复活
+    // （2v2）时自动清除；markClassicDeathFallen 只负责强制触发。
+    container.classList.toggle('classic-fighter-dead', Number(player.hp || 0) <= 0);
     container.classList.toggle('is-play-target', isHardTarget);
     container.classList.toggle('is-soft-target', isSoftTarget);
     container.classList.toggle('is-self-only-target', isSelfOnlyTarget);
@@ -33443,6 +33446,37 @@ function clearScheduledGameOver() {
     scheduledGameOverState = null;
 }
 
+/* GB-409：死亡演出——结算画面弹出前，先把阵亡角色的战斗立绘打上死亡
+ * 表现（震动倒下 + 去色变暗），并短暂冻结战斗画面。此前只有状态完全
+ * 连续时才重播伤害浮字（Phelren 单人局恰好如此），真实对局的伤害在
+ * 中间状态里已经播完，game_over 一到就直接跳结算，「看不到被什么
+ * 打死了」。 */
+function markClassicDeathFallen(state) {
+    if (!state || typeof state !== 'object') return;
+    const deadIds = new Set(
+        getStatePlayerRefs(state)
+            .filter(ref => Number(ref.data && ref.data.health) <= 0)
+            .map(ref => normalizePlayerId(ref.id))
+            .filter(id => id != null)
+    );
+    if (!deadIds.size) return;
+    [
+        'classic-fighter-self',
+        'classic-fighter-ally',
+        'classic-fighter-enemy',
+        'classic-fighter-enemy-2',
+    ].forEach(elementId => {
+        const fighter = $(elementId);
+        if (!fighter || fighter.classList.contains('hidden')) return;
+        const pid = classicFighterElementIdToPlayerId(elementId);
+        if (pid == null || !deadIds.has(pid)) return;
+        if (fighter.classList.contains('classic-fighter-dead')) return;
+        fighter.classList.remove('classic-fighter-dead');
+        void fighter.offsetHeight;
+        fighter.classList.add('classic-fighter-dead');
+    });
+}
+
 function copyBattleLogState(source) {
     if (!source || !Array.isArray(source.log)) return null;
     return {
@@ -33494,6 +33528,48 @@ function renderGameOverAfterFinalAnimation(previous, next, options = {}) {
         && areSequentialGameStates(previous, next, { allowSoloPerspectiveShift: true });
     if (!shouldAnimate) {
         if (options.tutorial) stopTutorialUiForGameOver();
+        // GB-409：第一次从战斗进入 game_over 时，即使无法逐段重播（状态不
+        // 连续、或没有可用前态），也不直接跳结算——冻结战斗画面 + 阵亡演
+        // 出，短暂停留后再进结算画面。
+        const previousMatchKey = phaseContextMatchKey(previous);
+        const nextMatchKey = phaseContextMatchKey(next);
+        const isDeathTransition = next
+            && next.phase === 'game_over'
+            && previous
+            && previous.phase
+            && previous.phase !== 'game_over'
+            && (!previousMatchKey || !nextMatchKey || previousMatchKey === nextMatchKey);
+        if (isDeathTransition) {
+            showView('view-game');
+            renderGame(next);
+            markClassicDeathFallen(next);
+            updateStatus(UI.game_over);
+            const scheduledMatchKey = nextMatchKey || previousMatchKey;
+            scheduledGameOverState = next;
+            gameOverRenderTimer = setTimeout(() => {
+                gameOverRenderTimer = null;
+                const currentMatchKey = phaseContextMatchKey(gameState) || activeNetworkMatchKey;
+                if (
+                    scheduledMatchKey
+                    && (
+                        retiredNetworkMatchKeys.has(scheduledMatchKey)
+                        || (currentMatchKey && currentMatchKey !== scheduledMatchKey)
+                    )
+                ) {
+                    scheduledGameOverState = null;
+                    return;
+                }
+                const finalState = preserveGameOverLogState(
+                    gameState && gameState.phase === 'game_over' ? gameState : scheduledGameOverState,
+                    scheduledGameOverState
+                );
+                scheduledGameOverState = null;
+                if (!finalState || finalState.phase !== 'game_over') return;
+                if (options.fullScreen === false) renderGame(finalState);
+                else renderGameOver(finalState);
+            }, 1100);
+            return;
+        }
         if (options.fullScreen === false) renderGame(next);
         else renderGameOver(next);
         return;
@@ -33506,6 +33582,7 @@ function renderGameOverAfterFinalAnimation(previous, next, options = {}) {
         : stableNext;
     renderGame(previewState);
     showStateDeltas(previous, stableNext);
+    markClassicDeathFallen(stableNext);
     updateStatus(UI.game_over);
     const delay = estimateGameOverAnimationDelay(previous, stableNext);
     const scheduledMatchKey = phaseContextMatchKey(stableNext);

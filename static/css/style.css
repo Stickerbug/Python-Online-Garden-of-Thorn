@@ -18171,6 +18171,22 @@ html[data-ui-style="minimal"] .btn-end-turn {
   animation: classicFighterShake 300ms cubic-bezier(.18,.86,.2,1);
 }
 
+/* GB-409：阵亡演出——结算画面前的死亡倒下（震动→去色变暗→倾斜沉底），
+ * both 保持终态直到视图切走。 */
+.classic-fighter.classic-fighter-dead {
+  animation: classicFighterDeathFall 620ms cubic-bezier(.36,.07,.19,.97) both;
+}
+
+@keyframes classicFighterDeathFall {
+  0% { transform: translate(0, 0) rotate(0deg); filter: grayscale(0) brightness(1); }
+  14% { transform: translate(-7px, 2px) rotate(-2deg); filter: grayscale(.2) brightness(1.18); }
+  30% { transform: translate(6px, 3px) rotate(2deg); filter: grayscale(.45) brightness(.92); }
+  46% { transform: translate(-5px, 1px) rotate(-1.6deg); filter: grayscale(.6) brightness(.8); }
+  62% { transform: translate(4px, 2px) rotate(1.1deg); filter: grayscale(.78) brightness(.68); }
+  100% { transform: translate(0, 6px) rotate(-1.2deg); filter: grayscale(1) brightness(.55); }
+}
+
+
 @keyframes classicHpHit {
   0% { box-shadow: 0 0 0 rgba(192,57,43,0); filter: brightness(1); transform: scaleX(1); }
   18% { box-shadow: 0 0 20px rgba(192,57,43,0.66); filter: brightness(1.24); transform: scaleX(1.018); }
