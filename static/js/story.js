@@ -5970,7 +5970,8 @@
         item.style.top = `${rect.top + Math.max(18, rect.height * .28)}px`;
         layer.append(item);
         item.addEventListener('animationend', () => item.remove(), { once: true });
-        window.setTimeout(() => item.remove(), 1100);
+        // 兜底移除随演出速度档位缩短（浮字动画本身已被档位 CSS 加速）。
+        window.setTimeout(() => item.remove(), Math.max(120, 1100 / storyPlaybackRate));
     }
 
     function storyEventAmount(value) {
@@ -12565,7 +12566,8 @@
         if (!motion) return;
         const elapsed = Math.max(0, Math.min(80, timestamp - Number(motion.lastTimestamp || timestamp)));
         if (!motion.animating && !motion.paused && !storyMechanicalTrackReducedMotion()) {
-            motion.angle += elapsed / STORY_MECHANICAL_TRACK_PERIOD_MS * 360;
+            // 待机慢转随演出速度档位等比加速（与出牌/结算节奏一致）。
+            motion.angle += elapsed * storyPlaybackRate / STORY_MECHANICAL_TRACK_PERIOD_MS * 360;
             if (Math.abs(motion.angle) > 36000) motion.angle %= 360;
         }
         motion.lastTimestamp = timestamp;
@@ -12810,7 +12812,8 @@
         let delta = STORY_MECHANICAL_TRACK_TRIGGER_ANGLE - absoluteAngle;
         delta = ((delta + 540) % 360) - 180;
         const targetAngle = Number(motion.angle || 0) + delta;
-        const duration = Math.max(300, Math.min(620, 280 + Math.abs(delta) * 1.7));
+        // 演出速度档位（2/3/5×）等比缩短转盘结算旋转时长。
+        const duration = storyMotionDuration(Math.max(300, Math.min(620, 280 + Math.abs(delta) * 1.7)));
         wheel.classList.add('is-resolving');
         item.classList.add('is-activating');
         await animateStoryMechanicalTrackRotation(enemyId, motion, targetAngle, duration);

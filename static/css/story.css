@@ -5884,6 +5884,11 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   animation: storyCombatFloat 820ms cubic-bezier(.18, .82, .2, 1) forwards;
 }
 
+/* 演出速度档位（2/3/5×）等比缩短浮字动画（keyframe 不在 transition 通配内） */
+.story-speed-2x .story-combat-float { animation-duration: 410ms; }
+.story-speed-3x .story-combat-float { animation-duration: 273ms; }
+.story-speed-5x .story-combat-float { animation-duration: 164ms; }
+
 .story-combat-float-damage { color: #ff7a74; }
 .story-combat-float-heal { color: #f48fb1; }
 .story-combat-float-elixir { color: #f1c40f; }
