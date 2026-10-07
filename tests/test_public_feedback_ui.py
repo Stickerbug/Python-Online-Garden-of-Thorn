@@ -35,7 +35,9 @@ def test_standalone_page_has_all_surfaces_and_account_bar():
         'id="fc-create-dialog"',
         'id="fc-report-dialog"',
         'id="fc-appeal-pane"',
-        'id="fc-appeal-form"',
+        'id="feedback-thread-list"',
+        'id="feedback-message-list"',
+        'id="btn-feedback-send"',
         '/static/js/feedback_center.js',
         '/static/css/feedback_center.css',
     ):
@@ -44,14 +46,20 @@ def test_standalone_page_has_all_surfaces_and_account_bar():
     assert (ROOT / 'static' / 'css' / 'feedback_center.css').is_file()
 
 
-def test_appeal_lives_in_feedback_center_and_home_links_to_it():
-    # 主页不再内嵌申诉表单，只保留跳转反馈中心的入口。
-    assert 'id="integrity-appeal-link"' in INDEX
+def test_admin_appeal_chat_lives_in_feedback_center_and_home_links_to_it():
+    # 「管理员/申诉」对话整体迁入反馈中心；主页只保留新标签页入口。
+    assert 'id="btn-open-feedback"' in INDEX
     assert 'href="/feedback-center/appeal"' in INDEX
-    assert 'id="integrity-appeal-form"' not in INDEX
-    # 反馈中心承担申诉 UI：路由、标签页与提交端点。
+    assert 'id="feedback-modal"' not in INDEX
+    assert 'id="feedback-thread-list"' not in INDEX
+    # 关联申诉回到主页信誉弹窗内嵌表单（不再走反馈中心）。
+    assert 'id="integrity-appeal-form"' in INDEX
+    assert 'id="integrity-appeal-link"' not in INDEX
+    # 反馈中心承担对话 UI：路由、线程/消息/提交端点与视图渲染。
     assert "/feedback-center/appeal" in JS
-    assert '/api/account-integrity/appeal' in JS
+    assert '/api/feedback/threads' in JS
+    assert '/api/feedback/messages/read' in JS
+    assert '/api/feedback/send' in JS
     assert 'renderAppealView' in JS
     assert '.fc-appeal-pane' in CSS
 

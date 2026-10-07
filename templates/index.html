@@ -389,45 +389,6 @@
     </div>
   </div>
 </div>
-<div id="feedback-modal" class="feedback-modal hidden">
-  <div class="feedback-inner">
-    <div class="account-popover-head">
-      <div id="feedback-title" class="account-popover-title">反馈</div>
-      <button id="btn-feedback-close" class="account-close-btn" type="button">×</button>
-    </div>
-    <div class="feedback-tabs">
-      <button id="feedback-tab-send" class="feedback-tab active" type="button" data-feedback-tab="send">发送反馈</button>
-      <button id="feedback-tab-staff" class="feedback-tab hidden" type="button" data-feedback-tab="staff">查看反馈</button>
-      <button id="feedback-tab-handling" class="feedback-tab hidden" type="button">举报处理</button>
-    </div>
-    <div class="feedback-body">
-      <aside id="feedback-thread-list" class="feedback-thread-list"></aside>
-      <section class="feedback-chat">
-        <div class="feedback-compose-row">
-          <select id="feedback-category" aria-label="反馈分类">
-            <option value="account">账号问题</option>
-            <option value="report">举报/纠纷</option>
-            <option value="appeal">对局申诉</option>
-          </select>
-          <input id="feedback-title-input" type="text" maxlength="80" placeholder="标题">
-          <input id="feedback-replay-id" class="hidden" type="text" maxlength="24" inputmode="text" placeholder="回放 ID，例如 R-12345 或 P-12345">
-          <select id="feedback-status-select" class="hidden" aria-label="反馈状态">
-            <option value="open">未处理</option>
-            <option value="pending">已回复</option>
-            <option value="closed">已关闭</option>
-          </select>
-        </div>
-        <div id="feedback-replay-preview" class="feedback-replay-preview hidden"></div>
-        <div id="feedback-message-list" class="feedback-message-list"></div>
-        <div class="feedback-input-row">
-          <textarea id="feedback-message-input" maxlength="200" rows="3" placeholder="输入反馈内容..."></textarea>
-          <button id="btn-feedback-send" class="mini-btn" type="button">发送</button>
-        </div>
-        <p id="feedback-error" class="error-text"></p>
-      </section>
-    </div>
-  </div>
-</div>
 <div id="view-skin" class="view hidden">
   <div class="skin-editor-page">
     <div class="skin-editor-panel">
@@ -563,7 +524,7 @@
 </div>
 <div class="form-row login-utility-row">
 <a id="btn-public-feedback-center" class="btn-settings" href="/feedback-center" target="_blank" rel="noopener">反馈中心</a>
-<button id="btn-open-feedback" class="btn-settings">反馈</button>
+<a id="btn-open-feedback" class="btn-settings" href="/feedback-center/appeal" target="_blank" rel="noopener">反馈</a>
 <button id="btn-open-about" class="btn-settings">关于</button>
 </div>
 </div>
@@ -1037,7 +998,8 @@
   </section>
   <section><h3>待确认及我的举报</h3><div id="integrity-reports"></div></section>
   <section id="integrity-appeal-section" hidden><h3>关联申诉</h3><p>关联由多信号自动判断，同一网络不会单独确认。申诉由Staff/Admin复核，处理前仍保留当前信誉规则。</p>
-    <a id="integrity-appeal-link" class="btn btn-secondary" href="/feedback-center/appeal" target="_blank" rel="noopener">前往申诉</a>
+    <form id="integrity-appeal-form"><label>申诉说明 <textarea id="integrity-appeal-reason" maxlength="500" required></textarea></label>
+      <button type="submit" class="btn btn-secondary">提交申诉</button></form>
   </section>
   <section><h3>最近信誉流水</h3><div id="integrity-ledger"></div></section>
   <section id="integrity-staff-section" hidden><h3>Staff/Admin 审核</h3>

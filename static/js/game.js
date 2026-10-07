@@ -2064,11 +2064,8 @@ Object.assign(I18N.en, {
     social_search_id: 'Allow adding me by ID', social_accept_game_invites: 'Accept match invitations', social_allow_guest_spectators: 'Allow guest spectators',
     social_game_invites_disabled: 'This player has disabled match invitations.',
     social_settings_saved: 'Social settings saved',
-    feedback: 'Admin / Report', feedback_send: 'Contact Admin', feedback_staff: 'View Admin Messages', feedback_handling: 'Moderation',
+    feedback: 'Admin / Report',
     feedback_center: 'Feedback Center',
-    feedback_account: 'Account support', feedback_report: 'Report / Dispute', feedback_appeal: 'Match appeal',
-    feedback_login_required: 'Sign in to send feedback.', feedback_empty: 'No feedback yet.',
-    feedback_staff_empty: 'No player feedback.', feedback_sent: 'Feedback sent',
     last_login: 'Last seen: {0}', win_rate: 'Win rate: {0}%', recent_matches: 'Recent matches',
     friend_profile: 'Profile', direct_messages: 'Direct Messages'
 });
@@ -2084,11 +2081,8 @@ Object.assign(I18N.zh, {
     social_search_id: '允许通过ID添加我', social_accept_game_invites: '接受对局邀请', social_allow_guest_spectators: '允许游客观战',
     social_game_invites_disabled: '该玩家已关闭对局邀请',
     social_settings_saved: '社交设置已保存',
-    feedback: '管理员/申诉', feedback_send: '联系管理员', feedback_staff: '查看管理员反馈', feedback_handling: '举报处理',
+    feedback: '管理员/申诉',
     feedback_center: '反馈中心',
-    feedback_account: '账号问题', feedback_report: '举报/纠纷', feedback_appeal: '对局申诉',
-    feedback_login_required: '登录账号后可以发送反馈。', feedback_empty: '暂无反馈。',
-    feedback_staff_empty: '暂无玩家反馈。', feedback_sent: '反馈已发送',
     last_login: '上次下线：{0}', win_rate: '胜率：{0}%', recent_matches: '最近对局',
     friend_profile: '资料', direct_messages: '私信'
 });
@@ -2104,11 +2098,8 @@ Object.assign(I18N.fr, {
     social_search_id: 'Autoriser par ID', social_accept_game_invites: 'Accepter les invitations de partie', social_allow_guest_spectators: 'Autoriser les spectateurs invités',
     social_game_invites_disabled: 'Ce joueur a désactivé les invitations de partie.',
     social_settings_saved: 'Réglages enregistrés',
-    feedback: 'Admin / Signalement', feedback_send: "Contacter l'admin", feedback_staff: 'Voir les messages admin', feedback_handling: 'Modération',
+    feedback: 'Admin / Signalement',
     feedback_center: 'Centre de signalements',
-    feedback_account: 'Problème de compte', feedback_report: 'Signalement / litige', feedback_appeal: 'Appel de partie',
-    feedback_login_required: 'Connectez-vous pour envoyer un feedback.', feedback_empty: 'Aucun feedback.',
-    feedback_staff_empty: 'Aucun feedback joueur.', feedback_sent: 'Feedback envoyé',
     last_login: 'Dernière activité : {0}', win_rate: 'Taux de victoire : {0}%', recent_matches: 'Parties récentes',
     friend_profile: 'Profil', direct_messages: 'Messages'
 });
@@ -2124,11 +2115,8 @@ Object.assign(I18N.ja, {
     social_search_id: 'IDで追加を許可', social_accept_game_invites: '対戦招待を受け取る', social_allow_guest_spectators: 'ゲスト観戦を許可',
     social_game_invites_disabled: 'このプレイヤーは対戦招待を無効にしています。',
     social_settings_saved: '設定を保存しました',
-    feedback: '管理者・通報', feedback_send: '管理者に問い合わせ', feedback_staff: '管理者メッセージ確認', feedback_handling: '通報管理',
+    feedback: '管理者・通報',
     feedback_center: 'フィードバックセンター',
-    feedback_account: 'アカウント問題', feedback_report: '通報・紛争', feedback_appeal: '対戦申立',
-    feedback_login_required: 'ログインすると送信できます。', feedback_empty: 'まだありません。',
-    feedback_staff_empty: 'プレイヤー feedback はありません。', feedback_sent: '送信しました',
     last_login: '最終退出: {0}', win_rate: '勝率: {0}%', recent_matches: '最近の対戦',
     friend_profile: 'プロフィール', direct_messages: 'DM'
 });
@@ -2144,10 +2132,6 @@ Object.assign(I18N.en, {
     replay_pause: 'Pause', replay_next: 'Next', replay_instant: 'Instant',
     replay_winner: 'Winner: {0}', replay_round: 'Round {0}', replay_frame_empty: 'No timeline data.',
     replay_loading_progress: 'Loaded {0}/{1} frames', replay_prepare: 'Preparing replay...',
-    feedback_appeal: 'Match Appeal', feedback_replay_id: 'Replay ID',
-    feedback_appeal_entry: 'Go to appeal',
-    feedback_appeal_pending_short: 'Appeal under review — click to view',
-    feedback_replay_placeholder: 'Replay ID, e.g. R-12345 or P-12345'
 });
 Object.assign(I18N.zh, {
     account_replays: '最近回放', replay_viewer: '回放查看器', replay_view: '查看',
@@ -2161,10 +2145,6 @@ Object.assign(I18N.zh, {
     replay_pause: '暂停', replay_next: '下一步', replay_instant: '立即',
     replay_winner: '胜者：{0}', replay_round: '第{0}回合', replay_frame_empty: '暂无时间线数据。',
     replay_loading_progress: '已加载 {0}/{1} 帧', replay_prepare: '正在准备回放...',
-    feedback_appeal: '对局申诉', feedback_replay_id: '回放 ID',
-    feedback_appeal_entry: '前往申诉',
-    feedback_appeal_pending_short: '申诉复核中，点击查看',
-    feedback_replay_placeholder: '回放 ID，例如 R-12345 或 P-12345'
 });
 Object.assign(I18N.fr, {
     account_replays: 'Replays récents', replay_viewer: 'Lecteur de replay', replay_view: 'Voir',
@@ -2178,10 +2158,6 @@ Object.assign(I18N.fr, {
     replay_pause: 'Pause', replay_next: 'Suiv.', replay_instant: 'Instant',
     replay_winner: 'Vainqueur : {0}', replay_round: 'Tour {0}', replay_frame_empty: 'Aucune timeline.',
     replay_loading_progress: '{0}/{1} frames chargées', replay_prepare: 'Préparation du replay...',
-    feedback_appeal: 'Contestation de partie', feedback_replay_id: 'ID du replay',
-    feedback_appeal_entry: 'Aller à l’appel',
-    feedback_appeal_pending_short: 'Appel en cours de vérification — cliquez pour voir',
-    feedback_replay_placeholder: 'ID du replay, ex. R-12345 ou P-12345'
 });
 Object.assign(I18N.ja, {
     account_replays: '最近のリプレイ', replay_viewer: 'リプレイビューア', replay_view: '表示',
@@ -2195,10 +2171,6 @@ Object.assign(I18N.ja, {
     replay_pause: '一時停止', replay_next: '次へ', replay_instant: '即時',
     replay_winner: '勝者: {0}', replay_round: 'ラウンド {0}', replay_frame_empty: 'タイムラインなし。',
     replay_loading_progress: '{0}/{1}フレーム読込済み', replay_prepare: 'リプレイ準備中...',
-    feedback_appeal: '対戦の異議申立て', feedback_replay_id: 'リプレイID',
-    feedback_appeal_entry: '申立てへ',
-    feedback_appeal_pending_short: '申立て審査中 — クリックで表示',
-    feedback_replay_placeholder: 'リプレイID（例 R-12345 / P-12345）'
 });
 Object.assign(I18N.en, { chief_designer_prefix: 'Chief Designer' });
 Object.assign(I18N.zh, { admin_prefix: '\u7ba1\u7406\u5458', login_admin_reserved: '\u6b64\u6635\u79f0\u88ab\u7ba1\u7406\u5458\u5360\u7528' });
@@ -5753,11 +5725,9 @@ let socialUnreadPollTimer = null;
 let socialUnreadAbortController = null;
 let socialUnreadRequestPromise = null;
 let socialUnreadPollDelay = 30000;
-let feedbackState = { is_staff: false, unread_count: 0, threads: [], messages: [], thread: null, replay: null };
-let activeFeedbackTab = 'send';
-let activeFeedbackThreadId = null;
-let activeFeedbackStaffView = false;
-let feedbackCollapsedGroups = { open: false, pending: false, closed: true };
+/* 反馈对话已迁入反馈中心（/feedback-center/appeal）；主页只保留入口按钮
+   与未读角标（loadFeedbackSummary/updateFeedbackBadge）。 */
+let feedbackState = { is_staff: false, unread_count: 0 };
 let activeSocialFriendId = null;
 let activeSocialSection = 'friends';
 let activeSocialRequestId = null;
@@ -7092,22 +7062,6 @@ function updateStaticText() {
     if (feedbackBtn) feedbackBtn.textContent = UI.feedback;
     const publicFeedbackCenter = $('btn-public-feedback-center');
     if (publicFeedbackCenter) publicFeedbackCenter.textContent = UI.feedback_center || '反馈中心';
-    const feedbackTitle = $('feedback-title');
-    if (feedbackTitle) feedbackTitle.textContent = UI.feedback;
-    const feedbackSendTab = $('feedback-tab-send');
-    if (feedbackSendTab) feedbackSendTab.textContent = UI.feedback_send;
-    const feedbackStaffTab = $('feedback-tab-staff');
-    if (feedbackStaffTab) feedbackStaffTab.textContent = UI.feedback_staff;
-    const feedbackHandlingTab = $('feedback-tab-handling');
-    if (feedbackHandlingTab) feedbackHandlingTab.textContent = UI.feedback_handling || '举报处理';
-    const feedbackAppealOption = document.querySelector('#feedback-category option[value="appeal"]');
-    if (feedbackAppealOption) feedbackAppealOption.textContent = UI.feedback_appeal || '对局申诉';
-    const feedbackAccountOption = document.querySelector('#feedback-category option[value="account"]');
-    if (feedbackAccountOption) feedbackAccountOption.textContent = UI.feedback_account || '账号问题';
-    const feedbackReportOption = document.querySelector('#feedback-category option[value="report"]');
-    if (feedbackReportOption) feedbackReportOption.textContent = UI.feedback_report || '举报/纠纷';
-    const feedbackReplayInput = $('feedback-replay-id');
-    if (feedbackReplayInput) feedbackReplayInput.placeholder = UI.feedback_replay_placeholder || '回放 ID，例如 R-12345 或 P-12345';
     const gameoverReplayLabel = $('gameover-replay-label');
     if (gameoverReplayLabel) gameoverReplayLabel.textContent = UI.replay_id || '回放 ID';
     const settingsAudio = $('settings-section-audio');
@@ -19894,15 +19848,7 @@ function renderAccountIntegrity(session) {
     });
     if (!session.busy) {
         $('integrity-report-form').querySelector('button').disabled = !matches.length;
-        const appealLink = $('integrity-appeal-link');
-        if (appealLink) {
-            // 申诉表单在反馈中心（/feedback-center/appeal），这里只留入口链接与状态提示。
-            const pending = profile?.appeal_status === 'pending';
-            appealLink.textContent = pending
-                ? (UI.feedback_appeal_pending_short || '申诉复核中，点击查看')
-                : (UI.feedback_appeal_entry || '前往申诉');
-            appealLink.classList.toggle('disabled', pending);
-        }
+        $('integrity-appeal-form').querySelector('button').disabled = profile?.appeal_status === 'pending';
     }
 }
 
@@ -19979,6 +19925,10 @@ function setupAccountIntegrityUi() {
     $('btn-account-integrity')?.addEventListener('click', openAccountIntegrity);
     $('integrity-close').addEventListener('click', () => dialog.close());
     dialog.addEventListener('close', () => { if (!dialog.open) clearAccountIntegrity(); });
+    $('integrity-appeal-form').addEventListener('submit', event => {
+        event.preventDefault();
+        submitAccountIntegrity('/api/account-integrity/appeal', {reason:$('integrity-appeal-reason').value.trim()});
+    });
     $('integrity-refresh').addEventListener('click', () => loadAccountIntegrity(accountIntegritySession));
     $('integrity-staff-load').addEventListener('click', () => loadAccountIntegrity(accountIntegritySession, true));
     $('integrity-report-form').addEventListener('submit', event => {
@@ -22233,8 +22183,7 @@ function renderAccountState() {
     updateCommunityUploadState();
     renderCommunityModList();
     if (!currentAccount) {
-        feedbackState = { is_staff: false, unread_count: 0, threads: [], messages: [], thread: null, replay: null };
-        activeFeedbackThreadId = null;
+        feedbackState = { is_staff: false, unread_count: 0 };
         updateFeedbackBadge();
     }
     if (activeViewId === 'view-skin') syncSkinFormFromCurrent();
@@ -23623,32 +23572,9 @@ function updateFeedbackBadge() {
     }
 }
 
-function feedbackStatusLabel(status) {
-    const key = String(status || '').toLowerCase();
-    if (key === 'closed') return currentLang === 'zh' ? '已关闭' : (currentLang === 'ja' ? '終了' : (currentLang === 'fr' ? 'Fermé' : 'Closed'));
-    if (key === 'pending') return currentLang === 'zh' ? '已回复' : (currentLang === 'ja' ? '返信済み' : (currentLang === 'fr' ? 'Répondu' : 'Replied'));
-    return currentLang === 'zh' ? '未处理' : (currentLang === 'ja' ? '未対応' : (currentLang === 'fr' ? 'Ouvert' : 'Open'));
-}
-
-function feedbackStaffGroups(items = []) {
-    const groups = [
-        { key: 'open', label: feedbackStatusLabel('open'), items: [] },
-        { key: 'pending', label: feedbackStatusLabel('pending'), items: [] },
-        { key: 'closed', label: feedbackStatusLabel('closed'), items: [] },
-    ];
-    const byKey = Object.fromEntries(groups.map(group => [group.key, group]));
-    (Array.isArray(items) ? items : []).forEach(item => {
-        const key = ['open', 'pending', 'closed'].includes(String(item.status || '').toLowerCase())
-            ? String(item.status || '').toLowerCase()
-            : 'open';
-        byKey[key].items.push(item);
-    });
-    return groups;
-}
-
 async function loadFeedbackSummary() {
     if (!currentAccount) {
-        feedbackState = { is_staff: false, unread_count: 0, threads: [], messages: [], thread: null, replay: null };
+        feedbackState = { is_staff: false, unread_count: 0 };
         updateFeedbackBadge();
         return;
     }
@@ -23660,96 +23586,6 @@ async function loadFeedbackSummary() {
     } catch (_) {
         updateFeedbackBadge();
     }
-}
-
-function renderFeedbackThreads() {
-    const list = $('feedback-thread-list');
-    if (!list) return;
-    const items = Array.isArray(feedbackState.threads) ? feedbackState.threads : [];
-    if (!currentAccount) {
-        list.innerHTML = `<div class="friend-empty">${escapeHtml(UI.feedback_login_required || '登录账号后可以发送反馈。')}</div>`;
-        return;
-    }
-    if (!items.length) {
-        list.innerHTML = `<div class="friend-empty">${escapeHtml(activeFeedbackStaffView ? (UI.feedback_staff_empty || '暂无玩家反馈。') : (UI.feedback_empty || '暂无反馈。'))}</div>`;
-        return;
-    }
-    const renderItem = (item) => {
-        const active = String(item.id) === String(activeFeedbackThreadId);
-        const user = item.user || {};
-        const title = item.title || item.last_message || `#${item.id}`;
-        const status = feedbackStatusLabel(item.status);
-        const replayRef = Number(item.replay_id) > 0 ? `R-${Number(item.replay_id)}` : '';
-        return `
-          <button class="feedback-thread-item${active ? ' active' : ''}" type="button" data-feedback-thread="${escapeHtml(item.id)}">
-            <span class="feedback-thread-title">${item.unread ? '<span class="feedback-dot"></span>' : ''}${escapeHtml(title)}</span>
-            <span class="feedback-thread-meta">${escapeHtml([activeFeedbackStaffView ? `${user.username || '-'} · ${status}` : status, replayRef, formatDateTimeShort(item.updated_at || item.created_at || '')].filter(Boolean).join(' · '))}</span>
-            <span class="feedback-thread-preview">${escapeHtml(item.last_message || '')}</span>
-          </button>`;
-    };
-    if (activeFeedbackStaffView) {
-        list.innerHTML = feedbackStaffGroups(items).map(group => {
-            const collapsed = !!feedbackCollapsedGroups[group.key];
-            const rows = collapsed ? '' : group.items.map(renderItem).join('');
-            return `
-              <section class="feedback-thread-group feedback-thread-group-${escapeHtml(group.key)}${collapsed ? ' collapsed' : ''}">
-                <button class="feedback-thread-group-title" type="button" data-feedback-group-toggle="${escapeHtml(group.key)}">
-                  <span class="feedback-thread-group-arrow">${collapsed ? '>' : 'v'}</span>
-                  <span>${escapeHtml(group.label)}</span>
-                  <span>${escapeHtml(group.items.length)}</span>
-                </button>
-                ${rows || (collapsed ? '' : `<div class="feedback-thread-group-empty">${escapeHtml(UI.feedback_staff_empty || '暂无玩家反馈。')}</div>`)}
-              </section>`;
-        }).join('');
-        return;
-    }
-    list.innerHTML = items.map(renderItem).join('');
-}
-
-function renderFeedbackMessages() {
-    const list = $('feedback-message-list');
-    if (!list) return;
-    if (!currentAccount) {
-        list.innerHTML = `<div class="friend-empty">${escapeHtml(UI.feedback_login_required || '登录账号后可以发送反馈。')}</div>`;
-        return;
-    }
-    const messages = Array.isArray(feedbackState.messages) ? feedbackState.messages : [];
-    if (!activeFeedbackThreadId && !messages.length) {
-        list.innerHTML = `<div class="friend-empty">${escapeHtml(activeFeedbackStaffView ? '选择一条玩家反馈。' : '填写内容后发送新的反馈。')}</div>`;
-        return;
-    }
-    const currentUserId = currentAccount && currentAccount.id;
-    list.innerHTML = '';
-    const fragment = document.createDocumentFragment();
-    messages.forEach(msg => {
-        const self = Number(msg.sender_user_id) === Number(currentUserId);
-        const row = document.createElement('div');
-        row.className = `feedback-message ${self ? 'self' : 'other'}`;
-        const bubble = document.createElement('div');
-        bubble.className = 'feedback-bubble';
-        const meta = document.createElement('div');
-        meta.className = `feedback-sender ${feedbackNameClass(msg.sender_role)}`;
-        const nameSpan = document.createElement('span');
-        setPlayerNameContent(nameSpan, {
-            ...(self ? (currentAccount || {}) : {}),
-            ...msg,
-            nickname: msg.sender_name || (self ? (currentAccount.username || '') : '-'),
-        }, { adminPrefix: true });
-        meta.appendChild(nameSpan);
-        const timeSpan = document.createElement('span');
-        timeSpan.className = 'feedback-message-time';
-        timeSpan.textContent = formatLobbyChatSeparator({ created_at: msg.created_at });
-        meta.appendChild(timeSpan);
-        const text = document.createElement('div');
-        text.className = 'feedback-text';
-        text.textContent = msg.message || '';
-        bubble.appendChild(meta);
-        bubble.appendChild(text);
-        row.appendChild(bubble);
-        fragment.appendChild(row);
-    });
-    list.appendChild(fragment);
-    list.scrollTop = list.scrollHeight;
 }
 
 function ensureReplayVideoExportStyle() {
@@ -25340,223 +25176,6 @@ window.GTNReplayVideoBridge = {
     },
 };
 
-function normalizedFeedbackReplayId(value) {
-    const text = String(value || '').trim().toUpperCase();
-    const match = text.match(/^(?:([RP])-)?(\d+)$/);
-    if (!match || Number(match[2]) <= 0) return null;
-    return match[1] ? `${match[1]}-${Number(match[2])}` : String(Number(match[2]));
-}
-
-function renderFeedbackReplayPreview() {
-    const box = $('feedback-replay-preview');
-    if (!box) return;
-    const threadReplayId = Number(feedbackState.thread && feedbackState.thread.replay_id || 0);
-    const replay = feedbackState.replay;
-    const replayId = Number(replay && replay.id || threadReplayId || 0);
-    if (!(replayId > 0)) {
-        box.innerHTML = '';
-        box.classList.add('hidden');
-        return;
-    }
-    const replayPrefix = String(replay && replay.replay_prefix || 'R').toUpperCase() === 'P' ? 'P' : 'R';
-    const replayRef = String(replay && replay.replay_ref || `${replayPrefix}-${replayId}`);
-    const players = replay && Array.isArray(replay.players) ? replay.players.join(' / ') : '';
-    const detail = replay
-        ? [formatCommunityTime(replay.created_at), replay.mode, players].filter(Boolean).join(' · ')
-        : (currentLang === 'zh' ? '回放不存在或已过期' : 'Replay unavailable or expired');
-    box.innerHTML = `
-        <div class="feedback-replay-preview-main"><strong>${escapeHtml(replayRef)}</strong>${detail ? ` · ${escapeHtml(detail)}` : ''}</div>
-        ${replay ? `<button class="mini-btn" type="button" data-feedback-replay-open="${escapeHtml(replayRef)}">${escapeHtml(UI.replay_view || '查看')}</button>` : ''}
-    `;
-    box.classList.remove('hidden');
-}
-
-async function loadFeedbackReplayPreview(replayId, showError = false) {
-    const normalized = normalizedFeedbackReplayId(replayId);
-    feedbackState.replay = null;
-    if (!normalized) {
-        renderFeedbackReplayPreview();
-        return false;
-    }
-    try {
-        const data = await authRequest(`/api/replays/${encodeURIComponent(normalized)}`);
-        feedbackState.replay = data.replay || null;
-        renderFeedbackReplayPreview();
-        return !!feedbackState.replay;
-    } catch (err) {
-        renderFeedbackReplayPreview();
-        if (showError) {
-            const errorBox = $('feedback-error');
-            if (errorBox) errorBox.textContent = err.message || UI.replay_load_failed;
-        }
-        return false;
-    }
-}
-
-function updateFeedbackReplayField() {
-    const category = $('feedback-category');
-    const input = $('feedback-replay-id');
-    const creatingAppeal = !activeFeedbackThreadId
-        && !activeFeedbackStaffView
-        && category
-        && category.value === 'appeal';
-    if (input) input.classList.toggle('hidden', !creatingAppeal);
-    if (!activeFeedbackThreadId && !creatingAppeal) feedbackState.replay = null;
-    renderFeedbackReplayPreview();
-}
-
-function renderFeedbackModal() {
-    const staffTab = $('feedback-tab-staff');
-    if (staffTab) staffTab.classList.toggle('hidden', !feedbackState.is_staff);
-    const handlingTab = $('feedback-tab-handling');
-    if (handlingTab) handlingTab.classList.toggle('hidden', !feedbackState.is_staff);
-    document.querySelectorAll('[data-feedback-tab]').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.feedbackTab === activeFeedbackTab);
-    });
-    activeFeedbackStaffView = activeFeedbackTab === 'staff';
-    const category = $('feedback-category');
-    const titleInput = $('feedback-title-input');
-    const statusSelect = $('feedback-status-select');
-    if (category) category.classList.toggle('hidden', activeFeedbackStaffView || !!activeFeedbackThreadId);
-    if (titleInput) titleInput.classList.toggle('hidden', activeFeedbackStaffView || !!activeFeedbackThreadId);
-    if (statusSelect) statusSelect.classList.toggle('hidden', !activeFeedbackStaffView || !activeFeedbackThreadId);
-    updateFeedbackReplayField();
-    renderFeedbackThreads();
-    renderFeedbackMessages();
-    updateFeedbackBadge();
-}
-
-/* 举报处理已独立为 /handling 页（staff 专属入口），此处仅负责新开标签页 */
-
-async function loadFeedbackThreads(staffView = false) {
-    if (!currentAccount) {
-        feedbackState.threads = [];
-        feedbackState.messages = [];
-        feedbackState.thread = null;
-        feedbackState.replay = null;
-        renderFeedbackModal();
-        return;
-    }
-    try {
-        let data;
-        if (staffView) {
-            const statuses = ['open', 'pending', 'closed'];
-            const results = await Promise.all(statuses.map(status =>
-                authRequest(`/api/feedback/threads?staff=1&status=${encodeURIComponent(status)}&limit=30`, undefined, { timeoutMs: 7000 })
-            ));
-            data = {
-                is_staff: results.some(item => item && item.is_staff),
-                unread_count: Math.max(...results.map(item => Number(item && item.unread_count || 0)), 0),
-                items: results.flatMap(item => Array.isArray(item && item.items) ? item.items : []),
-            };
-        } else {
-            data = await authRequest('/api/feedback/threads?staff=0&limit=50', undefined, { timeoutMs: 7000 });
-        }
-        feedbackState.is_staff = !!data.is_staff;
-        feedbackState.unread_count = Number(data.unread_count || 0);
-        feedbackState.threads = Array.isArray(data.items) ? data.items : [];
-        if (!activeFeedbackThreadId && feedbackState.threads.length && staffView) {
-            activeFeedbackThreadId = feedbackState.threads[0].id;
-            await openFeedbackThread(activeFeedbackThreadId);
-            return;
-        }
-        renderFeedbackModal();
-    } catch (err) {
-        const box = $('feedback-error');
-        if (box) box.textContent = err.message || UI.account_error;
-    }
-}
-
-async function openFeedbackThread(threadId) {
-    if (!threadId) return;
-    activeFeedbackThreadId = threadId;
-    try {
-        const data = await authRequest(
-            '/api/feedback/messages/read',
-            { thread_id: threadId, limit: 100 },
-            { timeoutMs: 7000 },
-        );
-        feedbackState.is_staff = !!data.is_staff;
-        feedbackState.unread_count = Number(data.unread_count || 0);
-        feedbackState.messages = Array.isArray(data.messages) ? data.messages : [];
-        const thread = data.thread || {};
-        feedbackState.thread = thread;
-        feedbackState.replay = null;
-        const statusSelect = $('feedback-status-select');
-        if (statusSelect && thread.status) statusSelect.value = thread.status;
-        renderFeedbackModal();
-        if (thread.replay_id) await loadFeedbackReplayPreview(thread.replay_id);
-    } catch (err) {
-        const box = $('feedback-error');
-        if (box) box.textContent = err.message || UI.account_error;
-    }
-}
-
-async function sendFeedbackMessage() {
-    const input = $('feedback-message-input');
-    const text = (input?.value || '').trim();
-    const box = $('feedback-error');
-    if (box) box.textContent = '';
-    if (!currentAccount) {
-        if (box) box.textContent = UI.feedback_login_required || '登录账号后可以发送反馈。';
-        return;
-    }
-    if (!text) return;
-    const payload = { text };
-    if (activeFeedbackThreadId) payload.thread_id = activeFeedbackThreadId;
-    else {
-        payload.category = $('feedback-category')?.value || 'other';
-        payload.title = ($('feedback-title-input')?.value || '').trim();
-        if (payload.category === 'appeal') payload.replay_id = ($('feedback-replay-id')?.value || '').trim();
-    }
-    try {
-        const data = await authRequest('/api/feedback/send', payload, { timeoutMs: 7000 });
-        if (input) input.value = '';
-        activeFeedbackThreadId = data.thread?.id || data.thread_id || activeFeedbackThreadId;
-        feedbackState.is_staff = !!data.is_staff;
-        feedbackState.unread_count = Number(data.unread_count || 0);
-        feedbackState.messages = Array.isArray(data.messages) ? data.messages : [];
-        feedbackState.thread = data.thread || feedbackState.thread;
-        await loadFeedbackThreads(activeFeedbackStaffView);
-        if (activeFeedbackThreadId) await openFeedbackThread(activeFeedbackThreadId);
-        if (box) box.textContent = UI.feedback_sent || '反馈已发送';
-    } catch (err) {
-        if (box) box.textContent = err.message || UI.account_error;
-    }
-}
-
-async function updateFeedbackStatus() {
-    if (!activeFeedbackThreadId || !feedbackState.is_staff) return;
-    const status = $('feedback-status-select')?.value || 'open';
-    try {
-        const data = await authRequest('/api/feedback/status', { thread_id: activeFeedbackThreadId, status }, { timeoutMs: 7000 });
-        feedbackState.messages = Array.isArray(data.messages) ? data.messages : feedbackState.messages;
-        await loadFeedbackThreads(true);
-        await openFeedbackThread(activeFeedbackThreadId);
-    } catch (err) {
-        const box = $('feedback-error');
-        if (box) box.textContent = err.message || UI.account_error;
-    }
-}
-
-async function toggleFeedbackModal(show) {
-    const modal = $('feedback-modal');
-    if (!modal) return;
-    modal.classList.toggle('hidden', !show);
-    if (!show) {
-        return;
-    }
-    activeFeedbackTab = feedbackState.is_staff && activeFeedbackTab === 'staff' ? 'staff' : 'send';
-    activeFeedbackStaffView = activeFeedbackTab === 'staff';
-    if (!currentAccount) {
-        feedbackState.threads = [];
-        feedbackState.messages = [];
-        renderFeedbackModal();
-        return;
-    }
-    await loadFeedbackSummary();
-    await loadFeedbackThreads(activeFeedbackStaffView);
-}
 
 async function addFriendFromInput() {
     setFriendsError('');
@@ -41146,45 +40765,10 @@ async function init() {
         stopSocialNetworkActivity();
         stopSocialUnreadPolling();
     });
-    if ($('btn-open-feedback')) $('btn-open-feedback').addEventListener('click', () => toggleFeedbackModal(true));
-    if ($('btn-feedback-close')) $('btn-feedback-close').addEventListener('click', () => toggleFeedbackModal(false));
-    if ($('feedback-tab-handling')) {
-        $('feedback-tab-handling').addEventListener('click', () => {
-            window.open('/handling', '_blank', 'noopener');
-        });
-    }
-    document.querySelectorAll('[data-feedback-tab]').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            activeFeedbackTab = btn.dataset.feedbackTab || 'send';
-            activeFeedbackThreadId = null;
-            feedbackState.messages = [];
-            feedbackState.thread = null;
-            feedbackState.replay = null;
-            await loadFeedbackThreads(activeFeedbackTab === 'staff');
-        });
-    });
-    if ($('btn-feedback-send')) $('btn-feedback-send').addEventListener('click', sendFeedbackMessage);
-    if ($('feedback-category')) $('feedback-category').addEventListener('change', updateFeedbackReplayField);
-    if ($('feedback-replay-id')) {
-        $('feedback-replay-id').addEventListener('change', () => {
-            loadFeedbackReplayPreview($('feedback-replay-id').value, true);
-        });
-    }
-    if ($('feedback-replay-preview')) {
-        $('feedback-replay-preview').addEventListener('click', (event) => {
-            const button = event.target.closest('[data-feedback-replay-open]');
-            if (button) openAccountReplay(button.dataset.feedbackReplayOpen);
-        });
-    }
-    if ($('feedback-message-input')) {
-        $('feedback-message-input').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault();
-                sendFeedbackMessage();
-            }
-        });
-    }
-    if ($('feedback-status-select')) $('feedback-status-select').addEventListener('change', updateFeedbackStatus);
+    // 管理员/申诉对话已迁入反馈中心；btn-open-feedback 是原生链接（新标签页打开）。
+    // ?replay=R-12345：反馈中心回放预览的「查看」入口，打开主页回放查看器。
+    const replayQuery = new URLSearchParams(window.location.search).get('replay');
+    if (replayQuery) openAccountReplay(replayQuery);
     if ($('btn-account-popover-close')) $('btn-account-popover-close').addEventListener('click', () => toggleAccountPopover(false));
     setupAccountIntegrityUi();
     if ($('btn-friends-popover-close')) $('btn-friends-popover-close').addEventListener('click', () => toggleFriendsPopover(false));
@@ -41255,21 +40839,6 @@ async function init() {
             event.preventDefault();
             startDmToUser(dmUserBtn.dataset.dmOpenUser, dmUserBtn.dataset.dmOpenName || '');
             return;
-        }
-        const feedbackGroupBtn = event.target.closest('[data-feedback-group-toggle]');
-        if (feedbackGroupBtn) {
-            event.preventDefault();
-            const key = String(feedbackGroupBtn.dataset.feedbackGroupToggle || '');
-            if (key) {
-                feedbackCollapsedGroups[key] = !feedbackCollapsedGroups[key];
-                renderFeedbackThreads();
-            }
-            return;
-        }
-        const feedbackThreadBtn = event.target.closest('[data-feedback-thread]');
-        if (feedbackThreadBtn) {
-            event.preventDefault();
-            openFeedbackThread(feedbackThreadBtn.dataset.feedbackThread);
         }
     });
     if ($('btn-account-replays-refresh')) $('btn-account-replays-refresh').addEventListener('click', loadAccountReplays);

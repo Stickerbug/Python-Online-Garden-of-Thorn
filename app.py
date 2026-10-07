@@ -23720,8 +23720,8 @@ def feedback_center_browse(kind=None):
 
 @app.route('/feedback-center/appeal')
 def feedback_center_appeal():
-    # 关联申诉是反馈中心的独立页签（2026-10-07）：主页信誉弹窗的
-    # 「前往申诉」链接指向这里，页面脚本按路径自动切到申诉视图。
+    # 「管理员/申诉」对话已从主页弹窗迁入反馈中心（2026-10-07）：本路由是
+    # 该视图的直达入口（主页按钮新标签页打开），线程与历史对话接口同源。
     return render_template(
         'feedback_center.html',
         static_version=GTN_STATIC_VERSION,

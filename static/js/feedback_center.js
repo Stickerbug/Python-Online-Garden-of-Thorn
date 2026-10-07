@@ -3,13 +3,15 @@
 
   const T = {
     zh: {
-      appeal_tab: '申诉', appeal_kicker: '账号关联', appeal_title: '关联申诉',
-      appeal_copy: '关联由多信号自动判断，同一网络不会单独确认。申诉由管理员人工复核，处理前仍保留当前信誉规则。',
-      appeal_not_linked: '当前没有已成立的账号关联，无需申诉。若对信誉分有疑问，请在反馈中说明。',
-      appeal_linked: '已自动关联', appeal_pending: '已收到你的申诉，管理员复核中。处理结果会更新到你的信誉流水。',
-      appeal_loading: '正在读取关联状态…', appeal_need_login: '请先登录账号后再申诉。',
-      appeal_need_reason: '请填写申诉说明。', appeal_done: '申诉已提交，请等待管理员复核。',
-      appeal_reason: '申诉说明', appeal_submit: '提交申诉', appeal_back: '返回反馈列表',
+      fb_tab: '管理员/申诉', fb_send: '联系管理员', fb_staff: '查看管理员反馈', fb_handling: '举报处理',
+      fb_category_account: '账号问题', fb_category_report: '举报/纠纷', fb_category_appeal: '对局申诉',
+      fb_title_placeholder: '标题', fb_replay_placeholder: '回放 ID，例如 R-12345 或 P-12345',
+      fb_message_placeholder: '输入反馈内容...', fb_send_btn: '发送',
+      fb_status_open: '未处理', fb_status_pending: '已回复', fb_status_closed: '已关闭',
+      fb_login_required: '登录账号后可以发送反馈。', fb_empty: '暂无反馈。', fb_staff_empty: '暂无玩家反馈。',
+      fb_sent: '反馈已发送', fb_select_thread: '选择一条玩家反馈。', fb_compose_hint: '填写内容后发送新的反馈。',
+      fb_replay_view: '查看', fb_replay_load_failed: '回放加载失败', fb_replay_unavailable: '回放不存在或已过期',
+      fb_admin_prefix: '管理员', fb_request_failed: '请求失败',
       feedback_center: '反馈中心', bug_tab: '漏洞', suggestion_tab: '建议', internal_tab: '不公开', internal_kind: '不公开反馈', project_subtitle: '漏洞与建议',
       project_copy: '报告漏洞，或为未来的更新提出建议。登录后可投票与讨论。',
       status: '状态', all_status: '全部状态', sort: '排序',
@@ -50,13 +52,15 @@
       internal_status: { new: '待处理', needs_info: '需补充', in_progress: '处理中', fixed: '已完成', duplicate: '重复', invalid: '无效' },
     },
     en: {
-      appeal_tab: 'Appeal', appeal_kicker: 'Account link', appeal_title: 'Link appeal',
-      appeal_copy: 'Links are judged automatically from multiple signals; a shared network alone does not confirm one. Appeals are reviewed manually; current reputation rules stay in force until then.',
-      appeal_not_linked: 'No confirmed account link — no appeal needed. If you question your reputation score, describe it in feedback.',
-      appeal_linked: 'Auto-linked', appeal_pending: 'Appeal received; a moderator is reviewing. Results will appear in your reputation ledger.',
-      appeal_loading: 'Loading link status…', appeal_need_login: 'Sign in before appealing.',
-      appeal_need_reason: 'Please describe your appeal.', appeal_done: 'Appeal submitted; awaiting moderator review.',
-      appeal_reason: 'Appeal description', appeal_submit: 'Submit appeal', appeal_back: 'Back to feedback',
+      fb_tab: 'Admin / Report', fb_send: 'Contact Admin', fb_staff: 'View Admin Messages', fb_handling: 'Moderation',
+      fb_category_account: 'Account support', fb_category_report: 'Report / Dispute', fb_category_appeal: 'Match appeal',
+      fb_title_placeholder: 'Title', fb_replay_placeholder: 'Replay ID, e.g. R-12345 or P-12345',
+      fb_message_placeholder: 'Type your message...', fb_send_btn: 'Send',
+      fb_status_open: 'Open', fb_status_pending: 'Replied', fb_status_closed: 'Closed',
+      fb_login_required: 'Sign in to send feedback.', fb_empty: 'No feedback yet.', fb_staff_empty: 'No player feedback.',
+      fb_sent: 'Feedback sent', fb_select_thread: 'Select a player feedback thread.', fb_compose_hint: 'Fill in and send new feedback.',
+      fb_replay_view: 'View', fb_replay_load_failed: 'Failed to load replay', fb_replay_unavailable: 'Replay unavailable or expired',
+      fb_admin_prefix: 'Admin', fb_request_failed: 'Request failed',
       feedback_center: 'Feedback Center', bug_tab: 'Bugs', suggestion_tab: 'Suggestions', internal_tab: 'Internal', internal_kind: 'Internal feedback', project_subtitle: 'Bugs & suggestions',
       project_copy: 'Report bugs or propose updates. Sign in to vote and discuss.',
       status: 'Status', all_status: 'All statuses', sort: 'Sort',
@@ -98,13 +102,15 @@
       internal_status: { new: 'New', needs_info: 'Needs info', in_progress: 'In progress', fixed: 'Done', duplicate: 'Duplicate', invalid: 'Invalid' },
     },
     fr: {
-      appeal_tab: 'Appel', appeal_kicker: 'Association de compte', appeal_title: 'Appel d’association',
-      appeal_copy: 'Les associations sont déduites automatiquement de plusieurs signaux ; un réseau partagé ne suffit pas. Les appels sont examinés manuellement ; les règles de réputation restent en vigueur en attendant.',
-      appeal_not_linked: 'Aucune association de compte confirmée — pas d’appel nécessaire. Pour une question sur votre réputation, décrivez-la dans un retour.',
-      appeal_linked: 'Association automatique', appeal_pending: 'Appel reçu ; un modérateur l’examine. Le résultat apparaîtra dans votre historique de réputation.',
-      appeal_loading: 'Chargement de l’association…', appeal_need_login: 'Connectez-vous avant de faire appel.',
-      appeal_need_reason: 'Veuillez décrire votre appel.', appeal_done: 'Appel envoyé ; en attente de vérification.',
-      appeal_reason: 'Description de l’appel', appeal_submit: 'Envoyer l’appel', appeal_back: 'Retour aux signalements',
+      fb_tab: 'Admin / Signalement', fb_send: "Contacter l'admin", fb_staff: 'Voir les messages admin', fb_handling: 'Modération',
+      fb_category_account: 'Problème de compte', fb_category_report: 'Signalement / litige', fb_category_appeal: 'Appel de partie',
+      fb_title_placeholder: 'Titre', fb_replay_placeholder: 'ID du replay, ex. R-12345 ou P-12345',
+      fb_message_placeholder: 'Écrivez votre message...', fb_send_btn: 'Envoyer',
+      fb_status_open: 'Ouvert', fb_status_pending: 'Répondu', fb_status_closed: 'Fermé',
+      fb_login_required: 'Connectez-vous pour envoyer un feedback.', fb_empty: 'Aucun feedback.', fb_staff_empty: 'Aucun feedback joueur.',
+      fb_sent: 'Feedback envoyé', fb_select_thread: 'Sélectionnez un feedback joueur.', fb_compose_hint: 'Remplissez et envoyez un nouveau feedback.',
+      fb_replay_view: 'Voir', fb_replay_load_failed: 'Échec du replay', fb_replay_unavailable: 'Replay indisponible ou expiré',
+      fb_admin_prefix: 'Admin', fb_request_failed: 'Échec de la requête',
       feedback_center: 'Centre de signalements', bug_tab: 'Bugs', suggestion_tab: 'Suggestions', internal_tab: 'Interne', internal_kind: 'Signalement interne', project_subtitle: 'Bugs et suggestions',
       project_copy: 'Signalez un bug ou proposez une amélioration. Connectez-vous pour voter.',
       status: 'Statut', all_status: 'Tous', sort: 'Trier', sort_priority: 'Priorité',
@@ -143,13 +149,15 @@
       internal_status: { new: 'Nouveau', needs_info: 'Infos requises', in_progress: 'En cours', fixed: 'Terminé', duplicate: 'Doublon', invalid: 'Invalide' },
     },
     ja: {
-      appeal_tab: '申立て', appeal_kicker: 'アカウント関連', appeal_title: '関連の申立て',
-      appeal_copy: '関連は複数のシグナルから自動判定され、同一ネットワークだけでは確定しません。申立ては管理者が手動で確認し、処理までは現在の評判ルールが適用されます。',
-      appeal_not_linked: '確定したアカウント関連はなく、申立ては不要です。評判スコアに疑問がある場合はフィードバックで説明してください。',
-      appeal_linked: '自動関連済み', appeal_pending: '申立てを受け付けました。管理者が確認中です。結果は評判履歴に反映されます。',
-      appeal_loading: '関連状態を読み込み中…', appeal_need_login: '申立ての前にログインしてください。',
-      appeal_need_reason: '申立ての説明を記入してください。', appeal_done: '申立てを送信しました。管理者の確認をお待ちください。',
-      appeal_reason: '申立ての説明', appeal_submit: '申立てを送信', appeal_back: '一覧へ戻る',
+      fb_tab: '管理者・通報', fb_send: '管理者に問い合わせ', fb_staff: '管理者メッセージ確認', fb_handling: '通報管理',
+      fb_category_account: 'アカウント問題', fb_category_report: '通報・紛争', fb_category_appeal: '対戦申立',
+      fb_title_placeholder: 'タイトル', fb_replay_placeholder: 'リプレイID（例 R-12345 / P-12345）',
+      fb_message_placeholder: 'メッセージを入力...', fb_send_btn: '送信',
+      fb_status_open: '未対応', fb_status_pending: '返信済み', fb_status_closed: '終了',
+      fb_login_required: 'ログインすると送信できます。', fb_empty: 'まだありません。', fb_staff_empty: 'プレイヤー feedback はありません。',
+      fb_sent: '送信しました', fb_select_thread: 'プレイヤーの報告を選択してください。', fb_compose_hint: '入力して新しい報告を送信。',
+      fb_replay_view: '表示', fb_replay_load_failed: 'リプレイ読み込み失敗', fb_replay_unavailable: 'リプレイは存在しないか期限切れです',
+      fb_admin_prefix: '管理者', fb_request_failed: 'リクエスト失敗',
       feedback_center: 'フィードバックセンター', bug_tab: 'バグ', suggestion_tab: '提案', internal_tab: '内部', internal_kind: '内部フィードバック', project_subtitle: 'バグと提案',
       project_copy: 'バグを報告したり、今後の更新を提案できます。',
       status: '状態', all_status: 'すべて', sort: '並び替え', sort_priority: '優先度',
@@ -208,11 +216,16 @@
     notificationsLoaded: false,
     accountOpen: false,
     reportContext: null,
-    appealLoaded: false,
   };
 
-  /* 申诉是与 bug/建议列表并列的独立视图（/feedback-center/appeal），不属于 kind。 */
+  /* 管理员/申诉是与 bug/建议列表并列的独立视图（/feedback-center/appeal），
+     自主页反馈弹窗迁入：线程/消息接口同源，历史对话直接可见。 */
   let appealViewActive = false;
+  const fbState = { is_staff: false, unread_count: 0, threads: [], messages: [], thread: null, replay: null };
+  let fbActiveTab = 'send';
+  let fbActiveThreadId = null;
+  let fbStaffView = false;
+  const fbCollapsedGroups = { open: false, pending: false, closed: true };
 
   const VOTABLE = {
     bug: new Set(['new', 'needs_info', 'confirmed', 'in_progress']),
@@ -548,12 +561,30 @@
     $('fc-tab-bug').textContent = t('bug_tab');
     $('fc-tab-suggestion').textContent = t('suggestion_tab');
     $('fc-tab-internal').textContent = t('internal_tab');
-    $('fc-tab-appeal').textContent = t('appeal_tab');
-    $('fc-appeal-title').textContent = t('appeal_title');
-    $('fc-appeal-copy').textContent = t('appeal_copy');
-    $('fc-appeal-reason-label').textContent = t('appeal_reason');
-    $('fc-appeal-submit').textContent = t('appeal_submit');
-    $('fc-appeal-back').textContent = t('appeal_back');
+    $('feedback-tab-send').textContent = t('fb_send');
+    $('feedback-tab-staff').textContent = t('fb_staff');
+    $('feedback-tab-handling').textContent = t('fb_handling');
+    const catSel = $('feedback-category');
+    if (catSel && catSel.options.length >= 3) {
+      catSel.options[0].textContent = t('fb_category_account');
+      catSel.options[1].textContent = t('fb_category_report');
+      catSel.options[2].textContent = t('fb_category_appeal');
+    }
+    const statusSel = $('feedback-status-select');
+    if (statusSel && statusSel.options.length >= 3) {
+      statusSel.options[0].textContent = t('fb_status_open');
+      statusSel.options[1].textContent = t('fb_status_pending');
+      statusSel.options[2].textContent = t('fb_status_closed');
+    }
+    const fbTitleInput = $('feedback-title-input');
+    if (fbTitleInput) fbTitleInput.placeholder = t('fb_title_placeholder');
+    const fbReplayInput = $('feedback-replay-id');
+    if (fbReplayInput) fbReplayInput.placeholder = t('fb_replay_placeholder');
+    const fbMessageInput = $('feedback-message-input');
+    if (fbMessageInput) fbMessageInput.placeholder = t('fb_message_placeholder');
+    const fbSendBtn = $('btn-feedback-send');
+    if (fbSendBtn) fbSendBtn.textContent = t('fb_send_btn');
+    updateInboxBadge();
     const internalTab = $('fc-tab-internal');
     if (internalTab) internalTab.hidden = !state.isStaff;
   }
@@ -874,93 +905,379 @@
     closeIssue();
   }
 
-  /* —— 关联申诉视图：数据与主页信誉弹窗同源（GET/POST /api/account-integrity）。 —— */
+  /* —— 管理员/申诉视图（自主页反馈弹窗迁入）：接口与历史对话同源。 —— */
+  function fbTimeShort(value) {
+    const time = new Date(value);
+    if (Number.isNaN(time.getTime())) return String(value || '');
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${time.getFullYear()}-${pad(time.getMonth() + 1)}-${pad(time.getDate())} ${pad(time.getHours())}:${pad(time.getMinutes())}`;
+  }
+
+  function fbNameClass(role) {
+    const key = String(role || '').toLowerCase();
+    if (key === 'admin') return 'admin-name';
+    if (key === 'staff') return 'bloom-name';
+    if (key === 'contributor') return 'guard-name';
+    if (key === 'sponsor') return 'thorn-name';
+    return '';
+  }
+
+  function fbStatusLabel(status) {
+    const key = String(status || '').toLowerCase();
+    if (key === 'closed') return t('fb_status_closed');
+    if (key === 'pending') return t('fb_status_pending');
+    return t('fb_status_open');
+  }
+
+  function fbStaffGroups(items = []) {
+    const groups = [
+      { key: 'open', label: fbStatusLabel('open'), items: [] },
+      { key: 'pending', label: fbStatusLabel('pending'), items: [] },
+      { key: 'closed', label: fbStatusLabel('closed'), items: [] },
+    ];
+    const byKey = Object.fromEntries(groups.map(group => [group.key, group]));
+    (Array.isArray(items) ? items : []).forEach(item => {
+      const key = ['open', 'pending', 'closed'].includes(String(item.status || '').toLowerCase())
+        ? String(item.status || '').toLowerCase()
+        : 'open';
+      byKey[key].items.push(item);
+    });
+    return groups;
+  }
+
+  function updateInboxBadge() {
+    const tabBtn = $('fc-tab-appeal');
+    if (!tabBtn) return;
+    const count = Number(fbState.unread_count || 0);
+    const base = esc(t('fb_tab'));
+    tabBtn.innerHTML = count > 0
+      ? `${base}<span class="fc-badge">${count > 99 ? '99+' : count}</span>`
+      : base;
+  }
+
+  async function loadFeedbackSummary() {
+    if (!state.account) {
+      fbState.is_staff = false;
+      fbState.unread_count = 0;
+      updateInboxBadge();
+      return;
+    }
+    try {
+      const data = await api('/api/feedback/summary');
+      fbState.is_staff = !!data.is_staff;
+      fbState.unread_count = Number(data.unread_count || 0);
+    } catch (_) {}
+    updateInboxBadge();
+  }
+
+  function renderFeedbackThreads() {
+    const list = $('feedback-thread-list');
+    if (!list) return;
+    const items = Array.isArray(fbState.threads) ? fbState.threads : [];
+    if (!state.account) {
+      list.innerHTML = `<div class="fc-muted">${esc(t('fb_login_required'))}</div>`;
+      return;
+    }
+    if (!items.length) {
+      list.innerHTML = `<div class="fc-muted">${esc(fbStaffView ? t('fb_staff_empty') : t('fb_empty'))}</div>`;
+      return;
+    }
+    const renderItem = (item) => {
+      const active = String(item.id) === String(fbActiveThreadId);
+      const user = item.user || {};
+      const title = item.title || item.last_message || `#${item.id}`;
+      const status = fbStatusLabel(item.status);
+      const replayRef = Number(item.replay_id) > 0 ? `R-${Number(item.replay_id)}` : '';
+      return `
+        <button class="feedback-thread-item${active ? ' active' : ''}" type="button" data-feedback-thread="${esc(item.id)}">
+          <span class="feedback-thread-title">${item.unread ? '<span class="feedback-dot"></span>' : ''}${esc(title)}</span>
+          <span class="feedback-thread-meta">${esc([fbStaffView ? `${user.username || '-'} · ${status}` : status, replayRef, fbTimeShort(item.updated_at || item.created_at || '')].filter(Boolean).join(' · '))}</span>
+          <span class="feedback-thread-preview">${esc(item.last_message || '')}</span>
+        </button>`;
+    };
+    if (fbStaffView) {
+      list.innerHTML = fbStaffGroups(items).map(group => {
+        const collapsed = !!fbCollapsedGroups[group.key];
+        const rows = collapsed ? '' : group.items.map(renderItem).join('');
+        return `
+          <section class="feedback-thread-group feedback-thread-group-${esc(group.key)}${collapsed ? ' collapsed' : ''}">
+            <button class="feedback-thread-group-title" type="button" data-feedback-group-toggle="${esc(group.key)}">
+              <span class="feedback-thread-group-arrow">${collapsed ? '>' : 'v'}</span>
+              <span>${esc(group.label)}</span>
+              <span>${esc(group.items.length)}</span>
+            </button>
+            ${rows || (collapsed ? '' : `<div class="feedback-thread-group-empty">${esc(t('fb_staff_empty'))}</div>`)}
+          </section>`;
+      }).join('');
+      return;
+    }
+    list.innerHTML = items.map(renderItem).join('');
+  }
+
+  function renderFeedbackMessages() {
+    const list = $('feedback-message-list');
+    if (!list) return;
+    if (!state.account) {
+      list.innerHTML = `<div class="fc-muted">${esc(t('fb_login_required'))}</div>`;
+      return;
+    }
+    const messages = Array.isArray(fbState.messages) ? fbState.messages : [];
+    if (!fbActiveThreadId && !messages.length) {
+      list.innerHTML = `<div class="fc-muted">${esc(fbStaffView ? t('fb_select_thread') : t('fb_compose_hint'))}</div>`;
+      return;
+    }
+    const currentUserId = state.account && state.account.id;
+    list.innerHTML = '';
+    const fragment = document.createDocumentFragment();
+    messages.forEach(msg => {
+      const self = Number(msg.sender_user_id) === Number(currentUserId);
+      const row = document.createElement('div');
+      row.className = `feedback-message ${self ? 'self' : 'other'}`;
+      const bubble = document.createElement('div');
+      bubble.className = 'feedback-bubble';
+      const meta = document.createElement('div');
+      meta.className = `feedback-sender ${fbNameClass(msg.sender_role)}`;
+      const isAdmin = String(msg.sender_role || '').toLowerCase() === 'admin';
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = `${isAdmin ? `[${t('fb_admin_prefix')}] ` : ''}${msg.sender_name || (self ? (state.account.username || '') : '-')}`;
+      meta.appendChild(nameSpan);
+      const timeSpan = document.createElement('span');
+      timeSpan.className = 'feedback-message-time';
+      timeSpan.textContent = fbTimeShort(msg.created_at);
+      meta.appendChild(timeSpan);
+      const text = document.createElement('div');
+      text.className = 'feedback-text';
+      text.textContent = msg.message || '';
+      bubble.appendChild(meta);
+      bubble.appendChild(text);
+      row.appendChild(bubble);
+      fragment.appendChild(row);
+    });
+    list.appendChild(fragment);
+    list.scrollTop = list.scrollHeight;
+  }
+
+  function normalizedFeedbackReplayId(value) {
+    const text = String(value || '').trim().toUpperCase();
+    const match = text.match(/^(?:([RP])-)?(\d+)$/);
+    if (!match || Number(match[2]) <= 0) return null;
+    return match[1] ? `${match[1]}-${Number(match[2])}` : String(Number(match[2]));
+  }
+
+  function renderFeedbackReplayPreview() {
+    const box = $('feedback-replay-preview');
+    if (!box) return;
+    const threadReplayId = Number(fbState.thread && fbState.thread.replay_id || 0);
+    const replay = fbState.replay;
+    const replayId = Number(replay && replay.id || threadReplayId || 0);
+    if (!(replayId > 0)) {
+      box.innerHTML = '';
+      box.classList.add('hidden');
+      return;
+    }
+    const replayPrefix = String(replay && replay.replay_prefix || 'R').toUpperCase() === 'P' ? 'P' : 'R';
+    const replayRef = String(replay && replay.replay_ref || `${replayPrefix}-${replayId}`);
+    const players = replay && Array.isArray(replay.players) ? replay.players.join(' / ') : '';
+    const detail = replay
+      ? [fbTimeShort(replay.created_at), replay.mode, players].filter(Boolean).join(' · ')
+      : t('fb_replay_unavailable');
+    box.innerHTML = `
+      <div class="feedback-replay-preview-main"><strong>${esc(replayRef)}</strong>${detail ? ` · ${esc(detail)}` : ''}</div>
+      ${replay ? `<button class="fc-button fc-button-secondary fc-button-small" type="button" data-feedback-replay-open="${esc(replayRef)}">${esc(t('fb_replay_view'))}</button>` : ''}
+    `;
+    box.classList.remove('hidden');
+  }
+
+  async function loadFeedbackReplayPreview(replayId, showError = false) {
+    const normalized = normalizedFeedbackReplayId(replayId);
+    fbState.replay = null;
+    if (!normalized) {
+      renderFeedbackReplayPreview();
+      return false;
+    }
+    try {
+      const data = await api(`/api/replays/${encodeURIComponent(normalized)}`);
+      fbState.replay = data.replay || null;
+      renderFeedbackReplayPreview();
+      return !!fbState.replay;
+    } catch (err) {
+      renderFeedbackReplayPreview();
+      if (showError) {
+        const errorBox = $('feedback-error');
+        if (errorBox) errorBox.textContent = String(err?.message || t('fb_replay_load_failed'));
+      }
+      return false;
+    }
+  }
+
+  function updateFeedbackReplayField() {
+    const category = $('feedback-category');
+    const input = $('feedback-replay-id');
+    const creatingAppeal = !fbActiveThreadId
+      && !fbStaffView
+      && category
+      && category.value === 'appeal';
+    if (input) input.classList.toggle('hidden', !creatingAppeal);
+    if (!fbActiveThreadId && !creatingAppeal) fbState.replay = null;
+    renderFeedbackReplayPreview();
+  }
+
+  function renderInbox() {
+    const staffTab = $('feedback-tab-staff');
+    if (staffTab) staffTab.classList.toggle('hidden', !fbState.is_staff);
+    const handlingTab = $('feedback-tab-handling');
+    if (handlingTab) handlingTab.classList.toggle('hidden', !fbState.is_staff);
+    document.querySelectorAll('#fc-appeal-pane [data-feedback-tab]').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.feedbackTab === fbActiveTab);
+    });
+    fbStaffView = fbActiveTab === 'staff';
+    const category = $('feedback-category');
+    const titleInput = $('feedback-title-input');
+    const statusSelect = $('feedback-status-select');
+    if (category) category.classList.toggle('hidden', fbStaffView || !!fbActiveThreadId);
+    if (titleInput) titleInput.classList.toggle('hidden', fbStaffView || !!fbActiveThreadId);
+    if (statusSelect) statusSelect.classList.toggle('hidden', !fbStaffView || !fbActiveThreadId);
+    updateFeedbackReplayField();
+    renderFeedbackThreads();
+    renderFeedbackMessages();
+    updateInboxBadge();
+  }
+
+  async function loadFeedbackThreads(staffView = false) {
+    if (!state.account) {
+      fbState.threads = [];
+      fbState.messages = [];
+      fbState.thread = null;
+      fbState.replay = null;
+      renderInbox();
+      return;
+    }
+    try {
+      let data;
+      if (staffView) {
+        const statuses = ['open', 'pending', 'closed'];
+        const results = await Promise.all(statuses.map(status =>
+          api(`/api/feedback/threads?staff=1&status=${encodeURIComponent(status)}&limit=30`)
+        ));
+        data = {
+          is_staff: results.some(item => item && item.is_staff),
+          unread_count: Math.max(...results.map(item => Number(item && item.unread_count || 0)), 0),
+          items: results.flatMap(item => Array.isArray(item && item.items) ? item.items : []),
+        };
+      } else {
+        data = await api('/api/feedback/threads?staff=0&limit=50');
+      }
+      fbState.is_staff = !!data.is_staff;
+      fbState.unread_count = Number(data.unread_count || 0);
+      fbState.threads = Array.isArray(data.items) ? data.items : [];
+      if (!fbActiveThreadId && fbState.threads.length && staffView) {
+        fbActiveThreadId = fbState.threads[0].id;
+        await openFeedbackThread(fbActiveThreadId);
+        return;
+      }
+      renderInbox();
+    } catch (err) {
+      const box = $('feedback-error');
+      if (box) box.textContent = String(err?.message || t('fb_request_failed'));
+    }
+  }
+
+  async function openFeedbackThread(threadId) {
+    if (!threadId) return;
+    fbActiveThreadId = threadId;
+    try {
+      const data = await api('/api/feedback/messages/read', {
+        method: 'POST',
+        body: { thread_id: threadId, limit: 100 },
+      });
+      fbState.is_staff = !!data.is_staff;
+      fbState.unread_count = Number(data.unread_count || 0);
+      fbState.messages = Array.isArray(data.messages) ? data.messages : [];
+      const thread = data.thread || {};
+      fbState.thread = thread;
+      fbState.replay = null;
+      const statusSelect = $('feedback-status-select');
+      if (statusSelect && thread.status) statusSelect.value = thread.status;
+      renderInbox();
+      if (thread.replay_id) await loadFeedbackReplayPreview(thread.replay_id);
+    } catch (err) {
+      const box = $('feedback-error');
+      if (box) box.textContent = String(err?.message || t('fb_request_failed'));
+    }
+  }
+
+  async function sendFeedbackMessage() {
+    const input = $('feedback-message-input');
+    const text = (input?.value || '').trim();
+    const box = $('feedback-error');
+    if (box) box.textContent = '';
+    if (!state.account) {
+      if (box) box.textContent = t('fb_login_required');
+      return;
+    }
+    if (!text) return;
+    const payload = { text };
+    if (fbActiveThreadId) payload.thread_id = fbActiveThreadId;
+    else {
+      payload.category = $('feedback-category')?.value || 'other';
+      payload.title = ($('feedback-title-input')?.value || '').trim();
+      if (payload.category === 'appeal') payload.replay_id = ($('feedback-replay-id')?.value || '').trim();
+    }
+    try {
+      const data = await api('/api/feedback/send', { method: 'POST', body: payload });
+      if (input) input.value = '';
+      fbActiveThreadId = data.thread?.id || data.thread_id || fbActiveThreadId;
+      fbState.is_staff = !!data.is_staff;
+      fbState.unread_count = Number(data.unread_count || 0);
+      fbState.messages = Array.isArray(data.messages) ? data.messages : [];
+      fbState.thread = data.thread || fbState.thread;
+      await loadFeedbackThreads(fbStaffView);
+      if (fbActiveThreadId) await openFeedbackThread(fbActiveThreadId);
+      if (box) box.textContent = t('fb_sent');
+    } catch (err) {
+      if (box) box.textContent = String(err?.message || t('fb_request_failed'));
+    }
+  }
+
+  async function updateFeedbackStatus() {
+    if (!fbActiveThreadId || !fbState.is_staff) return;
+    const status = $('feedback-status-select')?.value || 'open';
+    try {
+      const data = await api('/api/feedback/status', {
+        method: 'POST',
+        body: { thread_id: fbActiveThreadId, status },
+      });
+      fbState.messages = Array.isArray(data.messages) ? data.messages : fbState.messages;
+      await loadFeedbackThreads(true);
+      await openFeedbackThread(fbActiveThreadId);
+    } catch (err) {
+      const box = $('feedback-error');
+      if (box) box.textContent = String(err?.message || t('fb_request_failed'));
+    }
+  }
+
   async function renderAppealView() {
-    const appeal = $('fc-appeal-pane');
-    if (!appeal) return;
+    const pane = $('fc-appeal-pane');
+    if (!pane) return;
     appealViewActive = true;
-    appeal.classList.remove('hidden');
+    pane.classList.remove('hidden');
     $('fc-toolbar')?.classList.add('hidden');
     $('fc-split')?.classList.add('hidden');
     applyStaticText();
     updateTabs();
-    document.title = `${t('appeal_title')} · ${t('feedback_center')} · 荆棘花园`;
-    await loadAppealProfile();
-  }
-
-  function renderAppealProfile(data) {
-    const status = $('fc-appeal-status');
-    const form = $('fc-appeal-form');
-    const error = $('fc-appeal-error');
-    if (!status || !form) return;
-    if (error) error.hidden = true;
-    const profile = (data && data.profile) || {};
-    const band = (profile.linked_gr_band || {}).label || '';
-    if (!profile.linked) {
-      status.innerHTML = `<p class="fc-muted">${esc(t('appeal_not_linked'))}</p>`;
-      form.hidden = true;
-      return;
-    }
-    const linkedLine = `<p class="fc-appeal-linked">${esc(t('appeal_linked'))}${band ? ` · ${esc(band)}` : ''}</p>`;
-    if (profile.appeal_status === 'pending') {
-      status.innerHTML = linkedLine + `<p class="fc-muted">${esc(t('appeal_pending'))}</p>`;
-      form.hidden = true;
-      return;
-    }
-    status.innerHTML = linkedLine;
-    form.hidden = false;
-  }
-
-  async function loadAppealProfile({ force = false } = {}) {
-    const status = $('fc-appeal-status');
-    if (!status) return;
+    document.title = `${t('fb_tab')} · ${t('feedback_center')} · 荆棘花园`;
+    fbActiveTab = fbState.is_staff && fbActiveTab === 'staff' ? 'staff' : 'send';
+    fbActiveThreadId = null;
+    fbState.thread = null;
+    fbState.replay = null;
     if (!state.account) {
-      status.innerHTML = `<p class="fc-muted">${esc(t('appeal_need_login'))}</p>`;
-      $('fc-appeal-form')?.setAttribute('hidden', '');
+      fbState.threads = [];
+      fbState.messages = [];
+      renderInbox();
       return;
     }
-    if (state.appealLoaded && !force) return;
-    status.innerHTML = `<p class="fc-muted">${esc(t('appeal_loading'))}</p>`;
-    try {
-      const data = await api('/api/account-integrity');
-      state.appealLoaded = true;
-      renderAppealProfile(data);
-    } catch (err) {
-      status.innerHTML = `<p class="fc-error">${esc(String(err?.message || '加载失败'))}</p>`;
-    }
-  }
-
-  async function submitAppeal(event) {
-    event.preventDefault();
-    const reason = String($('fc-appeal-reason')?.value || '').trim();
-    const error = $('fc-appeal-error');
-    const submit = $('fc-appeal-submit');
-    if (!reason) {
-      if (error) {
-        error.textContent = t('appeal_need_reason');
-        error.hidden = false;
-      }
-      return;
-    }
-    if (error) error.hidden = true;
-    if (submit) submit.disabled = true;
-    try {
-      await api('/api/account-integrity/appeal', { method: 'POST', body: { reason } });
-      await loadAppealProfile({ force: true });
-      $('fc-appeal-status')?.insertAdjacentHTML('afterbegin', `<p class="fc-appeal-ok">${esc(t('appeal_done'))}</p>`);
-      const form = $('fc-appeal-form');
-      if (form) {
-        form.reset();
-        form.hidden = true;
-      }
-    } catch (err) {
-      if (error) {
-        error.textContent = String(err?.message || '提交失败');
-        error.hidden = false;
-      }
-    } finally {
-      if (submit) submit.disabled = false;
-    }
+    await loadFeedbackSummary();
+    await loadFeedbackThreads(fbStaffView);
   }
 
   function canonicalIssuePath(issue) {
@@ -1676,7 +1993,54 @@
       history.pushState({}, '', '/feedback-center/appeal');
       void renderAppealView();
     });
-    $('fc-appeal-form').addEventListener('submit', submitAppeal);
+    $('feedback-tab-handling').addEventListener('click', () => {
+      window.open('/handling', '_blank', 'noopener');
+    });
+    document.querySelectorAll('#fc-appeal-pane [data-feedback-tab]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        fbActiveTab = btn.dataset.feedbackTab || 'send';
+        fbActiveThreadId = null;
+        fbState.messages = [];
+        fbState.thread = null;
+        fbState.replay = null;
+        await loadFeedbackThreads(fbActiveTab === 'staff');
+      });
+    });
+    $('btn-feedback-send').addEventListener('click', sendFeedbackMessage);
+    $('feedback-category').addEventListener('change', updateFeedbackReplayField);
+    $('feedback-replay-id').addEventListener('change', () => {
+      loadFeedbackReplayPreview($('feedback-replay-id').value, true);
+    });
+    $('feedback-replay-preview').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-feedback-replay-open]');
+      if (button) {
+        window.open(`/?replay=${encodeURIComponent(button.dataset.feedbackReplayOpen)}`, '_blank', 'noopener');
+      }
+    });
+    $('feedback-message-input').addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+        sendFeedbackMessage();
+      }
+    });
+    $('feedback-status-select').addEventListener('change', updateFeedbackStatus);
+    document.addEventListener('click', (event) => {
+      const groupBtn = event.target.closest('#fc-appeal-pane [data-feedback-group-toggle]');
+      if (groupBtn) {
+        event.preventDefault();
+        const key = String(groupBtn.dataset.feedbackGroupToggle || '');
+        if (key) {
+          fbCollapsedGroups[key] = !fbCollapsedGroups[key];
+          renderFeedbackThreads();
+        }
+        return;
+      }
+      const threadBtn = event.target.closest('#fc-appeal-pane [data-feedback-thread]');
+      if (threadBtn) {
+        event.preventDefault();
+        openFeedbackThread(threadBtn.dataset.feedbackThread);
+      }
+    });
     $('fc-search').addEventListener('input', (event) => {
       state.search = event.target.value.trim();
       clearTimeout(searchTimer);
@@ -1806,7 +2170,10 @@
     await loadAccount();
     await loadNotifications();
     await applyLocationRoute();
-    window.addEventListener('focus', () => { refreshFeedbackUnread(); });
+    window.addEventListener('focus', () => {
+      refreshFeedbackUnread();
+      loadFeedbackSummary();
+    });
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') refreshFeedbackUnread();
     });
