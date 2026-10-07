@@ -12248,7 +12248,10 @@
     const storyOrbitMotions = new Map();
 
     function storyOrbitMotion() {
-        const key = phaseContextMatchKey(gameState) || 'orbit';
+        // 注意：story 页不加载 game.js——这里不能用 phaseContextMatchKey/
+        // gameState（会 ReferenceError 直接炸掉轨道渲染）。按 run id 隔离轮盘
+        // 角度即可，换 run 重置。
+        const key = String(activeRun?.id ?? 'orbit');
         if (!storyOrbitMotions.has(key)) {
             storyOrbitMotions.set(key, { angle: STORY_ORBIT_TRIGGER_ANGLE });
         }
