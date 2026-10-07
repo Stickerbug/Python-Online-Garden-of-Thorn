@@ -6652,6 +6652,16 @@
                 return null;
             }
             showToast(error.message || t.requestFailed);
+            /* 服务端拒绝/异常：若当前状态仍有待处理选择（例如花瓣选择确认后
+             * 旋转结算失败），选择窗已随表单关闭，但结束回合等操作仍被禁用
+             * ——玩家会被彻底卡住。重新打开选择窗让对局可以继续。 */
+            const pendingChoice = activeRun?.state?.combat?.pending_card_choice;
+            const choiceDialog = $('story-card-choice-dialog');
+            if (pendingChoice && choiceDialog && !choiceDialog.open) {
+                queueMicrotask(() => {
+                    if (!actionInFlight) openPendingStoryCardChoice(activeRun?.state);
+                });
+            }
             return null;
         } finally {
             actionInFlight = false;

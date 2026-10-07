@@ -3736,10 +3736,13 @@ def _selectable_enemy_targets(combat, values):
 
 def _card_targets(combat, values, payload):
     living = _selectable_enemy_targets(combat, values)
-    if values.get('target') != 'enemy':
-        return [combat]
+    # GB-401/403：广域优先于目标取向判定——bloom/root 型 wide 卡（氰化物
+    # 药丸、铀）默认 target=self，此前先走 self 分支把"对所有敌人"的效果
+    # 结算到了玩家自己身上。
     if 'wide' in _card_tags(values):
         return living
+    if values.get('target') != 'enemy':
+        return [combat]
     target_id = str(payload.get('target_id') or '')
     target = next(
         (enemy for enemy in living if str(enemy.get('id') or '') == target_id),
@@ -4239,14 +4242,16 @@ def _resolve_effect(state, card, values, effect, targets, payload, seed, events,
             )
         return
     if effect_type == 'rotate_orbit':
+        # 花瓣触发的旋转必须加深一层，否则花瓣→旋转→花瓣链上的 depth
+        # 永不增长，防递归上限形同虚设（GB-399 糖棍死循环的共犯）。
         _rotate_orbit(state, max(0, int(amount or 1)), seed, events,
                       source=str(effect.get('source') or getattr(card, 'def_id', 'play') if isinstance(card, dict) else 'play'),
-                      depth=int(context.get('orbit_depth') or 0))
+                      depth=int(context.get('orbit_depth') or 0) + (1 if context.get('orbit') else 0))
         return
     if effect_type == 'rotate_orbit_full':
         _rotate_orbit_full(state, seed, events,
                            source=str(values.get('name', {}).get('zh') if isinstance(values.get('name'), dict) else 'play'),
-                           depth=int(context.get('orbit_depth') or 0))
+                           depth=int(context.get('orbit_depth') or 0) + (1 if context.get('orbit') else 0))
         return
     if effect_type == 'orbit_add_petal':
         template_id = str(effect.get('def_id') or '')
@@ -4303,12 +4308,20 @@ def _resolve_effect(state, card, values, effect, targets, payload, seed, events,
         events.append({'type': 'orbit_durability_changed', 'amount': int(amount or 1)})
         return
     if effect_type == 'orbit_transform_all':
+        # GB-399：变形后的花瓣只保留模板的 orbit_effects（花瓣被转到时的
+        # 结算效果）。此前回退到整张打出效果——糖棍花瓣带着「变形+旋转」
+        # 再触发自己，耐久每次被重置回满，旋转链无限递归直至 500。
+        template_id = str(card.get('def_id') or '') if isinstance(card, dict) else ''
+        template = STORY_CARDS.get(template_id) or {}
+        petal_effects = values.get('orbit_effects') or template.get('orbit_effects')
+        if not petal_effects and template:
+            petal_effects = template.get('effects') or ()
         for petal in _orbit(combat).get('petals') or []:
-            petal['def_id'] = str(values.get('def_id') or petal.get('def_id') or card.get('def_id') or '')
+            petal['def_id'] = str(template_id or petal.get('def_id') or '')
             petal['name'] = values.get('name') or petal.get('name')
-            petal['effects'] = [copy.deepcopy(eff) for eff in (values.get('orbit_effects') or values.get('effects') or ())]
+            petal['effects'] = [copy.deepcopy(eff) for eff in (petal_effects or ())]
             petal['durability'] = max(1, int(effect.get('durability') or petal.get('durability') or 1))
-        events.append({'type': 'orbit_transformed', 'def_id': str(card.get('def_id') or '')})
+        events.append({'type': 'orbit_transformed', 'def_id': template_id})
         return
     if effect_type == 'orbit_draw_per_petal':
         count = _orbit_count(combat) + max(0, int(effect.get('bonus') or 0))
@@ -8592,13 +8605,10 @@ def _turn_boundary(state, seed, events, extra=False):
     combat['turn_kind'] = 'extra' if extra else 'normal'
     combat['cards_played_this_turn'] = 0
     combat['active_discards_this_turn'] = 0
-    # 轨道：回合开始的每回合计数重置 + 泡泡炸弹类的下回合护盾入账。
+    # 轨道：回合开始的每回合计数重置。
     orbit_state = _orbit(combat)
     orbit_state['rotations_this_turn'] = 0
     combat['orbit_cards_played_this_turn'] = 0
-    next_turn_shield = int(combat.pop('next_turn_shield', 0) or 0)
-    if next_turn_shield > 0:
-        _gain_shield(state, next_turn_shield, events)
     for equipment, effect in list(_equipment_effects(combat, 'orbit_start_rotate')):
         if state.get('phase') == 'combat':
             _rotate_orbit(
@@ -8638,6 +8648,11 @@ def _turn_boundary(state, seed, events, extra=False):
         combat['sturdy'] = sturdy - 1
     else:
         combat['shield'] = 0
+    # 泡泡炸弹类「下回合开始时获得的护盾」必须在护盾清零之后入账，
+    # 否则一进回合就被清空，玩家永远看不到这层盾（GB-402）。
+    next_turn_shield = int(combat.pop('next_turn_shield', 0) or 0)
+    if next_turn_shield > 0:
+        _gain_shield(state, next_turn_shield, events)
     # Restore the per-turn baseline, then add explicitly retained E.
     retained_elixir = int(combat.get('elixir') or 0) if _has_relic(state, 'easy_godhood') else 0
     retained_elixir = max(retained_elixir, int(combat.pop('retained_elixir', 0) or 0))

@@ -2548,7 +2548,7 @@ STORY_CARDS['nether_lightning']['source_card_id'] = 'HelLightning'
 # 文案按《卡牌描述规范》重写；图片占位（后续补充，不在 STORY_CARD_IMAGE_URLS 登记）。
 STORY_CARDS.update({
     'orbit_glass': _card(
-        'OrbitGlass', '魔法玻璃', 'Magic Glass', 1, 'thorn', 'common',
+        'OrbitGlass', '魔法玻璃', 'Magic Glass', 1, 'thorn', 'primary',
         '对所有敌人造成5D',
         description_en='Deal 5 D to all enemies',
         owner='orbiter', orbit=1, tags=('wide',),
@@ -2564,7 +2564,7 @@ STORY_CARDS.update({
         upgrade={'description': {'zh': '对目标造成13D，旋转轨道5次', 'en': 'Deal 13 D and rotate 5 times'}, 'effects': (_effect('damage', 13), _effect('rotate_orbit', 5))},
     ),
     'faster': _card(
-        'Faster', '更快', 'Faster', 1, 'thorn', 'common',
+        'Faster', '更快', 'Faster', 1, 'thorn', 'primary',
         '对目标造成5D，旋转轨道1次',
         description_en='Deal 5 D to the target and rotate the orbit once',
         owner='orbiter',
@@ -2702,7 +2702,7 @@ STORY_CARDS.update({
         'MagicRelativity', '魔法相对论', 'Magic Relativity', 1, 'thorn', 'rare',
         '只有轨道为空时才能打出；对随机敌人造成20D',
         description_en='Can only be played while the orbit is empty; deal 20 D to a random enemy',
-        owner='orbiter', orbit=2, requires_empty_orbit=True,
+        owner='orbiter', orbit=2, requires_empty_orbit=True, target='random',
         effects=(_effect('random_damage', 20),),
         upgrade={'description': {'zh': '只有轨道为空时才能打出；对随机敌人造成25D', 'en': 'Only while the orbit is empty; deal 25 D to a random enemy'}, 'effects': (_effect('random_damage', 25),)},
     ),
@@ -2865,12 +2865,15 @@ STORY_CARDS.update({
         '将轨道上所有花瓣变为糖棍花瓣，旋转轨道1次，对随机敌人造成6D',
         description_en='Turn all petals into Joystick petals, rotate once, deal 6 D to a random enemy',
         owner='orbiter', orbit=2,
+        # GB-399：糖棍花瓣被转到时只结算随机伤害，不再继承打出效果
+        # （否则变形→旋转→再变形的链会无限自旋）。
+        orbit_effects=(_effect('random_damage', 6),),
         effects=(
             _effect('orbit_transform_all', 1, durability=2),
             _effect('rotate_orbit', 1),
             _effect('random_damage', 6),
         ),
-        upgrade={'description': {'zh': '将轨道上所有花瓣变为糖棍+花瓣，旋转轨道1次，对随机敌人造成9D', 'en': 'Turn all petals into Joystick+ petals, rotate once, deal 9 D to a random enemy'}, 'effects': (
+        upgrade={'description': {'zh': '将轨道上所有花瓣变为糖棍+花瓣，旋转轨道1次，对随机敌人造成9D', 'en': 'Turn all petals into Joystick+ petals, rotate once, deal 9 D to a random enemy'}, 'orbit_effects': (_effect('random_damage', 9),), 'effects': (
             _effect('orbit_transform_all', 1, durability=2),
             _effect('rotate_orbit', 1),
             _effect('random_damage', 9),

@@ -20182,6 +20182,11 @@ def _solo_emit_pending_after_state(sid, engine, response_payload=None):
         return
     pending = getattr(engine, 'pending_response', None)
     if pending:
+        # GB-400：蓄势待发（导弹）在单人对局同样立即自动结算——不弹响应窗。
+        if _fire_stand_ready_counters_for_engine(engine, mode='1v1', room_id=None):
+            send_solo_state(sid)
+            _solo_emit_pending_after_state(sid, solo_sessions.get(sid))
+            return
         if isinstance(response_payload, dict):
             socketio.emit('response_request', response_payload, room=sid)
             return
@@ -21095,13 +21100,16 @@ def _auto_fire_stand_ready_counters(room):
     return _fire_stand_ready_counters_now(room)
 
 
-def _fire_stand_ready_counters_now(room):
-    engine = getattr(room, 'engine', None)
+def _fire_stand_ready_counters_for_engine(engine, mode='1v1', room_id=None):
+    """蓄势待发的引擎级自动结算，房间与单人对局共用。
+
+    GB-400：此前只有房间（多人/联机）路径会自动打出，单人（训练场/AI 对局）
+    的 pending_response 从不触发——玩家手里的导弹永远只弹响应窗。"""
     pending = getattr(engine, 'pending_response', None) if engine is not None else None
     if not isinstance(pending, dict) or getattr(engine, 'game_over', False):
         return False
     try:
-        if room.mode == '2v2':
+        if mode == '2v2':
             for entry in list(pending.get('counter_cards') or []):
                 responder_id = int(entry.get('responder_id', -1))
                 card_def = CARD_DEFS.get(str(entry.get('def_id', '') or ''))
@@ -21136,8 +21144,19 @@ def _fire_stand_ready_counters_now(room):
                         return True
                     return False
     except Exception as exc:
-        admin_event('error', f'stand_ready_autofire_failed room={getattr(room, "room_id", "?")}: {exc}', room_id=getattr(room, 'room_id', None))
+        admin_event('error', f'stand_ready_autofire_failed room={room_id or "?"}: {exc}', room_id=room_id)
     return False
+
+
+def _fire_stand_ready_counters_now(room):
+    engine = getattr(room, 'engine', None)
+    if not isinstance(engine, GameEngine):
+        return False
+    return _fire_stand_ready_counters_for_engine(
+        engine,
+        mode=str(getattr(room, 'mode', '1v1') or '1v1'),
+        room_id=getattr(room, 'room_id', None),
+    )
 
 
 def emit_pending_interaction_after_state_change(room, reason='state_change'):
@@ -32834,6 +32853,9 @@ AI_TEST_MAX_CHAIN_ACTIONS = max(4, _env_int('GTN_AI_MAX_CHAIN_ACTIONS', 64))
 # 选择窗口都没动），就用默认选项强制结算当前窗口。动作间有 ~450ms 可见
 # 延迟，默认 12 意味着最快约 5 秒后自救，玩家不会再看到无限卡住的 AI 回合。
 AI_TEST_STALL_ACTION_LIMIT = max(4, _env_int('GTN_AI_STALL_ACTION_LIMIT', 12))
+# GB-406：AI 决策层连续失败这么多次后停止自动推进（兜底动作虽能推状态，
+# 但决策一直挂意味着对局已不可信，继续跑只会高频刷状态、拒绝玩家操作）。
+AI_TEST_DECISION_FAIL_LIMIT = max(3, _env_int('GTN_AI_DECISION_FAIL_LIMIT', 8))
 
 
 def _ai_test_stall_fingerprint(engine):
@@ -34402,6 +34424,7 @@ def _run_ai_test_turn(sid):
                 # 可能永远卡在 AI 回合。
                 stall_fp = _ai_test_stall_fingerprint(engine)
                 with _lock:
+                    meta['_ai_decision_fail_streak'] = 0
                     if meta.get('_ai_stall_fp') == stall_fp:
                         meta['_ai_stall_count'] = int(meta.get('_ai_stall_count', 0)) + 1
                     else:
@@ -34430,6 +34453,27 @@ def _run_ai_test_turn(sid):
                         admin_event('error', f'AI stall force-progress failed: {stall_exc}', sid=sid)
             except Exception as exc:
                 admin_event('error', f'AI local decision failed: {type(exc).__name__}: {exc}', sid=sid)
+                # GB-406（Phelren 无限刷新复发）：决策层持续异常时，兜底动作
+                # 仍在推进状态广播——链上限耗尽又立刻 reschedule，玩家侧表现
+                # 为界面高频刷新且自己的操作全被拒。决策失败连续达到阈值就
+                # 停车：交还控制权并明确报错，不再自动续跑。
+                with _lock:
+                    meta['_ai_decision_fail_streak'] = int(meta.get('_ai_decision_fail_streak', 0)) + 1
+                    fail_streak = int(meta['_ai_decision_fail_streak'])
+                if fail_streak >= AI_TEST_DECISION_FAIL_LIMIT:
+                    with _lock:
+                        meta['thinking'] = False
+                        meta['last_ai_error'] = str(exc)
+                    admin_event(
+                        'warning',
+                        f'AI 决策连续失败 {fail_streak} 次，已暂停自动推进（sid={sid}）',
+                        sid=sid,
+                    )
+                    socketio.emit('server_error', {
+                        'message': 'AI 决策连续失败，已暂停自动行动；可稍后再试或投降本局。',
+                    }, room=sid)
+                    send_solo_state(sid)
+                    return
                 try:
                     fallback_result, fallback_kind, fallback_payload = _ai_test_fallback_action(engine, ai_player_id)
                     _record_ai_test_replay_action(
@@ -34489,6 +34533,9 @@ def _run_ai_test_turn(sid):
             and engine is not None
             and not getattr(engine, 'game_over', False)
             and _solo_decision_player(engine) == int(meta.get('ai_player_id', 1))
+            # GB-406：决策层正在连续失败时不再自动续跑，避免兜底+重调度
+            # 变成高频刷新循环；由断路器报错后交还控制权。
+            and int(meta.get('_ai_decision_fail_streak', 0)) < AI_TEST_DECISION_FAIL_LIMIT
         ):
             try:
                 fallback_result, fallback_kind, fallback_payload = _ai_test_fallback_action(
