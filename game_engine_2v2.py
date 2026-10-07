@@ -1914,45 +1914,45 @@ class GameEngine2v2(GameEngine):
         target = self._attack_target(player_id, choice)
         dmg = self._modified_attack_damage(6, card)
         self.log_msg(f"{self.pn(player_id)}使用基本攻击！对{self.pn(target)}造成{dmg}伤害")
-        self.deal_attack_damage(target, dmg, attacker_id=player_id)
+        self.deal_attack_damage(target, dmg, attacker_id=player_id, source_card=card)
 
     def _effect_bone(self, player_id: int, card: CardInstance, choice=None):
         target = self._attack_target(player_id, choice)
         dmg = self._modified_attack_damage(12, card)
         self.log_msg(f"{self.pn(player_id)}使用骨头！对{self.pn(target)}造成{dmg}伤害")
-        self.deal_attack_damage(target, dmg, attacker_id=player_id)
+        self.deal_attack_damage(target, dmg, attacker_id=player_id, source_card=card)
 
     def _effect_stinger(self, player_id: int, card: CardInstance, choice=None):
         target = self._attack_target(player_id, choice)
         dmg = self._modified_attack_damage(20, card)
         self.log_msg(f"{self.pn(player_id)}使用刺！对{self.pn(target)}造成{dmg}伤害")
-        self.deal_attack_damage(target, dmg, is_precision=True, attacker_id=player_id)
+        self.deal_attack_damage(target, dmg, is_precision=True, attacker_id=player_id, source_card=card)
 
     def _effect_sand(self, player_id: int, card: CardInstance, choice=None):
         target = self._attack_target(player_id, choice)
         dmg = self._modified_attack_damage(3, card)
         hits = self._card_total_hits(card, 4)
         self.log_msg(f"{self.pn(player_id)}使用沙子！对{self.pn(target)}造成{dmg}x{hits}伤害")
-        self.deal_attack_damage(target, dmg, hits, attacker_id=player_id)
+        self.deal_attack_damage(target, dmg, hits, attacker_id=player_id, source_card=card)
 
     def _effect_wing(self, player_id: int, card: CardInstance, choice=None):
         target = self._attack_target(player_id, choice)
         dmg = self._modified_attack_damage(8, card)
         hits = self._card_total_hits(card, 2)
         self.log_msg(f"{self.pn(player_id)}使用翅膀！对{self.pn(target)}造成{dmg}x{hits}伤害")
-        self.deal_attack_damage(target, dmg, hits, attacker_id=player_id)
+        self.deal_attack_damage(target, dmg, hits, attacker_id=player_id, source_card=card)
 
     def _effect_light(self, player_id: int, card: CardInstance, choice=None):
         target = self._attack_target(player_id, choice)
         dmg = self._modified_attack_damage(2, card)
         hits = self._card_total_hits(card, 2)
         self.log_msg(f"{self.pn(player_id)}使用轻！对{self.pn(target)}造成{dmg}x{hits}伤害")
-        self.deal_attack_damage(target, dmg, hits, attacker_id=player_id)
+        self.deal_attack_damage(target, dmg, hits, attacker_id=player_id, source_card=card)
 
     def _effect_fang(self, player_id: int, card: CardInstance, choice=None):
         target = self._attack_target(player_id, choice)
         dmg = self._modified_attack_damage(8, card)
-        dealt = self.deal_attack_damage(target, dmg, attacker_id=player_id)
+        dealt = self.deal_attack_damage(target, dmg, attacker_id=player_id, source_card=card)
         if dealt > 0:
             self.players[player_id].heal(4)
             self.log_msg(f"{self.pn(player_id)}使用尖牙！回复4H")
@@ -1964,20 +1964,20 @@ class GameEngine2v2(GameEngine):
         dmg = self._modified_attack_damage(6 + (0 if immune else 3 * ps.triangle_stacks), card)
         if int(getattr(card, 'fission_hit', 0) or 0) == 0:
             self._log_card_play(player_id, card)
-        dealt = self.deal_attack_damage(target, dmg, attacker_id=player_id)
+        dealt = self.deal_attack_damage(target, dmg, attacker_id=player_id, source_card=card)
         if dealt > 0 and not immune and ps.triangle_stacks < 4:
             ps.triangle_stacks += 1
 
     def _effect_magicbone(self, player_id: int, card: CardInstance, choice=None):
         target = self._attack_target(player_id, choice)
         dmg = self._modified_attack_damage(15, card)
-        self.deal_attack_damage(target, dmg, attacker_id=player_id)
+        self.deal_attack_damage(target, dmg, attacker_id=player_id, source_card=card)
         self.log_msg(f"{self.pn(player_id)}使用魔法骨头！对{self.pn(target)}造成{dmg}伤害")
 
     def _effect_magicstinger(self, player_id: int, card: CardInstance, choice=None):
         target = self._attack_target(player_id, choice)
         dmg = self._modified_attack_damage(30, card)
-        self.deal_attack_damage(target, dmg, is_precision=True, attacker_id=player_id)
+        self.deal_attack_damage(target, dmg, is_precision=True, attacker_id=player_id, source_card=card)
         self.log_msg(f"{self.pn(player_id)}使用魔法刺！对{self.pn(target)}造成{dmg}伤害")
 
     def _effect_iris(self, player_id: int, card: CardInstance, choice=None):
@@ -2475,7 +2475,12 @@ class GameEngine2v2(GameEngine):
             self._last_positive_damage_hits = [0] * len(self.players)
         self._last_positive_damage_hits[target_id] = 0
         immune = self._is_status_immune(target_id)
-        for _ in range(hits):
+        # 反馈 #390：威力与 1v1 引擎同口径（设计 9.27 + 2026-09-29 修订）——
+        # 全部加在该笔伤害的第一段上，只加一次；旧公式 ceil(power/hits) 加到
+        # 每一段（沙子威力1×4段 = 4D×4，R-30235 实录）。
+        power_first_hit_applied = False
+        for hit_index in range(hits):
+            is_first_hit = hit_index == 0
             precision_dodged = False
             plank_blocks_attack = False
             if ps.dodge > 0 and not immune:
@@ -2505,7 +2510,15 @@ class GameEngine2v2(GameEngine):
                     power = clamp_card_power(getattr(source_card, 'power_value', 0) or 0)
                 except Exception:
                     power = 0
-            dmg = max(0, amount + int(math.ceil(power / max(1, int(hits or 1)))))
+            dmg = amount
+            if (
+                power != 0
+                and is_first_hit
+                and not power_first_hit_applied
+                and int(getattr(source_card, 'fission_hit', 0) or 0) == 0
+            ):
+                dmg = max(0, dmg + int(power))
+                power_first_hit_applied = True
             if 0 <= attacker_id < len(self.players):
                 multiplier = float(getattr(self.players[attacker_id], 'damage_multiplier', 1.0) or 1.0)
                 if multiplier != 1.0:
