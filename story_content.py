@@ -2602,12 +2602,12 @@ STORY_CARDS.update({
         },
     ),
     'nazar_amulet': _card(
-        'NazarAmulet', '斜眼护符', 'Nazar Amulet', 1, 'bloom', 'rare',
-        '获得5层护盾×轨道花瓣数',
-        description_en='Gain 5 S per petal on the orbit',
+        'NazarAmulet', '邪眼护符', 'Nazar Amulet', 1, 'bloom', 'rare',
+        '获得(5+轨道花瓣数)层护盾',
+        description_en='Gain (5 + orbit petal count) S',
         owner='orbiter',
         effects=(_effect('shield_plus_orbit_count', 5),),
-        upgrade={'description': {'zh': '获得8层护盾×轨道花瓣数', 'en': 'Gain 8 S per petal'}, 'effects': (_effect('shield_plus_orbit_count', 8),)},
+        upgrade={'description': {'zh': '获得(8+轨道花瓣数)层护盾', 'en': 'Gain (8 + orbit petal count) S'}, 'effects': (_effect('shield_plus_orbit_count', 8),)},
     ),
     'dodge_amulet': _card(
         'DodgeAmulet', '闪避护符', 'Dodge Amulet', 2, 'root', 'rare',

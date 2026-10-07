@@ -21069,6 +21069,13 @@ def emit_or_resolve_pending_response(room, reason='emit'):
     _stamp_pending_interactions(room)
     pending_now = getattr(getattr(room, 'engine', None), 'pending_response', None)
     if isinstance(pending_now, dict):
+        # GB-400：蓄势待发（导弹）必须在**所有**响应窗入口立即自动结算。
+        # 此前自动打出只接在 emit_pending_interaction_after_state_change，
+        # 而 play_card / resolve_choice / end_turn 等主路径直接调本函数——
+        # 真实对局里导弹照样弹 5s 窗口而不是即时生效。
+        if _fire_stand_ready_counters_now(room):
+            broadcast_game_state(room)
+            return emit_or_resolve_pending_response(room, reason=f'{reason}:stand_ready')
         # 反制窗口节奏（设计 2026-09-28，1v1/2v2 同口径）：有人可反制最长 5s，
         # 到点自动替未响应者「不反制」；2s 内到达的响应由 on_response 压到
         # 整 2s 再结算。forced_wait（无人可反制）是纯等待窗：不发响应请求，
@@ -21164,11 +21171,8 @@ def emit_pending_interaction_after_state_change(room, reason='state_change'):
     if engine is None or getattr(engine, 'game_over', False):
         return
     if getattr(engine, 'pending_response', None):
-        fired = _auto_fire_stand_ready_counters(room)
-        if fired is True:
-            broadcast_game_state(room)
-            emit_pending_interaction_after_state_change(room, reason=f'{reason}:stand_ready')
-            return
+        # 蓄势待发的自动结算已并入 emit_or_resolve_pending_response，
+        # 这里不再单独打一遍（避免双发 handle_response）。
         emit_or_resolve_pending_response(room, reason=reason)
         return
     if getattr(engine, 'pending_choice', None):

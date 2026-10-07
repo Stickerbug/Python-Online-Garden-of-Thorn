@@ -4195,9 +4195,11 @@ def _resolve_effect(state, card, values, effect, targets, payload, seed, events,
         if candidates:
             chosen = _rng(state, seed, 'orbit_upgrade_pile').choice(candidates)
             values = _card_values(chosen)
-            chosen.setdefault('modifiers', {})['orbit_bonus'] = (
-                int(chosen['modifiers'].get('orbit_bonus') or 0) + bonus
-            )
+            # GB-408：抽牌堆里的牌不一定带 modifiers——旧写法先在右侧取
+            # chosen['modifiers'] 再 setdefault，KeyError 直接炸掉整个
+            # resolve_card_choice，选择窗关了又无法推进，玩家被卡死。
+            modifiers = chosen.setdefault('modifiers', {})
+            modifiers['orbit_bonus'] = int(modifiers.get('orbit_bonus') or 0) + bonus
             events.append({
                 'type': 'orbit_pile_upgraded',
                 'def_id': chosen.get('def_id'),
@@ -4341,9 +4343,10 @@ def _resolve_effect(state, card, values, effect, targets, payload, seed, events,
         events.append({'type': 'orbit_from_discard', 'durability': durability})
         return
     if effect_type == 'shield_plus_orbit_count':
+        # GB-407：表15 是「获得(5+轨道花瓣数)层护盾」——加法，不是乘法。
         _gain_shield(
             state,
-            max(0, int(amount or 0)) * max(1, _orbit_count(combat) + 1),
+            max(0, int(amount or 0)) + max(0, _orbit_count(combat)),
             events,
         )
         return
@@ -5327,21 +5330,22 @@ def _resolve_card_effects_once(
     # 轨道卡打出后：效果结算完成，在其轨道末尾生成耐久为X的花瓣（表15）。
     if state.get('phase') == 'combat':
         orbit_value = values.get('orbit')
-        if orbit_value:
-            # 分裂器等对牌堆卡加的轨道层数在此并入耐久。
-            orbit_bonus = 0
-            if isinstance(card, dict):
-                modifiers = card.get('modifiers') or {}
-                try:
-                    orbit_bonus = int(modifiers.get('orbit_bonus') or 0)
-                except (TypeError, ValueError):
-                    orbit_bonus = 0
+        # 分裂器等对牌堆卡加的轨道层数在此并入耐久；原无轨道的牌获得轨道
+        # （表15「轨道层数+2」对任意被选牌生效，不只是已有轨道的牌）。
+        orbit_bonus = 0
+        if isinstance(card, dict):
+            modifiers = card.get('modifiers') or {}
+            try:
+                orbit_bonus = int(modifiers.get('orbit_bonus') or 0)
+            except (TypeError, ValueError):
+                orbit_bonus = 0
+        if orbit_value or orbit_bonus:
             petal = _orbit_new_petal(
                 state,
                 combat,
                 card.get('def_id'),
                 values,
-                int(orbit_value) + orbit_bonus,
+                int(orbit_value or 0) + orbit_bonus,
                 events,
                 source='play',
             )

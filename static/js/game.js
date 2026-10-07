@@ -34759,14 +34759,28 @@ function memoizedCompactParse(tag, line, parse) {
         const hit = battleCompactParseCache.get(key);
         battleCompactParseCache.delete(key);
         battleCompactParseCache.set(key, hit);
-        return hit;
+        return cloneCompactParseHit(hit);
     }
     const value = parse(line);
     battleCompactParseCache.set(key, value);
     if (battleCompactParseCache.size > BATTLE_COMPACT_PARSE_CAP) {
         battleCompactParseCache.delete(battleCompactParseCache.keys().next().value);
     }
-    return value;
+    return cloneCompactParseHit(value);
+}
+
+/* GB-387 复发（使用卡牌数 1,2,8,…,1e19）：缓存命中此前直接返回同一对象，
+ * compactBattleLogEntriesForDisplay 展开进条目时嵌套的 cards 数组仍是
+ * 缓存里的引用——mergeBattleUseForCompact 把同一对象与自己相加（每次
+ * 自合并计数×2），且写回的变异留在缓存里跨渲染继续翻倍。必须按命中
+ * 克隆（含 cards 深拷贝），缓存对象永不外流。 */
+function cloneCompactParseHit(value) {
+    if (!value) return value;
+    const copy = { ...value };
+    if (Array.isArray(value.cards)) {
+        copy.cards = value.cards.map(card => ({ ...card }));
+    }
+    return copy;
 }
 
 function decodeBattleLogCardMarker(text) {
