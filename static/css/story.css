@@ -7955,6 +7955,11 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   animation: storyOrbitDurabilityTick 300ms ease;
 }
 
+/* 演出速度档位同样缩短 tick 动画（全局规则只覆盖 transition-duration） */
+.story-speed-2x .story-orbit-petal-durability.is-tick { animation-duration: 150ms; }
+.story-speed-3x .story-orbit-petal-durability.is-tick { animation-duration: 100ms; }
+.story-speed-5x .story-orbit-petal-durability.is-tick { animation-duration: 60ms; }
+
 @keyframes storyOrbitDurabilityTick {
   0% { transform: scale(1); }
   45% { transform: scale(1.5); }

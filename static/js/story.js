@@ -12356,7 +12356,8 @@
             if (ring) layoutStoryOrbitPetals(ring);
         };
         item.addEventListener('transitionend', onEnd, { once: true });
-        window.setTimeout(onEnd, 420);
+        // 消散兜底计时随演出速度档位缩短（与 CSS transition 的档位覆盖一致）。
+        window.setTimeout(onEnd, Math.max(80, 420 / storyPlaybackRate));
     }
 
     function ensureStoryOrbitRing() {
@@ -12392,7 +12393,7 @@
         byId.forEach((item, id) => {
             if (liveIds.has(id)) return;
             item.classList.add('is-expiring');
-            window.setTimeout(() => item.remove(), 380);
+            window.setTimeout(() => item.remove(), Math.max(70, 380 / storyPlaybackRate));
         });
         petals.forEach((petal) => {
             const id = String(petal.petal_id || '');
@@ -12423,7 +12424,8 @@
         let delta = STORY_ORBIT_TRIGGER_ANGLE - absoluteAngle;
         delta = ((delta + 540) % 360) - 180;
         const targetAngle = Number(motion.angle || 0) + delta;
-        const duration = Math.max(300, Math.min(620, 280 + Math.abs(delta) * 1.7));
+        // 演出速度档位（2/3/5×）等比缩短步进旋转时长。
+        const duration = storyMotionDuration(Math.max(300, Math.min(620, 280 + Math.abs(delta) * 1.7)));
         ring.classList.add('is-resolving');
         item.classList.add('is-activating');
         await animateStoryOrbitRotation(ring, motion, targetAngle, duration);
