@@ -503,6 +503,8 @@ def test_story_equipment_orbits_around_player_portrait():
     avatar_stack = '''<div class="story-avatar-stack">
               <div id="story-player-portrait" class="story-portrait story-player-portrait player-avatar has-skin" aria-label="玩家"></div>
               <div id="story-player-equipment" class="story-equipment-list" aria-label="装备"></div>
+              <!-- 表15 轨道使：轨道环（比装备轨道半径略大），花瓣按队列排列，指针高亮下一个将触发的花瓣 -->
+              <div id="story-orbit-track" class="story-orbit-track" aria-label="轨道" hidden></div>
             </div>'''
 
     assert avatar_stack in STORY_TEMPLATE

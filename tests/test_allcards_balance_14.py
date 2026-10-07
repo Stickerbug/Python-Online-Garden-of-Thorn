@@ -13,7 +13,10 @@ ROOT = Path(__file__).resolve().parents[1]
 MODS = ROOT / "mods"
 PACKAGES = {
     "Shovel": "Garden Cards Addition.gtnmod",
+    "MagicGlass": "Garden Cards Addition.gtnmod",
     "Coffee": "Vanilla Cards.gtnmod",
+    "Sewage": "Vanilla Cards.gtnmod",
+    "Coconut": "Desert Cards Addition.gtnmod",
     "Coal": "Garden Cards DLC.gtnmod",
     "Grass": "Garden Cards DLC.gtnmod",
     "Clay": "Sewers Cards Addition.gtnmod",
@@ -95,6 +98,107 @@ class AllCardsBalance14Tests(unittest.TestCase):
             target_id = choice.get("target_id") if isinstance(choice, dict) else None
             return engine.play_card(player_id, card.instance_id, target_id, choice or {})
         return engine.play_card(player_id, card.instance_id, choice or {})
+
+    # --------------------------------------------------------- Sewage GB-386
+    def test_sewage_logs_fallback_when_target_has_no_equipment(self):
+        # GB-386：目标没装备时不弹空选择窗、不静默作废——补「没有可摧毁的装备」。
+        engine = self.action_engine()
+        engine.players[1].equipment = []
+        sewage = CardInstance("Sewage")
+
+        result = self.play(engine, 0, sewage, self.target_choice(1))
+
+        self.assertTrue(result.get("success"), result)
+        if getattr(engine, "pending_response", None):
+            engine.resolve_forced_response()
+        self.assertIsNone(engine.pending_choice)  # 没有卡在空窗口上
+        self.assertTrue(
+            any("没有可摧毁的装备" in line for line in engine.log),
+            engine.log,
+        )
+
+    def test_sewage_still_destroys_chosen_equipment(self):
+        from game_engine import EquipmentInstance
+
+        engine = self.action_engine()
+        disc = CardInstance("Disc")
+        engine.players[1].equipment = [EquipmentInstance(disc, 1)]
+        sewage = CardInstance("Sewage")
+
+        result = self.play(engine, 0, sewage, self.target_choice(1))
+        self.assertTrue(result.get("success"), result)
+        if getattr(engine, "pending_response", None):
+            engine.resolve_forced_response()
+        self.assertIsNotNone(engine.pending_choice)
+        resolved = engine.resolve_choice(0, {
+            "target_player": 1, "target_player_id": 1, "target_id": 1,
+            "target_instance_id": disc.instance_id,
+        })
+        self.assertTrue(resolved.get("success"), resolved)
+        self.assertEqual(0, len(engine.players[1].equipment))
+        self.assertTrue(any("摧毁" in line for line in engine.log), engine.log)
+
+    # ------------------------------------------------------- Coconut GB-384
+    def test_coconut_can_be_reequipped_after_trigger_destroys_itself(self):
+        # GB-299/384/333：装备触发自毁不再给实例残留「打出中自毁」标记，
+        # 同一实例第二次打出能正常回到装备区。
+        engine = self.action_engine(GameEngine2v2)
+        coconut = CardInstance("Coconut")
+        engine.players[0].hand = [coconut]
+
+        result = self.play(engine, 0, coconut, self.target_choice(0))
+        self.assertTrue(result.get("success"), result)
+        if getattr(engine, "pending_response", None):
+            engine.resolve_forced_response()
+        self.assertTrue(any(
+            getattr(eq, "card_instance", None) is coconut
+            for eq in engine.players[0].equipment
+        ))
+
+        # 模拟装备触发（椰子触发：摧毁本装备）。
+        engine._run_v2_card_event(
+            0, coconut, "on_equipment_trigger",
+            {"target_player": 1, "target_player_id": 1, "target_id": 1},
+        )
+        self.assertEqual(0, len(engine.players[0].equipment))
+        self.assertNotIn("_equipment_destroyed_this_play", coconut.__dict__)
+
+        # 第二次打出同一实例：应重新装备，而不是进弃牌堆。
+        engine.players[0].discard.remove(coconut)
+        engine.players[0].hand = [coconut]
+        result2 = self.play(engine, 0, coconut, self.target_choice(0))
+        self.assertTrue(result2.get("success"), result2)
+        if getattr(engine, "pending_response", None):
+            engine.resolve_forced_response()
+        if engine.pending_choice is not None:
+            resolved2 = engine.resolve_choice(0, self.target_choice(0))
+            self.assertTrue(resolved2.get("success"), resolved2)
+        self.assertTrue(any(
+            getattr(eq, "card_instance", None) is coconut
+            for eq in engine.players[0].equipment
+        ))
+
+    # ------------------------------------------------------------ Magic Glass
+    def test_magic_glass_is_three_damage_split_over_fission_three(self):
+        # 平衡 2026-10-07：3D + 裂变3（留存基线 3，不是 1+2）。按裂变规则
+        # （每次 ceil(原始×聚变/裂变)）拆成 3 段 ×1D，每段命中回自己 1M，
+        # 打出后裂变回落到基线 3（回手再打仍是 3 段）。
+        engine = self.action_engine()
+        engine.players[0].magic = 0
+        engine.players[0].max_magic = 10
+        engine.players[1].health = 100
+        glass = CardInstance("MagicGlass")
+        self.assertEqual(3, glass.fission_base)
+
+        result = self.play(engine, 0, glass, self.target_choice(1))
+
+        self.assertTrue(result.get("success"), result)
+        if getattr(engine, "pending_response", None):
+            engine.resolve_forced_response()
+        self.assertEqual(97, engine.players[1].health)  # 3 段 × ceil(3/3)=1
+        self.assertEqual(3, engine.players[0].magic)  # 每段命中 +1M
+        self.assertEqual(3, glass.fission_level)
+        self.assertEqual(3, getattr(glass, "fission_base", 3))
 
     # ---------------------------------------------------------------- Shovel
     def test_shovel_ends_the_turn_immediately(self):
@@ -258,17 +362,49 @@ class AllCardsBalance14Tests(unittest.TestCase):
         self.assertGreater(len(target.hand), 3)
 
     # ---------------------------------------------------------------- Ankh
-    def test_ankh_revives_defeated_players_with_their_zones(self):
+    def test_ankh_rolls_back_to_own_turn_start_and_skips_defeated(self):
+        # 平衡 2026-10-07：所有玩家的 H/E/M 和状态回到各自上个自己回合
+        # 开始时的数值（不回到对局开始、不复活），打出者再 -2E。
         engine = self.action_engine(GameEngine2v2)
+        engine.players[0].health = 80
+        engine.players[0].elixir = 6
+        engine.players[0].magic = 4
+        engine.players[0].custom_statuses["poisoned"] = 2
+        engine._save_turn_start_snapshot(0)
+        engine.players[2].health = 70
+        engine.players[2].custom_statuses["burning"] = 3
+        engine._save_turn_start_snapshot(2)
+
+        engine.players[0].health = 30
+        engine.players[0].elixir = 1
+        engine.players[0].magic = 0
+        engine.players[0].custom_statuses["poisoned"] = 9
+        engine.players[2].health = 10
+        engine.players[2].custom_statuses = {}
         engine.players[1].health = 0
         engine.players[1].hand = [CardInstance("Basic")]
         engine.players[1].deck = [CardInstance("Bone")]
         ankh = CardInstance("Ankh")
 
         result = self.play(engine, 0, ankh, self.target_choice(0))
-
         self.assertTrue(result.get("success"), result)
-        self.assertGreater(engine.players[1].health, 0)
+        # 结算反制窗口后再断言回退结果：无人可反制时是纯等待窗，
+        # 由 resolve_forced_response 到点结算（与 app 层 worker 同口径）。
+        if engine.pending_response is not None:
+            if engine.pending_response.get("forced_wait"):
+                engine.resolve_forced_response()
+            else:
+                for entry in list(engine.pending_response.get("counter_cards", [])):
+                    if entry.get("responder_id") is not None:
+                        engine.handle_response(int(entry["responder_id"]), None)
+        self.assertEqual(80, engine.players[0].health)
+        self.assertEqual(4, engine.players[0].elixir)  # 回到6E后再-2E
+        self.assertEqual(4, engine.players[0].magic)
+        self.assertEqual(2, engine.players[0].custom_statuses.get("poisoned"))
+        self.assertEqual(70, engine.players[2].health)
+        self.assertEqual(3, engine.players[2].custom_statuses.get("burning"))
+        # 「所有玩家」默认不含阵亡玩家：不复活、区域不动。
+        self.assertEqual(0, engine.players[1].health)
         self.assertEqual(1, len(engine.players[1].hand))
         self.assertEqual(1, len(engine.players[1].deck))
 

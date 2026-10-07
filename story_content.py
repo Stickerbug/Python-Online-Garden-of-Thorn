@@ -57,32 +57,20 @@ STORY_CHARACTERS = {
             '轨道机制：轨道X将牌置于耐久为X的轨道；旋转会顺时针旋转轨道、'
             '触发转到的花瓣并使其耐久-1；每回合结束自动旋转一次。'
         ),
-        'implementation_status': 'planned',
-        'unlock': {
-            'kind': 'complete_journey',
-            'character_id': 'mage',
-            'any_difficulty': True,
-            'description': {
-                'zh': '使用魔法师以任意难度通关全部阶段后解锁',
-                'en': 'Complete every stage with Mage on any difficulty',
-            },
-        },
-        'unavailable_message': deepcopy(STORY_CHARACTER_NOT_READY_MESSAGE),
-    },
-    'summoner': {
-        'name': {'zh': '召唤师', 'en': 'Summoner'},
-        'design': (
-            '拥有3个召唤槽；召唤物具有被动、主动和特殊效果；回合结束触发被动；'
-            '号令X依次触发首个召唤物的主动并移至队尾；溢出召唤物会被牺牲。'
+        'implementation_status': 'playable',
+        'starter_deck': (
+            {'card_id': 'basic', 'count': 4},
+            {'card_id': 'rose', 'count': 5},
+            {'card_id': 'orbit_glass', 'count': 1},
+            {'card_id': 'faster', 'count': 1},
         ),
-        'implementation_status': 'planned',
+        'starter_relics': ('orbital_surround',),
         'unlock': {
-            'kind': 'complete_journey',
-            'character_id': 'orbiter',
-            'any_difficulty': True,
+            'kind': 'play_once',
+            'character_id': 'common_flower',
             'description': {
-                'zh': '使用轨道使以任意难度通关全部阶段后解锁',
-                'en': 'Complete every stage with Orbiter on any difficulty',
+                'zh': '使用普通的花花完成1局对局后解锁（任意难度，开局直接放弃也算）',
+                'en': 'Play one run with Common Flower on any difficulty (instant surrender counts)',
             },
         },
         'unavailable_message': deepcopy(STORY_CHARACTER_NOT_READY_MESSAGE),
@@ -99,12 +87,28 @@ STORY_CHARACTERS = {
         ),
         'starter_relics': ('magic_source',),
         'unlock': {
-            'kind': 'complete_journey',
-            'character_id': 'common_flower',
-            'any_difficulty': True,
+            'kind': 'play_once',
+            'character_id': 'orbiter',
             'description': {
-                'zh': '使用普通的花花以任意难度通关全部阶段后解锁',
-                'en': 'Complete every stage with Common Flower on any difficulty',
+                'zh': '使用轨道使完成1局对局后解锁（任意难度，开局直接放弃也算）',
+                'en': 'Play one run with Orbiter on any difficulty (instant surrender counts)',
+            },
+        },
+        'unavailable_message': deepcopy(STORY_CHARACTER_NOT_READY_MESSAGE),
+    },
+    'summoner': {
+        'name': {'zh': '召唤师', 'en': 'Summoner'},
+        'design': (
+            '拥有3个召唤槽；召唤物具有被动、主动和特殊效果；回合结束触发被动；'
+            '号令X依次触发首个召唤物的主动并移至队尾；溢出召唤物会被牺牲。'
+        ),
+        'implementation_status': 'planned',
+        'unlock': {
+            'kind': 'play_once',
+            'character_id': 'mage',
+            'description': {
+                'zh': '使用魔法师完成1局对局后解锁（任意难度，开局直接放弃也算）',
+                'en': 'Play one run with Mage on any difficulty (instant surrender counts)',
             },
         },
         'unavailable_message': deepcopy(STORY_CHARACTER_NOT_READY_MESSAGE),
@@ -114,12 +118,11 @@ STORY_CHARACTERS = {
         'design': '腐化、各类异常效果、放逐与放血。',
         'implementation_status': 'planned',
         'unlock': {
-            'kind': 'complete_journey',
+            'kind': 'play_once',
             'character_id': 'summoner',
-            'any_difficulty': True,
             'description': {
-                'zh': '使用召唤师以任意难度通关全部阶段后解锁',
-                'en': 'Complete every stage with Summoner on any difficulty',
+                'zh': '使用召唤师完成1局对局后解锁（任意难度，开局直接放弃也算）',
+                'en': 'Play one run with Summoner on any difficulty (instant surrender counts)',
             },
         },
         'unavailable_message': deepcopy(STORY_CHARACTER_NOT_READY_MESSAGE),
@@ -203,6 +206,8 @@ STORY_CARD_TYPES = {
 }
 
 STORY_PLAYER_ATTACK_EFFECT_TYPES = frozenset({
+    # 表15 轨道使：相对论——基础伤害×(1+本回合旋转次数)，走统一伤害管线。
+    'damage_per_rotation',
     'damage',
     'damage_per_active_discard',
     'damage_per_status',
@@ -218,6 +223,13 @@ STORY_TAGS = {
     'exile': {
         'name': {'zh': '放逐', 'en': 'Exile'},
         'description': {'zh': '打出后进入放逐区。', 'en': 'Exile this card after it is played.'},
+    },
+    'orbit': {
+        'name': {'zh': '轨道', 'en': 'Orbit'},
+        'description': {
+            'zh': '轨道:X：打出并结算后，在轨道末尾生成耐久为X的花瓣；旋转会触发转到的花瓣效果并使其耐久-1，耐久归零后花瓣消失；每回合结束时轨道自动旋转一次。',
+            'en': 'Orbit: X — after this card is played and resolved, add a petal with X durability to the end of the orbit; each rotation triggers the petal it reaches and reduces its durability by 1; the petal vanishes at 0; the orbit rotates once automatically at the end of each turn.',
+        },
     },
     'ready': {
         'name': {'zh': '蓄势待发', 'en': 'Ready'},
@@ -1328,6 +1340,10 @@ def _card(
     owner='primary',
     flavor='',
     script=None,
+    orbit=None,
+    orbit_effects=None,
+    must_play_first=False,
+    requires_empty_orbit=False,
 ):
     description = _story_card_description(description)
     description_en = (
@@ -1359,6 +1375,16 @@ def _card(
         definition['upgrade'] = normalized_upgrade
     if script:
         definition['script'] = script
+    # 轨道（表15）：轨道X = 打出后在轨道末尾生成耐久为X的花瓣；
+    # orbit_effects 覆盖花瓣触发效果（缺省与打出效果相同）。
+    if orbit is not None:
+        definition['orbit'] = int(orbit)
+    if orbit_effects is not None:
+        definition['orbit_effects'] = tuple(orbit_effects)
+    if must_play_first:
+        definition['must_play_first'] = True
+    if requires_empty_orbit:
+        definition['requires_empty_orbit'] = True
     return definition
 
 
@@ -2512,7 +2538,768 @@ STORY_CARDS = {
 
 STORY_CARDS['nether_lightning']['source_card_id'] = 'HelLightning'
 
+# ---------------------------------------------------------------------------
+# 表15 新增：轨道使卡组（owner='orbiter'）。轨道X = 打出并结算后，在轨道
+# 末尾生成耐久为X的花瓣；旋转触发花瓣效果并使耐久-1。轨道值写在
+# definition['orbit']，花瓣效果缺省与打出效果相同（orbit_effects 可覆盖）。
+# 文案按《卡牌描述规范》重写；图片占位（后续补充，不在 STORY_CARD_IMAGE_URLS 登记）。
+STORY_CARDS.update({
+    'orbit_glass': _card(
+        'OrbitGlass', '魔法玻璃', 'Magic Glass', 1, 'thorn', 'common',
+        '对所有敌人造成5D',
+        description_en='Deal 5 D to all enemies',
+        owner='orbiter', orbit=1, tags=('wide',),
+        effects=(_effect('damage', 5),),
+        upgrade={'description': {'zh': '对所有敌人造成8D', 'en': 'Deal 8 D to all enemies'}, 'effects': (_effect('damage', 8),)},
+    ),
+    'enchanted_faster': _card(
+        'EnchantedFaster', '附魔更快', 'Enchanted Faster', 1, 'thorn', 'super',
+        '对目标造成10D，旋转轨道3次',
+        description_en='Deal 10 D to the target and rotate the orbit 3 times',
+        owner='orbiter',
+        effects=(_effect('damage', 10), _effect('rotate_orbit', 3)),
+        upgrade={'description': {'zh': '对目标造成13D，旋转轨道5次', 'en': 'Deal 13 D and rotate 5 times'}, 'effects': (_effect('damage', 13), _effect('rotate_orbit', 5))},
+    ),
+    'faster': _card(
+        'Faster', '更快', 'Faster', 1, 'thorn', 'common',
+        '对目标造成5D，旋转轨道1次',
+        description_en='Deal 5 D to the target and rotate the orbit once',
+        owner='orbiter',
+        effects=(_effect('damage', 5), _effect('rotate_orbit', 1)),
+        upgrade={'description': {'zh': '对目标造成4D，旋转轨道2次', 'en': 'Deal 4 D and rotate twice'}, 'effects': (_effect('damage', 4), _effect('rotate_orbit', 2))},
+    ),
+    'web': _card(
+        'Web', '网', 'Web', 1, 'bloom', 'common',
+        '获得3层护盾',
+        description_en='Gain 3 S',
+        owner='orbiter', orbit=99,
+        effects=(_effect('shield', 3),),
+        upgrade={'description': {'zh': '获得4层护盾', 'en': 'Gain 4 S'}, 'effects': (_effect('shield', 4),)},
+    ),
+    'electric_web': _card(
+        'ElectricWeb', '电网', 'Electric Web', 1, 'bloom', 'common',
+        '获得5层护盾',
+        description_en='Gain 5 S',
+        owner='orbiter', orbit=1,
+        effects=(_effect('shield', 5),),
+        upgrade={'description': {'zh': '获得7层护盾；轨道2', 'en': 'Gain 7 S; Orbit 2'}, 'effects': (_effect('shield', 7),), 'orbit': 2},
+    ),
+    'square_card': _card(
+        'Square', '正方形', 'Square', 2, 'bloom', 'rare',
+        '获得14层护盾；此牌可无限升级',
+        description_en='Gain 14 S. This card can be upgraded indefinitely',
+        owner='orbiter',
+        effects=(_effect('shield', 14),),
+        upgrade={
+            'infinite_formula': {
+                'kind': 'shield', 'base': 14, 'per': 4,
+                'description': {'zh': '获得{n}层护盾；此牌可无限升级。', 'en': 'Gain {n} S. This card can be upgraded indefinitely.'},
+            },
+            'description': {'zh': '获得18层护盾；此牌可无限升级。', 'en': 'Gain 18 S. This card can be upgraded indefinitely.'},
+        },
+    ),
+    'nazar_amulet': _card(
+        'NazarAmulet', '斜眼护符', 'Nazar Amulet', 1, 'bloom', 'rare',
+        '获得5层护盾×轨道花瓣数',
+        description_en='Gain 5 S per petal on the orbit',
+        owner='orbiter',
+        effects=(_effect('shield_plus_orbit_count', 5),),
+        upgrade={'description': {'zh': '获得8层护盾×轨道花瓣数', 'en': 'Gain 8 S per petal'}, 'effects': (_effect('shield_plus_orbit_count', 8),)},
+    ),
+    'dodge_amulet': _card(
+        'DodgeAmulet', '闪避护符', 'Dodge Amulet', 2, 'root', 'rare',
+        '每旋转一次轨道，获得2层护盾',
+        description_en='Whenever the orbit rotates, gain 2 S',
+        owner='orbiter',
+        effects=(_effect('equipment', 2, script='orbit_on_rotate_shield'),),
+        upgrade={'description': {'zh': '每旋转一次轨道，获得3层护盾', 'en': 'Whenever the orbit rotates, gain 3 S'}, 'effects': (_effect('equipment', 3, script='orbit_on_rotate_shield'), )},
+    ),
+    'magic_dodge_amulet': _card(
+        'MagicDodgeAmulet', '魔法闪避护符', 'Magic Dodge Amulet', 2, 'root', 'rare',
+        '每旋转一次轨道，对随机敌人造成5D',
+        description_en='Whenever the orbit rotates, deal 5 D to a random enemy',
+        owner='orbiter',
+        effects=(_effect('equipment', 5, script='orbit_on_rotate_damage'),),
+        upgrade={'description': {'zh': '每旋转一次轨道，对随机敌人造成7D', 'en': 'Whenever the orbit rotates, deal 7 D to a random enemy'}, 'effects': (_effect('equipment', 7, script='orbit_on_rotate_damage'), )},
+    ),
+    'magic_faster': _card(
+        'MagicFaster', '魔法更快', 'Magic Faster', 3, 'root', 'ultra',
+        '自己回合内每抽1张牌，旋转轨道1次',
+        description_en='Whenever you draw a card on your turn, rotate the orbit once',
+        owner='orbiter',
+        effects=(_effect('equipment', 1, script='orbit_on_draw'),),
+        upgrade={'description': {'zh': '自己回合内每抽1张牌，旋转轨道1次；花费-1', 'en': 'Whenever you draw a card on your turn, rotate the orbit once; costs 1 less'}, 'cost_e': 2},
+    ),
+    'uranium': _card(
+        'Uranium', '铀', 'Uranium', 2, 'root', 'rare',
+        '对所有敌人施加1层虚弱和1层易损',
+        description_en='Apply 1 Weak and 1 Vulnerable to all enemies',
+        owner='orbiter', orbit=2, tags=('wide',),
+        effects=(
+            _effect('status', 1, status='weak'),
+            _effect('status', 1, status='vulnerable'),
+        ),
+        upgrade={'description': {'zh': '对所有敌人施加1层虚弱和1层易损；获得固有，花费-1', 'en': 'Apply 1 Weak and 1 Vulnerable to all enemies; Innate, costs 1 less'}, 'cost_e': 1, 'tags': ('wide', 'innate')},
+    ),
+    'gear': _card(
+        'Gear', '齿轮', 'Gear', 1, 'bloom', 'ultra',
+        '旋转轨道一圈',
+        description_en='Rotate the orbit a full circle',
+        owner='orbiter', tags=('exile',),
+        effects=(_effect('rotate_orbit_full', 1),),
+        upgrade={'description': {'zh': '旋转轨道一圈；取消放逐', 'en': 'Rotate the orbit a full circle; no longer exiles'}, 'tags': ()},
+    ),
+    'magic_gear': _card(
+        'MagicGear', '魔法齿轮', 'Magic Gear', 1, 'root', 'rare',
+        '回合开始时，旋转轨道2次',
+        description_en='At the start of your turn, rotate the orbit twice',
+        owner='orbiter',
+        effects=(_effect('equipment', 2, script='orbit_start_rotate'),),
+        upgrade={'description': {'zh': '回合开始时，旋转轨道3次', 'en': 'At the start of your turn, rotate the orbit 3 times'}, 'effects': (_effect('equipment', 3, script='orbit_start_rotate'), )},
+    ),
+    'cat_card': _card(
+        'Cat', '小猫', 'Cat', 1, 'bloom', 'rare',
+        '此花瓣被转到时：旋转轨道2次',
+        description_en='When this petal is rotated to: rotate the orbit twice',
+        owner='orbiter', orbit=3,
+        effects=(),
+        orbit_effects=(_effect('rotate_orbit', 2),),
+        upgrade={'description': {'zh': '此花瓣被转到时：旋转轨道2次；改为轨道4', 'en': 'When rotated to: rotate twice; Orbit 4'}, 'orbit': 4},
+    ),
+    'orbit_splitter': _card(
+        'OrbitSplitter', '分裂器', 'Orbit Splitter', 2, 'root', 'ultra',
+        '所有轨道花瓣被转到时额外结算一次',
+        description_en='All orbit petals trigger one extra time when rotated to',
+        owner='orbiter',
+        effects=(_effect('equipment', 1, script='orbit_splitter'),),
+        upgrade={'description': {'zh': '所有轨道花瓣被转到时额外结算一次；获得固有', 'en': 'All orbit petals trigger one extra time; Innate'}, 'tags': ('innate',)},
+    ),
+    'date_palm': _card(
+        'DatePalm', '海枣', 'Date Palm', 1, 'thorn', 'rare',
+        '对随机敌人造成4D；此花瓣的伤害永久+3',
+        description_en='Deal 4 D to a random enemy; this petal permanently deals 3 more',
+        owner='orbiter', orbit=3,
+        effects=(_effect('date_palm_strike', 4, growth=3),),
+        orbit_effects=(_effect('date_palm_strike', 4),),
+        upgrade={
+            'description': {'zh': '对随机敌人造成4D；此花瓣的伤害永久+5', 'en': 'Deal 4 D; this petal permanently deals 5 more'},
+            'effects': (_effect('date_palm_strike', 4, growth=5),),
+            'orbit_effects': (_effect('date_palm_strike', 4),),
+        },
+    ),
+    'relativity': _card(
+        'Relativity', '相对论', 'Relativity', 1, 'thorn', 'rare',
+        '对目标造成5D，额外重复本回合已旋转轨道次数次',
+        description_en='Deal 5 D, repeating once per orbit rotation this turn',
+        owner='orbiter',
+        effects=(_effect('damage_per_rotation', 5),),
+        upgrade={'description': {'zh': '对目标造成7D，额外重复本回合已旋转轨道次数次', 'en': 'Deal 7 D, repeating once per rotation this turn'}, 'effects': (_effect('damage_per_rotation', 7),)},
+    ),
+    'magic_relativity': _card(
+        'MagicRelativity', '魔法相对论', 'Magic Relativity', 1, 'thorn', 'rare',
+        '只有轨道为空时才能打出；对随机敌人造成20D',
+        description_en='Can only be played while the orbit is empty; deal 20 D to a random enemy',
+        owner='orbiter', orbit=2, requires_empty_orbit=True,
+        effects=(_effect('random_damage', 20),),
+        upgrade={'description': {'zh': '只有轨道为空时才能打出；对随机敌人造成25D', 'en': 'Only while the orbit is empty; deal 25 D to a random enemy'}, 'effects': (_effect('random_damage', 25),)},
+    ),
+    'bugatti_card': _card(
+        'Bugatti', '布加迪', 'Bugatti', 1, 'root', 'rare',
+        '每旋转3次轨道，抽1张牌',
+        description_en='Every 3 orbit rotations, draw 1 card',
+        owner='orbiter',
+        effects=(_effect('equipment', 1, script='orbit_rotate_draw', every=3),),
+        upgrade={'description': {'zh': '每旋转3次轨道，抽1张牌；花费-1', 'en': 'Every 3 rotations, draw 1 card; costs 1 less'}, 'cost_e': 0},
+    ),
+    'lentil': _card(
+        'Lentil', '小扁豆', 'Lentil', 0, 'bloom', 'ultra',
+        '选择轨道上一个花瓣，将轨道转到它之前，旋转一次轨道',
+        description_en='Pick a petal, move the orbit pointer before it, then rotate once',
+        owner='orbiter', tags=('exile',),
+        effects=(_effect('orbit_pick_and_rotate', 1),),
+        upgrade={'description': {'zh': '选择轨道上一个花瓣，将轨道转到它之前，旋转一次轨道；取消放逐', 'en': 'Pick a petal and rotate to it; no longer exiles'}, 'tags': ()},
+    ),
+    'wing': _card(
+        'Wing', '翅膀', 'Wing', 2, 'thorn', 'common',
+        '对目标造成10D',
+        description_en='Deal 10 D to the target',
+        owner='orbiter', orbit=1,
+        effects=(_effect('damage', 10),),
+        upgrade={'description': {'zh': '对目标造成12D', 'en': 'Deal 12 D to the target'}, 'effects': (_effect('damage', 12),)},
+    ),
+    'quantum_card': _card(
+        'Quantum', '量子', 'Quantum', 2, 'root', 'rare',
+        '每旋转4次轨道，再旋转1次',
+        description_en='Every 4 orbit rotations, rotate once more',
+        owner='orbiter',
+        effects=(_effect('equipment', 1, script='orbit_rotate_extra', every=4),),
+        upgrade={'description': {'zh': '每旋转4次轨道，再旋转1次；花费-1', 'en': 'Every 4 rotations, rotate once more; costs 1 less'}, 'cost_e': 1},
+    ),
+    'sugar': _card(
+        'Sugar', '糖', 'Sugar', 2, 'bloom', 'rare',
+        '回复1E',
+        description_en='Recover 1 E',
+        owner='orbiter', orbit=4,
+        effects=(_effect('elixir', 1),),
+        upgrade={'description': {'zh': '回复1E；改为轨道6', 'en': 'Recover 1 E; Orbit 6'}, 'orbit': 6},
+    ),
+    'blood_sugar': _card(
+        'BloodSugar', '血糖', 'Blood Sugar', 1, 'bloom', 'rare',
+        '翻倍自己的E，获得2层超载',
+        description_en='Double your E and gain 2 Overload',
+        owner='orbiter',
+        effects=(_effect('double_elixir', 1, overload=2),),
+        upgrade={'description': {'zh': '翻倍自己的E，获得2层超载；花费-1', 'en': 'Double your E and gain 2 Overload; costs 1 less'}, 'cost_e': 0},
+    ),
+    'snail_shell': _card(
+        'SnailShell', '蜗牛壳', 'Snail Shell', 1, 'bloom', 'common',
+        '旋转轨道2次',
+        description_en='Rotate the orbit twice',
+        owner='orbiter',
+        effects=(_effect('rotate_orbit', 2),),
+        upgrade={'description': {'zh': '旋转轨道3次', 'en': 'Rotate the orbit 3 times'}, 'effects': (_effect('rotate_orbit', 3),)},
+    ),
+    'orbit_magic_sewage': _card(
+        'OrbitMagicSewage', '魔法污水', 'Magic Sewage', 0, 'bloom', 'rare',
+        '摧毁轨道上所有花瓣，每摧毁1个回复1E',
+        description_en='Destroy all petals on the orbit; recover 1 E per petal destroyed',
+        owner='orbiter', tags=('exile',),
+        effects=(_effect('orbit_clear_for_elixir', 1, per=1),),
+        upgrade={'description': {'zh': '摧毁轨道上所有花瓣，每摧毁1个回复1E；取消放逐', 'en': 'Destroy all petals, recover 1 E each; no longer exiles'}, 'tags': ()},
+    ),
+    'orbit_third_eye': _card(
+        'OrbitThirdEye', '第三只眼', 'Third Eye', 1, 'bloom', 'common',
+        '抽2张牌',
+        description_en='Draw 2 cards',
+        owner='orbiter', orbit=2,
+        effects=(_effect('draw', 2),),
+        upgrade={'description': {'zh': '抽2张牌；改为轨道3', 'en': 'Draw 2 cards; Orbit 3'}, 'orbit': 3},
+    ),
+    'magic_third_eye': _card(
+        'OrbitMagicThirdEye', '魔法第三只眼', 'Magic Third Eye', 1, 'bloom', 'ultra',
+        '轨道上每有1个花瓣，抽1张牌',
+        description_en='Draw 1 card per petal on the orbit',
+        owner='orbiter', tags=('exile',),
+        effects=(_effect('orbit_draw_per_petal', 1),),
+        upgrade={'description': {'zh': '轨道上每有1个花瓣，抽1张牌；取消放逐', 'en': 'Draw 1 card per petal; no longer exiles'}, 'tags': ()},
+    ),
+    'knife': _card(
+        'Knife', '刀', 'Knife', 1, 'thorn', 'rare',
+        '对自己造成2D，对随机敌人造成12D，旋转轨道1次',
+        description_en='Deal 2 D to yourself and 12 D to a random enemy, rotate the orbit once',
+        owner='orbiter', orbit=3,
+        effects=(
+            _effect('lose_health', 2),
+            _effect('random_damage', 12),
+            _effect('rotate_orbit', 1),
+        ),
+        upgrade={'description': {'zh': '对自己造成2D，对随机敌人造成12D，旋转轨道1次；改为轨道5', 'en': 'Deal 2 D to yourself and 12 D to a random enemy; Orbit 5'}, 'orbit': 5},
+    ),
+    'orbit_thorn': _card(
+        'OrbitThorn', '荆棘', 'Thorn', 1, 'infect', 'special',
+        '此花瓣被转到时：失去1H',
+        description_en='When this petal is rotated to: lose 1 H',
+        owner='orbiter', orbit=3,
+        effects=(),
+        orbit_effects=(_effect('lose_health', 1),),
+    ),
+    'blood_feather': _card(
+        'BloodFeather', '血羽毛', 'Blood Feather', 0, 'bloom', 'common',
+        '抽2张牌，将1个轨道3荆棘花瓣加入轨道',
+        description_en='Draw 2 cards and add an Orbit 3 Thorn petal to the orbit',
+        owner='orbiter',
+        effects=(
+            _effect('draw', 2),
+            _effect('orbit_add_petal', 1, def_id='orbit_thorn', durability=3),
+        ),
+        upgrade={'description': {'zh': '抽3张牌，将1个轨道3荆棘花瓣加入轨道', 'en': 'Draw 3 cards and add an Orbit 3 Thorn petal'}, 'effects': (
+            _effect('draw', 3),
+            _effect('orbit_add_petal', 1, def_id='orbit_thorn', durability=3),
+        )},
+    ),
+    'blood_seed': _card(
+        'BloodSeed', '血种子', 'Blood Seed', 1, 'bloom', 'common',
+        '回复2E，本牌获得1层迅捷（非永久），将1个轨道3荆棘花瓣加入轨道',
+        description_en='Recover 2 E, this card gains 1 Swift (non-permanent), add an Orbit 3 Thorn petal',
+        owner='orbiter',
+        effects=(
+            _effect('elixir', 2),
+            _effect('self_swift', 1),
+            _effect('orbit_add_petal', 1, def_id='orbit_thorn', durability=3),
+        ),
+        upgrade={'description': {'zh': '回复3E，本牌获得1层迅捷（非永久），将1个轨道3荆棘花瓣加入轨道', 'en': 'Recover 3 E, gain 1 Swift, add an Orbit 3 Thorn petal'}, 'effects': (
+            _effect('elixir', 3),
+            _effect('self_swift', 1),
+            _effect('orbit_add_petal', 1, def_id='orbit_thorn', durability=3),
+        )},
+    ),
+    'iris': _card(
+        'Iris', '鸢尾', 'Iris', 1, 'bloom', 'common',
+        '对目标施加6层中毒',
+        description_en='Apply 6 Poison to the target',
+        owner='orbiter', target='enemy',
+        effects=(_effect('status', 6, status='poison'),),
+        upgrade={'description': {'zh': '对目标施加9层中毒', 'en': 'Apply 9 Poison to the target'}, 'effects': (_effect('status', 9, status='poison'),)},
+    ),
+    'grape': _card(
+        'Grape', '葡萄', 'Grape', 1, 'bloom', 'common',
+        '对随机敌人施加3层中毒',
+        description_en='Apply 3 Poison to a random enemy',
+        owner='orbiter', orbit=2,
+        effects=(_effect('random_status', 3, status='poison'),),
+        upgrade={'description': {'zh': '对随机敌人施加3层中毒；改为轨道3', 'en': 'Apply 3 Poison to a random enemy; Orbit 3'}, 'orbit': 3},
+    ),
+    'black_death': _card(
+        'BlackDeath', '黑死病', 'Black Death', 2, 'bloom', 'rare',
+        '对目标施加9层剧毒',
+        description_en='Apply 9 Toxic to the target',
+        owner='orbiter', target='enemy',
+        effects=(_effect('status', 9, status='toxic_poison'),),
+        upgrade={'description': {'zh': '对目标施加13层剧毒', 'en': 'Apply 13 Toxic to the target'}, 'effects': (_effect('status', 13, status='toxic_poison'),)},
+    ),
+    'candy_stick': _card(
+        'CandyStick', '糖棍', 'Joystick', 2, 'thorn', 'ultra',
+        '将轨道上所有花瓣变为糖棍花瓣，旋转轨道1次，对随机敌人造成6D',
+        description_en='Turn all petals into Joystick petals, rotate once, deal 6 D to a random enemy',
+        owner='orbiter', orbit=2,
+        effects=(
+            _effect('orbit_transform_all', 1, durability=2),
+            _effect('rotate_orbit', 1),
+            _effect('random_damage', 6),
+        ),
+        upgrade={'description': {'zh': '将轨道上所有花瓣变为糖棍+花瓣，旋转轨道1次，对随机敌人造成9D', 'en': 'Turn all petals into Joystick+ petals, rotate once, deal 9 D to a random enemy'}, 'effects': (
+            _effect('orbit_transform_all', 1, durability=2),
+            _effect('rotate_orbit', 1),
+            _effect('random_damage', 9),
+        )},
+    ),
+    'golden_cactus': _card(
+        'GoldenCactus', '金仙人掌', 'Golden Cactus', 1, 'bloom', 'rare',
+        '轨道上所有花瓣的耐久+1',
+        description_en='All petals on the orbit gain 1 durability',
+        owner='orbiter', tags=('exile',),
+        effects=(_effect('orbit_durability_all', 1),),
+        upgrade={'description': {'zh': '轨道上所有花瓣的耐久+1；花费-1', 'en': 'All petals gain 1 durability; costs 1 less'}, 'cost_e': 0},
+    ),
+    'leg': _card(
+        'Leg', '腿', 'Leg', 1, 'bloom', 'common',
+        '旋转轨道1次，抽2张牌',
+        description_en='Rotate the orbit once and draw 2 cards',
+        owner='orbiter',
+        effects=(_effect('rotate_orbit', 1), _effect('draw', 2)),
+        upgrade={'description': {'zh': '旋转轨道1次，抽3张牌', 'en': 'Rotate the orbit once and draw 3 cards'}, 'effects': (_effect('rotate_orbit', 1), _effect('draw', 3))},
+    ),
+    'poison_sting': _card(
+        'PoisonSting', '毒刺', 'Poison Sting', 1, 'bloom', 'common',
+        '对目标施加5层中毒，抽2张牌',
+        description_en='Apply 5 Poison to the target and draw 2 cards',
+        owner='orbiter',
+        effects=(_effect('status', 5, status='poison'), _effect('draw', 2)),
+        upgrade={'description': {'zh': '对目标施加5层中毒，抽3张牌', 'en': 'Apply 5 Poison and draw 3 cards'}, 'effects': (_effect('status', 5, status='poison'), _effect('draw', 3))},
+    ),
+    'snowflake': _card(
+        'Snowflake', '雪花', 'Snowflake', 3, 'thorn', 'common',
+        '对随机敌人造成20D',
+        description_en='Deal 20 D to a random enemy',
+        owner='orbiter', orbit=2,
+        effects=(_effect('random_damage', 20),),
+        upgrade={'description': {'zh': '对随机敌人造成20D；改为轨道3', 'en': 'Deal 20 D to a random enemy; Orbit 3'}, 'orbit': 3},
+    ),
+    'banana': _card(
+        'Banana', '香蕉', 'Banana', 2, 'bloom', 'common',
+        '获得9层护盾，抽1张牌',
+        description_en='Gain 9 S and draw 1 card',
+        owner='orbiter', orbit=2,
+        effects=(_effect('shield', 9), _effect('draw', 1)),
+        upgrade={'description': {'zh': '获得12层护盾，抽1张牌', 'en': 'Gain 12 S and draw 1 card'}, 'effects': (_effect('shield', 12), _effect('draw', 1))},
+    ),
+    'carrot': _card(
+        'Carrot', '胡萝卜', 'Carrot', 1, 'thorn', 'common',
+        '对随机敌人造成5D；本回合使用过轨道牌时，打出后回复1E',
+        description_en='Deal 5 D to a random enemy; if an Orbit card was played this turn, recover 1 E',
+        owner='orbiter', orbit=2,
+        effects=(_effect('random_damage', 5), _effect('refund_if_orbit_played', 1)),
+        upgrade={'description': {'zh': '对随机敌人造成7D；本回合使用过轨道牌时，打出后回复1E', 'en': 'Deal 7 D to a random enemy; recover 1 E if an Orbit card was played'}, 'effects': (_effect('random_damage', 7), _effect('refund_if_orbit_played', 1))},
+    ),
+    'magic_splitter': _card(
+        'MagicSplitter', '魔法分裂器', 'Magic Splitter', 0, 'root', 'rare',
+        '抉择：选择攻击牌或技能牌；使抽牌堆中随机1张该类型牌的轨道耐久+2',
+        description_en='Choose one: Attack or Skill; a random card of that type in the draw pile gains 2 Orbit durability',
+        owner='orbiter',
+        effects=(_effect('choose_effect', 1, options=(
+            {
+                'id': 'thorn',
+                'label': {'zh': '攻击牌', 'en': 'Attack'},
+                'description': {'zh': '抽牌堆中随机1张攻击牌轨道耐久+2', 'en': 'A random Attack in the draw pile gains 2 Orbit durability'},
+                'effects': (_effect('orbit_upgrade_random_pile', 2, card_type='thorn'),),
+            },
+            {
+                'id': 'bloom',
+                'label': {'zh': '技能牌', 'en': 'Skill'},
+                'description': {'zh': '抽牌堆中随机1张技能牌轨道耐久+2', 'en': 'A random Skill in the draw pile gains 2 Orbit durability'},
+                'effects': (_effect('orbit_upgrade_random_pile', 2, card_type='bloom'),),
+            },
+        )),),
+        upgrade={'description': {'zh': '抉择：选择攻击牌或技能牌；使抽牌堆中随机1张该类型牌的轨道耐久+3', 'en': 'Choose one; a random card of that type gains 3 Orbit durability'}, 'effects': (_effect('choose_effect', 1, options=(
+            {
+                'id': 'thorn',
+                'label': {'zh': '攻击牌', 'en': 'Attack'},
+                'description': {'zh': '抽牌堆中随机1张攻击牌轨道耐久+3', 'en': 'A random Attack gains 3 Orbit durability'},
+                'effects': (_effect('orbit_upgrade_random_pile', 3, card_type='thorn'),),
+            },
+            {
+                'id': 'bloom',
+                'label': {'zh': '技能牌', 'en': 'Skill'},
+                'description': {'zh': '抽牌堆中随机1张技能牌轨道耐久+3', 'en': 'A random Skill gains 3 Orbit durability'},
+                'effects': (_effect('orbit_upgrade_random_pile', 3, card_type='bloom'),),
+            },
+        )),)},
+    ),
+    'stem_cell': _card(
+        'StemCell', '干细胞', 'Stem Cell', 1, 'root', 'rare',
+        '每当你施加中毒时，获得2层护盾',
+        description_en='Whenever you apply Poison, gain 2 S',
+        owner='orbiter',
+        effects=(_effect('equipment', 2, script='orbit_poison_shield'),),
+        upgrade={'description': {'zh': '每当你施加中毒时，获得3层护盾', 'en': 'Whenever you apply Poison, gain 3 S'}, 'effects': (_effect('equipment', 3, script='orbit_poison_shield'), )},
+    ),
+    'magic_stem_cell': _card(
+        'MagicStemCell', '魔法干细胞', 'Magic Stem Cell', 1, 'root', 'rare',
+        '每当你施加中毒时，对随机敌人造成4D',
+        description_en='Whenever you apply Poison, deal 4 D to a random enemy',
+        owner='orbiter',
+        effects=(_effect('equipment', 4, script='orbit_poison_damage'),),
+        upgrade={'description': {'zh': '每当你施加中毒时，对随机敌人造成5D', 'en': 'Whenever you apply Poison, deal 5 D to a random enemy'}, 'effects': (_effect('equipment', 5, script='orbit_poison_damage'), )},
+    ),
+    'bubble_bomb': _card(
+        'BubbleBomb', '泡泡炸弹', 'Bubble Bomb', 0, 'bloom', 'common',
+        '下回合开始时获得7层护盾',
+        description_en='At the start of your next turn, gain 7 S',
+        owner='orbiter',
+        effects=(_effect('delayed_shield_next_turn', 7),),
+        upgrade={'description': {'zh': '下回合开始时获得10层护盾', 'en': 'At the start of your next turn, gain 10 S'}, 'effects': (_effect('delayed_shield_next_turn', 10),)},
+    ),
+    'acid_bomb': _card(
+        'AcidBomb', '酸性炸弹', 'Acid Bomb', 2, 'thorn', 'common',
+        '对所有敌人造成7D，施加7层中毒',
+        description_en='Deal 7 D and apply 7 Poison to all enemies',
+        owner='orbiter', tags=('wide',),
+        effects=(_effect('damage', 7), _effect('status', 7, status='poison')),
+        upgrade={'description': {'zh': '对所有敌人造成10D，施加10层中毒', 'en': 'Deal 10 D and apply 10 Poison to all enemies'}, 'effects': (_effect('damage', 10), _effect('status', 10, status='poison'))},
+    ),
+    'magic_cancer_cell': _card(
+        'MagicCancerCell', '魔法癌细胞', 'Magic Cancer Cell', 1, 'root', 'rare',
+        '你每施加2次中毒，抽1张牌',
+        description_en='Every 2 times you apply Poison, draw 1 card',
+        owner='orbiter',
+        effects=(_effect('equipment', 1, script='orbit_poison_draw', every=2),),
+        upgrade={'description': {'zh': '你每施加2次中毒，抽1张牌；获得固有', 'en': 'Every 2 times you apply Poison, draw 1 card; Innate'}, 'tags': ('innate',)},
+    ),
+    'orbit_cancer_cell': _card(
+        'OrbitCancerCell', '癌细胞', 'Cancer Cell', 1, 'bloom', 'ultra',
+        '使用后，本回合你每打出1张牌，对随机敌人施加3层中毒',
+        description_en='After use, each card you play this turn applies 3 Poison to a random enemy',
+        owner='orbiter',
+        effects=(_effect('temporary_effect', 3, script='orbit_cancer_poison'),),
+        upgrade={'description': {'zh': '使用后，本回合你每打出1张牌，对随机敌人施加4层中毒', 'en': 'After use, each card you play this turn applies 4 Poison'}, 'effects': (_effect('temporary_effect', 4, script='orbit_cancer_poison'),)},
+    ),
+    'cyanide': _card(
+        'Cyanide', '氰化物', 'Cyanide', 1, 'bloom', 'rare',
+        '对目标施加1层滞留，抽1张牌',
+        description_en='Apply 1 Stagnation to the target and draw 1 card',
+        owner='orbiter', target='enemy',
+        effects=(_effect('status', 1, status='stagnation'), _effect('draw', 1)),
+        upgrade={'description': {'zh': '对目标施加1层滞留，抽1张牌；花费-1', 'en': 'Apply 1 Stagnation and draw 1 card; costs 1 less'}, 'cost_e': 0},
+    ),
+    'reactor_core': _card(
+        'ReactorCore', '堆芯', 'Reactor Core', 2, 'bloom', 'ultra',
+        '对目标施加4层中毒',
+        description_en='Apply 4 Poison to the target',
+        owner='orbiter', orbit=99, target='enemy',
+        effects=(_effect('status', 4, status='poison'),),
+        upgrade={'description': {'zh': '对目标施加7层中毒', 'en': 'Apply 7 Poison to the target'}, 'effects': (_effect('status', 7, status='poison'),)},
+    ),
+    'magic_reactor_core': _card(
+        'MagicReactorCore', '魔法堆芯', 'Magic Reactor Core', 1, 'bloom', 'rare',
+        '旋转轨道1次；目标每有5层中毒，再旋转1次（最多5次）',
+        description_en='Rotate the orbit once; rotate once more per 5 Poison on the target (max 5)',
+        owner='orbiter', target='enemy',
+        effects=(_effect('rotate_per_target_poison', 1, per=5, limit=5),),
+        upgrade={'description': {'zh': '旋转轨道1次；目标每有3层中毒，再旋转1次（最多5次）', 'en': 'Rotate once; once more per 3 Poison on the target (max 5)'}, 'effects': (_effect('rotate_per_target_poison', 1, per=3, limit=5),)},
+    ),
+    'magic_cyanide': _card(
+        'MagicCyanide', '魔法氰化物', 'Magic Cyanide', 2, 'bloom', 'rare',
+        '清除目标所有中毒，对其造成清除层数×4D',
+        description_en='Remove all Poison from the target and deal 4 D per stack removed',
+        owner='orbiter', target='enemy',
+        effects=(_effect('consume_poison_damage', 4),),
+        upgrade={'description': {'zh': '清除目标所有中毒，对其造成清除层数×6D', 'en': 'Remove all Poison and deal 6 D per stack removed'}, 'effects': (_effect('consume_poison_damage', 6),)},
+    ),
+    'cyanide_pill': _card(
+        'CyanidePill', '氰化物药丸', 'Cyanide Pill', 2, 'bloom', 'ultra',
+        '对所有敌人施加99层滞留',
+        description_en='Apply 99 Stagnation to all enemies',
+        owner='orbiter', tags=('wide',),
+        effects=(_effect('status', 99, status='stagnation'),),
+        upgrade={'description': {'zh': '对所有敌人施加99层滞留；获得固有', 'en': 'Apply 99 Stagnation to all enemies; Innate'}, 'tags': ('wide', 'innate')},
+    ),
+    'chitin': _card(
+        'Chitin', '甲壳质', 'Chitin', 0, 'bloom', 'rare',
+        '获得8层护盾',
+        description_en='Gain 8 S',
+        owner='orbiter', tags=('innate',),
+        effects=(_effect('shield', 8),),
+        upgrade={'description': {'zh': '获得11层护盾', 'en': 'Gain 11 S'}, 'effects': (_effect('shield', 11),)},
+    ),
+    'magic_acid_bomb': _card(
+        'MagicAcidBomb', '魔法酸性炸弹', 'Magic Acid Bomb', 2, 'bloom', 'ultra',
+        '对随机敌人施加4层中毒，重复5次',
+        description_en='Apply 4 Poison to a random enemy, 5 times',
+        owner='orbiter',
+        effects=(_effect('random_status', 4, status='poison', hits=5),),
+        upgrade={'description': {'zh': '对随机敌人施加4层中毒，重复7次', 'en': 'Apply 4 Poison to a random enemy, 7 times'}, 'effects': (_effect('random_status', 4, status='poison', hits=7),)},
+    ),
+    'magic_quantum': _card(
+        'MagicQuantum', '魔法量子', 'Magic Quantum', 2, 'bloom', 'ultra',
+        '将弃牌堆所有牌放入轨道（各为轨道1花瓣）',
+        description_en='Put every card in the discard pile onto the orbit as Orbit 1 petals',
+        owner='orbiter',
+        effects=(_effect('discard_to_orbit', 1, durability=1),),
+        upgrade={'description': {'zh': '将弃牌堆所有牌放入轨道（各为轨道1花瓣）；花费-1', 'en': 'Put the discard pile onto the orbit; costs 1 less'}, 'cost_e': 1},
+    ),
+    'poison_gas': _card(
+        'PoisonGas', '毒气', 'Poison Gas', 1, 'root', 'rare',
+        '你每次施加中毒时，施加层数+2',
+        description_en='Whenever you apply Poison, apply 2 more',
+        owner='orbiter',
+        effects=(_effect('equipment', 2, script='orbit_poison_bonus'),),
+        upgrade={'description': {'zh': '你每次施加中毒时，施加层数+3', 'en': 'Whenever you apply Poison, apply 3 more'}, 'effects': (_effect('equipment', 3, script='orbit_poison_bonus'), )},
+    ),
+    'magic_poison_gas': _card(
+        'MagicPoisonGas', '魔法毒气', 'Magic Poison Gas', 2, 'root', 'ultra',
+        '你每次施加中毒时，施加层数×1.5（向下取整）',
+        description_en='Whenever you apply Poison, apply 1.5 times as many (rounded down)',
+        owner='orbiter',
+        effects=(_effect('equipment', 1, script='orbit_poison_multiplier', multiplier=1.5),),
+        upgrade={'description': {'zh': '你每次施加中毒时，施加层数×2', 'en': 'Whenever you apply Poison, apply twice as many'}, 'effects': (_effect('equipment', 1, script='orbit_poison_multiplier', multiplier=2.0), )},
+    ),
+    'privet': _card(
+        'Privet', '女贞子', 'Privet', 1, 'thorn', 'rare',
+        '对目标造成3D，结算目标中毒1次',
+        description_en='Deal 3 D to the target and settle its Poison once',
+        owner='orbiter',
+        effects=(_effect('damage', 3), _effect('settle_poison', 1)),
+        upgrade={'description': {'zh': '对目标造成3D，结算目标中毒2次', 'en': 'Deal 3 D and settle its Poison twice'}, 'effects': (_effect('damage', 3), _effect('settle_poison', 2))},
+    ),
+    'demon_plague': _card(
+        'DemonPlague', '恶魔的瘟疫', "Demon's Plague", 4, 'bloom', 'ultra',
+        '对目标施加6层剧毒，施加1层中毒×6次，然后结算目标中毒×6次；此牌在手牌中且可支付费用时，其他牌无法打出',
+        description_en='Apply 6 Toxic and 1 Poison 6 times to the target, then settle its Poison 6 times; while this card is in hand and affordable, no other card can be played',
+        owner='orbiter', target='enemy', must_play_first=True,
+        effects=(
+            _effect('status', 6, status='toxic_poison'),
+            _effect('status', 1, status='poison', hits=6),
+            _effect('settle_poison', 6),
+        ),
+        upgrade={'description': {'zh': '对目标施加6层剧毒，施加1层中毒×6次，然后结算目标中毒×6次；此牌在手牌中且可支付费用时，其他牌无法打出；花费-1', 'en': 'Apply 6 Toxic and 1 Poison 6 times, settle Poison 6 times; costs 1 less'}, 'cost_e': 3},
+    ),
+    'magic_shard': _card(
+        'MagicShard', '魔法碎片', 'Magic Shard', 1, 'bloom', 'rare',
+        '抽2张牌，抉择：额外抽1张牌，或将1个轨道1魔法碎片花瓣加入轨道',
+        description_en='Draw 2 cards, then choose: draw 1 more, or add an Orbit 1 Magic Shard petal',
+        owner='orbiter', orbit=1,
+        effects=(_effect('draw', 2), _effect('choose_effect', 1, options=(
+            {
+                'id': 'draw_more',
+                'label': {'zh': '额外抽1张', 'en': 'Draw 1 more'},
+                'description': {'zh': '额外抽1张牌', 'en': 'Draw 1 more card'},
+                'effects': (_effect('draw', 1),),
+            },
+            {
+                'id': 'add_shard',
+                'label': {'zh': '碎片入轨', 'en': 'Shard to orbit'},
+                'description': {'zh': '将1个轨道1魔法碎片花瓣加入轨道', 'en': 'Add an Orbit 1 Magic Shard petal'},
+                'effects': (_effect('orbit_add_petal', 1, def_id='magic_shard', durability=1),),
+            },
+        )),),
+        orbit_effects=(_effect('draw', 2),),
+        upgrade={'description': {'zh': '抽2张牌，抉择：额外抽2张牌，或将1个轨道2魔法碎片花瓣加入轨道', 'en': 'Draw 2 cards, then choose: draw 2 more, or add an Orbit 2 Magic Shard petal'}, 'effects': (_effect('draw', 2), _effect('choose_effect', 1, options=(
+            {
+                'id': 'draw_more',
+                'label': {'zh': '额外抽2张', 'en': 'Draw 2 more'},
+                'description': {'zh': '额外抽2张牌', 'en': 'Draw 2 more cards'},
+                'effects': (_effect('draw', 2),),
+            },
+            {
+                'id': 'add_shard',
+                'label': {'zh': '碎片入轨', 'en': 'Shard to orbit'},
+                'description': {'zh': '将1个轨道2魔法碎片花瓣加入轨道', 'en': 'Add an Orbit 2 Magic Shard petal'},
+                'effects': (_effect('orbit_add_petal', 1, def_id='magic_shard', durability=2),),
+            },
+        )),), 'orbit': 2},
+    ),
+    'microplastic': _card(
+        'Microplastic', '微塑料', 'Microplastic', 1, 'thorn', 'rare',
+        '对目标造成1D×3，然后施加3层中毒和3层剧毒',
+        description_en='Deal 1 D 3 times to the target, then apply 3 Poison and 3 Toxic',
+        owner='orbiter',
+        effects=(
+            _effect('damage', 1, hits=3),
+            _effect('status', 3, status='poison'),
+            _effect('status', 3, status='toxic_poison'),
+        ),
+        upgrade={'description': {'zh': '对目标造成1D×4，然后施加4层中毒和4层剧毒', 'en': 'Deal 1 D 4 times, then apply 4 Poison and 4 Toxic'}, 'effects': (
+            _effect('damage', 1, hits=4),
+            _effect('status', 4, status='poison'),
+            _effect('status', 4, status='toxic_poison'),
+        )},
+    ),
+})
+
+# ---------------------------------------------------------------------------
+# 表15 新增：召唤师起步内容（角色保持 planned；机制与卡牌先行入引擎）。
+STORY_CARDS.update({
+    'ant_egg': _card(
+        'AntEgg', '幼蚁蛋', 'Ant Egg', 1, 'bloom', 'common',
+        '召唤幼蚁',
+        description_en='Summon an Ant Larva',
+        owner='summoner',
+        effects=(_effect('summon', 1, def_id='ant_larva'),),
+        upgrade={'description': {'zh': '召唤幼蚁，获得4层护盾', 'en': 'Summon an Ant Larva and gain 4 S'}, 'effects': (_effect('summon', 1, def_id='ant_larva'), _effect('shield', 4))},
+    ),
+    'honey': _card(
+        'Honey', '蜂蜜', 'Honey', 1, 'thorn', 'common',
+        '对目标造成4D，号令1',
+        description_en='Deal 4 D to the target and Command 1',
+        owner='summoner',
+        effects=(_effect('damage', 4), _effect('order', 1)),
+        upgrade={'description': {'zh': '对目标造成8D，号令1', 'en': 'Deal 8 D to the target and Command 1'}, 'effects': (_effect('damage', 8), _effect('order', 1))},
+    ),
+    'ant_nest_egg': _card(
+        'AntNestEgg', '蚁穴蛋', 'Ant Nest Egg', 2, 'bloom', 'common',
+        '召唤3个幼蚁',
+        description_en='Summon 3 Ant Larvae',
+        owner='summoner',
+        effects=(_effect('summon', 3, def_id='ant_larva'),),
+        upgrade={'description': {'zh': '召唤4个幼蚁', 'en': 'Summon 4 Ant Larvae'}, 'effects': (_effect('summon', 4, def_id='ant_larva'),)},
+    ),
+    'branch': _card(
+        'Branch', '树枝', 'Branch', 2, 'bloom', 'common',
+        '召唤沙尘暴',
+        description_en='Summon a Sandstorm',
+        owner='summoner', flavor='神奇的树枝，可以唤来强力的狂风。',
+        effects=(_effect('summon', 1, def_id='sandstorm'),),
+        upgrade={'description': {'zh': '召唤沙尘暴，号令1', 'en': 'Summon a Sandstorm and Command 1'}, 'effects': (_effect('summon', 1, def_id='sandstorm'), _effect('order', 1))},
+    ),
+    'magic_branch': _card(
+        'MagicBranch', '魔法树枝', 'Magic Branch', 1, 'root', 'rare',
+        '回合开始时，若有1M，则耗费1M召唤沙尘暴',
+        description_en='At the start of your turn, if you have 1 M, spend it to summon a Sandstorm',
+        owner='summoner', flavor='这一支树枝散发着奇特的光芒。',
+        effects=(_effect('equipment', 1, script='summon_each_turn', def_id='sandstorm', cost_m=1),),
+        upgrade={'description': {'zh': '回合开始时，若有1M，则耗费1M召唤沙尘暴，并号令1', 'en': 'At the start of your turn, spend 1 M to summon a Sandstorm and Command 1'}, 'effects': (_effect('equipment', 1, script='summon_each_turn', def_id='sandstorm', cost_m=1, order=1), )},
+    ),
+    'sunflower_seed': _card(
+        'SunflowerSeed', '瓜子（向日葵蛋）', 'Sunflower Seed', 1, 'bloom', 'common',
+        '召唤向日葵',
+        description_en='Summon a Sunflower',
+        owner='summoner', flavor='从盛开的向日葵上采下，至于掉了多少血你别管。',
+        effects=(_effect('summon', 1, def_id='sunflower'),),
+        upgrade={'description': {'zh': '召唤向日葵，获得5层护盾', 'en': 'Summon a Sunflower and gain 5 S'}, 'effects': (_effect('summon', 1, def_id='sunflower'), _effect('shield', 5))},
+    ),
+})
+
+# ---------------------------------------------------------------------------
+# 表15 新增：召唤物定义（被动/主动/牺牲/入场效果）。
+STORY_SUMMONS = {
+    'ant_larva': {
+        'name': {'zh': '幼蚁', 'en': 'Ant Larva'},
+        'passive': (_effect('random_damage', 2),),
+        'active': (_effect('shield', 4),),
+        'sacrifice': (_effect('shield', 3),),
+        'on_summon': (),
+    },
+    'sandstorm': {
+        'name': {'zh': '沙尘暴', 'en': 'Sandstorm'},
+        'passive': (_effect('shield', 2), _effect('random_damage', 2),),
+        'active': (_effect('random_damage', 3, hits=3),),
+        'sacrifice': (_effect('random_damage', 12),),
+        'on_summon': (),
+    },
+    'sunflower': {
+        'name': {'zh': '向日葵', 'en': 'Sunflower'},
+        'passive': (_effect('shield', 5),),
+        'active': (_effect('shield', 3), _effect('random_damage', 3),),
+        'sacrifice': (_effect('order', 1),),
+        'on_summon': (),
+    },
+}
+
 STORY_CARD_IMAGE_URLS = {
+        # 表15 轨道使/召唤师卡图（Orbital Agent 素材包，2026-10-07）
+    'orbit_glass': '/static/assets/story-card-art/orbit-glass.svg',
+    'candy_stick': '/static/assets/story-card-art/joystick.svg',
+    'enchanted_faster': '/static/assets/story-card-art/enchanted-faster.svg',
+    'faster': '/static/assets/story-card-art/faster.svg',
+    'web': '/static/assets/story-card-art/web.svg',
+    'electric_web': '/static/assets/story-card-art/electric-web.svg',
+    'square_card': '/static/assets/story-card-art/square-card.svg',
+    'nazar_amulet': '/static/assets/story-card-art/nazar-amulet.svg',
+    'dodge_amulet': '/static/assets/story-card-art/dodge-amulet.svg',
+    'magic_dodge_amulet': '/static/assets/story-card-art/magic-dodge-amulet.svg',
+    'magic_faster': '/static/assets/story-card-art/magic-faster.svg',
+    'uranium': '/static/assets/story-card-art/uranium.svg',
+    'gear': '/static/assets/story-card-art/gear.svg',
+    'magic_gear': '/static/assets/story-card-art/magic-gear.svg',
+    'cat_card': '/static/assets/story-card-art/cat-card.svg',
+    'orbit_splitter': '/static/assets/story-card-art/orbit-splitter.svg',
+    'date_palm': '/static/assets/story-card-art/date-palm.svg',
+    'relativity': '/static/assets/story-card-art/relativity.svg',
+    'magic_relativity': '/static/assets/story-card-art/magic-relativity.svg',
+    'bugatti_card': '/static/assets/story-card-art/bugatti-card.svg',
+    'lentil': '/static/assets/story-card-art/lentil.svg',
+    'wing': '/static/assets/story-card-art/wing.svg',
+    'quantum_card': '/static/assets/story-card-art/quantum-card.svg',
+    'sugar': '/static/assets/story-card-art/sugar.svg',
+    'blood_sugar': '/static/assets/story-card-art/blood-sugar.svg',
+    'snail_shell': '/static/assets/story-card-art/snail-shell.svg',
+    'orbit_magic_sewage': '/static/assets/story-card-art/orbit-magic-sewage.svg',
+    'orbit_third_eye': '/static/assets/story-card-art/orbit-third-eye.svg',
+    'magic_third_eye': '/static/assets/story-card-art/magic-third-eye.svg',
+    'knife': '/static/assets/story-card-art/knife.svg',
+    'orbit_thorn': '/static/assets/story-card-art/orbit-thorn.svg',
+    'blood_feather': '/static/assets/story-card-art/blood-feather.svg',
+    'blood_seed': '/static/assets/story-card-art/blood-seed.svg',
+    'iris': '/static/assets/story-card-art/iris.svg',
+    'grape': '/static/assets/story-card-art/grape.svg',
+    'black_death': '/static/assets/story-card-art/black-death.svg',
+    'golden_cactus': '/static/assets/story-card-art/golden-cactus.svg',
+    'leg': '/static/assets/story-card-art/leg.svg',
+    'poison_sting': '/static/assets/story-card-art/poison-sting.svg',
+    'snowflake': '/static/assets/story-card-art/snowflake.svg',
+    'banana': '/static/assets/story-card-art/banana.svg',
+    'carrot': '/static/assets/story-card-art/carrot.svg',
+    'magic_splitter': '/static/assets/story-card-art/magic-splitter.svg',
+    'stem_cell': '/static/assets/story-card-art/stem-cell.svg',
+    'magic_stem_cell': '/static/assets/story-card-art/magic-stem-cell.svg',
+    'bubble_bomb': '/static/assets/story-card-art/bubble-bomb.svg',
+    'acid_bomb': '/static/assets/story-card-art/acid-bomb.svg',
+    'magic_cancer_cell': '/static/assets/story-card-art/magic-cancer-cell.svg',
+    'orbit_cancer_cell': '/static/assets/story-card-art/orbit-cancer-cell.svg',
+    'cyanide': '/static/assets/story-card-art/cyanide.svg',
+    'reactor_core': '/static/assets/story-card-art/reactor-core.svg',
+    'magic_reactor_core': '/static/assets/story-card-art/magic-reactor-core.svg',
+    'magic_cyanide': '/static/assets/story-card-art/magic-cyanide.svg',
+    'cyanide_pill': '/static/assets/story-card-art/cyanide-pill.svg',
+    'chitin': '/static/assets/story-card-art/chitin.svg',
+    'magic_acid_bomb': '/static/assets/story-card-art/magic-acid-bomb.svg',
+    'magic_quantum': '/static/assets/story-card-art/magic-quantum.svg',
+    'poison_gas': '/static/assets/story-card-art/poison-gas.svg',
+    'magic_poison_gas': '/static/assets/story-card-art/magic-poison-gas.svg',
+    'privet': '/static/assets/story-card-art/privet.svg',
+    'demon_plague': '/static/assets/story-card-art/demon-plague.svg',
+    'magic_shard': '/static/assets/story-card-art/magic-shard.svg',
+    'microplastic': '/static/assets/story-card-art/microplastic.svg',
     'capacitor': '/static/assets/story-card-art/capacitor.svg',
     'confused': '/static/assets/story-card-art/confused.svg',
     'copper_rod': '/static/assets/story-card-art/copper-rod.svg',
@@ -2679,11 +3466,12 @@ def _relic(
     amount=0,
     stackable=None,
     shop_excluded=False,
+    character_id=None,
 ):
     # Every talent may stack, including character and boss talents that are
     # normally unique. This public field must mirror the engine rule.
     stackable = True
-    return {
+    definition = {
         'name': {'zh': zh, 'en': en},
         'description': {'zh': description, 'en': description},
         'rarity': rarity,
@@ -2692,6 +3480,9 @@ def _relic(
         'stackable': bool(stackable),
         'shop_excluded': bool(shop_excluded),
     }
+    if character_id:
+        definition['character_id'] = str(character_id)
+    return definition
 
 
 STORY_RELICS = {
@@ -2789,6 +3580,22 @@ STORY_RELICS = {
     'many_cards': _relic('多多益善', 'More Is More', '牌组每有15张牌，战斗开始时获得1层力量与1层耐力。', rarity='common', script='deck_count_power', amount=15),
     'shop_refresh': _relic('挥金如土', 'Squander', '商店拥有刷新功能，初始25G，每次刷新增加25G。', rarity='common', script='shop_refresh'),
     'innate_thought': _relic('固有思维', 'Innate Thought', '获得时选择1张牌，使其获得【固有】。', rarity='common', script='grant_innate'),
+    # 表15 新增天赋
+    'orbital_surround': _relic(
+        '环绕轨道', 'Orbital Surround',
+        '回合结束时轨道旋转一圈。',
+        rarity='special', script='orbit_end_full_rotate',
+    ),
+    'third_eye_summon': _relic(
+        '第三只眼', 'Third Eye',
+        '战斗中首个召唤出来的召唤物，其牺牲效果可在每回合开始时耗费1E触发一次。',
+        character_id='summoner',
+    ),
+    'miracle_spring': _relic(
+        '奇迹之春', 'Miracle Spring',
+        '每回合结束时，选择一个召唤物，再次触发其被动效果。',
+        character_id='summoner',
+    ),
 }
 
 
@@ -3082,8 +3889,8 @@ STORY_ENEMIES.update({
         _move('生长', 'Grow', _effect('self_heal', 9, lunatic_amount=13), _effect('gain_charged', 1)),
     ), traits=('charged',), initial={'charged': 2}, lunatic_health=71),
     'leech': _enemy('水蛭', 'Leech', 56, (
-        _move('吸食', 'Suck', _effect('damage', 12, lunatic_amount=13), _effect('gain_power', 2)),
-        _move('扭动', 'Twist', _effect('damage', 3, hits=3)),
+        _move('吸食', 'Suck', _effect('damage', 9, lunatic_amount=10), _effect('gain_power', 1)),
+        _move('扭动', 'Twist', _effect('damage', 3, hits=2, lunatic_hits=3)),
     ), traits=('vampire',), initial={'vampire': 2}, lunatic_health=59),
     'shark': _enemy('鲨鱼', 'Shark', 86, (
         _move('追猎', 'Hunt', _effect('damage', 9, lunatic_amount=12), _effect('player_status', 1, status='vulnerable'), _effect('gain_power', 1)),
@@ -3279,11 +4086,10 @@ STORY_ENEMIES.update({
         _move('燃烧', 'Combustion', _effect('damage_from_player_status', 16, status='toxic_poison', lunatic_amount=21), _effect('halve_player_status', 0, status='toxic_poison')),
     ), script='chimney', traits=('injured_summon',),
        initial={'injured_summon': 100}, lunatic_health=489),
-    'generator': _enemy('发电机', 'Generator', 321, (
-        _move('反射护盾', 'Reflective Shield', _effect('gain_status', 4, status='reflection', lunatic_amount=5), _effect('gain_shield', 40, lunatic_amount=50)),
-        _move('漏电', 'Leakage', _effect('damage', 22, lunatic_amount=26), _effect('all_cards_charge', 2)),
-        _move('发电', 'Generate', _effect('gain_status', 3, status='reflection', lunatic_amount=4), _effect('gain_shield', 40, lunatic_amount=50)),
-    ), script='generator', lunatic_health=345),
+    'generator': _enemy('发电机', 'Generator', 278, (
+        _move('漏电', 'Leakage', _effect('damage', 22, lunatic_amount=26), _effect('gain_power', 2)),
+        _move('发电', 'Generate', _effect('gain_status', 2, status='reflection', lunatic_amount=3), _effect('gain_shield', 40, lunatic_amount=50)),
+    ), script='generator', initial={'reflection': 2, 'shield': 40}, lunatic_initial={'reflection': 3, 'shield': 50}, lunatic_health=298),
 })
 
 # Explicit move orders preserve repeated moves without encoding them as
@@ -3325,7 +4131,7 @@ STORY_ENEMIES['mechanical_crab']['move_order'] = (0, 1, 2, 3)
 STORY_ENEMIES['smoke']['move_order'] = (0, 1)
 STORY_ENEMIES['brick_pile']['move_order'] = (0,)
 STORY_ENEMIES['chimney']['move_order'] = (0, 0, 1)
-STORY_ENEMIES['generator']['move_order'] = (0, 1, 2)
+STORY_ENEMIES['generator']['move_order'] = (0, 1)
 
 # Workbook 11 sync: numeric/status adjustments kept separate so balance and
 # behavior edits stay auditable in one place.
@@ -3380,10 +4186,6 @@ _MOVE_EFFECT('mechanical_rat', 0, 0, 'amount', 17)
 _MOVE_EFFECT('mechanical_rat', 0, 0, 'lunatic_amount', 20)
 _MOVE_EFFECT('mechanical_rat', 1, 0, 'amount', 22)
 _MOVE_EFFECT('mechanical_rat', 1, 0, 'lunatic_amount', 26)
-_MOVE_EFFECT('generator', 0, 0, 'amount', 2)
-_MOVE_EFFECT('generator', 0, 0, 'lunatic_amount', 3)
-_MOVE_EFFECT('generator', 2, 0, 'amount', 2)
-_MOVE_EFFECT('generator', 2, 0, 'lunatic_amount', 3)
 
 _HEALTH = {
     'sandstone': (23, 26),
@@ -3401,7 +4203,6 @@ _HEALTH = {
     'smoke': (39, 42),
     'mechanical_rat': (214, 230),
     'chimney': (414, 432),
-    'generator': (278, 298),
 }
 for _enemy_id, (_hp, _lunatic_hp) in _HEALTH.items():
     STORY_ENEMIES[_enemy_id]['max_health'] = _hp
@@ -3873,6 +4674,7 @@ def story_content_payload(card_defs=None, asset_version=''):
         'easy_relic_ids': list(STORY_EASY_RELIC_IDS),
         'enemies': deepcopy(STORY_ENEMIES),
         'enchantment_books': deepcopy(STORY_ENCHANTMENT_BOOKS),
+        'summons': deepcopy(STORY_SUMMONS),
     }
     _append_story_asset_versions(payload, asset_version)
     return payload
@@ -3910,12 +4712,24 @@ def validate_story_content():
         'elemental_force_repeat', 'magic_x_electric_damage',
         'random_electric_damage', 'static_hold_double_trigger',
         'static_preserve_next',
+        # 表15 轨道/召唤效果
+        'rotate_orbit', 'rotate_orbit_full', 'orbit_add_petal',
+        'double_elixir', 'settle_poison', 'consume_poison_damage',
+        'random_status', 'random_damage', 'orbit_durability_all',
+        'orbit_transform_all', 'damage_per_rotation', 'orbit_draw_per_petal',
+        'discard_to_orbit', 'shield_plus_orbit_count',
+        'delayed_shield_next_turn', 'date_palm_strike', 'choose_effect',
+        'refund_if_orbit_played', 'rotate_per_target_poison',
+        'orbit_clear_for_elixir', 'orbit_upgrade_random_pile',
+        'orbit_pick_and_rotate',
+        'summon', 'order',
     }
     card_effect_types.update(STORY_PLAYER_ATTACK_EFFECT_TYPES)
     card_scripts = {
         'azalea', 'azalea_plus', 'light_sprout', 'return_draw_top', 'slimed',
         'startled', 'static_electricity', 'unrelenting', 'corruption',
         'factory_waste', 'requires_no_last_turn_damage',
+        'orbit_cancer_poison',
     }
     equipment_scripts = {
         'cannot_draw', 'disc', 'magic_acid', 'magic_pearl', 'pearl',
@@ -3930,6 +4744,12 @@ def validate_story_content():
         'static_on_attacked', 'turn_draw',
         'electric_hit_static', 'electric_hit_trigger_static',
         'magic_gain_temp_power', 'magic_random_static',
+        # 表15 轨道使/召唤师装备脚本
+        'orbit_on_rotate_shield', 'orbit_on_rotate_damage', 'orbit_on_draw',
+        'orbit_start_rotate', 'orbit_splitter', 'orbit_rotate_draw',
+        'orbit_rotate_extra', 'orbit_poison_shield', 'orbit_poison_damage',
+        'orbit_poison_draw', 'orbit_poison_bonus', 'orbit_poison_multiplier',
+        'summon_each_turn',
     }
     relic_scripts = {
         'attack_shield', 'avoid_elite', 'boss_blind', 'boss_broken', 'boss_frenzy',
@@ -3952,6 +4772,7 @@ def validate_story_content():
         'reward_card_choices', 'first_attack_double', 'make_wide',
         'favorite_card', 'discard_mine', 'infect_card', 'kill_reward',
         'deck_count_power', 'shop_refresh', 'grant_innate',
+        'orbit_end_full_rotate',
     }
     enemy_effect_types = {
         'add_draw_card', 'adjacent_shield', 'allies_heal', 'allies_power',
@@ -3999,7 +4820,7 @@ def validate_story_content():
             if status and status not in STORY_STATUSES and status not in STORY_TRAITS:
                 errors.append(f'{effect_owner}: unknown status {status}')
             script = effect.get('script')
-            if script and script not in equipment_scripts:
+            if script and script not in equipment_scripts and script not in card_scripts:
                 errors.append(f'{effect_owner}: unknown script {script}')
 
     for card_id, definition in STORY_CARDS.items():
@@ -4056,7 +4877,7 @@ def validate_story_content():
     for relic_id, definition in STORY_RELICS.items():
         if definition.get('rarity') not in STORY_RARITIES and definition.get('rarity') != 'special':
             errors.append(f'{relic_id}: invalid relic rarity')
-        if definition.get('script') not in relic_scripts:
+        if definition.get('script') is not None and definition.get('script') not in relic_scripts:
             errors.append(f'{relic_id}: unknown relic script {definition.get("script")}')
 
     book_scripts = {

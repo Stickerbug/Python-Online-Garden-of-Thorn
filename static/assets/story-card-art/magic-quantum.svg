@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_1" data-name="图层_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 283.5 283.5">
+  <!-- Generator: Adobe Illustrator 29.0.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 186)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: #f39a44;
+        stroke: #ea7f12;
+        stroke-miterlimit: 10;
+        stroke-width: 5px;
+      }
+    </style>
+  </defs>
+  <ellipse class="st0" cx="119.5" cy="141.6" rx="76.1" ry="27.2" transform="translate(-48.7 63.8) rotate(-25)"/>
+  <ellipse class="st0" cx="164" cy="141.8" rx="27.2" ry="76.1" transform="translate(-33.9 230.5) rotate(-65)"/>
+</svg>

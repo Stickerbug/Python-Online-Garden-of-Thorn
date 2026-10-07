@@ -23,6 +23,7 @@ import hashlib
 import hmac
 import ipaddress
 import secrets
+import uuid
 import platform
 import subprocess
 import sqlite3
@@ -195,6 +196,7 @@ from db import (
     create_story_coop_run,
     create_story_manual_save,
     create_story_run,
+    record_story_play,
     create_report_entry,
     create_remember_token,
     create_user,
@@ -815,6 +817,8 @@ GTN_STATIC_VERSION += '-public-feedback-internal-kind-1'
 GTN_STATIC_VERSION += '-story-reputation-badges-1'
 GTN_STATIC_VERSION += '-feedback-center-route-full-info-1'
 GTN_STATIC_VERSION += '-feedback-admin-wording-1'
+GTN_STATIC_VERSION += '-feedback-center-appeal-tab-1'
+GTN_STATIC_VERSION += '-gb-fixes-log-accum-1'
 GTN_STATIC_VERSION += '-community-chain-1-story-trait-chip-size-1-story-bush-cycle-1'
 GTN_STATIC_VERSION += '-feedback-account-popover-avatar-look-1'
 GTN_STATIC_VERSION += '-feedback-titles-avatar-size-1'
@@ -9811,7 +9815,7 @@ def get_ongoing_games(beta_mode=None):
                 game_info.update({
                     'ai_match': True,
                     'match_kind': 'phelren',
-                    'ai_policy_label': str(getattr(room, 'ai_policy_label', None) or 'Phelren V2.1'),
+                    'ai_policy_label': str(getattr(room, 'ai_policy_label', None) or 'Phelren V2.2'),
                 })
             if room.mode == '2v2':
                 game_info['player3'] = player_names[2] if len(player_names) > 2 else '?'
@@ -20354,6 +20358,10 @@ def _slice_state_log_for_recipient(state, engine, recipient_key, *, force_full=F
         return
     start = max(0, int(state.get('log_start') or 0))
     total = start + len(log)
+    # GB-387/392：日志重写代数——压缩/并入会重写同位置的行（行数可能不变），
+    # 仅按行数切片会把内容替换当成“无新行”。代数变化时整体重发并重置记账。
+    generation = int(getattr(engine, '_log_rewrite_generation', 0) or 0)
+    state['log_gen'] = generation
     sent = getattr(engine, '_log_sent_totals', None)
     if not isinstance(sent, dict):
         sent = {}
@@ -20362,12 +20370,17 @@ def _slice_state_log_for_recipient(state, engine, recipient_key, *, force_full=F
         except Exception:
             return
     last = sent.get(recipient_key)
-    if not force_full and isinstance(last, int) and start <= last <= total:
-        skip = last - start
+    if (
+        not force_full
+        and isinstance(last, dict)
+        and start <= int(last.get('total') or 0) <= total
+        and int(last.get('gen') or 0) == generation
+    ):
+        skip = int(last.get('total') or 0) - start
         if skip:
             state['log'] = log[skip:]
-            state['log_start'] = last
-    sent[recipient_key] = total
+            state['log_start'] = int(last.get('total') or 0)
+    sent[recipient_key] = {'total': total, 'gen': generation}
 
 
 def send_solo_state(sid, perspective=None, *, broadcast_spectators=True, force_full_log=False):
@@ -20395,7 +20408,20 @@ def send_solo_state(sid, perspective=None, *, broadcast_spectators=True, force_f
     state['log_total'] = log_offset + len(state.get('log') or [])
     _slice_state_log_for_recipient(state, engine, f'owner:{sid}', force_full=force_full_log)
     state['your_id'] = perspective
-    state['match_key'] = _ai_test_match_key(ai_meta) if ai_meta else f"solo:{id(engine)}"
+    # GB-387：solo 的 match_key 不能用 id(engine)——旧引擎被回收后新引擎可能
+    # 复用同一地址，客户端会把它当成同一局，战斗日志跨局累积。给引擎实例
+    # 挂一次性 uuid 标签（首见时分配，之后稳定）。
+    if ai_meta:
+        state['match_key'] = _ai_test_match_key(ai_meta)
+    else:
+        engine_tag = getattr(engine, '_gtn_match_key_tag', None)
+        if not engine_tag:
+            engine_tag = f"solo:{uuid.uuid4().hex[:12]}"
+            try:
+                engine._gtn_match_key_tag = engine_tag
+            except Exception:
+                engine_tag = f"solo:{id(engine)}"
+        state['match_key'] = engine_tag
     ai_room = _ai_test_replay_room(sid) if ai_meta else None
     if is_tutorial:
         state['your_name'] = '你'
@@ -20410,7 +20436,7 @@ def send_solo_state(sid, perspective=None, *, broadcast_spectators=True, force_f
         state['ai_test'] = True
         state['ai_player_id'] = int(ai_meta.get('ai_player_id', 1))
         state['ai_thinking'] = bool(ai_meta.get('thinking'))
-        state['ai_policy_label'] = str(ai_meta.get('policy_label') or 'Phelren V2.1')
+        state['ai_policy_label'] = str(ai_meta.get('policy_label') or 'Phelren V2.2')
         state['ai_diagnostic_session_id'] = str(ai_meta.get('session_id') or '')
         if engine.game_over and isinstance(ai_meta.get('match_summary'), dict):
             state['match_summary'] = dict(ai_meta['match_summary'])
@@ -21384,7 +21410,7 @@ def build_spectate_state(room, perspective=0):
         base['ai_match'] = True
         base['ai_test'] = True
         base['ai_player_id'] = int(getattr(room, 'ai_player_id', 1))
-        base['ai_policy_label'] = str(getattr(room, 'ai_policy_label', None) or 'Phelren V2.1')
+        base['ai_policy_label'] = str(getattr(room, 'ai_policy_label', None) or 'Phelren V2.2')
     if getattr(engine, 'game_over', False) or getattr(engine, 'phase', None) == 'game_over':
         base['match_summary'] = getattr(room, '_match_summary', None)
     try:
@@ -22888,7 +22914,7 @@ def api_story_run_create():
         progress = _story_progress_without_blocking(user_id)
         if not story_character_is_unlocked(progress, character_id):
             return _json_error(
-                '请先使用前一名角色以任意难度通关全部阶段',
+                '请先使用前一名角色完成1局对局（任意难度，开局直接放弃也算）',
                 409,
                 code='STORY_CHARACTER_LOCKED',
                 character_id=character_id,
@@ -22898,6 +22924,13 @@ def api_story_run_create():
         state = build_initial_story_state(seed, character_id=character_id)
         state['event_bank'] = get_story_bank(user_id)
         run, created = create_story_run(user_id, seed, STORY_CONTENT_VERSION, state)
+        if created:
+            # 玩过一局即解锁下一名角色（平衡 2026-10-07）：创建对局就计数。
+            try:
+                record_story_play(user_id, character_id)
+                progress = _story_progress_without_blocking(user_id)
+            except sqlite3.OperationalError:
+                pass
         run = _story_run_with_compatibility(run)
         new_discoveries = _sync_story_discoveries(user_id, run)
         return jsonify({
@@ -23679,6 +23712,16 @@ def feedback_center_browse(kind=None):
         user = _current_account_user()
         if not user or not feedback_is_staff(user.get('id')):
             return redirect('/feedback-center/bug')
+    return render_template(
+        'feedback_center.html',
+        static_version=GTN_STATIC_VERSION,
+    )
+
+
+@app.route('/feedback-center/appeal')
+def feedback_center_appeal():
+    # 关联申诉是反馈中心的独立页签（2026-10-07）：主页信誉弹窗的
+    # 「前往申诉」链接指向这里，页面脚本按路径自动切到申诉视图。
     return render_template(
         'feedback_center.html',
         static_version=GTN_STATIC_VERSION,
@@ -32941,7 +32984,7 @@ def _create_ai_test_replay_room(sid, engine, meta, room_id=None):
     room.ai_human_player_id = human_player_id
     room.ai_player_id = ai_player_id
     room.ai_sid = ai_sid
-    room.ai_policy_label = str(meta.get('policy_label') or 'Phelren V2.1')
+    room.ai_policy_label = str(meta.get('policy_label') or 'Phelren V2.2')
     room.action_lock = _solo_action_lock_for_sid(sid)
     room.record_pregame_stats = False
     room.match_mod_profile = copy.deepcopy(_ai_test_mod_payload(sid))
@@ -34076,7 +34119,7 @@ def _finalize_ai_test_replay(sid, engine, meta, reason='game_over'):
             'match_kind': 'phelren',
             'ai_match': True,
             'ai_name': str(meta.get('ai_name') or 'Phelren'),
-            'ai_policy_label': str(meta.get('policy_label') or 'Phelren V2.1'),
+            'ai_policy_label': str(meta.get('policy_label') or 'Phelren V2.2'),
             'players': names[:2],
             'player_ids': player_ids,
             'winner_name': winner_name,
@@ -34564,7 +34607,7 @@ def _start_ai_test_session(sid, ai_health=None):
             'pregame_ai_running': False,
             'recent_ai_decisions': [],
             'latest_ai_decision_id': None,
-            'policy_label': 'Phelren V2.1',
+            'policy_label': 'Phelren V2.2',
             'diagnostic_metadata': {
                 'mode': 'formal_1v1_local_test',
                 'human_seat': human_player_id,

@@ -380,6 +380,7 @@
         firmness: { className: 'custom story-firmness', color: '#515A5A' },
         armor_break: { className: 'custom story-armor-break', color: '#8D6E63' },
         rebound: { className: 'custom story-rebound', color: '#9B59B6' },
+        orbit: { className: 'custom story-orbit-tag', color: '#B06A00' },
     });
 
     const STORY_INLINE_ICONS = Object.freeze({
@@ -6375,6 +6376,14 @@
             renderResourceOrbs('story-combat-player-elixir', Number(event.after), 0, 'e');
         } else if (eventType === 'magic' && Number.isFinite(Number(event.after))) {
             renderResourceOrbs('story-combat-player-magic', Number(event.after), 0, 'm');
+        } else if (
+            eventType.startsWith('orbit_')
+            || eventType === 'orbit_rotate'
+            || eventType.startsWith('summon_')
+        ) {
+            const combatState = nextRun?.state?.combat;
+            renderStoryOrbit(combatState?.orbit);
+            renderStorySummons(combatState?.summons);
         }
         syncStoryPresentationPatch(event.presentation_patch, nextRun);
     }
@@ -6502,6 +6511,20 @@
             await animateStoryCardInserted(event);
         } else if (eventType === 'equipment_added') {
             spawnStoryFloat($('story-player-target'), localize(storyContent?.cards?.[event.def_id]?.name), 'equipment');
+        } else if (eventType === 'orbit_petal_added') {
+            spawnStoryFloat($('story-player-target'), localize(event?.petal?.name) || '上轨', 'equipment');
+        } else if (eventType === 'orbit_rotate') {
+            spawnStoryFloat($('story-orbit-track') || $('story-player-target'), '旋转', 'status');
+        } else if (eventType === 'orbit_petal_expired') {
+            spawnStoryFloat($('story-orbit-track') || $('story-player-target'), '花瓣消散', 'status');
+        } else if (eventType === 'orbit_cleared') {
+            spawnStoryFloat($('story-player-target'), `清轨×${storyEventAmount(event.destroyed)}`, 'elixir');
+        } else if (eventType === 'summon_added') {
+            spawnStoryFloat($('story-player-target'), localize(storyContent?.summons?.[String(event.summon_def_id || '')]?.name) || '召唤', 'equipment');
+        } else if (eventType === 'summon_ordered') {
+            spawnStoryFloat($('story-player-target'), '号令', 'status');
+        } else if (eventType === 'summon_sacrificed') {
+            spawnStoryFloat($('story-player-target'), '牺牲', 'status');
         } else if (eventType === 'mechanical_track_captured') {
             addStoryMechanicalTrackEventCard(event, 'start');
         } else if (eventType === 'mechanical_track_card_created') {
@@ -6852,6 +6875,19 @@
             values.description = {
                 zh: `对目标造成${damage}[[icon:D]]；此牌可无限升级。`,
                 en: `Deal ${damage}[[icon:D]]. This card can be upgraded indefinitely.`,
+            };
+        }
+        // 表15（正方形）：参数化无限升级——基础+每级增量作用于指定效果类型。
+        const infiniteFormula = definition.upgrade?.infinite_formula;
+        if (infiniteFormula && typeof infiniteFormula === 'object') {
+            const total = Number(infiniteFormula.base || 0) + Number(infiniteFormula.per || 0) * upgradeLevel;
+            const kind = String(infiniteFormula.kind || 'damage');
+            values.effects = values.effects.map((effect) => (
+                effect.type === kind ? { ...effect, amount: total } : effect
+            ));
+            values.description = {
+                zh: String(infiniteFormula.description?.zh || `获得{total}层护盾；此牌可无限升级。`).replaceAll('{n}', String(total)),
+                en: String(infiniteFormula.description?.en || '').replaceAll('{n}', String(total)),
             };
         }
         const modifiers = card?.modifiers && typeof card.modifiers === 'object' ? card.modifiers : {};
@@ -7731,7 +7767,7 @@
         tag.className = `card-flag ${style.className}`;
         tag.textContent = localize(definition.name);
         if (amount !== null && Number(amount) > 0) {
-            tag.textContent += `: ${Math.floor(Number(amount))}`;
+            tag.textContent += `:${Math.floor(Number(amount))}`;
         }
         tag.title = localize(definition.description);
         if (style.className.includes('custom')) tag.style.setProperty('--custom-tag-color', style.color);
@@ -7766,6 +7802,20 @@
             const tag = storyTagElement(tagId, amount);
             if (tag) flags.append(tag);
         });
+        // 表15 轨道使：轨道:X 走标签系统（可进图鉴，样式与其他标签一致）。
+        // 服务进程未重启时内容包可能还没有 orbit 定义——兜底渲染同格式标签。
+        const orbitValue = Number(values?.orbit || 0);
+        if (orbitValue > 0) {
+            const orbitTag = storyTagElement('orbit', orbitValue) || (() => {
+                const fallbackTag = document.createElement('span');
+                fallbackTag.className = 'card-flag custom story-orbit-tag';
+                fallbackTag.style.setProperty('--custom-tag-color', '#B06A00');
+                fallbackTag.textContent = `${localize({ zh: '轨道', en: 'Orbit' })}:${orbitValue}`;
+                fallbackTag.title = '打出并结算后，在轨道末尾生成耐久为该数值的花瓣；旋转会触发花瓣效果并使其耐久-1；每回合结束自动旋转一次';
+                return fallbackTag;
+            })();
+            flags.append(orbitTag);
+        }
         if (!flags.childElementCount) flags.classList.add('card-flags-empty');
         if (!supportsPrediction && !flags.childElementCount) return null;
 
@@ -8269,6 +8319,69 @@
         const dialog = $('story-card-choice-dialog');
         const grid = $('story-card-choice-grid');
         if (!pending || !dialog || !grid) return false;
+        // 表15：抉择 / 选花瓣 / 选召唤物 —— 单选按钮列表，点击后确认。
+        const optionKind = String(pending.kind || '');
+        if (optionKind === 'effect_choice' || optionKind === 'orbit_petal' || optionKind === 'summon_pick') {
+            if (
+                dialog.open
+                && cardChoiceContext?.mode === 'option_choice'
+                && String(cardChoiceContext.choiceKind) === optionKind
+            ) return true;
+            if (dialog.open) return false;
+            const options = optionKind === 'effect_choice'
+                ? (Array.isArray(pending.options) ? pending.options : [])
+                : optionKind === 'orbit_petal'
+                    ? (Array.isArray(pending.petals) ? pending.petals : [])
+                    : (Array.isArray(pending.summons) ? pending.summons : []);
+            const payloadKey = optionKind === 'effect_choice'
+                ? 'selected_option_id'
+                : optionKind === 'orbit_petal'
+                    ? 'selected_petal_id'
+                    : 'selected_summon_id';
+            cardChoiceContext = {
+                mode: 'option_choice',
+                choiceKind: optionKind,
+                payloadKey,
+                selectedId: '',
+            };
+            setStoryCardChoiceRequired(true);
+            setText('story-card-choice-title', localize(pending.title) || t.chooseCards);
+            setText('story-card-choice-copy', '');
+            grid.replaceChildren();
+            options.forEach((option) => {
+                const wrapper = document.createElement('button');
+                wrapper.type = 'button';
+                wrapper.className = 'story-card-choice-select-item story-option-choice-item';
+                let label = '';
+                let hint = '';
+                if (optionKind === 'effect_choice') {
+                    label = localize(option.label) || String(option.id || '');
+                    hint = localize(option.description) || '';
+                } else if (optionKind === 'orbit_petal') {
+                    label = `${localize(option.name) || String(option.def_id || '')}（耐久${Number(option.durability || 0)}）`;
+                } else {
+                    label = localize(storyContent?.summons?.[String(option.def_id || '')]?.name) || String(option.def_id || '');
+                }
+                wrapper.textContent = label;
+                if (hint) wrapper.title = hint;
+                wrapper.addEventListener('click', () => {
+                    grid.querySelectorAll('.story-option-choice-item').forEach((item) => item.classList.remove('is-selected'));
+                    wrapper.classList.add('is-selected');
+                    if (cardChoiceContext) {
+                        cardChoiceContext.selectedId = optionKind === 'effect_choice'
+                            ? String(option.id || '')
+                            : optionKind === 'orbit_petal'
+                                ? String(option.petal_id || '')
+                                : String(option.summon_id || '');
+                    }
+                    $('story-card-choice-confirm').disabled = false;
+                });
+                grid.append(wrapper);
+            });
+            $('story-card-choice-confirm').disabled = true;
+            dialog.showModal();
+            return true;
+        }
         if (
             dialog.open
             && cardChoiceContext?.mode === 'pending_card'
@@ -12106,6 +12219,159 @@
         }
     }
 
+    // ------------------------------------------------ 轨道/召唤（表15）
+    const STORY_ORBIT_RING_PERIOD_S = 13;
+    const STORY_ORBIT_SPIN_PERIOD_S = 12;
+
+    function storyOrbitCardDefinition(defId) {
+        return storyContent?.cards?.[String(defId || '')] || null;
+    }
+
+    function buildStoryOrbitPetalVisual(petal) {
+        const definition = storyOrbitCardDefinition(petal?.def_id);
+        const visual = document.createElement('span');
+        visual.className = 'story-orbit-petal-visual';
+        const icon = document.createElement('span');
+        icon.className = 'story-orbit-petal-icon';
+        const imageUrl = String(definition?.image_url || '');
+        if (imageUrl) {
+            const image = document.createElement('img');
+            image.className = 'story-orbit-petal-image';
+            image.src = imageUrl;
+            image.alt = '';
+            image.setAttribute('aria-hidden', 'true');
+            icon.append(image);
+        } else {
+            const fallback = document.createElement('span');
+            fallback.className = 'story-orbit-petal-fallback';
+            fallback.textContent = (localize(definition?.name) || String(petal?.def_id || '?')).slice(0, 1);
+            icon.append(fallback);
+        }
+        const durability = document.createElement('b');
+        durability.className = 'story-orbit-petal-durability';
+        durability.textContent = String(Number(petal?.durability || 0));
+        visual.append(icon);
+        // 角标不参与自转：挂在 visual 层（visual 有反向旋转补偿，始终正立）。
+        visual.append(durability);
+        return visual;
+    }
+
+    function buildStoryOrbitPetal(petal, ring) {
+        const definition = storyOrbitCardDefinition(petal?.def_id);
+        const item = document.createElement('div');
+        item.className = 'story-orbit-petal';
+        item.dataset.petalId = String(petal?.petal_id || '');
+        item.style.setProperty(
+            '--story-orbit-delay',
+            `${GTNEquipmentMotion.counterDelaySeconds(ring, STORY_ORBIT_RING_PERIOD_S).toFixed(3)}s`,
+        );
+        item.style.setProperty(
+            '--story-orbit-spin-delay',
+            `${GTNEquipmentMotion.spinDelaySeconds(
+                storyEquipmentOwnerKey(),
+                String(petal?.petal_id || petal?.def_id || ''),
+                STORY_ORBIT_SPIN_PERIOD_S,
+            )}s`,
+        );
+        const label = localize(definition?.name) || String(petal?.def_id || '');
+        item.setAttribute('aria-label', `轨道花瓣 ${label}（耐久${Number(petal?.durability || 0)}）`);
+        item.title = `${label}｜耐久 ${Number(petal?.durability || 0)}`;
+        item.append(buildStoryOrbitPetalVisual(petal));
+        return item;
+    }
+
+    function syncStoryOrbitPetal(item, petal, index, total, isNext) {
+        const angle = 360 / Math.max(1, total) * index;
+        item.style.setProperty('--story-orbit-index', String(index));
+        item.style.setProperty('--story-orbit-angle', `${angle}deg`);
+        item.classList.toggle('is-next', Boolean(isNext));
+        const badge = item.querySelector('.story-orbit-petal-durability');
+        const durability = String(Number(petal?.durability || 0));
+        if (badge && badge.textContent !== durability) badge.textContent = durability;
+        item.title = `${item.title.split('｜')[0]}｜耐久 ${durability}${isNext ? '（下一次旋转触发）' : ''}`;
+    }
+
+    function renderStoryOrbit(orbit) {
+        const container = $('story-orbit-track');
+        if (!container) return;
+        const petals = Array.isArray(orbit?.petals) ? orbit.petals : [];
+        // 离场动画期间即使轨道已空也保持可见，动画结束后再隐藏。
+        const hasDomPetals = Boolean(container.querySelector('.story-orbit-petal'));
+        container.hidden = petals.length === 0 && !hasDomPetals;
+        if (container.hidden) return;
+        let ring = container.querySelector(':scope > .story-orbit-ring');
+        if (!ring) {
+            ring = document.createElement('div');
+            ring.className = 'story-orbit-ring';
+            container.replaceChildren(ring);
+            container.style.setProperty(
+                '--story-orbit-delay',
+                `${GTNEquipmentMotion.orbitDelaySeconds(STORY_ORBIT_RING_PERIOD_S).toFixed(3)}s`,
+            );
+        }
+        GTNEquipmentMotion.startOrbitMotion(ring, {
+            periodSec: STORY_ORBIT_RING_PERIOD_S,
+            chipSelector: ':scope > .story-orbit-petal',
+            visualSelector: '.story-orbit-petal-visual',
+            pauseRoot: container.closest('.story-avatar-stack'),
+        });
+        const pointer = Number(orbit?.pointer || 0) % Math.max(1, petals.length);
+        const liveIds = new Set(petals.map((petal) => String(petal.petal_id || '')));
+        const byId = new Map();
+        ring.querySelectorAll(':scope > .story-orbit-petal').forEach((item) => {
+            const id = String(item.dataset.petalId || '');
+            if (id) byId.set(id, item);
+        });
+        byId.forEach((item, id) => {
+            if (liveIds.has(id)) return;
+            GTNEquipmentMotion.startLeave(item, {
+                scaleVar: '--story-orbit-radius-scale',
+                removeMs: 420,
+                onComplete: (el) => el.remove(),
+            });
+        });
+        petals.forEach((petal, index) => {
+            const id = String(petal.petal_id || '');
+            let item = byId.get(id);
+            if (item && item.dataset.motionLeaving === '1') {
+                GTNEquipmentMotion.cancelLeave(item, { scaleVar: '--story-orbit-radius-scale' });
+            }
+            if (!item) {
+                item = buildStoryOrbitPetal(petal, ring);
+                ring.appendChild(item);
+                item.style.setProperty('--story-orbit-radius-scale', '0');
+                item.style.opacity = '0';
+                GTNEquipmentMotion.beginEnter(item, {
+                    scaleVar: '--story-orbit-radius-scale',
+                    cleanupMs: 640,
+                });
+            }
+            syncStoryOrbitPetal(item, petal, index, petals.length, index === pointer);
+        });
+    }
+
+    function renderStorySummons(summons) {
+        const container = $('story-summon-slots');
+        if (!container) return;
+        const list = Array.isArray(summons) ? summons : [];
+        container.hidden = list.length === 0;
+        container.replaceChildren();
+        for (let slot = 0; slot < 3; slot += 1) {
+            const cell = document.createElement('div');
+            cell.className = 'story-summon-slot';
+            const summon = list[slot];
+            if (summon) {
+                cell.classList.add('is-occupied');
+                const definition = storyContent?.summons?.[String(summon.def_id || '')];
+                cell.textContent = localize(definition?.name) || String(summon.def_id || '');
+                cell.title = slot === 0 ? '队首：号令会先触发它' : '';
+            } else {
+                cell.classList.add('is-empty');
+            }
+            container.append(cell);
+        }
+    }
+
     function renderStoryEquipment(cards) {
         const container = $('story-player-equipment');
         if (!container) return;
@@ -12935,6 +13201,8 @@
             { key: 'attack_blocked', label: '禁攻', value: combat.attack_blocked },
         ]);
         renderStoryEquipment(combat.equipment);
+        renderStoryOrbit(combat.orbit);
+        renderStorySummons(combat.summons);
         const enemyGroup = $('story-enemy-group');
         enemyGroup?.replaceChildren();
         livingEnemies.forEach((enemyItem) => {
@@ -15182,6 +15450,15 @@
                 }
                 setStoryCardChoiceRequired(false);
                 storyAction('resolve_deck_operation', { selected_card_ids: selected });
+                return;
+            }
+            if (context.mode === 'option_choice') {
+                if (event.target.returnValue !== 'confirm' || !context.selectedId) {
+                    requestAnimationFrame(() => openPendingStoryCardChoice(activeRun?.state));
+                    return;
+                }
+                setStoryCardChoiceRequired(false);
+                storyAction('resolve_card_choice', { [context.payloadKey]: context.selectedId });
                 return;
             }
             if (context.mode === 'pending_card') {

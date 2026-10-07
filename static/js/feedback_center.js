@@ -3,6 +3,13 @@
 
   const T = {
     zh: {
+      appeal_tab: '申诉', appeal_kicker: '账号关联', appeal_title: '关联申诉',
+      appeal_copy: '关联由多信号自动判断，同一网络不会单独确认。申诉由管理员人工复核，处理前仍保留当前信誉规则。',
+      appeal_not_linked: '当前没有已成立的账号关联，无需申诉。若对信誉分有疑问，请在反馈中说明。',
+      appeal_linked: '已自动关联', appeal_pending: '已收到你的申诉，管理员复核中。处理结果会更新到你的信誉流水。',
+      appeal_loading: '正在读取关联状态…', appeal_need_login: '请先登录账号后再申诉。',
+      appeal_need_reason: '请填写申诉说明。', appeal_done: '申诉已提交，请等待管理员复核。',
+      appeal_reason: '申诉说明', appeal_submit: '提交申诉', appeal_back: '返回反馈列表',
       feedback_center: '反馈中心', bug_tab: '漏洞', suggestion_tab: '建议', internal_tab: '不公开', internal_kind: '不公开反馈', project_subtitle: '漏洞与建议',
       project_copy: '报告漏洞，或为未来的更新提出建议。登录后可投票与讨论。',
       status: '状态', all_status: '全部状态', sort: '排序',
@@ -43,6 +50,13 @@
       internal_status: { new: '待处理', needs_info: '需补充', in_progress: '处理中', fixed: '已完成', duplicate: '重复', invalid: '无效' },
     },
     en: {
+      appeal_tab: 'Appeal', appeal_kicker: 'Account link', appeal_title: 'Link appeal',
+      appeal_copy: 'Links are judged automatically from multiple signals; a shared network alone does not confirm one. Appeals are reviewed manually; current reputation rules stay in force until then.',
+      appeal_not_linked: 'No confirmed account link — no appeal needed. If you question your reputation score, describe it in feedback.',
+      appeal_linked: 'Auto-linked', appeal_pending: 'Appeal received; a moderator is reviewing. Results will appear in your reputation ledger.',
+      appeal_loading: 'Loading link status…', appeal_need_login: 'Sign in before appealing.',
+      appeal_need_reason: 'Please describe your appeal.', appeal_done: 'Appeal submitted; awaiting moderator review.',
+      appeal_reason: 'Appeal description', appeal_submit: 'Submit appeal', appeal_back: 'Back to feedback',
       feedback_center: 'Feedback Center', bug_tab: 'Bugs', suggestion_tab: 'Suggestions', internal_tab: 'Internal', internal_kind: 'Internal feedback', project_subtitle: 'Bugs & suggestions',
       project_copy: 'Report bugs or propose updates. Sign in to vote and discuss.',
       status: 'Status', all_status: 'All statuses', sort: 'Sort',
@@ -84,6 +98,13 @@
       internal_status: { new: 'New', needs_info: 'Needs info', in_progress: 'In progress', fixed: 'Done', duplicate: 'Duplicate', invalid: 'Invalid' },
     },
     fr: {
+      appeal_tab: 'Appel', appeal_kicker: 'Association de compte', appeal_title: 'Appel d’association',
+      appeal_copy: 'Les associations sont déduites automatiquement de plusieurs signaux ; un réseau partagé ne suffit pas. Les appels sont examinés manuellement ; les règles de réputation restent en vigueur en attendant.',
+      appeal_not_linked: 'Aucune association de compte confirmée — pas d’appel nécessaire. Pour une question sur votre réputation, décrivez-la dans un retour.',
+      appeal_linked: 'Association automatique', appeal_pending: 'Appel reçu ; un modérateur l’examine. Le résultat apparaîtra dans votre historique de réputation.',
+      appeal_loading: 'Chargement de l’association…', appeal_need_login: 'Connectez-vous avant de faire appel.',
+      appeal_need_reason: 'Veuillez décrire votre appel.', appeal_done: 'Appel envoyé ; en attente de vérification.',
+      appeal_reason: 'Description de l’appel', appeal_submit: 'Envoyer l’appel', appeal_back: 'Retour aux signalements',
       feedback_center: 'Centre de signalements', bug_tab: 'Bugs', suggestion_tab: 'Suggestions', internal_tab: 'Interne', internal_kind: 'Signalement interne', project_subtitle: 'Bugs et suggestions',
       project_copy: 'Signalez un bug ou proposez une amélioration. Connectez-vous pour voter.',
       status: 'Statut', all_status: 'Tous', sort: 'Trier', sort_priority: 'Priorité',
@@ -122,6 +143,13 @@
       internal_status: { new: 'Nouveau', needs_info: 'Infos requises', in_progress: 'En cours', fixed: 'Terminé', duplicate: 'Doublon', invalid: 'Invalide' },
     },
     ja: {
+      appeal_tab: '申立て', appeal_kicker: 'アカウント関連', appeal_title: '関連の申立て',
+      appeal_copy: '関連は複数のシグナルから自動判定され、同一ネットワークだけでは確定しません。申立ては管理者が手動で確認し、処理までは現在の評判ルールが適用されます。',
+      appeal_not_linked: '確定したアカウント関連はなく、申立ては不要です。評判スコアに疑問がある場合はフィードバックで説明してください。',
+      appeal_linked: '自動関連済み', appeal_pending: '申立てを受け付けました。管理者が確認中です。結果は評判履歴に反映されます。',
+      appeal_loading: '関連状態を読み込み中…', appeal_need_login: '申立ての前にログインしてください。',
+      appeal_need_reason: '申立ての説明を記入してください。', appeal_done: '申立てを送信しました。管理者の確認をお待ちください。',
+      appeal_reason: '申立ての説明', appeal_submit: '申立てを送信', appeal_back: '一覧へ戻る',
       feedback_center: 'フィードバックセンター', bug_tab: 'バグ', suggestion_tab: '提案', internal_tab: '内部', internal_kind: '内部フィードバック', project_subtitle: 'バグと提案',
       project_copy: 'バグを報告したり、今後の更新を提案できます。',
       status: '状態', all_status: 'すべて', sort: '並び替え', sort_priority: '優先度',
@@ -180,7 +208,11 @@
     notificationsLoaded: false,
     accountOpen: false,
     reportContext: null,
+    appealLoaded: false,
   };
+
+  /* 申诉是与 bug/建议列表并列的独立视图（/feedback-center/appeal），不属于 kind。 */
+  let appealViewActive = false;
 
   const VOTABLE = {
     bug: new Set(['new', 'needs_info', 'confirmed', 'in_progress']),
@@ -516,6 +548,12 @@
     $('fc-tab-bug').textContent = t('bug_tab');
     $('fc-tab-suggestion').textContent = t('suggestion_tab');
     $('fc-tab-internal').textContent = t('internal_tab');
+    $('fc-tab-appeal').textContent = t('appeal_tab');
+    $('fc-appeal-title').textContent = t('appeal_title');
+    $('fc-appeal-copy').textContent = t('appeal_copy');
+    $('fc-appeal-reason-label').textContent = t('appeal_reason');
+    $('fc-appeal-submit').textContent = t('appeal_submit');
+    $('fc-appeal-back').textContent = t('appeal_back');
     const internalTab = $('fc-tab-internal');
     if (internalTab) internalTab.hidden = !state.isStaff;
   }
@@ -523,6 +561,7 @@
   function updateTabs() {
     $('fc-tab-bug').classList.toggle('is-active', state.kind === 'bug');
     $('fc-tab-suggestion').classList.toggle('is-active', state.kind === 'suggestion');
+    $('fc-tab-appeal').classList.toggle('is-active', appealViewActive);
     const internalTab = $('fc-tab-internal');
     if (internalTab) {
       internalTab.classList.toggle('is-active', state.kind === 'internal');
@@ -826,11 +865,102 @@
     messages?.classList.add('hidden');
     toolbar?.classList.remove('hidden');
     split?.classList.remove('hidden');
+    $('fc-appeal-pane')?.classList.add('hidden');
+    appealViewActive = false;
   }
 
   function showBrowse() {
     showFeedbackSplitView();
     closeIssue();
+  }
+
+  /* —— 关联申诉视图：数据与主页信誉弹窗同源（GET/POST /api/account-integrity）。 —— */
+  async function renderAppealView() {
+    const appeal = $('fc-appeal-pane');
+    if (!appeal) return;
+    appealViewActive = true;
+    appeal.classList.remove('hidden');
+    $('fc-toolbar')?.classList.add('hidden');
+    $('fc-split')?.classList.add('hidden');
+    applyStaticText();
+    updateTabs();
+    document.title = `${t('appeal_title')} · ${t('feedback_center')} · 荆棘花园`;
+    await loadAppealProfile();
+  }
+
+  function renderAppealProfile(data) {
+    const status = $('fc-appeal-status');
+    const form = $('fc-appeal-form');
+    const error = $('fc-appeal-error');
+    if (!status || !form) return;
+    if (error) error.hidden = true;
+    const profile = (data && data.profile) || {};
+    const band = (profile.linked_gr_band || {}).label || '';
+    if (!profile.linked) {
+      status.innerHTML = `<p class="fc-muted">${esc(t('appeal_not_linked'))}</p>`;
+      form.hidden = true;
+      return;
+    }
+    const linkedLine = `<p class="fc-appeal-linked">${esc(t('appeal_linked'))}${band ? ` · ${esc(band)}` : ''}</p>`;
+    if (profile.appeal_status === 'pending') {
+      status.innerHTML = linkedLine + `<p class="fc-muted">${esc(t('appeal_pending'))}</p>`;
+      form.hidden = true;
+      return;
+    }
+    status.innerHTML = linkedLine;
+    form.hidden = false;
+  }
+
+  async function loadAppealProfile({ force = false } = {}) {
+    const status = $('fc-appeal-status');
+    if (!status) return;
+    if (!state.account) {
+      status.innerHTML = `<p class="fc-muted">${esc(t('appeal_need_login'))}</p>`;
+      $('fc-appeal-form')?.setAttribute('hidden', '');
+      return;
+    }
+    if (state.appealLoaded && !force) return;
+    status.innerHTML = `<p class="fc-muted">${esc(t('appeal_loading'))}</p>`;
+    try {
+      const data = await api('/api/account-integrity');
+      state.appealLoaded = true;
+      renderAppealProfile(data);
+    } catch (err) {
+      status.innerHTML = `<p class="fc-error">${esc(String(err?.message || '加载失败'))}</p>`;
+    }
+  }
+
+  async function submitAppeal(event) {
+    event.preventDefault();
+    const reason = String($('fc-appeal-reason')?.value || '').trim();
+    const error = $('fc-appeal-error');
+    const submit = $('fc-appeal-submit');
+    if (!reason) {
+      if (error) {
+        error.textContent = t('appeal_need_reason');
+        error.hidden = false;
+      }
+      return;
+    }
+    if (error) error.hidden = true;
+    if (submit) submit.disabled = true;
+    try {
+      await api('/api/account-integrity/appeal', { method: 'POST', body: { reason } });
+      await loadAppealProfile({ force: true });
+      $('fc-appeal-status')?.insertAdjacentHTML('afterbegin', `<p class="fc-appeal-ok">${esc(t('appeal_done'))}</p>`);
+      const form = $('fc-appeal-form');
+      if (form) {
+        form.reset();
+        form.hidden = true;
+      }
+    } catch (err) {
+      if (error) {
+        error.textContent = String(err?.message || '提交失败');
+        error.hidden = false;
+      }
+    } finally {
+      if (submit) submit.disabled = false;
+    }
   }
 
   function canonicalIssuePath(issue) {
@@ -885,6 +1015,9 @@
     if (path === '/feedback-center/messages') {
       return { view: 'messages', kind: 'bug' };
     }
+    if (path === '/feedback-center/appeal') {
+      return { view: 'appeal', kind: 'bug' };
+    }
     return { view: 'list', kind: 'bug' };
   }
 
@@ -892,6 +1025,10 @@
     const route = parseLocationRoute();
     if (route.view === 'messages') {
       await renderMessagesView();
+      return;
+    }
+    if (route.view === 'appeal') {
+      await renderAppealView();
       return;
     }
     showFeedbackSplitView();
@@ -1535,6 +1672,11 @@
     $('fc-tab-suggestion').addEventListener('click', () => {
       navigateKind('suggestion');
     });
+    $('fc-tab-appeal').addEventListener('click', () => {
+      history.pushState({}, '', '/feedback-center/appeal');
+      void renderAppealView();
+    });
+    $('fc-appeal-form').addEventListener('submit', submitAppeal);
     $('fc-search').addEventListener('input', (event) => {
       state.search = event.target.value.trim();
       clearTimeout(searchTimer);

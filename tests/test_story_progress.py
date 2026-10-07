@@ -17,18 +17,29 @@ from story_progress import (
 def test_unlock_chain_and_per_character_difficulty_rules():
     empty = build_story_progress_payload()
     assert story_character_is_unlocked(empty, 'common_flower') is True
+    assert story_character_is_unlocked(empty, 'orbiter') is False
     assert story_character_is_unlocked(empty, 'mage') is False
     assert story_journey_is_unlocked(empty, 'common_flower', 'easy', 'standard')
     assert story_journey_is_unlocked(empty, 'common_flower', 'normal', 'standard')
     assert not story_journey_is_unlocked(empty, 'common_flower', 'hard', 'standard')
     assert not story_journey_is_unlocked(empty, 'common_flower', 'normal', 'boss_rush')
 
+    # 玩过前一名角色（平衡 2026-10-07）：创建过对局即解锁下一名。
+    played_orbiter = build_story_progress_payload([], [{
+        'character_id': 'orbiter',
+        'plays': 1,
+    }])
+    assert story_character_is_unlocked(played_orbiter, 'mage') is True
+    assert story_character_is_unlocked(played_orbiter, 'summoner') is False
+
+    # 老玩家兜底：通关过前一名角色也保持解锁。
     normal_clear = build_story_progress_payload([{
         'character_id': 'common_flower',
         'difficulty': 'normal',
         'standard_clears': 1,
     }])
-    assert story_character_is_unlocked(normal_clear, 'mage') is True
+    assert story_character_is_unlocked(normal_clear, 'orbiter') is True
+    assert story_character_is_unlocked(normal_clear, 'mage') is False
     assert story_journey_is_unlocked(
         normal_clear, 'common_flower', 'hard', 'standard'
     )
@@ -113,7 +124,16 @@ def test_story_completion_is_idempotent_and_solo_commit_records_it(
     common = progress['characters']['common_flower']
     assert common['clears']['normal']['standard'] == 1
     assert common['difficulties']['hard'] is True
-    assert progress['characters']['mage']['unlocked'] is True
+    # 新链（普花→轨道使→魔法师）：通关普花解锁轨道使，魔法师仍锁定。
+    assert progress['characters']['orbiter']['unlocked'] is True
+    assert progress['characters']['mage']['unlocked'] is False
+
+    # 玩过一局（含开局投降）即解锁：record_story_play 计数后魔法师解锁。
+    assert db.record_story_play(user['id'], 'orbiter') is True
+    assert db.record_story_play(user['id'], 'orbiter') is True
+    replayed = db.get_story_progress(user['id'])
+    assert replayed['characters']['orbiter']['played'] is True
+    assert replayed['characters']['mage']['unlocked'] is True
 
     assert db.record_story_completion(
         'solo', run['id'], user['id'], 'common_flower', 'normal', 'standard'

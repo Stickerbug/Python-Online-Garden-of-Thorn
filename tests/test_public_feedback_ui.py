@@ -24,6 +24,7 @@ def test_standalone_page_has_all_surfaces_and_account_bar():
         'id="fc-account-popover"',
         'id="fc-tab-bug"',
         'id="fc-tab-suggestion"',
+        'id="fc-tab-appeal"',
         'id="fc-status-filter"',
         'id="fc-issue-list"',
         'id="fc-detail"',
@@ -33,12 +34,26 @@ def test_standalone_page_has_all_surfaces_and_account_bar():
         'id="fc-search"',
         'id="fc-create-dialog"',
         'id="fc-report-dialog"',
+        'id="fc-appeal-pane"',
+        'id="fc-appeal-form"',
         '/static/js/feedback_center.js',
         '/static/css/feedback_center.css',
     ):
         assert marker in TEMPLATE
     assert (ROOT / 'static' / 'js' / 'feedback_center.js').is_file()
     assert (ROOT / 'static' / 'css' / 'feedback_center.css').is_file()
+
+
+def test_appeal_lives_in_feedback_center_and_home_links_to_it():
+    # 主页不再内嵌申诉表单，只保留跳转反馈中心的入口。
+    assert 'id="integrity-appeal-link"' in INDEX
+    assert 'href="/feedback-center/appeal"' in INDEX
+    assert 'id="integrity-appeal-form"' not in INDEX
+    # 反馈中心承担申诉 UI：路由、标签页与提交端点。
+    assert "/feedback-center/appeal" in JS
+    assert '/api/account-integrity/appeal' in JS
+    assert 'renderAppealView' in JS
+    assert '.fc-appeal-pane' in CSS
 
 
 def test_standalone_client_uses_all_core_endpoints():

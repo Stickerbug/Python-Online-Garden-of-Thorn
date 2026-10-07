@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_1" data-name="图层_1" xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 283.5 283.5">
+  <!-- Generator: Adobe Illustrator 29.0.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 186)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: #afd158;
+        stroke: #7abd2f;
+      }
+
+      .st0, .st1 {
+        stroke-miterlimit: 10;
+        stroke-width: 10px;
+      }
+
+      .st2 {
+        fill: url(#_未命名的渐变_74);
+      }
+
+      .st1 {
+        fill: #bfe3ea;
+        stroke: #d7aa12;
+      }
+
+      .st3 {
+        fill: url(#_未命名的渐变_28);
+      }
+    </style>
+    <radialGradient id="_未命名的渐变_28" data-name="未命名的渐变 28" cx="208.2" cy="76.8" fx="208.2" fy="76.8" r="20.5" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e7e73a"/>
+      <stop offset="1" stop-color="#d8e026" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="_未命名的渐变_74" data-name="未命名的渐变 74" x1="125.6" y1="231.8" x2="125.6" y2="80.8" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#76c5b4" stop-opacity=".2"/>
+      <stop offset="1" stop-color="#2cb4ea" stop-opacity=".4"/>
+    </linearGradient>
+  </defs>
+  <circle class="st0" cx="125.6" cy="156.3" r="70.9"/>
+  <path class="st1" d="M199.4,78.9c-4.4.2-12.8,1.1-21.8,6.3-6.9,4-11.3,8.9-13.8,12.1"/>
+  <circle class="st3" cx="208.2" cy="76.8" r="20.5"/>
+  <circle class="st2" cx="125.6" cy="156.3" r="75.5"/>
+</svg>

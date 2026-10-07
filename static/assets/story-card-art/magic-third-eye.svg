@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_1" data-name="图层_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 283.5 283.5">
+  <!-- Generator: Adobe Illustrator 29.0.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 186)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: #fff;
+      }
+
+      .st1 {
+        fill: #489ad5;
+      }
+
+      .st2 {
+        fill: #231815;
+      }
+    </style>
+  </defs>
+  <ellipse class="st1" cx="141.7" cy="141.7" rx="32.8" ry="69.1"/>
+  <path class="st2" d="M168.3,141.7c0,32.1-17.8,59.2-24.3,67.9s-3.4,1.5-4.6,0c-6.4-8.7-24.3-35.8-24.3-67.9s17.8-59.2,24.3-67.9,3.4-1.5,4.6,0c6.4,8.7,24.3,35.8,24.3,67.9Z"/>
+  <ellipse class="st0" cx="141.7" cy="141.7" rx="21.3" ry="25.5"/>
+</svg>

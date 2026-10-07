@@ -324,17 +324,17 @@ STORY_EVENTS_12 = {
     },
     'talent_lottery': {
         'stage': None,
-        'requires_gold': 150,
+        'requires_gold': 100,
         'title': {'zh': '天赋抽奖', 'en': 'Talent Lottery'},
         'body': {
-            'zh': '你遇到了一个抽奖机，上面写着150G一次。',
-            'en': 'You find a lottery machine that reads 150 G per draw.',
+            'zh': '你遇到了一个抽奖机，上面写着100G一次。',
+            'en': 'You find a lottery machine that reads 100 G per draw.',
         },
         'speaker': {'zh': '天赋抽奖机', 'en': 'Talent Lottery Machine'},
         'options': _opts(
             ('talent_draw', '抽奖', 'Draw', 'talent_draw', True, '', {
-                'zh': '花费150G查看一个随机天赋；不满意可花费50G刷新',
-                'en': 'Pay 150 G to view a random talent; refresh it for 50 G if unsatisfied',
+                'zh': '花费100G查看一个随机天赋；不满意可花费40G刷新',
+                'en': 'Pay 100 G to view a random talent; refresh it for 40 G if unsatisfied',
             }),
             ('leave', '离开', 'Leave', 'leave'),
         ),

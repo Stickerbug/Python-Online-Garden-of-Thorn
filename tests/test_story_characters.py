@@ -16,12 +16,14 @@ from story_mode import build_initial_story_state
 
 def test_all_sheet_characters_are_projected_with_a_stable_unavailable_message():
     payload = story_content_payload()
+    # 表15：展示顺序 普花→轨道使→魔法师→召唤师→邪术师（与解锁链一致）。
     assert tuple(payload['characters']) == (
-        'common_flower', 'orbiter', 'summoner', 'mage', 'occultist',
+        'common_flower', 'orbiter', 'mage', 'summoner', 'occultist',
     )
-    for character_id in ('common_flower', 'mage'):
+    for character_id in ('common_flower', 'orbiter', 'mage'):
         assert payload['characters'][character_id]['implementation_status'] == 'playable'
-    for character_id in ('orbiter', 'summoner', 'occultist'):
+    # 表15：轨道使已实装可玩；召唤师/邪术师仍为 planned。
+    for character_id in ('summoner', 'occultist'):
         assert payload['characters'][character_id]['implementation_status'] == 'planned'
         assert (
             payload['characters'][character_id]['unavailable_message']
@@ -37,8 +39,11 @@ def test_initial_story_state_records_character_and_rejects_unready_roles():
     mage = build_initial_story_state('character-mage', 'mage')
     assert mage['character_id'] == 'mage'
     assert mage['player']['character_id'] == 'mage'
+    orbiter = build_initial_story_state('character-orbiter', 'orbiter')
+    assert orbiter['character_id'] == 'orbiter'
+    assert orbiter['player']['character_id'] == 'orbiter'
     with pytest.raises(ValueError, match='STORY_CHARACTER_NOT_READY'):
-        build_initial_story_state('character-orbiter', 'orbiter')
+        build_initial_story_state('character-summoner', 'summoner')
     with pytest.raises(ValueError, match='UNKNOWN_STORY_CHARACTER'):
         build_initial_story_state('character-unknown', 'future_unknown')
 
@@ -50,7 +55,7 @@ def test_story_run_api_rejects_unready_and_unknown_characters_before_db_write():
         mock.patch.object(gtn, '_current_story_run', return_value=None),
         mock.patch.object(gtn, 'create_story_run') as create_run,
     ):
-        unready = client.post('/api/story/run', json={'character_id': 'orbiter'})
+        unready = client.post('/api/story/run', json={'character_id': 'summoner'})
         unknown = client.post('/api/story/run', json={'character_id': 'future_unknown'})
         malformed = client.post('/api/story/run', json=['common_flower'])
 
@@ -59,7 +64,7 @@ def test_story_run_api_rejects_unready_and_unknown_characters_before_db_write():
         'success': False,
         'error': STORY_CHARACTER_NOT_READY_MESSAGE['zh'],
         'code': 'STORY_CHARACTER_NOT_READY',
-        'character_id': 'orbiter',
+        'character_id': 'summoner',
     }
     assert unknown.status_code == 400
     assert unknown.get_json()['code'] == 'UNKNOWN_STORY_CHARACTER'
@@ -80,6 +85,7 @@ def test_story_run_api_persists_the_selected_playable_character():
         mock.patch.object(gtn, '_require_account_json', return_value=(41, 'Tester', None)),
         mock.patch.object(gtn, '_current_story_run', return_value=None),
         mock.patch.object(gtn, 'create_story_run', return_value=(created_run, True)) as create_run,
+        mock.patch.object(gtn, 'record_story_play', return_value=True) as record_play,
         mock.patch.object(gtn, '_story_run_with_compatibility', side_effect=lambda run: run),
         mock.patch.object(gtn, '_sync_story_discoveries', return_value=[]),
         mock.patch.object(gtn, '_list_story_discoveries_without_blocking', return_value=[]),
@@ -90,6 +96,8 @@ def test_story_run_api_persists_the_selected_playable_character():
     state = create_run.call_args.args[3]
     assert state['character_id'] == 'common_flower'
     assert state['player']['character_id'] == 'common_flower'
+    # 玩过一局即解锁（平衡 2026-10-07）：创建对局时记录一次游玩。
+    record_play.assert_called_once_with(41, 'common_flower')
 
 
 def test_character_selector_is_wired_without_allowing_planned_roles_to_start():
@@ -131,17 +139,15 @@ def test_confirmed_character_loadouts_and_unlock_chain_are_exposed():
         {'character_card_id': 'mage_leaf', 'count': 1},
     )
     assert mage['starter_relics'] == ('magic_source',)
-    assert mage['unlock']['character_id'] == 'common_flower'
-    assert mage['unlock']['any_difficulty'] is True
+    assert mage['unlock']['character_id'] == 'orbiter'
     assert content['character_cards']['mage_basic']['name']['zh'] == '魔法基本'
     assert content['character_relics']['magic_source']['effect_text'] == '回合开始时，回复1M'
 
-    chain = ('common_flower', 'mage', 'orbiter', 'summoner', 'occultist')
+    chain = ('common_flower', 'orbiter', 'mage', 'summoner', 'occultist')
     for previous, current in zip(chain, chain[1:]):
         unlock = content['characters'][current]['unlock']
-        assert unlock['kind'] == 'complete_journey'
+        assert unlock['kind'] == 'play_once'
         assert unlock['character_id'] == previous
-        assert unlock['any_difficulty'] is True
 
 
 def test_mage_starter_runtime_is_source_backed_and_playable():

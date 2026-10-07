@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_图层_1" data-name="图层_1" xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 283.5 283.5">
+  <!-- Generator: Adobe Illustrator 29.0.0, SVG Export Plug-In . SVG Version: 2.1.0 Build 186)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: #f7f8d2;
+        stroke: #f3f3ab;
+        stroke-miterlimit: 10;
+        stroke-width: 15px;
+      }
+
+      .st1 {
+        fill: url(#_未命名的渐变_75);
+        opacity: .8;
+      }
+    </style>
+    <radialGradient id="_未命名的渐变_75" data-name="未命名的渐变 75" cx="141.8" cy="142" fx="141.8" fy="142" r="63.8" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#551e80"/>
+      <stop offset=".7" stop-color="#9497ca" stop-opacity=".4"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <circle class="st0" cx="141.7" cy="141.7" r="56.7"/>
+  <circle class="st1" cx="141.8" cy="142" r="63.8"/>
+</svg>

@@ -345,6 +345,10 @@ def reset_card_after_play(card: CardInstance):
 
 
 def reset_card_for_discard(card: CardInstance):
+    # GB-299/384/333：清掉可能残留的「本回合打出中自毁」标记——该标记只应
+    # 在出牌结算内消费；跟着实例进弃牌堆会让下次打出被误判成已自毁。
+    if card is not None:
+        card.__dict__.pop('_equipment_destroyed_this_play', None)
     return
 
 
@@ -484,6 +488,9 @@ class PlayerState:
             'elixir': self.elixir,
             'magic': self.magic,
         }
+        # 安卡（平衡 2026-10-07）：状态也要能随快照回退——回合开始时的
+        # 状态标签存这里。None = 本局还没存过快照（回退时不碰状态）。
+        self.turn_start_statuses: Optional[Dict[str, int]] = None
         self.match_start_snapshot: Dict[str, int] = {
             'health': self.health,
             'elixir': self.elixir,
@@ -605,6 +612,11 @@ class PlayerState:
             'achievement_death_round': self.achievement_death_round,
             'achievement_self_caused_death': self.achievement_self_caused_death,
             'turn_start_snapshot': dict(self.turn_start_snapshot),
+            'turn_start_statuses': (
+                dict(self.turn_start_statuses)
+                if isinstance(self.turn_start_statuses, dict)
+                else None
+            ),
             'match_start_snapshot': dict(self.match_start_snapshot),
             'custom_statuses': dict(self.custom_statuses),
         }
@@ -752,6 +764,12 @@ class PlayerState:
             'elixir': ps.elixir,
             'magic': ps.magic,
         })
+        saved_turn_statuses = d.get('turn_start_statuses')
+        ps.turn_start_statuses = (
+            dict(saved_turn_statuses)
+            if isinstance(saved_turn_statuses, dict)
+            else None
+        )
         ps.match_start_snapshot = dict(d.get('match_start_snapshot') or {
             'health': ps.health,
             'elixir': ps.elixir,
@@ -991,9 +1009,6 @@ class GameEngine:
     SETUP_CARD_YGGDRASIL = 'Yggdrasil'
     # Built-in fallback card of ``add_equipment_to_zone`` when data omits it.
     SETUP_CARD_LEAF = 'Leaf'
-    # 能量涌动（事件 6，设计 9.29）：回合开始（回复前）把剩余 E//2 记账，
-    # 下回合开始返还。
-    ENERGY_SURGE_PENDING_KEY = 'energy_surge_pending_bonus'
     # 反制窗口节奏（设计 2026-09-28，仅真实对局启用——solo/AI 训练保持即时）：
     # 有人可反制的窗口最长 5s，到点服务端自动替未响应者「不反制」；
     # 无人可反制的非装备牌也开 2s 纯等待窗（不泄露时序信息）；
@@ -1010,7 +1025,7 @@ class GameEngine:
         6: {
             'id': 6,
             'name': '能量涌动',
-            'desc': '回合开始时每剩余2[[icon:E]]，下回合开始多回复1[[icon:E]]',
+            'desc': '回合开始回复[[icon:E]]时，每剩余2[[icon:E]]（回复前），本回合额外回复1[[icon:E]]',
             'position': 3,
         },
         7: {'id': 7, 'name': '先手压制', 'desc': '必定先手，先手回复7E并抽5张牌', 'position': 3},
@@ -2050,6 +2065,8 @@ class GameEngine:
                 'elixir': int(getattr(ps, 'elixir', 0) or 0),
                 'magic': int(getattr(ps, 'magic', 0) or 0),
             }
+            # 安卡回退需要状态：即使为空也记录（None 表示从未存过）。
+            ps.turn_start_statuses = dict(getattr(ps, 'custom_statuses', {}) or {})
 
     def _save_match_start_snapshot(self, player_id: int):
         if 0 <= player_id < len(self.players):
@@ -2107,6 +2124,10 @@ class GameEngine:
         ps.health = max(0, min(int(snap.get('health', ps.health)), int(ps.max_health)))
         ps.elixir = max(0, min(int(snap.get('elixir', ps.elixir)) - max(0, int(extra_elixir_loss or 0)), int(ps.max_elixir)))
         ps.magic = max(0, min(int(snap.get('magic', ps.magic)), int(ps.max_magic)))
+        # 状态一并回退（平衡 2026-10-07 安卡口径）；未存过快照的旧对局不动状态。
+        saved_statuses = getattr(ps, 'turn_start_statuses', None)
+        if isinstance(saved_statuses, dict):
+            ps.custom_statuses = dict(saved_statuses)
 
     def _restore_match_start_snapshot(self, player_id: int, extra_elixir_loss: int = 0):
         if not (0 <= player_id < len(self.players)):
@@ -3688,6 +3709,8 @@ class GameEngine:
         # start_game 初始化血量时覆盖默认 100。空 dict = 全部默认。
         self.player_health_overrides: Dict[int, int] = {}
         self.log: List[str] = []
+        # GB-387/392：日志重写代数（纯追加不变；压缩/并入 +1），增量下发依据。
+        self._log_rewrite_generation: int = 0
         self.draft_pool: List[CardInstance] = []
         self.allowed_card_ids: Optional[Set[str]] = None
         self.available_builtin_setup_card_ids: Set[str] = set(self.BUILTIN_SETUP_CARD_IDS)
@@ -3929,6 +3952,7 @@ class GameEngine:
         return rendered
 
     def log_msg(self, msg: str):
+        before_len = len(self.log)
         text = self._normalize_log_text(str(msg))
         if not text:
             return
@@ -3936,14 +3960,26 @@ class GameEngine:
         if not text:
             return
         if self._merge_log_text(text):
+            self._bump_log_rewrite_generation(before_len)
             return
         if self._move_use_log_before_response_detail(text):
+            self._bump_log_rewrite_generation(before_len)
             return
         self.log.append(text)
         if self._is_log_compaction_boundary(text):
             self._mark_log_visible()
+            self._bump_log_rewrite_generation(before_len)
             return
         self._compact_recent_repeated_action_block()
+        self._bump_log_rewrite_generation(before_len)
+
+    def _bump_log_rewrite_generation(self, before_len: int):
+        """GB-387/392：纯追加 = 行数恰 +1；并入既有行、块压缩或插入都会让
+        行数偏离 +1——只要偏离就说明日志被重写，重写代数 +1。增量下发按
+        （代数, 行数）判定，代数变化时整体重发，避免同位置内容替换被当成
+        "无新行"（例：使用轻×3 → ×4 行数不变）。"""
+        if len(self.log) != before_len + 1:
+            self._log_rewrite_generation = int(getattr(self, '_log_rewrite_generation', 0)) + 1
 
     _UNRESOLVED_LOG_PLACEHOLDER_RE = re.compile(r'\{[A-Za-z_][A-Za-z0-9_]*\}')
 
@@ -5727,8 +5763,10 @@ class GameEngine:
         return True
 
     def _resolve_mulligans(self):
-        # 统一结算：塞底 → 洗牌 → 等量补抽。补抽刻意绕过「到手牌时」触发
-        # （萌芽连锁 / 玉米成长 / after_draw 钩子），防止调度被用来白赚抽牌收益。
+        # 统一结算：等量补抽 → 塞回 → 洗牌（先抽再洗：补抽发生在所选牌
+        # 塞回之前，调度必然拿到新牌，不会把刚塞回的牌又抽回来）。
+        # 补抽刻意绕过「到手牌时」触发（萌芽连锁 / 玉米成长 / after_draw
+        # 钩子），防止调度被用来白赚抽牌收益。
         for player_id, pick in enumerate(self.mulligan_picks):
             ps = self.players[player_id]
             stuffed = []
@@ -5737,12 +5775,13 @@ class GameEngine:
                 if card is None:
                     continue
                 ps.hand.remove(card)
-                ps.deck.append(card)
                 stuffed.append(card)
             if not stuffed:
                 continue
-            random.shuffle(ps.deck)
             drawn = self._draw_opening_swap_cards(player_id, len(stuffed))
+            for card in stuffed:
+                ps.deck.append(card)
+            random.shuffle(ps.deck)
             self.log_msg(
                 f"{self.pn(player_id)}调度{len(stuffed)}张牌，重抽{len(drawn)}张"
             )
@@ -6188,10 +6227,9 @@ class GameEngine:
                 random.shuffle(ps.deck)
             self.log_msg(f"{self.pn(player_id)}【命运抽签】：少抽1张牌，{added}张牌洗入牌库")
         elif event_id == 6:
-            ps.custom_vars[self.ENERGY_SURGE_PENDING_KEY] = 0
             self.log_msg(
-                f"{self.pn(player_id)}【能量涌动】：回合开始时每剩余2E，"
-                "下回合开始额外回复1E"
+                f"{self.pn(player_id)}【能量涌动】：回合开始回复E时，"
+                "每剩余2E（回复前）额外回复1E"
             )
         elif event_id == 7:
             self.log_msg(f"{self.pn(player_id)}【先手压制】：先手回复7E并抽5张牌")
@@ -6288,10 +6326,10 @@ class GameEngine:
         return picks[player_id] is not None and str(picks[player_id]) == '11'
 
     def _opening_event_elixir_recovery_bonus(self, player_id: int) -> int:
-        """能量涌动（事件 6）：返还上回合开始时记账的 E//2，并按本回合开始
-        （回复前）的剩余 E 重新记账给下回合（设计 9.29：记账时点从回合结束
-        改到回合开始，对手回合里反制消耗的 E 会降低记账值）。
-        返还仍走 ``gain_elixir``，照常受 E 上限限制。
+        """能量涌动（事件 6，平衡 2026-10-07）：本回合回复 E 时，按回复前
+        剩余 E 计算——每剩余 2E 额外多回 1E（例：回复前剩 3E，3//2=1，
+        本回合回复 5+1E；剩 4E 回复 5+2E）。不再跨回合记账。返还走
+        ``gain_elixir``，受 E 上限限制。
         """
         if not self._valid_player_id(player_id):
             return 0
@@ -6299,18 +6337,14 @@ class GameEngine:
         if player_id >= len(picks) or str(picks[player_id]) != '6':
             return 0
         ps = self.players[player_id]
-        custom_vars = getattr(ps, 'custom_vars', None)
-        if not isinstance(custom_vars, dict):
-            return 0
-        pending = max(0, int(custom_vars.get(self.ENERGY_SURGE_PENDING_KEY, 0) or 0))
         remaining_now = max(0, int(getattr(ps, 'elixir', 0) or 0))
-        custom_vars[self.ENERGY_SURGE_PENDING_KEY] = remaining_now // 2
-        if remaining_now // 2 > 0:
+        bonus = remaining_now // 2
+        if bonus > 0:
             self.log_msg(
-                f"{self.pn(player_id)}【能量涌动】：回合开始剩余{remaining_now}E，"
-                f"记账{remaining_now // 2}E于下回合返还"
+                f"{self.pn(player_id)}【能量涌动】：回复前剩余{remaining_now}E，"
+                f"本回合额外回复{bonus}E"
             )
-        return pending
+        return bonus
 
     def _apply_v2_opening_event(self, player_id: int, event_id) -> bool:
         if event_id is None:
@@ -9554,8 +9588,10 @@ class GameEngine:
                 )
         # 反馈 #168（牌堆/弃牌/放逐部分）：区域里没有任何候选牌时同样不排队空窗口，
         # 否则玩家会卡在一个「无从选择」的窗口上。
+        # GB-386：equipment 区同样适用——污水指向没装备的目标时不再弹空窗、
+        # 不再静默作废，让后续步骤继续（摧毁步自带「没有可摧毁的装备」兜底）。
         zone_name = str((choice_params or {}).get('zone') or '').strip().lower()
-        if zone_name in ('deck', 'discard', 'exile'):
+        if zone_name in ('deck', 'discard', 'exile', 'equipment'):
             owner_id = choice_target_id if self._valid_player_id(choice_target_id) else player_id
             if self._valid_player_id(owner_id):
                 filter_spec = choice_params.get('filter') if isinstance(choice_params, dict) else None
@@ -22406,11 +22442,16 @@ class GameEngine:
         raise V2ZoneError(f"snapshot 只认 action=save/load，收到 {action!r}")
 
     def _restore_turn_start_payload(self, player_id, card, params, log, choice, context):
+        # 安卡（平衡 2026-10-07）：H/E/M+状态回退到各自上个自己回合开始。
+        # 「所有玩家」默认不含阵亡玩家（描述规范 §3）——本效果不复活。
         extra_self_e_loss = self._eval_int(player_id, params.get('extra_self_e_loss', 0), card)
         for tid in self._resolve_targets(player_id, params.get('target', 'self')):
             if params.get('exclude_self') and tid == player_id:
                 continue
+            if int(getattr(self.players[tid], 'health', 0) or 0) <= 0:
+                continue
             self._restore_turn_start_snapshot(tid, extra_self_e_loss if tid == player_id else 0)
+            self.log_msg(f"{self.pn(tid)}回到自己回合开始时的状态")
         if log:
             self.log_msg(log)
 
@@ -22507,7 +22548,10 @@ class GameEngine:
             if eq is not None and self._destroy_equipment(owner_id, eq, check_protection=False, source_id=source_id):
                 # 设计 2026-09-29：on_play 里自毁的装备牌（魔法盐0充能等）——
                 # 打一轮标记，出牌后置的 root 自动装回要跳过这一张。
-                if card is not None:
+                # GB-299/384/333：只在「本牌打出结算」里才打标记。装备触发
+                # （椰子等）自毁时打的标记会残留在弃牌堆的实例上，二次打出
+                # 会被误判成「已自毁」而跳过装备——白扣费用还装不上。
+                if card is not None and str((context or {}).get('current_event') or '') == 'on_play':
                     card.__dict__['_equipment_destroyed_this_play'] = True
                 if log:
                     self.log_msg(log)
@@ -22530,13 +22574,18 @@ class GameEngine:
             if mode == 'choice':
                 eq = self._destroy_equipment_choice_target(pid, card, params, choice)
                 if eq is None:
+                    # GB-386：选择摧毁找不到目标装备（目标没装备 / AI 答了
+                    # 无效实例）时不再静默——没有自定义 log 就补一条兜底战报，
+                    # 与旧版 _effect_sewage 的「但没有可摧毁的装备」同口径。
+                    self.log_msg(log or f"{self.pn(player_id)}没有可摧毁的装备")
                     continue
                 eq_name = eq.card_def.name_cn
                 if self._destroy_equipment(pid, eq, source_id=source_id):
                     destroyed_count += 1
                     self.log_msg(log or f"{self.pn(player_id)}摧毁了{self.pn(pid)}的{eq_name}")
-                elif log:
-                    self.log_msg(log)
+                else:
+                    # GB-386：装备保护/不可摧毁抵消摧毁时也留一条记录。
+                    self.log_msg(log or f"{self.pn(pid)}的{eq_name}未被摧毁（装备保护）")
                 continue
             if scope == 'field' and not destroyable_only:
                 candidates = list(self.players[pid].equipment)

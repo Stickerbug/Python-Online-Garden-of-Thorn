@@ -2819,6 +2819,19 @@ def init_db(
         )
         conn.execute(
             '''
+            CREATE TABLE IF NOT EXISTS story_character_plays (
+                user_id INTEGER NOT NULL,
+                character_id TEXT NOT NULL,
+                plays INTEGER NOT NULL DEFAULT 0 CHECK(plays >= 0),
+                first_played_at TEXT,
+                last_played_at TEXT,
+                PRIMARY KEY(user_id, character_id),
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
+        conn.execute(
+            '''
             CREATE TABLE IF NOT EXISTS story_progress_completions (
                 source_kind TEXT NOT NULL CHECK(source_kind IN ('solo', 'coop')),
                 source_id TEXT NOT NULL,
@@ -4480,7 +4493,37 @@ def get_story_progress(user_id):
                ORDER BY character_id ASC, difficulty ASC''',
             (user_id,),
         ).fetchall()
-    return build_story_progress_payload([dict(row) for row in rows])
+        plays = conn.execute(
+            '''SELECT character_id, plays FROM story_character_plays
+               WHERE user_id = ?''',
+            (user_id,),
+        ).fetchall()
+    return build_story_progress_payload(
+        [dict(row) for row in rows],
+        [dict(row) for row in plays],
+    )
+
+
+def record_story_play(user_id, character_id):
+    """故事角色「玩过」计数（平衡 2026-10-07）：创建对局即计 1 次，
+    开局直接放弃也算——用于下一名角色的解锁条件。"""
+    from story_progress import normalize_story_character_id
+
+    user_id = int(user_id)
+    character_id = normalize_story_character_id(character_id)
+    now = utc_iso(utc_now_dt())
+    with closing(get_db_connection()) as conn:
+        conn.execute(
+            '''INSERT INTO story_character_plays
+               (user_id, character_id, plays, first_played_at, last_played_at)
+               VALUES (?, ?, 1, ?, ?)
+               ON CONFLICT(user_id, character_id) DO UPDATE SET
+                   plays = story_character_plays.plays + 1,
+                   last_played_at = excluded.last_played_at''',
+            (user_id, character_id, now, now),
+        )
+        conn.commit()
+    return True
 
 
 def get_story_progress_for_users(user_ids):

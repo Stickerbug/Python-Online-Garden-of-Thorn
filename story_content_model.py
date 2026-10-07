@@ -268,6 +268,33 @@ _CARD_ROWS.update({
     'elemental_force': 159,
 })
 
+# 表15（卡牌数据15.xlsx / 爬塔卡牌设计表）：轨道使与召唤师新卡行号。
+_CARD_ROWS.update({
+    'orbit_glass': 172, 'enchanted_faster': 173, 'faster': 174,
+    'web': 175, 'electric_web': 176, 'square_card': 177,
+    'nazar_amulet': 178, 'dodge_amulet': 179, 'magic_dodge_amulet': 180,
+    'magic_faster': 181, 'uranium': 182, 'gear': 183, 'magic_gear': 184,
+    'cat_card': 185, 'orbit_splitter': 186, 'date_palm': 187,
+    'relativity': 188, 'magic_relativity': 189, 'bugatti_card': 190,
+    'lentil': 191, 'wing': 192, 'quantum_card': 193, 'sugar': 194,
+    'blood_sugar': 195, 'snail_shell': 196, 'orbit_magic_sewage': 197,
+    'orbit_third_eye': 198, 'magic_third_eye': 199, 'knife': 200,
+    'orbit_thorn': 201, 'blood_feather': 202, 'blood_seed': 203,
+    'iris': 204, 'grape': 205, 'black_death': 206, 'candy_stick': 207,
+    'golden_cactus': 208, 'leg': 209, 'poison_sting': 210,
+    'snowflake': 211, 'banana': 212, 'carrot': 213,
+    'magic_splitter': 214, 'stem_cell': 215, 'magic_stem_cell': 216,
+    'bubble_bomb': 217, 'acid_bomb': 218, 'magic_cancer_cell': 219,
+    'orbit_cancer_cell': 220, 'cyanide': 221, 'reactor_core': 222,
+    'magic_reactor_core': 223, 'magic_cyanide': 224,
+    'cyanide_pill': 225, 'chitin': 226, 'magic_acid_bomb': 227,
+    'magic_quantum': 228, 'poison_gas': 229, 'magic_poison_gas': 230,
+    'privet': 231, 'demon_plague': 232, 'magic_shard': 233,
+    'microplastic': 234,
+    'ant_egg': 168, 'honey': 169, 'ant_nest_egg': 170,
+    'branch': 235, 'magic_branch': 236, 'sunflower_seed': 237,
+})
+
 _RELIC_ROWS = {
     'energetic': 3, 'ruthless': 14, 'firm_defense': 15,
     'fearless_pain': 16, 'circulation': 17, 'prepared': 18,
@@ -291,6 +318,8 @@ _RELIC_ROWS = {
     'foresight': 80, 'blitz': 81, 'split_wide': 82, 'favorite': 83,
     'discard_mine': 84, 'infect': 85, 'kill_flow': 86, 'many_cards': 87,
     'shop_refresh': 88, 'innate_thought': 89,
+    # 表15（天赋表）：环绕轨道(行5)、第三只眼(行83)、奇迹之春(行84)
+    'orbital_surround': 5, 'third_eye_summon': 83, 'miracle_spring': 84,
 }
 
 _ENEMY_ROWS = {
@@ -347,7 +376,7 @@ _ENCOUNTER_ROWS = {
 _CODE_ADDED_TAG_IDS = frozenset({
     'power', 'electric_power', 'swift', 'temporary_swift',
     'magic_swift', 'temporary_heavy', 'firmness', 'armor_break',
-    'rebound', 'favorite', 'infect',
+    'rebound', 'favorite', 'infect', 'orbit',
 })
 _CODE_ADDED_STATUS_IDS = frozenset({
     'disc', 'sturdy', 'regeneration', 'invincible',
@@ -467,6 +496,9 @@ def build_story_content_registry(
     encounter_catalog = deepcopy(STORY_ENCOUNTERS if encounters is None else encounters)
     records = []
 
+    _CHARACTER_ROWS = {
+        'common_flower': 1, 'orbiter': 2, 'summoner': 3, 'mage': 4, 'occultist': 5,
+    }
     precise_rows = {
         'card': _CARD_ROWS,
         'relic': _RELIC_ROWS,
@@ -476,7 +508,10 @@ def build_story_content_registry(
         for index, (content_id, definition) in enumerate(catalog.items(), 1):
             row = None
             if kind == 'character':
-                row = index
+                # 表15 角色设计表实际行序：普花1 轨道使2 召唤师3 魔法师4 邪术师5。
+                # 代码内展示顺序（普花→轨道使→魔法师→召唤师→邪术师）与表序不同，
+                # 来源行号按表序显式映射，不随字典顺序漂移。
+                row = _CHARACTER_ROWS.get(content_id, index)
             elif kind == 'character_card':
                 row = index + 102
             elif kind == 'character_relic':

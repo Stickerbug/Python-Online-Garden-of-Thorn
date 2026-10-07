@@ -21,6 +21,7 @@ from story_content import (
     STORY_RULES,
     STORY_SINGLE_LAYER_RELIC_IDS,
     STORY_STATUSES,
+    STORY_SUMMONS,
     STORY_TRAITS,
     STORY_TRAIT_VALUE_KEYS,
     story_combat_starting_magic,
@@ -840,6 +841,22 @@ def _card_values(card):
             'zh': f'对目标造成{damage}D；此牌可无限升级。',
             'en': f'Deal {damage} D. This card can be upgraded indefinitely.',
         }
+    # 表15 轨道使（正方形）：参数化无限升级——基础+每级增量作用于指定效果类型。
+    infinite_formula = (definition.get('upgrade') or {}).get('infinite_formula')
+    if isinstance(infinite_formula, dict):
+        kind = str(infinite_formula.get('kind') or 'damage')
+        total = int(infinite_formula.get('base') or 0) + int(infinite_formula.get('per') or 0) * upgrade_level
+        values['effects'] = tuple(
+            {**effect, 'amount': total}
+            if effect.get('type') == kind
+            else effect
+            for effect in values.get('effects') or ()
+        )
+        template = infinite_formula.get('description') or {'zh': f'获得{total}层护盾；此牌可无限升级。', 'en': f'Gain {total} S. This card can be upgraded indefinitely.'}
+        values['description'] = {
+            'zh': str(template.get('zh') or '').format(n=total),
+            'en': str(template.get('en') or '').format(n=total),
+        }
     modifiers = card.get('modifiers') if isinstance(card.get('modifiers'), dict) else {}
     if modifiers:
         extra_tags = tuple(str(tag) for tag in modifiers.get('extra_tags') or ())
@@ -1576,8 +1593,22 @@ def _apply_status(state, target, status, amount, events, source='card'):
         })
         return
     before = int(target.get(status) or 0)
-    target[status] = max(0, before + amount)
     target_id = target.get('id') or 'player'
+    # 毒气/魔法毒气（表15 轨道使）：对敌方施加中毒时按装备修正层数。
+    if status == 'poison' and str(target_id).startswith('enemy'):
+        adjusted = _orbit_poison_amount_bonus(state['combat'], amount)
+        if adjusted != amount:
+            events.append({
+                'type': 'status',
+                'target_id': target_id,
+                'status': status,
+                'amount': adjusted - amount,
+                'before': before,
+                'after': before,
+                'source': 'orbit_poison_modifier',
+            })
+            amount = adjusted
+    target[status] = max(0, before + amount)
     events.append({
         'type': 'status',
         'target_id': target_id,
@@ -1588,6 +1619,9 @@ def _apply_status(state, target, status, amount, events, source='card'):
         'source': source,
         'category': 'action' if status == 'stun' else 'status',
     })
+    # 干细胞/魔法干细胞/魔法癌细胞（表15 轨道使）：施加中毒后的装备触发。
+    if status == 'poison' and str(target_id).startswith('enemy'):
+        _apply_enemy_poison_hook(state, target, seed=str(state.get('seed') or 'status'), events=events)
     if status == 'vulnerable' and target_id != 'player':
         for _, effect in _equipment_effects(state['combat'], 'vulnerable_shield'):
             _gain_shield(state, int(effect.get('amount') or 0), events)
@@ -1924,6 +1958,16 @@ def _draw_cards(state, count, seed, events, autoplay_depth=0, card_filter=None):
                 'machine_learning_draw',
             )
         _on_card_drawn(state, card, seed, events, autoplay_depth)
+        # 魔法更快（表15 轨道使）：自己回合内每抽1张牌，旋转轨道一次。
+        if combat.get('turn') == 'player' and (_orbit(combat).get('petals') or []):
+            for _, draw_effect in _equipment_effects(combat, 'orbit_on_draw'):
+                _rotate_orbit(
+                    state,
+                    max(1, int(draw_effect.get('amount') or 1)),
+                    seed,
+                    events,
+                    source='orbit_on_draw',
+                )
     if drawn:
         _record_cards_drawn(state, drawn, events)
         events.append({'type': 'draw', 'count': len(drawn), 'card_instance_ids': drawn})
@@ -2777,6 +2821,10 @@ def _player_attack_effect_segment(state, effect, target, context):
     elif effect_type == 'damage_per_elixir':
         base_amount = amount
         hits = int(context.get('x_cost') or 0)
+    elif effect_type == 'damage_per_rotation':
+        # 相对论（表15 轨道使）：基础伤害 ×（1+本回合已旋转次数）。
+        base_amount = amount
+        hits = 1 + int((state.get('combat', {}).get('orbit') or {}).get('rotations_this_turn') or 0)
     else:
         return None
     # 附魔书/威力加成按段分摊（GB-206，与多人 ceil(power/hits) 同口径）：
@@ -2787,19 +2835,33 @@ def _player_attack_effect_segment(state, effect, target, context):
     return max(0, base_amount), max(0, hits)
 
 
+def _player_power_bonus(state, effect=None):
+    """威力（力量）加成：与多人模式同口径（设计 2026-10-07）——全部加在
+    该笔伤害的第一段上，由调用方决定是否是第一段。power_scale=0 的
+    效果（如珍珠装备伤）不享受威力。"""
+    effect = effect or {}
+    power_scale = int(effect['power_scale']) if 'power_scale' in effect else 1
+    if power_scale <= 0:
+        return 0
+    combat = state['combat']
+    power = int(combat.get('power') or 0) + int(combat.get('temporary_power') or 0)
+    return max(0, power * power_scale)
+
+
 def _player_attack_hit_amount(
     state,
     enemy,
     base_amount,
     effect=None,
     attack_multiplier=1,
+    power_bonus=0,
 ):
     """Apply shared player-side and target-side modifiers to one physical hit."""
     combat = state['combat']
     effect = effect or {}
-    power_scale = int(effect['power_scale']) if 'power_scale' in effect else 1
-    power = int(combat.get('power') or 0) + int(combat.get('temporary_power') or 0)
-    amount = max(0, int(base_amount) + power * power_scale)
+    # 威力不再默认折进每一段：调用方只在第一段传入 power_bonus
+    # （与多人模式「全部加在该笔伤害的第一段」同口径）。
+    amount = max(0, int(base_amount) + max(0, int(power_bonus)))
     amount = math.floor(amount * float(attack_multiplier or 1))
     amount = math.floor(amount * float(combat.get('turn_damage_multiplier') or 1))
     if effect.get('damage_multiplier'):
@@ -2898,12 +2960,26 @@ def _enemy_physical_damage(
     hit_count = max(0, int(hits))
     if hit_count <= 0:
         return 0
+    # 威力全部加在该笔伤害的第一段上（与多人模式同口径，设计 2026-10-07）。
+    power_bonus = _player_power_bonus(state, values)
     base_hit_amount = _player_attack_hit_amount(
         state,
         enemy,
         base_amount,
         values,
         attack_multiplier=attack_multiplier,
+    )
+    first_hit_amount = (
+        _player_attack_hit_amount(
+            state,
+            enemy,
+            base_amount,
+            values,
+            attack_multiplier=attack_multiplier,
+            power_bonus=power_bonus,
+        )
+        if power_bonus > 0
+        else base_hit_amount
     )
     tags = _card_tags(values)
     precise = 'precise' in tags
@@ -2912,7 +2988,7 @@ def _enemy_physical_damage(
     for hit_index in range(1, hit_count + 1):
         if int(enemy.get('health') or 0) <= 0:
             break
-        hit_amount = base_hit_amount
+        hit_amount = first_hit_amount if hit_index == 1 else base_hit_amount
         evade = max(0, int(enemy.get('evade') or 0))
         if evade > 0:
             enemy['evade'] = evade - 1
@@ -3111,6 +3187,25 @@ def _must_play_attack_card(state, card):
     )
 
 
+def _must_play_flagged_card(state, card):
+    """恶魔的瘟疫（表15）：此牌在手牌中且可支付费用时，必须先打出此牌。"""
+    combat = state.get('combat') or {}
+    values = _card_values(card)
+    if values.get('must_play_first'):
+        return False
+    for hand_card in combat.get('hand', []):
+        if hand_card is card:
+            continue
+        hand_values = _card_values(hand_card)
+        if not hand_values.get('must_play_first'):
+            continue
+        cost = max(0, int(hand_values.get('cost_e') or 0))
+        extra = 0
+        if int(combat.get('elixir') or 0) >= cost + extra:
+            return True
+    return False
+
+
 def _is_card_playable(state, card, automatic=False):
     combat = state.get('combat') or {}
     values = _card_values(card)
@@ -3121,11 +3216,14 @@ def _is_card_playable(state, card, automatic=False):
         or combat.get('opening_redraw_pending')
         or combat.get('pending_card_choice')
         or (not automatic and _must_play_attack_card(state, card))
+        or (not automatic and _must_play_flagged_card(state, card))
         or (
             values.get('type') == 'thorn'
             and int(combat.get('attack_blocked') or 0) > 0
         )
     ):
+        return False
+    if values.get('requires_empty_orbit') and _orbit_count(combat) > 0:
         return False
     if (
         values.get('script') == 'requires_no_last_turn_damage'
@@ -3359,6 +3457,70 @@ def _resolve_pending_card_choice(state, payload, seed, events):
     pending = combat.get('pending_card_choice')
     if not isinstance(pending, dict):
         _fail('NO_CARD_CHOICE', '当前没有待处理的卡牌选择')
+    kind = str(pending.get('kind') or '')
+    if kind == 'summon_pick':
+        summon_id = int(payload.get('selected_summon_id') or 0)
+        summons = _summons(combat)
+        summon = next(
+            (item for item in summons if int(item.get('summon_id') or 0) == summon_id),
+            None,
+        )
+        if summon is None:
+            _fail('INVALID_SUMMON', '所选召唤物无效')
+        combat.pop('pending_card_choice', None)
+        _resolve_summon_effects(state, summon, 'passive', seed, events)
+        return
+    if kind == 'orbit_petal':
+        petal_id = int(payload.get('selected_petal_id') or 0)
+        petals = _orbit(combat).get('petals') or []
+        pos = next(
+            (i for i, petal in enumerate(petals) if int(petal.get('petal_id') or 0) == petal_id),
+            None,
+        )
+        if pos is None:
+            _fail('INVALID_ORBIT_PETAL', '所选花瓣无效')
+        combat.pop('pending_card_choice', None)
+        orbit = _orbit(combat)
+        orbit['pointer'] = pos % len(petals) if petals else 0
+        events.append({'type': 'orbit_pointer_set', 'pointer': orbit['pointer']})
+        _rotate_orbit(state, 1, seed, events, source='orbit_pick_and_rotate')
+        return
+    if kind == 'effect_choice':
+        # 抉择（表15 轨道使）：魔法碎片/魔法分裂器等在两个效果间选择一项。
+        option_id = str(payload.get('selected_option_id') or '')
+        options = [
+            opt for opt in (pending.get('options') or [])
+            if isinstance(opt, dict)
+        ]
+        option = next((opt for opt in options if str(opt.get('id')) == option_id), None)
+        if option is None:
+            _fail('INVALID_EFFECT_CHOICE', '所选选项无效')
+        combat.pop('pending_card_choice', None)
+        source_card = pending.get('source_card') or {}
+        source_values = {
+            'name': source_card.get('name') or {'zh': '抉择'},
+            'type': source_card.get('type') or 'bloom',
+            'effects': tuple(option.get('effects') or ()),
+            'tags': tuple(source_card.get('tags') or ()),
+        }
+        pseudo_card = {
+            'def_id': source_card.get('def_id'),
+            'instance_id': source_card.get('instance_id'),
+            'upgraded': False,
+            'modifiers': {},
+        }
+        events.append({
+            'type': 'effect_choice_resolved',
+            'option_id': option_id,
+            'source_definition_id': source_card.get('def_id'),
+        })
+        for effect in option.get('effects') or ():
+            targets = _card_targets(combat, source_values, payload)
+            _resolve_effect(
+                state, pseudo_card, source_values, effect, targets,
+                payload, seed, events, {'autoplay_depth': 0},
+            )
+        return
     raw_ids = payload.get('selected_card_ids')
     if not isinstance(raw_ids, list):
         raw_ids = []
@@ -3584,6 +3746,357 @@ def _card_targets(combat, values, payload):
     return [target]
 
 
+# ---------------------------------------------------------------- 轨道系统
+# 表15 / 轨道使：轨道卡打出后在其轨道末尾生成耐久为X的花瓣；旋转一次触发
+# 转到的花瓣并使耐久-1；旋转一圈=当前所有花瓣各触发一次；每回合结束自动
+# 旋转一次。花瓣被触发时按卡效果再结算一次（目标规则与打出时一致）。
+
+def _orbit(combat):
+    orbit = combat.get('orbit')
+    if not isinstance(orbit, dict):
+        orbit = {}
+        combat['orbit'] = orbit
+    orbit.setdefault('petals', [])
+    orbit.setdefault('pointer', 0)
+    orbit.setdefault('rotations_this_turn', 0)
+    orbit.setdefault('rotations_this_combat', 0)
+    orbit.setdefault('serial', 0)
+    return orbit
+
+
+def _orbit_petal_snapshot(petal):
+    return {
+        'petal_id': petal.get('petal_id'),
+        'def_id': petal.get('def_id'),
+        'name': petal.get('name'),
+        'durability': int(petal.get('durability') or 0),
+    }
+
+
+def _orbit_new_petal(state, combat, def_id, values, durability, events, source, effects_override=None):
+    """把一张卡（或模板）作为花瓣放上轨道末尾。"""
+    orbit = _orbit(combat)
+    orbit['serial'] = int(orbit.get('serial') or 0) + 1
+    petal_effects = effects_override
+    if petal_effects is None:
+        petal_effects = values.get('orbit_effects') or values.get('effects') or ()
+    petal = {
+        'petal_id': orbit['serial'],
+        'def_id': str(def_id),
+        'name': values.get('name') or {'zh': str(def_id), 'en': str(def_id)},
+        'durability': max(1, int(durability or 1)),
+        'effects': [copy.deepcopy(eff) for eff in petal_effects],
+        'tags': list(values.get('tags') or ()),
+        'card_type': str(values.get('type') or ''),
+        'vars': {},
+    }
+    orbit['petals'].append(petal)
+    events.append({
+        'type': 'orbit_petal_added',
+        'petal': _orbit_petal_snapshot(petal),
+        'source': source,
+    })
+    return petal
+
+
+def _orbit_resolve_petal(state, petal, seed, events, depth=0):
+    """触发一个花瓣：以该卡的轨道效果结算一次。"""
+    combat = state['combat']
+    if not isinstance(petal, dict) or state.get('phase') != 'combat':
+        return
+    values = {
+        'name': petal.get('name') or {'zh': petal.get('def_id')},
+        'type': petal.get('card_type') or 'bloom',
+        'effects': tuple(petal.get('effects') or ()),
+        'tags': tuple(petal.get('tags') or ()),
+    }
+    pseudo_card = {'def_id': petal.get('def_id'), 'instance_id': -1, 'upgraded': False, 'modifiers': {}}
+    events.append({'type': 'orbit_petal_triggered', 'petal': _orbit_petal_snapshot(petal)})
+    repeats = 1
+    # 分裂器：所有轨道卡会额外触发一次
+    for _, _effect in _equipment_effects(combat, 'orbit_splitter'):
+        repeats += max(1, int(_effect.get('amount') or 1))
+    for _ in range(repeats):
+        if state.get('phase') != 'combat':
+            return
+        targets = _card_targets(combat, values, None)
+        for effect in values['effects']:
+            _resolve_effect(
+                state,
+                pseudo_card,
+                values,
+                effect,
+                targets,
+                {},
+                seed,
+                events,
+                {
+                    'autoplay_depth': 0,
+                    'orbit': True,
+                    'orbit_vars': petal.get('vars') or {},
+                    'orbit_depth': depth,
+                },
+            )
+
+
+def _orbit_on_rotate_hooks(state, seed, events, depth=0):
+    """每次旋转结算后触发的装备效果（闪避护符/魔法闪避护符/布加迪/量子）。"""
+    combat = state['combat']
+    if state.get('phase') != 'combat':
+        return
+    for _, effect in _equipment_effects(combat, 'orbit_on_rotate_shield'):
+        _gain_shield(state, max(0, int(effect.get('amount') or 0)), events)
+    for _, effect in _equipment_effects(combat, 'orbit_on_rotate_damage'):
+        living = _living_enemies(combat)
+        if living:
+            enemy = _rng(state, seed, 'orbit_rotate_damage').choice(living)
+            _enemy_physical_damage(
+                state,
+                enemy,
+                max(0, int(effect.get('amount') or 0)),
+                1,
+                events,
+                effect.get('_source_name') or 'orbit_on_rotate_damage',
+            )
+    for _, effect in _equipment_effects(combat, 'orbit_rotate_draw'):
+        every = max(1, int(effect.get('every') or 3))
+        orbit = _orbit(combat)
+        if int(orbit.get('rotations_this_combat') or 0) % every == 0:
+            _draw_cards(state, 1, seed, events, 0)
+    if depth < 16:
+        for _, effect in _equipment_effects(combat, 'orbit_rotate_extra'):
+            every = max(1, int(effect.get('every') or 4))
+            orbit = _orbit(combat)
+            if int(orbit.get('rotations_this_combat') or 0) % every == 0:
+                _rotate_orbit(state, 1, seed, events, source='orbit_rotate_extra', depth=depth + 1)
+
+
+def _rotate_orbit(state, times, seed, events, source='play', depth=0):
+    """旋转轨道 times 次：每次触发指针指向的花瓣，耐久-1，归零移除。"""
+    if depth > 24:
+        events.append({'type': 'orbit_rotate_skipped', 'reason': 'depth', 'source': source})
+        return 0
+    combat = state['combat']
+    orbit = _orbit(combat)
+    triggered = 0
+    for _ in range(max(0, int(times))):
+        petals = orbit['petals']
+        if not petals:
+            break
+        pointer = int(orbit.get('pointer') or 0)
+        idx = pointer % len(petals)
+        petal = petals[idx]
+        orbit['rotations_this_turn'] = int(orbit.get('rotations_this_turn') or 0) + 1
+        orbit['rotations_this_combat'] = int(orbit.get('rotations_this_combat') or 0) + 1
+        events.append({
+            'type': 'orbit_rotate',
+            'pointer': idx,
+            'petal': _orbit_petal_snapshot(petal),
+            'source': source,
+        })
+        # 耐久先扣：花瓣效果里的「旋转」不会再转到自己（防止自旋递归），
+        # 耐久归零时先移除再结算它的最后一次效果。
+        petal['durability'] = int(petal.get('durability') or 0) - 1
+        expired = int(petal.get('durability')) <= 0
+        if expired:
+            petals.pop(idx)
+            events.append({'type': 'orbit_petal_expired', 'petal_id': petal.get('petal_id')})
+            orbit['pointer'] = idx % len(petals) if petals else 0
+        else:
+            orbit['pointer'] = (idx + 1) % len(petals)
+        _orbit_resolve_petal(state, petal, seed, events, depth)
+        triggered += 1
+        if state.get('phase') != 'combat':
+            return triggered
+        petals = orbit['petals']
+        pos = next(
+            (i for i, p in enumerate(petals) if p.get('petal_id') == petal.get('petal_id')),
+            None,
+        )
+        if pos is not None and int(petals[pos].get('durability') or 0) <= 0:
+            petals.pop(pos)
+            events.append({'type': 'orbit_petal_expired', 'petal_id': petal.get('petal_id')})
+            orbit['pointer'] = min(orbit['pointer'], max(0, len(petals) - 1))
+        _orbit_on_rotate_hooks(state, seed, events, depth)
+    return triggered
+
+
+def _rotate_orbit_full(state, seed, events, source='play', depth=0):
+    """旋转一圈：当前轨道上的每个花瓣各被触发一次。"""
+    orbit = _orbit(state['combat'])
+    return _rotate_orbit(state, len(orbit.get('petals') or []), seed, events, source=source, depth=depth)
+
+
+def _orbit_count(combat):
+    return len(_orbit(combat).get('petals') or [])
+
+
+def _settle_enemy_poison(state, enemy, events):
+    """结算目标中毒一次：结算伤害→滞留时减半→剧毒追加（与回合结算同口径）。"""
+    poison = max(0, int(enemy.get('poison') or 0))
+    if poison <= 0:
+        return 0
+    _enemy_raw_damage(
+        state,
+        enemy,
+        poison,
+        events,
+        'poison',
+        player_caused=True,
+    )
+    if int(enemy.get('stagnation') or 0) <= 0:
+        enemy['poison'] = math.floor(poison / 2)
+    enemy['poison'] = int(enemy.get('poison') or 0) + max(0, int(enemy.get('toxic_poison') or 0))
+    return poison
+
+
+def _apply_enemy_poison_hook(state, enemy, seed, events):
+    """每次对敌方施加中毒后触发的轨道使装备效果（干细胞/魔法干细胞/魔法癌细胞）。"""
+    combat = state['combat']
+    if state.get('phase') != 'combat' or not isinstance(enemy, dict):
+        return
+    for _, effect in _equipment_effects(combat, 'orbit_poison_shield'):
+        _gain_shield(state, max(0, int(effect.get('amount') or 0)), events)
+    for _, effect in _equipment_effects(combat, 'orbit_poison_damage'):
+        living = _living_enemies(combat)
+        if living:
+            target = _rng(state, seed, 'orbit_poison_damage').choice(living)
+            _enemy_physical_damage(
+                state,
+                target,
+                max(0, int(effect.get('amount') or 0)),
+                1,
+                events,
+                'orbit_poison_damage',
+            )
+    for _, effect in _equipment_effects(combat, 'orbit_poison_draw'):
+        every = max(1, int(effect.get('every') or 2))
+        combat['orbit_poison_applies'] = int(combat.get('orbit_poison_applies') or 0) + 1
+        if combat['orbit_poison_applies'] % every == 0:
+            _draw_cards(state, 1, seed, events, 0)
+
+
+def _orbit_poison_amount_bonus(combat, amount):
+    """毒气/魔法毒气：对敌方施加中毒时按装备修正层数。"""
+    bonus = 0
+    for _, effect in _equipment_effects(combat, 'orbit_poison_bonus'):
+        bonus += int(effect.get('amount') or 0)
+    multiplier = 1.0
+    for _, effect in _equipment_effects(combat, 'orbit_poison_multiplier'):
+        multiplier *= float(effect.get('multiplier') or 1.0)
+    return max(0, int(math.floor((amount + bonus) * multiplier)))
+
+
+# ---------------------------------------------------------------- 召唤系统
+# 表15 / 召唤师：3个召唤槽；召唤X把召唤物放进第一个空槽（全满则牺牲队首，
+# 其余前移一格后在末槽召唤）；号令X=触发队首召唤物的主动效果并移到队尾，
+# 重复X次；被动效果在回合结束自动触发一次；被顶出的召唤物触发牺牲效果。
+
+SUMMON_SLOT_LIMIT = 3
+
+
+def _summons(combat):
+    summons = combat.get('summons')
+    if not isinstance(summons, list):
+        summons = []
+        combat['summons'] = summons
+    return summons
+
+
+def _resolve_summon_effects(state, summon, effect_key, seed, events, depth=0):
+    """按召唤物定义结算一段效果（passive/active/sacrifice）。"""
+    combat = state['combat']
+    if state.get('phase') != 'combat' or not isinstance(summon, dict):
+        return
+    definition = STORY_SUMMONS.get(str(summon.get('def_id') or '')) or {}
+    effects = definition.get(effect_key) or ()
+    if not effects:
+        return
+    values = {
+        'name': definition.get('name') or {'zh': summon.get('def_id')},
+        'type': 'bloom',
+        'effects': tuple(effects),
+        'tags': (),
+    }
+    pseudo_card = {'def_id': summon.get('def_id'), 'instance_id': -1, 'upgraded': False, 'modifiers': {}}
+    events.append({
+        'type': 'summon_triggered',
+        'summon_def_id': summon.get('def_id'),
+        'effect_kind': effect_key,
+    })
+    targets = _card_targets(combat, values, None)
+    for effect in effects:
+        _resolve_effect(
+            state, pseudo_card, values, effect, targets, {},
+            seed, events, {'autoplay_depth': 0, 'summon_depth': depth},
+        )
+
+
+def _sacrifice_summon_at(state, index, seed, events, depth=0):
+    summons = _summons(state['combat'])
+    if not summons or not (0 <= index < len(summons)):
+        return None
+    summon = summons.pop(index)
+    events.append({'type': 'summon_sacrificed', 'summon_def_id': summon.get('def_id')})
+    _resolve_summon_effects(state, summon, 'sacrifice', seed, events, depth)
+    return summon
+
+
+def _summon(state, def_id, count=1, seed='', events=None):
+    """召唤 count 个召唤物：进第一个空槽；全满则先牺牲队首再在末槽召唤。"""
+    combat = state['combat']
+    events = events if events is not None else []
+    for _ in range(max(1, int(count or 1))):
+        if state.get('phase') != 'combat':
+            break
+        summons = _summons(combat)
+        while len(summons) >= SUMMON_SLOT_LIMIT:
+            _sacrifice_summon_at(state, 0, seed, events)
+        definition = STORY_SUMMONS.get(str(def_id))
+        if definition is None:
+            break
+        if not summons and not combat.get('first_summon_def_id'):
+            # 第三只眼天赋（表15 召唤师）关注“首个召唤出来的召唤物”。
+            combat['first_summon_def_id'] = str(def_id)
+        summon = {
+            'summon_id': int(combat.get('summon_serial', 0) or 0) + 1,
+            'def_id': str(def_id),
+        }
+        combat['summon_serial'] = summon['summon_id']
+        summons.append(summon)
+        events.append({
+            'type': 'summon_added',
+            'summon_def_id': str(def_id),
+            'summon_id': summon['summon_id'],
+        })
+        _resolve_summon_effects(state, summon, 'on_summon', seed, events)
+    return events
+
+
+def _order_summons(state, times, seed, events, depth=0):
+    """号令X：触发队首召唤物的主动效果并移到队尾，重复X次。"""
+    combat = state['combat']
+    for _ in range(max(0, int(times or 0))):
+        if state.get('phase') != 'combat':
+            break
+        summons = _summons(combat)
+        if not summons:
+            break
+        head = summons.pop(0)
+        summons.append(head)
+        events.append({'type': 'summon_ordered', 'summon_def_id': head.get('def_id')})
+        _resolve_summon_effects(state, head, 'active', seed, events, depth)
+
+
+def _summons_turn_end_passives(state, seed, events):
+    """每个召唤物的被动效果在回合结束自动触发一次。"""
+    combat = state['combat']
+    for summon in list(_summons(combat)):
+        if state.get('phase') != 'combat':
+            break
+        _resolve_summon_effects(state, summon, 'passive', seed, events)
+
+
 def _apply_elemental_repeat_choice(state, choice, seed, events, context, card):
     combat = state['combat']
     choice = str(choice or '').strip()
@@ -3621,6 +4134,237 @@ def _resolve_effect(state, card, values, effect, targets, payload, seed, events,
     combat = state['combat']
     effect_type = str(effect.get('type') or '')
     amount = effect.get('amount', 0)
+    if effect_type == 'orbit_clear_for_elixir':
+        orbit = _orbit(combat)
+        destroyed = len(orbit.get('petals') or [])
+        if destroyed:
+            orbit['petals'] = []
+            orbit['pointer'] = 0
+            gain = destroyed * max(1, int(effect.get('per') or 1))
+            _gain_elixir(state, gain, events)
+            events.append({'type': 'orbit_cleared', 'destroyed': destroyed})
+        return
+    if effect_type == 'orbit_upgrade_random_pile':
+        pile_key = str(effect.get('pile') or 'draw_pile')
+        card_type_filter = str(effect.get('card_type') or '')
+        bonus = max(1, int(amount or 2))
+        candidates = [
+            item for item in combat.get(pile_key, [])
+            if (
+                (not card_type_filter or _card_values(item).get('type') == card_type_filter)
+                and int(_card_values(item).get('orbit') or 0) > 0
+            )
+        ] or [
+            item for item in combat.get(pile_key, [])
+            if not card_type_filter or _card_values(item).get('type') == card_type_filter
+        ]
+        if candidates:
+            chosen = _rng(state, seed, 'orbit_upgrade_pile').choice(candidates)
+            values = _card_values(chosen)
+            chosen.setdefault('modifiers', {})['orbit_bonus'] = (
+                int(chosen['modifiers'].get('orbit_bonus') or 0) + bonus
+            )
+            events.append({
+                'type': 'orbit_pile_upgraded',
+                'def_id': chosen.get('def_id'),
+                'amount': bonus,
+            })
+        return
+    if effect_type == 'orbit_pick_and_rotate':
+        petals = _orbit(combat).get('petals') or []
+        if petals:
+            combat['pending_card_choice'] = {
+                'kind': 'orbit_petal',
+                'title': {'zh': '选择一个花瓣', 'en': 'Choose a petal'},
+                'petals': [dict(petal, effects=None) for petal in petals],
+            }
+        return
+    if effect_type == 'summon':
+        _summon(
+            state,
+            str(effect.get('def_id') or ''),
+            int(amount or 1),
+            seed=seed,
+            events=events,
+        )
+        return
+    if effect_type == 'order':
+        _order_summons(state, int(amount or 1), seed, events, depth=int(context.get('summon_depth') or 0))
+        return
+    if effect_type == 'random_damage':
+        # 表15 轨道使：对随机敌人造成 XD（hits 为随机次数，逐次独立随机目标）。
+        for _ in range(max(1, int(effect.get('hits') or 1))):
+            living = _living_enemies(combat)
+            if not living:
+                break
+            enemy = _rng(state, seed, 'orbit_random_damage').choice(living)
+            _enemy_physical_damage(
+                state,
+                enemy,
+                max(0, int(amount or 0)),
+                1,
+                events,
+                _localized(values.get('name')),
+            )
+        return
+    if effect_type == 'rotate_orbit':
+        _rotate_orbit(state, max(0, int(amount or 1)), seed, events,
+                      source=str(effect.get('source') or getattr(card, 'def_id', 'play') if isinstance(card, dict) else 'play'),
+                      depth=int(context.get('orbit_depth') or 0))
+        return
+    if effect_type == 'rotate_orbit_full':
+        _rotate_orbit_full(state, seed, events,
+                           source=str(values.get('name', {}).get('zh') if isinstance(values.get('name'), dict) else 'play'),
+                           depth=int(context.get('orbit_depth') or 0))
+        return
+    if effect_type == 'orbit_add_petal':
+        template_id = str(effect.get('def_id') or '')
+        template = STORY_CARDS.get(template_id)
+        if template is not None:
+            template_values = dict(template)
+            template_values['name'] = template.get('name') or {'zh': template_id}
+            _orbit_new_petal(
+                state, combat, template_id, template_values,
+                int(effect.get('durability') or 1), events,
+                source=str(effect.get('source') or 'orbit_add_petal'),
+                effects_override=template.get('orbit_effects') or template.get('effects'),
+            )
+        return
+    if effect_type == 'double_elixir':
+        before_elixir = int(combat.get('elixir') or 0)
+        gained = max(0, before_elixir)
+        if gained:
+            _gain_elixir(state, gained, events)
+        overload = max(0, int(effect.get('overload') or 0))
+        if overload:
+            combat['overload'] = int(combat.get('overload') or 0) + overload
+            events.append({'type': 'overload_gained', 'amount': overload})
+        return
+    if effect_type == 'settle_poison':
+        for target in targets:
+            for _ in range(max(0, int(amount or 1))):
+                if int(target.get('health') or 0) <= 0:
+                    break
+                _settle_enemy_poison(state, target, events)
+        return
+    if effect_type == 'consume_poison_damage':
+        for target in targets:
+            poison = max(0, int(target.get('poison') or 0))
+            if poison > 0:
+                target['poison'] = 0
+                _enemy_physical_damage(
+                    state, target, poison * max(1, int(amount or 1)), 1, events,
+                    _localized(values.get('name')),
+                )
+        return
+    if effect_type == 'random_status':
+        status_key = str(effect.get('status') or 'poison')
+        for _ in range(max(0, int(effect.get('hits') or 1))):
+            living = _living_enemies(combat)
+            if not living:
+                break
+            enemy = _rng(state, seed, f'orbit_random_status:{status_key}').choice(living)
+            _apply_status(state, enemy, status_key, max(0, int(amount or 0)), events)
+        return
+    if effect_type == 'orbit_durability_all':
+        for petal in _orbit(combat).get('petals') or []:
+            petal['durability'] = int(petal.get('durability') or 0) + int(amount or 1)
+        events.append({'type': 'orbit_durability_changed', 'amount': int(amount or 1)})
+        return
+    if effect_type == 'orbit_transform_all':
+        for petal in _orbit(combat).get('petals') or []:
+            petal['def_id'] = str(values.get('def_id') or petal.get('def_id') or card.get('def_id') or '')
+            petal['name'] = values.get('name') or petal.get('name')
+            petal['effects'] = [copy.deepcopy(eff) for eff in (values.get('orbit_effects') or values.get('effects') or ())]
+            petal['durability'] = max(1, int(effect.get('durability') or petal.get('durability') or 1))
+        events.append({'type': 'orbit_transformed', 'def_id': str(card.get('def_id') or '')})
+        return
+    if effect_type == 'orbit_draw_per_petal':
+        count = _orbit_count(combat) + max(0, int(effect.get('bonus') or 0))
+        if count > 0:
+            _draw_cards(state, count, seed, events, int(context.get('autoplay_depth') or 0))
+        return
+    if effect_type == 'discard_to_orbit':
+        durability = max(1, int(effect.get('durability') or 1))
+        for item in list(combat.get('discard_pile') or []):
+            item_values = _card_values(item)
+            _orbit_new_petal(
+                state, combat, item.get('def_id'), item_values,
+                durability, events, source='magic_quantum',
+                effects_override=(),
+            )
+        combat['discard_pile'] = []
+        events.append({'type': 'orbit_from_discard', 'durability': durability})
+        return
+    if effect_type == 'shield_plus_orbit_count':
+        _gain_shield(
+            state,
+            max(0, int(amount or 0)) * max(1, _orbit_count(combat) + 1),
+            events,
+        )
+        return
+    if effect_type == 'delayed_shield_next_turn':
+        combat['next_turn_shield'] = int(combat.get('next_turn_shield') or 0) + max(0, int(amount or 0))
+        events.append({'type': 'next_turn_shield_queued', 'amount': max(0, int(amount or 0))})
+        return
+    if effect_type == 'date_palm_strike':
+        bonus = 0
+        orbit_vars = context.get('orbit_vars') if isinstance(context.get('orbit_vars'), dict) else {}
+        if context.get('orbit'):
+            bonus = int(orbit_vars.get('damage_bonus') or 0)
+        living = _living_enemies(combat)
+        if living:
+            enemy = _rng(state, seed, 'date_palm_strike').choice(living)
+            _enemy_physical_damage(
+                state, enemy, max(0, int(amount or 0)) + bonus, 1, events,
+                _localized(values.get('name')),
+            )
+        if not context.get('orbit'):
+            growth = max(0, int(effect.get('growth') or 0))
+            if growth:
+                combat.setdefault('orbit_date_palm_bonus', 0)
+                combat['orbit_date_palm_bonus'] = int(combat.get('orbit_date_palm_bonus') or 0) + growth
+                events.append({'type': 'orbit_petal_bonus', 'def_id': 'date_palm', 'amount': growth})
+        return
+    if effect_type == 'choose_effect':
+        options = [
+            {
+                'id': str(option.get('id') or f'option{index}'),
+                'label': option.get('label') or {'zh': str(option.get('id') or ''), 'en': str(option.get('id') or '')},
+                'description': option.get('description') or {},
+                'effects': list(option.get('effects') or ()),
+            }
+            for index, option in enumerate(effect.get('options') or ())
+        ]
+        if options:
+            combat['pending_card_choice'] = {
+                'kind': 'effect_choice',
+                'title': effect.get('title') or {'zh': '抉择', 'en': 'Choose one'},
+                'options': options,
+                'source_card': {
+                    'def_id': card.get('def_id'),
+                    'instance_id': card.get('instance_id'),
+                    'name': values.get('name'),
+                    'type': values.get('type'),
+                    'tags': list(values.get('tags') or ()),
+                },
+            }
+        return
+    if effect_type == 'refund_if_orbit_played':
+        if int(combat.get('orbit_cards_played_this_turn') or 0) > 0:
+            _gain_elixir(state, max(0, int(amount or 0)), events)
+        return
+    if effect_type == 'rotate_per_target_poison':
+        _rotate_orbit(state, 1, seed, events, depth=int(context.get('orbit_depth') or 0))
+        extra = 0
+        for target in targets:
+            extra += min(
+                max(0, int(effect.get('limit') or 5)),
+                int((max(0, int(target.get('poison') or 0))) // max(1, int(effect.get('per') or 5))),
+            )
+        if extra > 0:
+            _rotate_orbit(state, extra, seed, events, depth=int(context.get('orbit_depth') or 0))
+        return
     if effect_type in STORY_PLAYER_ATTACK_EFFECT_TYPES:
         for target in targets:
             segment = _player_attack_effect_segment(state, effect, target, context)
@@ -3641,8 +4385,12 @@ def _resolve_effect(state, card, values, effect, targets, payload, seed, events,
                 seed=seed,
             )
     elif effect_type == 'status':
+        hits = max(1, int(effect.get('hits') or 1))
         for target in targets:
-            _apply_status(state, target, str(effect.get('status') or ''), int(amount), events)
+            for _ in range(hits):
+                if isinstance(target, dict) and str(target.get('id') or '').startswith('enemy') and int(target.get('health') or 0) <= 0:
+                    break
+                _apply_status(state, target, str(effect.get('status') or ''), int(amount), events)
     elif effect_type == 'status_self':
         _apply_status(state, combat, str(effect.get('status') or ''), int(amount), events)
     elif effect_type == 'shield':
@@ -3806,6 +4554,9 @@ def _resolve_effect(state, card, values, effect, targets, payload, seed, events,
                 hand_card.setdefault('modifiers', {})['temporary_free_e'] = True
         elif script == 'disc':
             combat['disc_active'] = True
+        elif script == 'orbit_cancer_poison':
+            # 癌细胞（表15 轨道使）：使用后本回合每打一张牌，对目标施加X层中毒。
+            combat['orbit_cancer_poison'] = max(0, int(amount or 0))
         elif script:
             combat[script] = True
     elif effect_type == 'temporary_cost_down':
@@ -4529,6 +5280,34 @@ def _resolve_card_effects_once(
                     'parallel_group',
                     f'{group_prefix}:hit:{hit_index}' if hit_index else group_prefix,
                 )
+    # 轨道卡打出后：效果结算完成，在其轨道末尾生成耐久为X的花瓣（表15）。
+    if state.get('phase') == 'combat':
+        orbit_value = values.get('orbit')
+        if orbit_value:
+            # 分裂器等对牌堆卡加的轨道层数在此并入耐久。
+            orbit_bonus = 0
+            if isinstance(card, dict):
+                modifiers = card.get('modifiers') or {}
+                try:
+                    orbit_bonus = int(modifiers.get('orbit_bonus') or 0)
+                except (TypeError, ValueError):
+                    orbit_bonus = 0
+            petal = _orbit_new_petal(
+                state,
+                combat,
+                card.get('def_id'),
+                values,
+                int(orbit_value) + orbit_bonus,
+                events,
+                source='play',
+            )
+            # 海枣：此卡在轨道上的伤害永久+成长值（本场战斗累计）。
+            if str(card.get('def_id')) == 'date_palm':
+                petal['vars']['damage_bonus'] = int(combat.get('orbit_date_palm_bonus') or 0)
+            elif str(card.get('def_id')) == 'magic_shard':
+                petal['vars']['damage_bonus'] = 0
+        if values.get('orbit') or values.get('orbit_effects'):
+            combat['orbit_cards_played_this_turn'] = int(combat.get('orbit_cards_played_this_turn') or 0) + 1
 
 
 def _enchantment_killed_enemy_ids(combat, context):
@@ -4830,6 +5609,13 @@ def _finalize_played_card(
         event.setdefault('source_card_instance_id', instance_id)
         event.setdefault('source_definition_id', card['def_id'])
     combat['cards_played_this_turn'] = int(combat.get('cards_played_this_turn') or 0) + 1
+    # 癌细胞（表15 轨道使）：本回合每打出一张牌，对随机存活敌人施加X层中毒。
+    cancer_poison = int(combat.get('orbit_cancer_poison') or 0)
+    if cancer_poison > 0 and state.get('phase') == 'combat':
+        living = _living_enemies(combat)
+        if living:
+            enemy = _rng(state, seed, 'orbit_cancer_poison').choice(living)
+            _apply_status(state, enemy, 'poison', cancer_poison, events, source='cancer_cell')
     counts = combat.setdefault('card_use_counts', {})
     counts[card['def_id']] = int(counts.get(card['def_id']) or 0) + 1
     if values.get('type') == 'thorn' and int(combat.get('bleed') or 0) > 0:
@@ -5690,8 +6476,22 @@ def _card_damage_prediction(state, card, enemy):
             effect,
             attack_multiplier=context.get('attack_multiplier', 1),
         )
-        for _ in range(max(0, hits)):
-            hit_value = raw_value
+        # 威力加在第一段（与实际结算同口径）：预测首段加成、后续段不加。
+        power_bonus = _player_power_bonus(state, effect)
+        first_value = (
+            _player_attack_hit_amount(
+                state,
+                simulated_enemy,
+                base_amount,
+                effect,
+                attack_multiplier=context.get('attack_multiplier', 1),
+                power_bonus=power_bonus,
+            )
+            if power_bonus > 0
+            else raw_value
+        )
+        for hit_index in range(max(0, hits)):
+            hit_value = first_value if hit_index == 0 else raw_value
             if dodge > 0:
                 dodge -= 1
                 if precise:
@@ -6015,6 +6815,20 @@ def _start_combat(state, node, seed, events, encounter_override=None):
         'next_turn_draw_delta': 0,
         'sewage_active': False,
         'draw_phase_complete': False,
+        # 轨道系统（表15 / 轨道使）：petals 有序（新花瓣排末尾）、pointer 指向
+        # 下一次旋转会被转到的花瓣；旋转触发花瓣效果并使耐久-1，耐久归零消失。
+        'orbit': {
+            'petals': [],
+            'pointer': 0,
+            'rotations_this_turn': 0,
+            'rotations_this_combat': 0,
+            'serial': 0,
+        },
+        'orbit_cards_played_this_turn': 0,
+        'orbit_poison_applies': 0,
+        'next_turn_shield': 0,
+        'summons': [],
+        'summon_serial': 0,
     }
     state['phase'] = 'combat'
     combat = state['combat']
@@ -7742,6 +8556,46 @@ def _turn_boundary(state, seed, events, extra=False):
     combat['turn_kind'] = 'extra' if extra else 'normal'
     combat['cards_played_this_turn'] = 0
     combat['active_discards_this_turn'] = 0
+    # 轨道：回合开始的每回合计数重置 + 泡泡炸弹类的下回合护盾入账。
+    orbit_state = _orbit(combat)
+    orbit_state['rotations_this_turn'] = 0
+    combat['orbit_cards_played_this_turn'] = 0
+    next_turn_shield = int(combat.pop('next_turn_shield', 0) or 0)
+    if next_turn_shield > 0:
+        _gain_shield(state, next_turn_shield, events)
+    for equipment, effect in list(_equipment_effects(combat, 'orbit_start_rotate')):
+        if state.get('phase') == 'combat':
+            _rotate_orbit(
+                state,
+                max(1, int(effect.get('amount') or 1)),
+                seed,
+                events,
+                source=f"equipment:{equipment.get('def_id') or 'orbit_start_rotate'}",
+            )
+    # 魔法树枝（表15 召唤师）：回合开始时若有，则耗费1M召唤沙尘暴（升级+号令1）。
+    for equipment, effect in list(_equipment_effects(combat, 'summon_each_turn')):
+        if state.get('phase') != 'combat':
+            break
+        cost_m = max(0, int(effect.get('cost_m') or 1))
+        if int(combat.get('magic') or 0) >= cost_m:
+            if cost_m:
+                combat['magic'] = int(combat.get('magic') or 0) - cost_m
+                combat['magic_spent_this_turn'] = int(combat.get('magic_spent_this_turn') or 0) + cost_m
+                events.append({'type': 'magic_spent', 'amount': cost_m, 'source': equipment.get('def_id') or 'summon_each_turn'})
+            _summon(state, str(effect.get('def_id') or 'sandstorm'), 1, seed=seed, events=events)
+            if int(effect.get('order') or 0) > 0:
+                _order_summons(state, int(effect['order']), seed, events)
+    # 第三只眼天赋（表15 召唤师）：每回合开始可耗费1E触发首个召唤物的牺牲效果。
+    first_summon = str(combat.get('first_summon_def_id') or '')
+    if (
+        _has_relic(state, 'third_eye_summon')
+        and first_summon
+        and int(combat.get('elixir') or 0) >= 1
+        and any(s.get('def_id') == first_summon for s in _summons(combat))
+    ):
+        combat['elixir'] = int(combat.get('elixir') or 0) - 1
+        events.append({'type': 'elixir_spent', 'amount': 1, 'source': 'third_eye_summon'})
+        _resolve_summon_effects(state, {'def_id': first_summon}, 'sacrifice', seed, events)
     combat['card_play_limit'] = combat.pop('next_extra_play_limit', None) if extra else None
     sturdy = max(0, int(combat.get('sturdy') or 0))
     if sturdy:
@@ -7853,6 +8707,23 @@ def _turn_boundary(state, seed, events, extra=False):
 def _prepare_player_turn_end(state, seed, events, reason=None):
     combat = state['combat']
     combat['blind_active'] = False
+    # 轨道（表15）：每回合结束时自动旋转一次；环绕轨道天赋改为旋转一圈。
+    if state.get('phase') == 'combat' and (combat.get('orbit', {}).get('petals') or []):
+        if _has_relic(state, 'orbital_surround'):
+            _rotate_orbit_full(state, seed, events, source='orbital_surround')
+        else:
+            _rotate_orbit(state, 1, seed, events, source='turn_end')
+    combat.pop('orbit_cancer_poison', None)
+    # 召唤（表15）：每个召唤物的被动效果在回合结束自动触发一次；
+    # 奇迹之春天赋：回合结束可选择一个召唤物再触发一次其被动。
+    if state.get('phase') == 'combat' and _summons(combat):
+        _summons_turn_end_passives(state, seed, events)
+        if _has_relic(state, 'miracle_spring') and state.get('phase') == 'combat' and _summons(combat):
+            combat['pending_card_choice'] = {
+                'kind': 'summon_pick',
+                'title': {'zh': '奇迹之春：选择一个召唤物，再次触发其被动', 'en': 'Miracle Spring: pick a summon to repeat its passive'},
+                'summons': [dict(summon) for summon in _summons(combat)],
+            }
     if int(combat.get('invincible') or 0) > 0:
         before_invincible = int(combat['invincible'])
         combat['invincible'] = max(0, before_invincible - 1)
@@ -7994,12 +8865,15 @@ def _reward_choices(state, seed, room_type='combat', count=3):
 
 
 def _natural_relic_pool(state, rarity=None, for_shop=False):
+    character_id = str(state.get('player', {}).get('character_id') or 'common_flower')
     pool = [
         relic_id
         for relic_id, relic in STORY_RELICS.items()
         if relic.get('rarity') != 'special'
         and (rarity is None or relic.get('rarity') == rarity)
         and not (for_shop and relic.get('shop_excluded'))
+        # 表15：召唤师限定天赋不进其他角色的天赋池。
+        and not (relic.get('character_id') and relic.get('character_id') != character_id)
     ]
     # 普通天赋每个旅程只能获得一次；全部获取后返回空池，由调用方给安慰奖励。
     # 可重复获取的是特殊天赋（首领/Boss 与指定事件池），不走普通天赋池。
@@ -10393,7 +11267,7 @@ def _resolve_new_event_12(state, event_id, option_id, payload, seed, events):
             _gain_deck_card(state, offers[index], events, source=event_id)
             return
     if event_id == 'talent_lottery' and hint == 'talent_draw':
-        _pay_gold(player, 150)
+        _pay_gold(player, 100)
         relic_id = _random_relic(state, seed)
         room['talent_offer'] = relic_id
         relic_token = f'[[talent:{relic_id}]]'
@@ -10413,10 +11287,10 @@ def _resolve_new_event_12(state, event_id, option_id, payload, seed, events):
                 'id': 'refresh_talent',
                 'label': {'zh': '刷新', 'en': 'Refresh'},
                 'description': {
-                    'zh': '花费50G，重新抽取一个随机天赋',
-                    'en': 'Pay 50 G and draw another random talent',
+                    'zh': '花费40G，重新抽取一个随机天赋',
+                    'en': 'Pay 40 G and draw another random talent',
                 },
-                'cost_gold': 50,
+                'cost_gold': 40,
             },
             {
                 'id': 'leave',
@@ -10437,7 +11311,7 @@ def _resolve_new_event_12(state, event_id, option_id, payload, seed, events):
         _gain_relic(state, relic_id, seed, events)
         return
     if event_id == 'talent_lottery' and option_id == 'refresh_talent':
-        _pay_gold(player, 50)
+        _pay_gold(player, 40)
         relic_id = _random_relic(state, seed)
         previous = str(room.get('talent_offer') or '')
         for _ in range(30):

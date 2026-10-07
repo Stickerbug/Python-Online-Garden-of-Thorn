@@ -7831,3 +7831,165 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
     animation-iteration-count: 1 !important;
   }
 }
+
+/* ------------------------------------------------ 轨道环（表15 轨道使）
+   模仿装备轨道：环形 JS 公转（story.js 里 GTNEquipmentMotion 驱动）、
+   卡图居中、右下角耐久角标；半径比装备轨道更大。 */
+.story-orbit-track {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 3;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.story-orbit-ring {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  transform-origin: center;
+  animation: storyOrbitRingOrbit 13s linear infinite;
+  animation-delay: var(--story-orbit-delay, 0s);
+}
+
+.story-orbit-ring.gtn-orbit-js {
+  animation: none !important;
+}
+
+.story-orbit-petal {
+  --story-orbit-angle: 0deg;
+  --story-orbit-petal-radius: calc(var(--story-avatar-width) * 1.06);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 48px;
+  height: 48px;
+  border: 0;
+  background: transparent;
+  box-sizing: border-box;
+  pointer-events: auto;
+  transform-origin: 0 0;
+  transform:
+    rotate(var(--story-orbit-angle))
+    translateY(calc(-1 * var(--story-orbit-petal-radius) * var(--story-orbit-radius-scale, 1)))
+    rotate(calc(-1 * var(--story-orbit-angle)))
+    translate(-50%, -50%);
+  transition:
+    transform 620ms cubic-bezier(.2, .84, .2, 1),
+    opacity 240ms ease;
+  will-change: transform;
+}
+
+/* 自转（模仿装备图标的缓慢旋转，每个花瓣相位独立） */
+.story-orbit-petal-icon {
+  animation: storyOrbitIconSpin 12s linear infinite;
+  animation-delay: var(--story-orbit-spin-delay, 0s);
+}
+
+@keyframes storyOrbitIconSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.story-orbit-petal-visual,
+.story-orbit-petal-icon {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  position: relative;
+  transform-origin: center;
+}
+
+.story-orbit-petal-visual {
+  animation: storyOrbitCounterOrbit 13s linear infinite;
+  animation-delay: var(--story-orbit-delay, 0s);
+}
+
+.story-orbit-ring.gtn-orbit-js .story-orbit-petal-visual {
+  animation: none !important;
+}
+
+.story-orbit-petal-image {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+}
+
+.story-orbit-petal-fallback {
+  font-size: 16px;
+  font-weight: 800;
+  color: #b06a00;
+}
+
+.story-orbit-petal-durability {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  border: 1px solid rgba(176, 106, 0, .7);
+  background: #fff7e6;
+  color: #b06a00;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 16px;
+  text-align: center;
+  box-sizing: border-box;
+  box-shadow: 0 1px 4px rgba(23, 32, 51, .22);
+}
+
+@keyframes storyOrbitRingOrbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes storyOrbitCounterOrbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-360deg); }
+}
+
+/* ------------------------------------------------ 召唤槽（表15 召唤师） */
+.story-summon-slots {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    margin-top: 4px;
+}
+.story-summon-slot {
+    min-width: 64px;
+    padding: 4px 8px;
+    border-radius: 8px;
+    border: 1px dashed var(--story-line, #c9d4e0);
+    color: var(--story-muted, #8894a4);
+    font-size: 11px;
+    text-align: center;
+    box-sizing: border-box;
+}
+.story-summon-slot.is-occupied {
+    border-style: solid;
+    border-color: #7ec97e;
+    background: rgba(126, 201, 126, .14);
+    color: var(--story-text, #233);
+    font-weight: 700;
+}
+.story-summon-slot.is-occupied:first-child {
+    border-color: #f0a500;
+}
+
+/* 抉择选项按钮（表15：effect_choice/orbit_petal/summon_pick） */
+.story-option-choice-item {
+    min-height: 44px;
+    padding: 8px 12px;
+    font-size: 13px;
+}
+.story-option-choice-item.is-selected {
+    border-color: #f0a500;
+    box-shadow: 0 0 0 2px rgba(240, 165, 0, .35);
+}

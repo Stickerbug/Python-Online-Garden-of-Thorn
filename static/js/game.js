@@ -1022,7 +1022,7 @@ const I18N = {
         mod_selection_force_vanilla: 'Enabled the vanilla card mod because the selected mods must contain at least one Thorn, Bloom, Root, and Guard card.',
     mode_select: 'Mode', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: 'Infinite Fire', mode_random_deck: 'Random Deck',
         mode_casual_1v1: 'Casual 1v1', mode_casual_2v2: 'Casual 2v2', mode_ranked_1v1: 'Ranked 1v1', mode_ranked_2v2: 'Ranked 2v2', mode_casual_urf: 'Infinite Fire', mode_casual_random_deck: 'Random Deck',
-        ai_1v1_test: 'Battle Phelren V2.1', ai_1v1_test_title: 'Battle Phelren V2.1', ai_1v1_test_pending: 'Confirm a 1v1 match against Phelren? This match does not affect Garden Rating and uses the vanilla card set only.', ai_1v1_test_loading: 'Loading Phelren V2.1...',
+        ai_1v1_test: 'Battle Phelren V2.2', ai_1v1_test_title: 'Battle Phelren V2.2', ai_1v1_test_pending: 'Confirm a 1v1 match against Phelren? This match does not affect Garden Rating and uses the vanilla card set only.', ai_1v1_test_loading: 'Loading Phelren V2.2...',
         ai_1v1_test_health_label: 'AI HP', ai_1v1_test_health_note: 'AI HP',
         form_team: 'Form Team', leave_team: 'Leave Team', invite_team: 'Invite Team',
         team_invite_msg: '{0} invites you to form a team', team_formed_msg: 'Team formed with {0}',
@@ -1144,7 +1144,7 @@ I18N.zh = { ...I18N.en,
     gallery_type: '类型', gallery_cost: '费用', gallery_tags_label: '标签', gallery_description: '描述', gallery_effect: '效果', gallery_trigger: '触发',
     mode_select: '模式', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '无限火力', mode_random_deck: '随机卡组',
     mode_casual_1v1: '娱乐 1v1', mode_casual_2v2: '娱乐 2v2', mode_ranked_1v1: '天梯 1v1', mode_ranked_2v2: '天梯 2v2', mode_casual_urf: '无限火力', mode_casual_random_deck: '随机卡组',
-    ai_1v1_test: '对战 Phelren V2.1', ai_1v1_test_title: '对战 Phelren V2.1', ai_1v1_test_pending: '确认与 Phelren 进行 1v1 对局？本场对局不计段位，且仅使用原版模组。', ai_1v1_test_loading: '正在加载 Phelren V2.1…',
+    ai_1v1_test: '对战 Phelren V2.2', ai_1v1_test_title: '对战 Phelren V2.2', ai_1v1_test_pending: '确认与 Phelren 进行 1v1 对局？本场对局不计段位，且仅使用原版模组。', ai_1v1_test_loading: '正在加载 Phelren V2.2…',
     ai_1v1_test_health_label: 'AI 血量', ai_1v1_test_health_note: 'AI 血量',
     form_team: '组队', leave_team: '离开队伍', invite_team: '邀请队伍',
     team_invite_msg: '{0} 邀请你组队', team_formed_msg: '已与 {0} 组队',
@@ -1231,7 +1231,7 @@ I18N.fr = { ...I18N.en,
     choose_light_cards: 'Choisissez les cartes Attaque à convertir', choose_yggdrasil_card: 'Carte Arbre-Monde', opening_sequence_title: 'Arrangement floral', opening_sequence_message: 'Faites glisser les cartes pour réorganiser votre pioche. La carte du haut sera piochée en premier.', convert_label: 'Convertir', convert_per_type: 'Max {0} par type',
     selected_count: 'Sélectionné {0}/{1}', max_selection_warning: 'Ne peut pas dépasser {0}', deck_total: 'Deck : {0} cartes', view_deck_title: 'Voir le deck',
     mode_select: 'Mode', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: 'Feu infini', mode_random_deck: 'Deck aléatoire',
-    ai_1v1_test: 'Affronter Phelren V2.1', ai_1v1_test_title: 'Affronter Phelren V2.1', ai_1v1_test_pending: 'Confirmer un duel 1v1 contre Phelren ? Cette partie ne modifie pas le Garden Rating et utilise uniquement le jeu de base Vanilla.', ai_1v1_test_loading: 'Chargement de Phelren V2.1…',
+    ai_1v1_test: 'Affronter Phelren V2.2', ai_1v1_test_title: 'Affronter Phelren V2.2', ai_1v1_test_pending: 'Confirmer un duel 1v1 contre Phelren ? Cette partie ne modifie pas le Garden Rating et utilise uniquement le jeu de base Vanilla.', ai_1v1_test_loading: 'Chargement de Phelren V2.2…',
     ai_1v1_test_health_label: 'PV de l’IA', ai_1v1_test_health_note: 'PV de l’IA',
     hand_deck_info_opp: 'Main:{0} Deck:{1}', hand_deck_discard_info: 'Main:{0} Deck:{1} Défausse:{2}', round_status: 'Tour {0} - {1}',
     server_broadcast: 'Serveur : {0}', error_msg: 'Erreur : {0}', lobby_status: 'Salon - {0}', no_counter_countdown: 'Pas de contre({0})',
@@ -1320,7 +1320,7 @@ I18N.ja = { ...I18N.en,
     choose_light_cards: '変化させる攻撃カードを選択', choose_yggdrasil_card: '世界樹変換カードを選択', opening_sequence_title: '花序編成', opening_sequence_message: 'カードをドラッグして山札の順序を変更します。一番上のカードから引きます。', convert_label: '変換', convert_per_type: 'タイプごとに最大{0}枚',
     selected_count: '選択済み {0}/{1}', max_selection_warning: '{0}を超えることはできません', deck_total: 'デッキ: {0}枚', view_deck_title: 'デッキ確認',
     mode_select: 'モード', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '無限火力', mode_random_deck: 'ランダムデッキ',
-        ai_1v1_test: 'Phelren V2.1 と対戦', ai_1v1_test_title: 'Phelren V2.1 と対戦', ai_1v1_test_pending: 'Phelren との1v1対戦を開始しますか？この対戦では Garden Rating は変動せず、Vanilla カードのみを使用します。', ai_1v1_test_loading: 'Phelren V2.1 を読み込んでいます…',
+        ai_1v1_test: 'Phelren V2.2 と対戦', ai_1v1_test_title: 'Phelren V2.2 と対戦', ai_1v1_test_pending: 'Phelren との1v1対戦を開始しますか？この対戦では Garden Rating は変動せず、Vanilla カードのみを使用します。', ai_1v1_test_loading: 'Phelren V2.2 を読み込んでいます…',
         ai_1v1_test_health_label: 'AI HP', ai_1v1_test_health_note: 'AI HP',
     hand_deck_info_opp: '手札:{0} デッキ:{1}', hand_deck_discard_info: '手札:{0} デッキ:{1} 捨て札:{2}', round_status: '第{0}ターン - {1}',
     server_broadcast: 'サーバー: {0}', error_msg: 'エラー: {0}', lobby_status: 'ロビー - {0}', no_counter_countdown: 'カウンターなし({0})',
@@ -2145,6 +2145,8 @@ Object.assign(I18N.en, {
     replay_winner: 'Winner: {0}', replay_round: 'Round {0}', replay_frame_empty: 'No timeline data.',
     replay_loading_progress: 'Loaded {0}/{1} frames', replay_prepare: 'Preparing replay...',
     feedback_appeal: 'Match Appeal', feedback_replay_id: 'Replay ID',
+    feedback_appeal_entry: 'Go to appeal',
+    feedback_appeal_pending_short: 'Appeal under review — click to view',
     feedback_replay_placeholder: 'Replay ID, e.g. R-12345 or P-12345'
 });
 Object.assign(I18N.zh, {
@@ -2160,6 +2162,8 @@ Object.assign(I18N.zh, {
     replay_winner: '胜者：{0}', replay_round: '第{0}回合', replay_frame_empty: '暂无时间线数据。',
     replay_loading_progress: '已加载 {0}/{1} 帧', replay_prepare: '正在准备回放...',
     feedback_appeal: '对局申诉', feedback_replay_id: '回放 ID',
+    feedback_appeal_entry: '前往申诉',
+    feedback_appeal_pending_short: '申诉复核中，点击查看',
     feedback_replay_placeholder: '回放 ID，例如 R-12345 或 P-12345'
 });
 Object.assign(I18N.fr, {
@@ -2175,6 +2179,8 @@ Object.assign(I18N.fr, {
     replay_winner: 'Vainqueur : {0}', replay_round: 'Tour {0}', replay_frame_empty: 'Aucune timeline.',
     replay_loading_progress: '{0}/{1} frames chargées', replay_prepare: 'Préparation du replay...',
     feedback_appeal: 'Contestation de partie', feedback_replay_id: 'ID du replay',
+    feedback_appeal_entry: 'Aller à l’appel',
+    feedback_appeal_pending_short: 'Appel en cours de vérification — cliquez pour voir',
     feedback_replay_placeholder: 'ID du replay, ex. R-12345 ou P-12345'
 });
 Object.assign(I18N.ja, {
@@ -2190,6 +2196,8 @@ Object.assign(I18N.ja, {
     replay_winner: '勝者: {0}', replay_round: 'ラウンド {0}', replay_frame_empty: 'タイムラインなし。',
     replay_loading_progress: '{0}/{1}フレーム読込済み', replay_prepare: 'リプレイ準備中...',
     feedback_appeal: '対戦の異議申立て', feedback_replay_id: 'リプレイID',
+    feedback_appeal_entry: '申立てへ',
+    feedback_appeal_pending_short: '申立て審査中 — クリックで表示',
     feedback_replay_placeholder: 'リプレイID（例 R-12345 / P-12345）'
 });
 Object.assign(I18N.en, { chief_designer_prefix: 'Chief Designer' });
@@ -6427,7 +6435,7 @@ const lastStatusSignatures = new Map();
    （长对局全量日志含卡牌快照可达数百 KB），客户端拼成完整数组
    再进渲染管线；窗口对不上（新对局/重连/服务端全量）时整体替换。 */
 let battleLogAccum = [];
-let battleLogAccumStart = 0;
+let battleLogAccumStart = 0;let battleLogAccumGen = 0;
 const BATTLE_LOG_ACCUM_CAP = 1500;
 
 function mergeIncomingBattleLog(data) {
@@ -6436,10 +6444,16 @@ function mergeIncomingBattleLog(data) {
     const total = data.log_total != null && Number.isFinite(Number(data.log_total))
         ? Number(data.log_total) : start + data.log.length;
     const accTotal = battleLogAccumStart + battleLogAccum.length;
-    if (!battleLogAccum.length || start > accTotal || total < battleLogAccumStart) {
+    // GB-387/392：服务端压缩战报（重复行合并成 ×N）会让 total 比累积器还小，
+    // 且压缩会在行数不变时重写同位置的行（×3 → ×4）。前者看 total 回缩，
+    // 后者看服务端下发的日志代数 log_gen——任一变化都以服务端窗口整体重置，
+    // 否则旧累积器里的重复行会被显示层继续合并出 1,2,8,64 的指数计数。
+    const logGen = Number(data.log_gen || 0);
+    if (!battleLogAccum.length || logGen !== battleLogAccumGen || start > accTotal || total < accTotal) {
         battleLogAccum = data.log.map(line => String(line || ''));
         battleLogAccumStart = start;
-    } else if (total >= accTotal) {
+        battleLogAccumGen = logGen;
+    } else {
         const skip = Math.max(0, accTotal - start);
         const delta = data.log.slice(skip);
         for (let i = 0; i < delta.length; i++) battleLogAccum.push(String(delta[i] || ''));
@@ -6458,6 +6472,7 @@ function mergeIncomingBattleLog(data) {
 function resetBattleLogAccumulator() {
     battleLogAccum = [];
     battleLogAccumStart = 0;
+    battleLogAccumGen = 0;
 }
 const GALLERY_MECHANIC_FLAGS = new Set(['fusion_layer', 'fission_layer']);
 const bootLoader = {
@@ -6738,7 +6753,7 @@ function setAi1v1TestLoading(loading) {
     if (healthInput) healthInput.disabled = ai1v1StartPending;
     if (label) {
         label.textContent = ai1v1StartPending
-            ? (UI.ai_1v1_test_loading || '正在加载 Phelren V2.1…')
+            ? (UI.ai_1v1_test_loading || '正在加载 Phelren V2.2…')
             : UI.ai_1v1_test;
     }
 }
@@ -7051,7 +7066,7 @@ function updateStaticText() {
     const aiTestLabel = $('ai-1v1-test-label');
     if (aiTestLabel) {
         aiTestLabel.textContent = ai1v1StartPending
-            ? (UI.ai_1v1_test_loading || '正在加载 Phelren V2.1…')
+            ? (UI.ai_1v1_test_loading || '正在加载 Phelren V2.2…')
             : UI.ai_1v1_test;
     }
     const aiHealthLabel = $('ai-1v1-test-health-label');
@@ -19879,7 +19894,15 @@ function renderAccountIntegrity(session) {
     });
     if (!session.busy) {
         $('integrity-report-form').querySelector('button').disabled = !matches.length;
-        $('integrity-appeal-form').querySelector('button').disabled = profile?.appeal_status === 'pending';
+        const appealLink = $('integrity-appeal-link');
+        if (appealLink) {
+            // 申诉表单在反馈中心（/feedback-center/appeal），这里只留入口链接与状态提示。
+            const pending = profile?.appeal_status === 'pending';
+            appealLink.textContent = pending
+                ? (UI.feedback_appeal_pending_short || '申诉复核中，点击查看')
+                : (UI.feedback_appeal_entry || '前往申诉');
+            appealLink.classList.toggle('disabled', pending);
+        }
     }
 }
 
@@ -19970,10 +19993,6 @@ function setupAccountIntegrityUi() {
         const action = button.dataset.action;
         if (!['confirm','withdraw'].includes(action)) return;
         submitAccountIntegrity(`/api/account-integrity/team-reports/${Number(button.dataset.integrityReport)}/${action}`, {}, action==='confirm' ? '确认你作为对手观察到了该违规？成立后会扣除被举报者信誉。' : '确认撤回此举报？');
-    });
-    $('integrity-appeal-form').addEventListener('submit', event => {
-        event.preventDefault();
-        submitAccountIntegrity('/api/account-integrity/appeal', {reason:$('integrity-appeal-reason').value.trim()});
     });
     $('integrity-staff-form').addEventListener('submit', event => {
         event.preventDefault();
@@ -36174,6 +36193,10 @@ function appendGameChat(nick, text, meta = {}, channelMeta = {}) {
     }
     if (matchKey) battleChatMatchKey = matchKey;
     appendCompressedTimelineChat(battleChatEntries, { ...entry, matchKey }, 500);
+    // GB-393：本地新到的聊天必须让 renderLog 的性能短路失效——签名只在
+    // 服务端 room_chat_history 到达时更新，聊天即时推送不改签名的话，
+    // 短路会直接 return，消息要等下一次状态推送才显示。
+    roomChatHistorySignature = `local:${Date.now()}:${battleChatEntries.length}`;
     refreshBattleLogViews();
 }
 
@@ -38774,7 +38797,7 @@ function renderGameOver(data) {
                 const aiHealth = readAi1v1TestHealthInput();
                 setAi1v1TestLoading(true);
                 rematchBtn.disabled = true;
-                rematchBtn.textContent = UI.ai_1v1_test_loading || '正在加载 Phelren V2.1…';
+                rematchBtn.textContent = UI.ai_1v1_test_loading || '正在加载 Phelren V2.2…';
                 socket.emit('ai_1v1_rematch', { ai_health: aiHealth });
             };
         } else if (isTutorialGameOver && isWin) {

@@ -2077,10 +2077,14 @@ class GameEngine2v2(GameEngine):
             self._clear_invincible_state(expiring_id)
             self.log_msg(f"{self.pn(expiring_id)}的无敌效果结束")
         ps = self.players[player_id]
-        # 设计 9.29：血盾按各自回合开始衰减——floor(2/3×最大生命) →
-        # floor(1/3×最大生命) → 0（0 后不再变动；值按当前最大生命动态取）。
+        # 设计（平衡 2026-10-07）：血盾在「自己的回合开始」才衰减，且首个
+        # 自己回合不衰减——2/3 → (第2回合)1/3 → (第3回合)0，第三个回合
+        # 开始时才掉光。此前首个回合开始就掉到 1/3，提前了一回合。
+        shield_seen_key = 'blood_shield_own_turns_seen'
+        turns_seen = int(ps.custom_vars.get(shield_seen_key, 0) or 0) + 1
+        ps.custom_vars[shield_seen_key] = turns_seen
         shield_now = max(0, int(getattr(ps, 'blood_shield', 0) or 0))
-        if shield_now > 0:
+        if shield_now > 0 and turns_seen >= 2:
             shield_stage2 = max(0, int(getattr(ps, 'max_health', 0) or 0)) // 3
             if shield_now > shield_stage2:
                 ps.blood_shield = shield_stage2
@@ -2091,6 +2095,9 @@ class GameEngine2v2(GameEngine):
         self._decay_sealed_equipment_for_owner_turn(player_id)
         self._activate_pending_corruption()
         self._clear_forced_target_at_turn_start(player_id)
+        # 与 1v1 的 _apply_turn_start_effects 同位：自己回合开始时保存
+        # H/E/M+状态快照（安卡回退口径，平衡 2026-10-07）。
+        self._save_turn_start_snapshot(player_id)
         self._antennae_reveal[player_id] = None
         if hasattr(self, '_antennae_reveal_targets'):
             self._antennae_reveal_targets[player_id] = None

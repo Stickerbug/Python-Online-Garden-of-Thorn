@@ -297,10 +297,10 @@ def test_start_accepts_mage_only_when_every_member_has_unlocked_it():
     gtn.app.config.update(TESTING=True)
     client = gtn.app.test_client()
     forming = _bundle()
-    mage_progress = build_story_progress_payload([{
-        'character_id': 'common_flower',
-        'difficulty': 'normal',
-        'standard_clears': 1,
+    # 新链（普花→轨道使→魔法师）：魔法师的前置是轨道使——玩过一局即解锁。
+    mage_progress = build_story_progress_payload([], [{
+        'character_id': 'orbiter',
+        'plays': 1,
     }])
 
     def create_run_result(*args):

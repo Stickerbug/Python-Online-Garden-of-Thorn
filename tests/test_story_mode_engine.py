@@ -2202,6 +2202,33 @@ def test_player_damage_applies_power_before_multiplier_and_vulnerable_last():
     assert [event['amount'] for event in damage] == [27]
 
 
+def test_player_power_only_boosts_the_first_hit_of_a_multi_hit_attack():
+    """平衡 2026-10-07：威力与多人模式同口径——全部加在该笔伤害的第一段，
+    多段攻击的后续段不再吃威力。"""
+    seed = 'story-power-first-hit-only'
+    state, _ = _begin_combat(seed)
+    state['combat']['power'] = 3
+    card = _inject_hand_card(state, 'sand')  # 2D×4（沙）
+    target = state['combat']['enemies'][0]
+    target['health'] = target['max_health'] = 999
+    target['shield'] = 0
+    _refresh_combat_projections(state)
+
+    prediction = state['combat']['damage_predictions'][card['instance_id']]
+    hits = prediction['by_target'][target['id']]['hits']
+    assert hits[0] == 2 + 3  # 第一段吃满威力
+    assert hits[1:] == [2, 2, 2]  # 后续段不加
+
+    state, events = apply_story_action(
+        state,
+        'play_card',
+        {'card_instance_id': card['instance_id'], 'target_id': target['id']},
+        seed,
+    )
+    damage = [event['amount'] for event in events if event['type'] == 'enemy_damage']
+    assert damage == [5, 2, 2, 2]
+
+
 def test_acid_actively_discarding_azalea_runs_azalea_effect():
     seed = 'story-acid-azalea'
     state, _ = _begin_combat(seed)
@@ -2973,7 +3000,7 @@ def test_talent_lottery_offers_refresh_and_accepts_one_chosen_talent():
     assert state['phase'] == 'room'
     offered = state['room'].get('talent_offer')
     assert offered in STORY_RELICS
-    assert state['player']['gold'] == 350
+    assert state['player']['gold'] == 400  # 500 - 100G（表15：抽奖100G）
 
     state, _ = apply_story_action(
         state,

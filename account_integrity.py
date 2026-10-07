@@ -16,7 +16,7 @@ import db
 
 
 BJ = timezone(timedelta(hours=8))
-RULE_VERSION = '2'
+RULE_VERSION = '3'
 IDENTITY_WINDOW_DAYS = 30
 SHARED_NETWORK_USERS = 8
 RAPID_ALTERNATION_WINDOW_SECONDS = 15 * 60
@@ -816,14 +816,10 @@ def _pair_signals(conn, low, high, now):
         or same_day_feed
     )
     multiple_categories = len(categories) >= 2
-    can_confirm = (
-        score >= 90
-        and (
-            (strong_device and not shared)
-            or (multiple_categories and (not shared or strong_behavior))
-        )
-    )
-    state = 'confirmed' if can_confirm else 'probable' if score >= 70 else 'suspected' if score >= 40 else 'none'
+    # 平衡 2026-10-07：风险分 >50 即自动关联（原 ≥90 且需强信号）。
+    # dismissed/appealed 的人工裁定仍在 _recompute_pair_conn 里兜底，不会被覆盖。
+    can_confirm = score > 50
+    state = 'confirmed' if can_confirm else 'probable' if score >= 40 else 'suspected' if score >= 30 else 'none'
     facts = {'shared_device': bool(devices), 'stable_device_days': stable_device_days,
              'network_days': network_days, 'shared_network': shared, 'registration_overlap': registration_overlap,
              'registration_proximity_seven_days': registration_proximity,

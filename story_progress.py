@@ -5,8 +5,8 @@ from __future__ import annotations
 
 STORY_CHARACTER_CHAIN = (
     'common_flower',
-    'mage',
     'orbiter',
+    'mage',
     'summoner',
     'occultist',
 )
@@ -35,8 +35,12 @@ def normalize_story_journey_mode(value):
     return mode
 
 
-def build_story_progress_payload(rows=()):
-    """Project persisted clear counters into the public unlock contract."""
+def build_story_progress_payload(rows=(), plays=()):
+    """Project persisted clear/play counters into the public unlock contract.
+
+    解锁规则（平衡 2026-10-07）：使用前一名角色玩过一局（创建对局即算，
+    开局直接放弃也计入）就解锁下一名角色；通关仍用于难度/模式解锁。
+    """
 
     clears = {
         character_id: {
@@ -55,19 +59,34 @@ def build_story_progress_payload(rows=()):
             'standard': max(0, int(row.get('standard_clears') or 0)),
             'boss_rush': max(0, int(row.get('boss_rush_clears') or 0)),
         }
+    play_counts = {}
+    for row in plays or ():
+        try:
+            character_id = normalize_story_character_id(row.get('character_id'))
+        except (AttributeError, ValueError):
+            continue
+        play_counts[character_id] = max(
+            play_counts.get(character_id, 0),
+            max(0, int(row.get('plays') or 0)),
+        )
 
     characters = {}
     for index, character_id in enumerate(STORY_CHARACTER_CHAIN):
         prerequisite = STORY_CHARACTER_CHAIN[index - 1] if index else None
-        unlocked = prerequisite is None or any(
-            clears[prerequisite][difficulty]['standard'] > 0
-            for difficulty in STORY_DIFFICULTIES
+        unlocked = (
+            prerequisite is None
+            or play_counts.get(prerequisite, 0) > 0
+            or any(
+                clears[prerequisite][difficulty]['standard'] > 0
+                for difficulty in STORY_DIFFICULTIES
+            )
         )
         normal_complete = clears[character_id]['normal']['standard'] > 0
         hard_complete = clears[character_id]['hard']['standard'] > 0
         characters[character_id] = {
             'unlocked': bool(unlocked),
             'unlock_character_id': prerequisite,
+            'played': bool(play_counts.get(character_id, 0) > 0),
             'completed_any_difficulty': any(
                 clears[character_id][difficulty]['standard'] > 0
                 for difficulty in STORY_DIFFICULTIES

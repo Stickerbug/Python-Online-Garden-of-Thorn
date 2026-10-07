@@ -24,6 +24,7 @@
         <button id="fc-tab-bug" class="fc-tab is-active" type="button" data-kind="bug" role="tab">漏洞</button>
         <button id="fc-tab-suggestion" class="fc-tab" type="button" data-kind="suggestion" role="tab">建议</button>
         <button id="fc-tab-internal" class="fc-tab" type="button" data-kind="internal" role="tab" hidden>不公开</button>
+        <button id="fc-tab-appeal" class="fc-tab" type="button" data-kind="appeal" role="tab">申诉</button>
       </nav>
 
       <div class="fc-top-actions">
@@ -37,7 +38,7 @@
     </div>
   </header>
 
-  <div class="fc-toolbar">
+  <div id="fc-toolbar" class="fc-toolbar">
     <div class="fc-toolbar-left">
       <label class="fc-search">
           <span id="fc-search-label">输入筛选</span>
@@ -56,7 +57,7 @@
 
   <main class="fc-main">
     <section id="fc-messages" class="fc-messages hidden" aria-label="消息"></section>
-    <div class="fc-split">
+    <div id="fc-split" class="fc-split">
       <aside class="fc-issue-pane" aria-label="issue-list">
         <div class="fc-pane-head">
           <h6 id="fc-open-title">全部问题</h6>
@@ -77,6 +78,26 @@
         </div>
       </section>
     </div>
+
+    <section id="fc-appeal-pane" class="fc-appeal-pane hidden" aria-label="关联申诉">
+      <div class="fc-appeal-card">
+        <div class="fc-empty-kicker">账号关联</div>
+        <h2 id="fc-appeal-title">关联申诉</h2>
+        <p id="fc-appeal-copy" class="fc-muted">关联由多信号自动判断，同一网络不会单独确认。申诉由管理员人工复核，处理前仍保留当前信誉规则。</p>
+        <div id="fc-appeal-status" aria-live="polite"></div>
+        <form id="fc-appeal-form" class="fc-appeal-form" hidden>
+          <label class="fc-field">
+            <span id="fc-appeal-reason-label">申诉说明</span>
+            <textarea id="fc-appeal-reason" rows="6" maxlength="500" required></textarea>
+          </label>
+          <p id="fc-appeal-error" class="fc-error" role="alert" hidden></p>
+          <div class="fc-dialog-actions">
+            <button id="fc-appeal-submit" class="fc-button fc-button-primary" type="submit">提交申诉</button>
+            <a id="fc-appeal-back" class="fc-button fc-button-secondary fc-button-small" href="/feedback-center/bug">返回反馈列表</a>
+          </div>
+        </form>
+      </div>
+    </section>
   </main>
 
   <dialog id="fc-create-dialog" class="fc-dialog">

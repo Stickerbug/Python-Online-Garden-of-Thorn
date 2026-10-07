@@ -216,7 +216,8 @@ def test_rapid_same_device_alternation_confirms_automatically(accounts):
     identify(1)
     identify(2)
     assert not integrity.get_reputation_profile(1)['linked']
-    assert integrity.get_reputation_profile(1)['link_state'] == 'suspected'
+    # 平衡 2026-10-07：风险>50 才自动关联；50 分（仅同设备1天）留在 probable。
+    assert integrity.get_reputation_profile(1)['link_state'] == 'probable'
     assert identify(1)
     profile = integrity.get_reputation_profile(1)
     assert profile['linked']
@@ -265,7 +266,8 @@ def test_network_suspicion_escalates_through_signals_to_confirmed(accounts):
         # login-sequence alternation on their own.
         identify(2, day, device='phone-b', network='home', source='session')
     assert not integrity.get_reputation_profile(1)['linked']
-    assert integrity.get_reputation_profile(1)['link_state'] == 'suspected'
+    # 平衡 2026-10-07：3 日同网 40 分落在 probable 档（>50 才自动关联）。
+    assert integrity.get_reputation_profile(1)['link_state'] == 'probable'
 
     # More A<->B alternation on the same private network across two days.
     identify(1, 0, device='phone-a', network='home')
@@ -274,7 +276,10 @@ def test_network_suspicion_escalates_through_signals_to_confirmed(accounts):
     identify(2, 1, device='phone-b', network='home')
     identify(1, 1, device='phone-a', network='home')
     identify(2, 1, device='phone-b', network='home')
-    assert integrity.get_reputation_profile(1)['link_state'] == 'probable'
+    # 交替登录 +60 → 风险分超 50：按新规则直接自动关联。
+    profile = integrity.get_reputation_profile(1)
+    assert profile['linked']
+    assert profile['link_state'] == 'confirmed'
 
     with db.get_db_connection() as conn:
         conn.execute('UPDATE users SET total_ranked_games=1 WHERE id=1')
@@ -356,7 +361,10 @@ def test_new_registration_has_initial_ledger(accounts):
         assert conn.execute('SELECT COUNT(*) FROM reputation_ledger WHERE business_id=?',(f'reputation:init:user:{user["id"]}',)).fetchone()[0]==1
 
 
-def test_shared_computer_and_rating_still_need_behavior_on_campus(accounts):
+def test_shared_computer_auto_links_even_on_campus_network(accounts):
+    """平衡 2026-10-07：风险>50 即自动关联。共用设备跨 3 日（50+40=90 分）
+    即便在校园这类共享网络、且没有行为信号，也会自动关联；纯校园网络
+    （分数被压到 ≤5）仍不关联（见 test_campus_network_alone_never_confirms）。"""
     with db.get_db_connection() as conn:
         conn.execute('UPDATE users SET total_ranked_games=1 WHERE id=1')
         conn.execute('UPDATE users SET total_ranked_games=20 WHERE id=2')
@@ -364,9 +372,9 @@ def test_shared_computer_and_rating_still_need_behavior_on_campus(accounts):
     for day in range(3):
         for uid in accounts:
             identify(uid,day,device='shared-lab-browser',network='campus')
-    for uid in accounts:
-        integrity.recompute_account_links(uid,now=NOW+timedelta(days=2))
-        assert not integrity.get_reputation_profile(uid)['linked']
+    integrity.recompute_account_links(1,now=NOW+timedelta(days=2))
+    assert integrity.get_reputation_profile(1)['linked']
+    assert integrity.get_reputation_profile(1)['link_state'] == 'confirmed'
 
 
 def test_zero_reputation_violation_still_blocks_daily_recovery(accounts):

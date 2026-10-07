@@ -2019,3 +2019,37 @@ html.fc-scroll-locked body {
   border: 1px solid var(--fc-line);
   cursor: zoom-in;
 }
+
+/* 关联申诉视图（与漏洞/建议并列的独立页签，入口在主页信誉弹窗） */
+.fc-appeal-pane {
+  min-height: 0;
+  overflow: auto;
+}
+.fc-appeal-card {
+  max-width: 560px;
+  margin: 28px auto;
+  padding: 22px 24px;
+  border: 1px solid var(--fc-line);
+  border-radius: 12px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.fc-appeal-card h2 {
+  margin: 0;
+}
+.fc-appeal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.fc-appeal-linked {
+  margin: 0;
+  font-weight: 700;
+}
+.fc-appeal-ok {
+  margin: 0;
+  font-weight: 700;
+  color: #2f7d3c;
+}
