@@ -25451,7 +25451,6 @@ function visibleShortcutCloseButton(root) {
 function visibleShortcutOverlayRoots() {
     const ids = [
         'social-detail-modal',
-        'feedback-modal',
         'account-replay-modal',
         'term-intro-overlay',
         'rotate-hint',
