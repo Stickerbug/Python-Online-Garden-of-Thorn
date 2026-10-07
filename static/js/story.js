@@ -6376,14 +6376,11 @@
             renderResourceOrbs('story-combat-player-elixir', Number(event.after), 0, 'e');
         } else if (eventType === 'magic' && Number.isFinite(Number(event.after))) {
             renderResourceOrbs('story-combat-player-magic', Number(event.after), 0, 'm');
-        } else if (
-            eventType.startsWith('orbit_')
-            || eventType === 'orbit_rotate'
-            || eventType.startsWith('summon_')
-        ) {
-            const combatState = nextRun?.state?.combat;
-            renderStoryOrbit(combatState?.orbit);
-            renderStorySummons(combatState?.summons);
+        } else if (eventType.startsWith('summon_')) {
+            // 轨道事件不再从最终态整体重绘——动画由事件序列驱动
+            // （playStoryOrbitRotate / settleStoryOrbitTrigger），重绘会把
+            // 还在播放中的花瓣瞬间变成最终状态。
+            renderStorySummons(nextRun?.state?.combat?.summons);
         }
         syncStoryPresentationPatch(event.presentation_patch, nextRun);
     }
@@ -6512,11 +6509,25 @@
         } else if (eventType === 'equipment_added') {
             spawnStoryFloat($('story-player-target'), localize(storyContent?.cards?.[event.def_id]?.name), 'equipment');
         } else if (eventType === 'orbit_petal_added') {
+            // 上轨：构建花瓣 DOM（入场动画由 CSS is-entering 负责）+ 浮字。
+            {
+                const ring = ensureStoryOrbitRing();
+                const petalId = String(event?.petal?.petal_id || '');
+                if (ring && petalId && !ring.querySelector(`:scope > .story-orbit-petal[data-petal-id="${petalId}"]`)) {
+                    const item = buildStoryOrbitPetal(event.petal);
+                    item.classList.add('is-entering');
+                    ring.appendChild(item);
+                    layoutStoryOrbitPetals(ring);
+                    window.requestAnimationFrame(() => item.classList.remove('is-entering'));
+                }
+            }
             spawnStoryFloat($('story-player-target'), localize(event?.petal?.name) || '上轨', 'equipment');
         } else if (eventType === 'orbit_rotate') {
-            spawnStoryFloat($('story-orbit-track') || $('story-player-target'), '旋转', 'status');
+            // 机械花式：轮盘转到花瓣位置 → 扣耐久 → 效果（后续事件）→ 消散。
+            await settleStoryOrbitTrigger(event);
+            await playStoryOrbitRotate(event);
         } else if (eventType === 'orbit_petal_expired') {
-            spawnStoryFloat($('story-orbit-track') || $('story-player-target'), '花瓣消散', 'status');
+            await settleStoryOrbitTrigger(event);
         } else if (eventType === 'orbit_cleared') {
             spawnStoryFloat($('story-player-target'), `清轨×${storyEventAmount(event.destroyed)}`, 'elixir');
         } else if (eventType === 'summon_added') {
@@ -12220,8 +12231,47 @@
     }
 
     // ------------------------------------------------ 轨道/召唤（表15）
-    const STORY_ORBIT_RING_PERIOD_S = 13;
-    const STORY_ORBIT_SPIN_PERIOD_S = 12;
+    // 机械花式步进轨道：轮盘不连续公转；每次旋转由事件驱动——轮盘转到
+    // 触发点（正上方 -90°）→ 扣耐久 → 效果结算 →（归零）消散 → 下一位置。
+    const STORY_ORBIT_TRIGGER_ANGLE = -90;
+    const storyOrbitMotions = new Map();
+
+    function storyOrbitMotion() {
+        const key = phaseContextMatchKey(gameState) || 'orbit';
+        if (!storyOrbitMotions.has(key)) {
+            storyOrbitMotions.set(key, { angle: STORY_ORBIT_TRIGGER_ANGLE });
+        }
+        return storyOrbitMotions.get(key);
+    }
+
+    function storyOrbitReducedMotion() {
+        return Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+    }
+
+    function applyStoryOrbitMotion(ring, motion) {
+        ring.style.transform = `rotate(${Number(motion.angle || 0).toFixed(3)}deg)`;
+    }
+
+    function animateStoryOrbitRotation(ring, motion, targetAngle, duration) {
+        if (storyOrbitReducedMotion() || duration <= 1) {
+            motion.angle = targetAngle;
+            applyStoryOrbitMotion(ring, motion);
+            return Promise.resolve();
+        }
+        const startAngle = Number(motion.angle || 0);
+        const startedAt = performance.now();
+        return new Promise((resolve) => {
+            const step = (timestamp) => {
+                const progress = Math.max(0, Math.min(1, (timestamp - startedAt) / duration));
+                const eased = 1 - ((1 - progress) ** 3);
+                motion.angle = startAngle + (targetAngle - startAngle) * eased;
+                applyStoryOrbitMotion(ring, motion);
+                if (progress < 1) window.requestAnimationFrame(step);
+                else resolve();
+            };
+            window.requestAnimationFrame(step);
+        });
+    }
 
     function storyOrbitCardDefinition(defId) {
         return storyContent?.cards?.[String(defId || '')] || null;
@@ -12251,28 +12301,15 @@
         durability.className = 'story-orbit-petal-durability';
         durability.textContent = String(Number(petal?.durability || 0));
         visual.append(icon);
-        // 角标不参与自转：挂在 visual 层（visual 有反向旋转补偿，始终正立）。
         visual.append(durability);
         return visual;
     }
 
-    function buildStoryOrbitPetal(petal, ring) {
+    function buildStoryOrbitPetal(petal) {
         const definition = storyOrbitCardDefinition(petal?.def_id);
         const item = document.createElement('div');
         item.className = 'story-orbit-petal';
         item.dataset.petalId = String(petal?.petal_id || '');
-        item.style.setProperty(
-            '--story-orbit-delay',
-            `${GTNEquipmentMotion.counterDelaySeconds(ring, STORY_ORBIT_RING_PERIOD_S).toFixed(3)}s`,
-        );
-        item.style.setProperty(
-            '--story-orbit-spin-delay',
-            `${GTNEquipmentMotion.spinDelaySeconds(
-                storyEquipmentOwnerKey(),
-                String(petal?.petal_id || petal?.def_id || ''),
-                STORY_ORBIT_SPIN_PERIOD_S,
-            )}s`,
-        );
         const label = localize(definition?.name) || String(petal?.def_id || '');
         item.setAttribute('aria-label', `轨道花瓣 ${label}（耐久${Number(petal?.durability || 0)}）`);
         item.title = `${label}｜耐久 ${Number(petal?.durability || 0)}`;
@@ -12280,15 +12317,58 @@
         return item;
     }
 
-    function syncStoryOrbitPetal(item, petal, index, total, isNext) {
-        const angle = 360 / Math.max(1, total) * index;
-        item.style.setProperty('--story-orbit-index', String(index));
-        item.style.setProperty('--story-orbit-angle', `${angle}deg`);
-        item.classList.toggle('is-next', Boolean(isNext));
-        const badge = item.querySelector('.story-orbit-petal-durability');
-        const durability = String(Number(petal?.durability || 0));
-        if (badge && badge.textContent !== durability) badge.textContent = durability;
-        item.title = `${item.title.split('｜')[0]}｜耐久 ${durability}${isNext ? '（下一次旋转触发）' : ''}`;
+    function layoutStoryOrbitPetals(ring) {
+        const items = [...ring.querySelectorAll(':scope > .story-orbit-petal')]
+            .filter((item) => item.dataset.motionLeaving !== '1');
+        const total = Math.max(1, items.length);
+        items.forEach((item, index) => {
+            const angle = 360 / total * index;
+            item.style.setProperty('--story-orbit-index', String(index));
+            item.style.setProperty('--story-orbit-angle', `${angle}deg`);
+        });
+        return items;
+    }
+
+    function syncStoryOrbitPetalBadge(item, durability) {
+        const badge = item?.querySelector('.story-orbit-petal-durability');
+        if (badge && badge.textContent !== String(durability)) {
+            badge.textContent = String(durability);
+            badge.classList.remove('is-tick');
+            void badge.offsetWidth;
+            badge.classList.add('is-tick');
+        }
+        if (item) item.title = `${item.title.split('｜')[0]}｜耐久 ${durability}`;
+    }
+
+    function removeStoryOrbitPetal(petalId, { withFade = true } = {}) {
+        const container = $('story-orbit-track');
+        const ring = container?.querySelector(':scope > .story-orbit-ring');
+        const item = ring?.querySelector(`:scope > .story-orbit-petal[data-petal-id="${petalId}"]`);
+        if (!item) return;
+        if (!withFade || storyOrbitReducedMotion()) {
+            item.remove();
+            if (ring) layoutStoryOrbitPetals(ring);
+            return;
+        }
+        item.classList.add('is-expiring');
+        const onEnd = () => {
+            item.remove();
+            if (ring) layoutStoryOrbitPetals(ring);
+        };
+        item.addEventListener('transitionend', onEnd, { once: true });
+        window.setTimeout(onEnd, 420);
+    }
+
+    function ensureStoryOrbitRing() {
+        const container = $('story-orbit-track');
+        if (!container) return null;
+        let ring = container.querySelector(':scope > .story-orbit-ring');
+        if (!ring) {
+            ring = document.createElement('div');
+            ring.className = 'story-orbit-ring';
+            container.replaceChildren(ring);
+        }
+        return ring;
     }
 
     function renderStoryOrbit(orbit) {
@@ -12299,23 +12379,10 @@
         const hasDomPetals = Boolean(container.querySelector('.story-orbit-petal'));
         container.hidden = petals.length === 0 && !hasDomPetals;
         if (container.hidden) return;
-        let ring = container.querySelector(':scope > .story-orbit-ring');
-        if (!ring) {
-            ring = document.createElement('div');
-            ring.className = 'story-orbit-ring';
-            container.replaceChildren(ring);
-            container.style.setProperty(
-                '--story-orbit-delay',
-                `${GTNEquipmentMotion.orbitDelaySeconds(STORY_ORBIT_RING_PERIOD_S).toFixed(3)}s`,
-            );
-        }
-        GTNEquipmentMotion.startOrbitMotion(ring, {
-            periodSec: STORY_ORBIT_RING_PERIOD_S,
-            chipSelector: ':scope > .story-orbit-petal',
-            visualSelector: '.story-orbit-petal-visual',
-            pauseRoot: container.closest('.story-avatar-stack'),
-        });
-        const pointer = Number(orbit?.pointer || 0) % Math.max(1, petals.length);
+        const ring = ensureStoryOrbitRing();
+        if (!ring) return;
+        const motion = storyOrbitMotion();
+        applyStoryOrbitMotion(ring, motion);
         const liveIds = new Set(petals.map((petal) => String(petal.petal_id || '')));
         const byId = new Map();
         ring.querySelectorAll(':scope > .story-orbit-petal').forEach((item) => {
@@ -12324,30 +12391,60 @@
         });
         byId.forEach((item, id) => {
             if (liveIds.has(id)) return;
-            GTNEquipmentMotion.startLeave(item, {
-                scaleVar: '--story-orbit-radius-scale',
-                removeMs: 420,
-                onComplete: (el) => el.remove(),
-            });
+            item.classList.add('is-expiring');
+            window.setTimeout(() => item.remove(), 380);
         });
-        petals.forEach((petal, index) => {
+        petals.forEach((petal) => {
             const id = String(petal.petal_id || '');
-            let item = byId.get(id);
-            if (item && item.dataset.motionLeaving === '1') {
-                GTNEquipmentMotion.cancelLeave(item, { scaleVar: '--story-orbit-radius-scale' });
-            }
-            if (!item) {
-                item = buildStoryOrbitPetal(petal, ring);
+            if (!byId.has(id)) {
+                const item = buildStoryOrbitPetal(petal);
+                item.classList.add('is-entering');
                 ring.appendChild(item);
-                item.style.setProperty('--story-orbit-radius-scale', '0');
-                item.style.opacity = '0';
-                GTNEquipmentMotion.beginEnter(item, {
-                    scaleVar: '--story-orbit-radius-scale',
-                    cleanupMs: 640,
-                });
+                window.requestAnimationFrame(() => item.classList.remove('is-entering'));
+            } else {
+                syncStoryOrbitPetalBadge(byId.get(id), Number(petal?.durability || 0));
             }
-            syncStoryOrbitPetal(item, petal, index, petals.length, index === pointer);
         });
+        layoutStoryOrbitPetals(ring);
+    }
+
+    async function playStoryOrbitRotate(event) {
+        const container = $('story-orbit-track');
+        const ring = container?.querySelector(':scope > .story-orbit-ring');
+        const petalId = String(event?.petal?.petal_id || '');
+        const item = ring?.querySelector(`:scope > .story-orbit-petal[data-petal-id="${petalId}"]`);
+        if (!ring || !item) return;
+        const motion = storyOrbitMotion();
+        const items = layoutStoryOrbitPetals(ring);
+        const index = items.indexOf(item);
+        if (index < 0) return;
+        const cardAngle = 360 / Math.max(1, items.length) * index;
+        const absoluteAngle = cardAngle + Number(motion.angle || 0);
+        let delta = STORY_ORBIT_TRIGGER_ANGLE - absoluteAngle;
+        delta = ((delta + 540) % 360) - 180;
+        const targetAngle = Number(motion.angle || 0) + delta;
+        const duration = Math.max(300, Math.min(620, 280 + Math.abs(delta) * 1.7));
+        ring.classList.add('is-resolving');
+        item.classList.add('is-activating');
+        await animateStoryOrbitRotation(ring, motion, targetAngle, duration);
+        // 到位：扣耐久角标 → 效果事件紧随其后播放 → 消散由 expired 事件负责。
+        syncStoryOrbitPetalBadge(item, Number(event?.durability_after ?? 0));
+        item.classList.add('is-at-trigger');
+        await storySleep(storyOrbitReducedMotion() ? 1 : 110);
+    }
+
+    async function settleStoryOrbitTrigger(event) {
+        const container = $('story-orbit-track');
+        const ring = container?.querySelector(':scope > .story-orbit-ring');
+        const petalId = String(event?.petal_id || event?.petal?.petal_id || '');
+        const item = ring?.querySelector(`:scope > .story-orbit-petal[data-petal-id="${petalId}"]`);
+        item?.classList.remove('is-activating', 'is-at-trigger');
+        if (ring && !ring.querySelector('.story-orbit-petal.is-activating')) {
+            ring.classList.remove('is-resolving');
+        }
+        if (item && String(event?.type || '') === 'orbit_petal_expired') {
+            removeStoryOrbitPetal(petalId);
+        }
     }
 
     function renderStorySummons(summons) {

@@ -3912,26 +3912,33 @@ def _rotate_orbit(state, times, seed, events, source='play', depth=0):
         petal = petals[idx]
         orbit['rotations_this_turn'] = int(orbit.get('rotations_this_turn') or 0) + 1
         orbit['rotations_this_combat'] = int(orbit.get('rotations_this_combat') or 0) + 1
+        # 耐久先扣（防自旋递归），但 expired 事件推迟到效果结算之后——
+        # 表现层按「转到位置→扣耐久→效果→(归零)消散→下一位置」播放。
+        petal['durability'] = int(petal.get('durability') or 0) - 1
+        expired = int(petal.get('durability')) <= 0
+        slot_count = len(petals)
+        if expired:
+            petals.pop(idx)
+            orbit['pointer'] = idx % len(petals) if petals else 0
+        else:
+            orbit['pointer'] = (idx + 1) % len(petals)
         events.append({
             'type': 'orbit_rotate',
             'pointer': idx,
             'petal': _orbit_petal_snapshot(petal),
+            'petal_index': idx,
+            'petal_total': slot_count,
+            'durability_after': int(petal.get('durability') or 0),
+            'expired': expired,
             'source': source,
         })
-        # 耐久先扣：花瓣效果里的「旋转」不会再转到自己（防止自旋递归），
-        # 耐久归零时先移除再结算它的最后一次效果。
-        petal['durability'] = int(petal.get('durability') or 0) - 1
-        expired = int(petal.get('durability')) <= 0
-        if expired:
-            petals.pop(idx)
-            events.append({'type': 'orbit_petal_expired', 'petal_id': petal.get('petal_id')})
-            orbit['pointer'] = idx % len(petals) if petals else 0
-        else:
-            orbit['pointer'] = (idx + 1) % len(petals)
         _orbit_resolve_petal(state, petal, seed, events, depth)
         triggered += 1
         if state.get('phase') != 'combat':
             return triggered
+        if expired:
+            # 效果播完才宣布消散（客户端先看到结算浮字，再看花瓣离场）。
+            events.append({'type': 'orbit_petal_expired', 'petal_id': petal.get('petal_id')})
         petals = orbit['petals']
         pos = next(
             (i for i, p in enumerate(petals) if p.get('petal_id') == petal.get('petal_id')),

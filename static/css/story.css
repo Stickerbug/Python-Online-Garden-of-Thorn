@@ -7833,8 +7833,9 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 }
 
 /* ------------------------------------------------ 轨道环（表15 轨道使）
-   模仿装备轨道：环形 JS 公转（story.js 里 GTNEquipmentMotion 驱动）、
-   卡图居中、右下角耐久角标；半径比装备轨道更大。 */
+   机械花式步进轨道：轮盘由事件驱动旋转（story.js 的 playStoryOrbitRotate
+   控制 rotate），无连续公转；花瓣卡图直接显示，右下角耐久角标；
+   到位触发（is-at-trigger）→ 效果 →（归零）is-expiring 消散。 */
 .story-orbit-track {
   position: absolute;
   left: 50%;
@@ -7852,12 +7853,7 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   width: 0;
   height: 0;
   transform-origin: center;
-  animation: storyOrbitRingOrbit 13s linear infinite;
-  animation-delay: var(--story-orbit-delay, 0s);
-}
-
-.story-orbit-ring.gtn-orbit-js {
-  animation: none !important;
+  will-change: transform;
 }
 
 .story-orbit-petal {
@@ -7879,20 +7875,38 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
     rotate(calc(-1 * var(--story-orbit-angle)))
     translate(-50%, -50%);
   transition:
-    transform 620ms cubic-bezier(.2, .84, .2, 1),
-    opacity 240ms ease;
+    transform 480ms cubic-bezier(.2, .84, .2, 1),
+    opacity 260ms ease,
+    scale 260ms ease;
   will-change: transform;
 }
 
-/* 自转（模仿装备图标的缓慢旋转，每个花瓣相位独立） */
-.story-orbit-petal-icon {
-  animation: storyOrbitIconSpin 12s linear infinite;
-  animation-delay: var(--story-orbit-spin-delay, 0s);
+/* 入场：从环心弹出 */
+.story-orbit-petal.is-entering {
+  --story-orbit-radius-scale: 0;
+  opacity: 0;
 }
 
-@keyframes storyOrbitIconSpin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+/* 触发中：轻微放大 + 光晕提示当前结算位 */
+.story-orbit-petal.is-activating {
+  scale: 1.12;
+}
+
+.story-orbit-petal.is-at-trigger {
+  scale: 1.18;
+  filter: drop-shadow(0 0 10px rgba(240, 165, 0, .55));
+}
+
+/* 消散：缩小淡出 */
+.story-orbit-petal.is-expiring {
+  opacity: 0;
+  scale: .35;
+  pointer-events: none;
+}
+
+/* 轮盘结算中：非触发花瓣略微压暗，突出当前位 */
+.story-orbit-ring.is-resolving .story-orbit-petal:not(.is-activating) {
+  opacity: .72;
 }
 
 .story-orbit-petal-visual,
@@ -7903,15 +7917,6 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   place-items: center;
   position: relative;
   transform-origin: center;
-}
-
-.story-orbit-petal-visual {
-  animation: storyOrbitCounterOrbit 13s linear infinite;
-  animation-delay: var(--story-orbit-delay, 0s);
-}
-
-.story-orbit-ring.gtn-orbit-js .story-orbit-petal-visual {
-  animation: none !important;
 }
 
 .story-orbit-petal-image {
@@ -7945,14 +7950,15 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   box-shadow: 0 1px 4px rgba(23, 32, 51, .22);
 }
 
-@keyframes storyOrbitRingOrbit {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+/* 扣耐久时角标轻微弹跳 */
+.story-orbit-petal-durability.is-tick {
+  animation: storyOrbitDurabilityTick 300ms ease;
 }
 
-@keyframes storyOrbitCounterOrbit {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(-360deg); }
+@keyframes storyOrbitDurabilityTick {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.5); }
+  100% { transform: scale(1); }
 }
 
 /* ------------------------------------------------ 召唤槽（表15 召唤师） */
