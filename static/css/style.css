@@ -4289,28 +4289,6 @@ a.title-shop-afdian-go:hover {
   display: none;
 }
 
-#btn-open-feedback.has-badge::after {
-  content: attr(data-badge);
-  position: absolute;
-  top: -8px;
-  right: -8px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  display: grid;
-  place-items: center;
-  border-radius: 999px;
-  background: #d93636;
-  color: #fff;
-  font-size: 11px;
-  line-height: 1;
-  box-shadow: 0 0 0 2px var(--bg-primary);
-}
-
-#btn-open-feedback::before {
-  display: none;
-}
-
 #btn-public-feedback-center {
   color: var(--text-secondary);
   text-decoration: none;

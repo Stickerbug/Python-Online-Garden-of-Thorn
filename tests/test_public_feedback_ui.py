@@ -47,11 +47,13 @@ def test_standalone_page_has_all_surfaces_and_account_bar():
 
 
 def test_admin_appeal_chat_lives_in_feedback_center_and_home_links_to_it():
-    # 「管理员/申诉」对话整体迁入反馈中心；主页只保留新标签页入口。
-    assert 'id="btn-open-feedback"' in INDEX
-    assert 'href="/feedback-center/appeal"' in INDEX
+    # 「管理员/申诉」对话整体迁入反馈中心；主页不再有独立反馈入口，
+    # 工具行只留「反馈中心」与「关于」两个按钮。
+    assert 'id="btn-open-feedback"' not in INDEX
     assert 'id="feedback-modal"' not in INDEX
     assert 'id="feedback-thread-list"' not in INDEX
+    assert 'id="btn-public-feedback-center"' in INDEX
+    assert 'id="btn-open-about"' in INDEX
     # 关联申诉回到主页信誉弹窗内嵌表单（不再走反馈中心）。
     assert 'id="integrity-appeal-form"' in INDEX
     assert 'id="integrity-appeal-link"' not in INDEX

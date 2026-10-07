@@ -2064,7 +2064,6 @@ Object.assign(I18N.en, {
     social_search_id: 'Allow adding me by ID', social_accept_game_invites: 'Accept match invitations', social_allow_guest_spectators: 'Allow guest spectators',
     social_game_invites_disabled: 'This player has disabled match invitations.',
     social_settings_saved: 'Social settings saved',
-    feedback: 'Admin / Report',
     feedback_center: 'Feedback Center',
     last_login: 'Last seen: {0}', win_rate: 'Win rate: {0}%', recent_matches: 'Recent matches',
     friend_profile: 'Profile', direct_messages: 'Direct Messages'
@@ -2081,7 +2080,6 @@ Object.assign(I18N.zh, {
     social_search_id: '允许通过ID添加我', social_accept_game_invites: '接受对局邀请', social_allow_guest_spectators: '允许游客观战',
     social_game_invites_disabled: '该玩家已关闭对局邀请',
     social_settings_saved: '社交设置已保存',
-    feedback: '管理员/申诉',
     feedback_center: '反馈中心',
     last_login: '上次下线：{0}', win_rate: '胜率：{0}%', recent_matches: '最近对局',
     friend_profile: '资料', direct_messages: '私信'
@@ -2098,7 +2096,6 @@ Object.assign(I18N.fr, {
     social_search_id: 'Autoriser par ID', social_accept_game_invites: 'Accepter les invitations de partie', social_allow_guest_spectators: 'Autoriser les spectateurs invités',
     social_game_invites_disabled: 'Ce joueur a désactivé les invitations de partie.',
     social_settings_saved: 'Réglages enregistrés',
-    feedback: 'Admin / Signalement',
     feedback_center: 'Centre de signalements',
     last_login: 'Dernière activité : {0}', win_rate: 'Taux de victoire : {0}%', recent_matches: 'Parties récentes',
     friend_profile: 'Profil', direct_messages: 'Messages'
@@ -2115,7 +2112,6 @@ Object.assign(I18N.ja, {
     social_search_id: 'IDで追加を許可', social_accept_game_invites: '対戦招待を受け取る', social_allow_guest_spectators: 'ゲスト観戦を許可',
     social_game_invites_disabled: 'このプレイヤーは対戦招待を無効にしています。',
     social_settings_saved: '設定を保存しました',
-    feedback: '管理者・通報',
     feedback_center: 'フィードバックセンター',
     last_login: '最終退出: {0}', win_rate: '勝率: {0}%', recent_matches: '最近の対戦',
     friend_profile: 'プロフィール', direct_messages: 'DM'
@@ -5725,8 +5721,8 @@ let socialUnreadPollTimer = null;
 let socialUnreadAbortController = null;
 let socialUnreadRequestPromise = null;
 let socialUnreadPollDelay = 30000;
-/* 反馈对话已迁入反馈中心（/feedback-center/appeal）；主页只保留入口按钮
-   与未读角标（loadFeedbackSummary/updateFeedbackBadge）。 */
+/* 反馈对话（含入口）已整体迁入反馈中心；主页不再有反馈按钮，
+   这里只保留 is_staff 供聊天/界面角色判断（loadFeedbackSummary）。 */
 let feedbackState = { is_staff: false, unread_count: 0 };
 let activeSocialFriendId = null;
 let activeSocialSection = 'friends';
@@ -7058,8 +7054,6 @@ function updateStaticText() {
     if (settingsMods) settingsMods.textContent = UI.settings_mods;
     const settingsSocial = $('settings-section-social');
     if (settingsSocial) settingsSocial.textContent = UI.social;
-    const feedbackBtn = $('btn-open-feedback');
-    if (feedbackBtn) feedbackBtn.textContent = UI.feedback;
     const publicFeedbackCenter = $('btn-public-feedback-center');
     if (publicFeedbackCenter) publicFeedbackCenter.textContent = UI.feedback_center || '反馈中心';
     const gameoverReplayLabel = $('gameover-replay-label');
@@ -22293,7 +22287,6 @@ function renderAccountState() {
     renderCommunityModList();
     if (!currentAccount) {
         feedbackState = { is_staff: false, unread_count: 0 };
-        updateFeedbackBadge();
     }
     if (activeViewId === 'view-skin') syncSkinFormFromCurrent();
 }
@@ -23671,33 +23664,16 @@ function feedbackNameClass(role) {
     return '';
 }
 
-function updateFeedbackBadge() {
-    const btn = $('btn-open-feedback');
-    if (!btn) return;
-    const count = Number(feedbackState.unread_count || 0);
-    if (count > 0) {
-        btn.dataset.badge = count > 99 ? '99+' : String(count);
-        btn.classList.add('has-badge');
-    } else {
-        delete btn.dataset.badge;
-        btn.classList.remove('has-badge');
-    }
-}
-
 async function loadFeedbackSummary() {
     if (!currentAccount) {
         feedbackState = { is_staff: false, unread_count: 0 };
-        updateFeedbackBadge();
         return;
     }
     try {
         const data = await authRequest('/api/feedback/summary', undefined, { timeoutMs: 5000 });
         feedbackState.is_staff = !!data.is_staff;
         feedbackState.unread_count = Number(data.unread_count || 0);
-        updateFeedbackBadge();
-    } catch (_) {
-        updateFeedbackBadge();
-    }
+    } catch (_) {}
 }
 
 function ensureReplayVideoExportStyle() {
@@ -40876,8 +40852,8 @@ async function init() {
         stopSocialNetworkActivity();
         stopSocialUnreadPolling();
     });
-    // 管理员/申诉对话已迁入反馈中心；btn-open-feedback 是原生链接（新标签页打开）。
-    // ?replay=R-12345：反馈中心回放预览的「查看」入口，打开主页回放查看器。
+    // ?replay=R-12345：反馈中心「管理员/申诉」回放预览的「查看」入口，
+    // 打开主页回放查看器（对话入口已整体迁入反馈中心，主页不再有反馈按钮）。
     const replayQuery = new URLSearchParams(window.location.search).get('replay');
     if (replayQuery) openAccountReplay(replayQuery);
     if ($('btn-account-popover-close')) $('btn-account-popover-close').addEventListener('click', () => toggleAccountPopover(false));
