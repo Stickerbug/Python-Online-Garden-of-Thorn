@@ -3264,6 +3264,12 @@ def _is_card_playable(state, card, automatic=False):
     cost_e = values.get('cost_e')
     if cost_e == 'X':
         cost_e = 0
+    # GB-395：胡萝卜——本回合使用过轨道卡时费用视为 0（可支付性判定同步）。
+    if (
+        values.get('free_if_orbit_played')
+        and int(combat.get('orbit_cards_played_this_turn') or 0) > 0
+    ):
+        cost_e = 0
     cost_m = values.get('cost_m')
     if cost_m in ('X', 'x'):
         cost_m = 0
@@ -3788,6 +3794,8 @@ def _orbit_new_petal(state, combat, def_id, values, durability, events, source, 
         'effects': [copy.deepcopy(eff) for eff in petal_effects],
         'tags': list(values.get('tags') or ()),
         'card_type': str(values.get('type') or ''),
+        # GB-394：花瓣触发时的目标取向沿用卡面（thorn/guard=enemy，其余 self）。
+        'target': str(values.get('target') or 'self'),
         'vars': {},
     }
     orbit['petals'].append(petal)
@@ -3809,6 +3817,7 @@ def _orbit_resolve_petal(state, petal, seed, events, depth=0):
         'type': petal.get('card_type') or 'bloom',
         'effects': tuple(petal.get('effects') or ()),
         'tags': tuple(petal.get('tags') or ()),
+        'target': str(petal.get('target') or 'self'),
     }
     pseudo_card = {'def_id': petal.get('def_id'), 'instance_id': -1, 'upgraded': False, 'modifiers': {}}
     events.append({'type': 'orbit_petal_triggered', 'petal': _orbit_petal_snapshot(petal)})
@@ -3816,27 +3825,42 @@ def _orbit_resolve_petal(state, petal, seed, events, depth=0):
     # 分裂器：所有轨道卡会额外触发一次
     for _, _effect in _equipment_effects(combat, 'orbit_splitter'):
         repeats += max(1, int(_effect.get('amount') or 1))
+    living = _living_enemies(combat)
+    default_payload = {}
+    if values['target'] == 'enemy' and living:
+        # GB-394：敌向花瓣触发时没有玩家选择——自动取首个存活敌人，
+        # 此前缺省目标会让效果落到自己（如鸢尾给玩家上毒）或无处结算。
+        first_id = str(living[0].get('id') or '')
+        default_payload = {'target_id': first_id, 'target_player': first_id, 'target_player_id': first_id}
     for _ in range(repeats):
         if state.get('phase') != 'combat':
             return
-        targets = _card_targets(combat, values, None)
+        targets = _card_targets(combat, values, default_payload)
         for effect in values['effects']:
-            _resolve_effect(
-                state,
-                pseudo_card,
-                values,
-                effect,
-                targets,
-                {},
-                seed,
-                events,
-                {
-                    'autoplay_depth': 0,
-                    'orbit': True,
-                    'orbit_vars': petal.get('vars') or {},
-                    'orbit_depth': depth,
-                },
-            )
+            try:
+                _resolve_effect(
+                    state,
+                    pseudo_card,
+                    values,
+                    effect,
+                    targets,
+                    default_payload,
+                    seed,
+                    events,
+                    {
+                        'autoplay_depth': 0,
+                        'orbit': True,
+                        'orbit_vars': petal.get('vars') or {},
+                        'orbit_depth': depth,
+                    },
+                )
+            except StoryActionError as exc:
+                # 单个花瓣效果失败（无目标等）不再中断整次旋转。
+                events.append({
+                    'type': 'orbit_petal_skipped',
+                    'petal_id': petal.get('petal_id'),
+                    'code': str(getattr(exc, 'code', '') or ''),
+                })
 
 
 def _orbit_on_rotate_hooks(state, seed, events, depth=0):
@@ -5890,6 +5914,11 @@ def _play_card(state, payload, seed, events, autoplay_depth=0):
                 })
     cost_e = values.get('cost_e')
     x_cost = int(combat.get('elixir') or 0) if cost_e == 'X' else int(cost_e or 0)
+    # GB-395（胡萝卜）：本回合使用过轨道卡时可免费打出——是费用为 0，
+    # 不是"先付后退"；0E 时也必须能打出。
+    if values.get('free_if_orbit_played') and cost_e != 'X':
+        if int(combat.get('orbit_cards_played_this_turn') or 0) > 0:
+            x_cost = 0
     raw_cost_m = values.get('cost_m')
     if raw_cost_m in ('X', 'x'):
         x_magic_cost = _spend_magic(

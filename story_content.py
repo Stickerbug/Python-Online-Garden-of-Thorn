@@ -1344,6 +1344,7 @@ def _card(
     orbit_effects=None,
     must_play_first=False,
     requires_empty_orbit=False,
+    free_if_orbit_played=False,
 ):
     description = _story_card_description(description)
     description_en = (
@@ -1385,6 +1386,8 @@ def _card(
         definition['must_play_first'] = True
     if requires_empty_orbit:
         definition['requires_empty_orbit'] = True
+    if free_if_orbit_played:
+        definition['free_if_orbit_played'] = True
     return definition
 
 
@@ -2799,7 +2802,7 @@ STORY_CARDS.update({
         'OrbitThorn', '荆棘', 'Thorn', 1, 'infect', 'special',
         '此花瓣被转到时：失去1H',
         description_en='When this petal is rotated to: lose 1 H',
-        owner='orbiter', orbit=3,
+        owner='orbiter',
         effects=(),
         orbit_effects=(_effect('lose_health', 1),),
     ),
@@ -2901,7 +2904,7 @@ STORY_CARDS.update({
         'Snowflake', '雪花', 'Snowflake', 3, 'thorn', 'common',
         '对随机敌人造成20D',
         description_en='Deal 20 D to a random enemy',
-        owner='orbiter', orbit=2,
+        owner='orbiter', orbit=2, target='random',
         effects=(_effect('random_damage', 20),),
         upgrade={'description': {'zh': '对随机敌人造成20D；改为轨道3', 'en': 'Deal 20 D to a random enemy; Orbit 3'}, 'orbit': 3},
     ),
@@ -2915,11 +2918,11 @@ STORY_CARDS.update({
     ),
     'carrot': _card(
         'Carrot', '胡萝卜', 'Carrot', 1, 'thorn', 'common',
-        '对随机敌人造成5D；本回合使用过轨道牌时，打出后回复1E',
-        description_en='Deal 5 D to a random enemy; if an Orbit card was played this turn, recover 1 E',
-        owner='orbiter', orbit=2,
-        effects=(_effect('random_damage', 5), _effect('refund_if_orbit_played', 1)),
-        upgrade={'description': {'zh': '对随机敌人造成7D；本回合使用过轨道牌时，打出后回复1E', 'en': 'Deal 7 D to a random enemy; recover 1 E if an Orbit card was played'}, 'effects': (_effect('random_damage', 7), _effect('refund_if_orbit_played', 1))},
+        '对随机敌人造成5D；本回合使用过轨道牌时，此牌免费打出',
+        description_en='Deal 5 D to a random enemy; if an Orbit card was played this turn, this card costs 0',
+        owner='orbiter', orbit=2, free_if_orbit_played=True, target='random',
+        effects=(_effect('random_damage', 5),),
+        upgrade={'description': {'zh': '对随机敌人造成7D；本回合使用过轨道牌时，此牌免费打出', 'en': 'Deal 7 D to a random enemy; costs 0 if an Orbit card was played this turn'}, 'effects': (_effect('random_damage', 7),)},
     ),
     'magic_splitter': _card(
         'MagicSplitter', '魔法分裂器', 'Magic Splitter', 0, 'root', 'rare',
@@ -3107,7 +3110,7 @@ STORY_CARDS.update({
         'MagicShard', '魔法碎片', 'Magic Shard', 1, 'bloom', 'rare',
         '抽2张牌，抉择：额外抽1张牌，或将1个轨道1魔法碎片花瓣加入轨道',
         description_en='Draw 2 cards, then choose: draw 1 more, or add an Orbit 1 Magic Shard petal',
-        owner='orbiter', orbit=1,
+        owner='orbiter',
         effects=(_effect('draw', 2), _effect('choose_effect', 1, options=(
             {
                 'id': 'draw_more',
@@ -3122,7 +3125,6 @@ STORY_CARDS.update({
                 'effects': (_effect('orbit_add_petal', 1, def_id='magic_shard', durability=1),),
             },
         )),),
-        orbit_effects=(_effect('draw', 2),),
         upgrade={'description': {'zh': '抽2张牌，抉择：额外抽2张牌，或将1个轨道2魔法碎片花瓣加入轨道', 'en': 'Draw 2 cards, then choose: draw 2 more, or add an Orbit 2 Magic Shard petal'}, 'effects': (_effect('draw', 2), _effect('choose_effect', 1, options=(
             {
                 'id': 'draw_more',
@@ -3136,7 +3138,7 @@ STORY_CARDS.update({
                 'description': {'zh': '将1个轨道2魔法碎片花瓣加入轨道', 'en': 'Add an Orbit 2 Magic Shard petal'},
                 'effects': (_effect('orbit_add_petal', 1, def_id='magic_shard', durability=2),),
             },
-        )),), 'orbit': 2},
+        )),)},
     ),
     'microplastic': _card(
         'Microplastic', '微塑料', 'Microplastic', 1, 'thorn', 'rare',

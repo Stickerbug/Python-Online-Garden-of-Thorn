@@ -142,6 +142,44 @@ class TestOrbit:
         assert int(enemy.get('toxic_poison') or 0) == 6
         assert int(enemy.get('poison') or 0) >= 0
 
+    def test_enemy_targeted_petals_hit_enemies_not_player(self):
+        """GB-394：敌向花瓣（堆芯 中毒）触发时必须打敌人，不能落到玩家。"""
+        state = _orbiter_combat('petal-dir')
+        core = _new_card(state, 'reactor_core', False)
+        state['combat']['hand'] = [core]
+        state, _ = _play(state, core, seed='petal-dir')
+        combat = state['combat']
+        petal = next(p for p in combat['orbit']['petals'] if p['def_id'] == 'reactor_core')
+        assert petal.get('target') == 'enemy'
+        enemy_poison_before = int(combat['enemies'][0].get('poison') or 0)
+        _rotate_orbit(state, 1, 'petal-dir', [], source='test')
+        assert int(combat['enemies'][0].get('poison') or 0) > enemy_poison_before
+        assert int(combat.get('poison') or 0) == 0  # 玩家不中毒
+
+    def test_carrot_free_when_orbit_card_played(self):
+        """GB-395：胡萝卜是免费打出（0E 可打），不是先付后退。"""
+        state = _orbiter_combat('carrot-free')
+        web = _new_card(state, 'web', False)
+        state['combat']['hand'] = [web]
+        state, _ = apply_story_action(
+            state, 'play_card', {'card_instance_id': web['instance_id']}, 'carrot-free',
+        )
+        combat = state['combat']
+        carrot = _new_card(state, 'carrot', False)
+        combat['hand'] = [carrot]
+        combat['elixir'] = 0
+        assert _is_card_playable(state, carrot) is True
+        state, _ = apply_story_action(
+            state, 'play_card', {'card_instance_id': carrot['instance_id']}, 'carrot-free',
+        )
+        assert int(state['combat']['elixir']) == 0  # 没扣也没退
+
+        state2 = _orbiter_combat('carrot-paid')
+        carrot2 = _new_card(state2, 'carrot', False)
+        state2['combat']['hand'] = [carrot2]
+        state2['combat']['elixir'] = 0
+        assert _is_card_playable(state2, carrot2) is False  # 没用过轨道牌时 0E 打不出
+
     def test_splitter_extra_trigger(self):
         state = _orbiter_combat('orbit-split')
         splitter = _new_card(state, 'orbit_splitter', False)

@@ -9507,7 +9507,12 @@ class GameEngine:
                 selected = next((c for c in self.players[owner_id].hand if getattr(c, 'card_type', '') == 'thorn' and self._card_selectable_by_action(c)), None)
             return {'target_instance_id': getattr(selected, 'instance_id', None), **choice} if selected else None
         if choice_type in ('choose_equipment', 'choose_enemy_equipment'):
-            owner_id = target_id if choice_type == 'choose_enemy_equipment' and target_id >= 0 else player_id
+            # P-30291/GB-386 复发：原版污水的选装备窗口是 choose_equipment 且
+            # 目标是"卡的目标"（待选窗口带 target_player_id=对方）。AI 默认答案
+            # 之前对 choose_equipment 一律取自己的装备 → 答案指向自己的装备实例，
+            # 摧毁步在对方装备区找不到 → "没有可摧毁的装备"。窗口有目标时就
+            # 从目标装备区取第一件。
+            owner_id = target_id if self._valid_player_id(target_id) else player_id
             if not self._valid_player_id(owner_id):
                 return None
             eq = next((eq for eq in self.players[owner_id].equipment if getattr(eq, 'card_instance', None) is not None), None)

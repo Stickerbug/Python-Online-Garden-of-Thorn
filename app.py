@@ -208,6 +208,8 @@ from db import (
     feedback_is_staff,
     feedback_unread_count,
     get_dm_messages,
+    get_client_settings,
+    save_client_settings,
     get_feedback_messages,
     get_admin_user_detail,
     get_active_story_run,
@@ -25812,6 +25814,40 @@ def api_auth_me():
     if not request.cookies.get(REMEMBER_COOKIE_NAME):
         return _attach_remember_cookie(response, user)
     return response
+
+
+@app.route('/api/client-settings')
+def api_client_settings_get():
+    if not DB_AVAILABLE:
+        return jsonify({'success': False, 'error': DB_INIT_ERROR}), 503
+    uid, _, error = _require_account_json()
+    if error:
+        return error
+    stored = get_client_settings(uid) or {'settings': {}, 'updated_at': ''}
+    return jsonify({
+        'success': True,
+        'settings': stored['settings'],
+        'updated_at': stored['updated_at'],
+    })
+
+
+@app.route('/api/client-settings', methods=['PUT'])
+def api_client_settings_put():
+    if not DB_AVAILABLE:
+        return jsonify({'success': False, 'error': DB_INIT_ERROR}), 503
+    uid, _, error = _require_account_json()
+    if error:
+        return error
+    if not rate_limiter(f'client-settings:{uid}', limit=20, window=60):
+        return _rate_limit_response('同步过于频繁，请稍后重试', retry_after=60)
+    data = request.get_json(silent=True)
+    settings = data.get('settings') if isinstance(data, dict) else None
+    if not isinstance(settings, dict):
+        return _json_error('设置格式无效', 400, code='INVALID_CLIENT_SETTINGS')
+    if not save_client_settings(uid, settings):
+        return _json_error('设置内容超出限制', 400, code='CLIENT_SETTINGS_TOO_LARGE')
+    stored = get_client_settings(uid) or {'settings': {}, 'updated_at': ''}
+    return jsonify({'success': True, 'updated_at': stored['updated_at']})
 
 
 @app.route('/api/thorn-dew')

@@ -16551,11 +16551,20 @@ function attachTermIntroLongPress(anchor, onShow) {
 
 function attachTermIntroToCard(anchor, cardDict, cardOptions = {}) {
     if (!anchor || !cardDict || !cardDict.def_id) return;
-    attachTermIntroLongPress(anchor, () => {
-        showTermIntroForCard(cardDict, {
-            ...cardOptions,
-            sourceRect: getTermIntroSourceRect(anchor),
-        });
+    const showCardIntro = () => showTermIntroForCard(cardDict, {
+        ...cardOptions,
+        sourceRect: getTermIntroSourceRect(anchor),
+    });
+    attachTermIntroLongPress(anchor, showCardIntro);
+    // GB-347/391：触屏双击卡牌 = 开/关介绍（与长按并存）。触屏出牌本来就是
+    // 「点选 + 底部确认」，双击不会误触出牌；此前双击只挂在日志 chip 与
+    // 图鉴上，手牌等卡牌本体没有绑定，表现为“双击打不开”。
+    bindTouchDblclickToggle(anchor, (event) => {
+        if (isTermIntroOverlayVisible()) {
+            hideTermIntroOverlay();
+            return;
+        }
+        showCardIntro();
     });
 }
 
@@ -22070,6 +22079,106 @@ function loadCachedAccount() {
     }
 }
 
+/* ------------------------------------------------ 客户端设置账号侧备份（GB-391）
+ * 部分国产浏览器的隐私模式会随机清 localStorage，表现为设置“莫名变更”。
+ * gtn_* 设置键镜像到账号：登录/刷新时对比服务端 updated_at，服务端有更新
+ * （或本地丢失）→ 以服务端恢复并刷新一次页面；本地较新 → 推送到服务端。
+ * 所有 gtn_* 写入经下方的 localStorage.setItem 包装器触发防抖推送。 */
+let clientSettingsSyncTimer = null;
+let clientSettingsSyncing = false;
+
+function collectLocalClientSettings() {
+    const settings = {};
+    try {
+        for (let i = 0; i < localStorage.length; i += 1) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('gtn_') && key !== 'gtn_settings_sync_at') {
+                settings[key] = String(localStorage.getItem(key) || '');
+            }
+        }
+    } catch (_) {}
+    return settings;
+}
+
+async function pushClientSettings() {
+    if (!currentAccount || clientSettingsSyncing) return;
+    clientSettingsSyncing = true;
+    try {
+        const response = await authRequest('/api/client-settings', {
+            method: 'PUT',
+            body: JSON.stringify({ settings: collectLocalClientSettings() }),
+        }, { timeoutMs: 8000 });
+        if (response && response.updated_at) {
+            localStorage.setItem('gtn_settings_sync_at', response.updated_at);
+        }
+    } catch (_) {
+        // 离线/限流：下次写入会再触发推送。
+    } finally {
+        clientSettingsSyncing = false;
+    }
+}
+
+function scheduleClientSettingsSync() {
+    if (!currentAccount) return;
+    if (clientSettingsSyncTimer) clearTimeout(clientSettingsSyncTimer);
+    clientSettingsSyncTimer = setTimeout(pushClientSettings, 1500);
+}
+
+async function syncClientSettingsOnAuth() {
+    if (!currentAccount) return;
+    try {
+        const data = await authRequest('/api/client-settings', undefined, { timeoutMs: 8000 });
+        const serverSettings = (data && data.settings) || {};
+        const serverUpdatedAt = String((data && data.updated_at) || '');
+        let localMarker = '';
+        try { localMarker = String(localStorage.getItem('gtn_settings_sync_at') || ''); } catch (_) {}
+        if (serverUpdatedAt && serverUpdatedAt !== localMarker) {
+            // 服务端有本机没见过的版本（换设备 / 本地存储被清）→ 恢复。
+            let changed = false;
+            Object.entries(serverSettings).forEach(([key, value]) => {
+                if (!key.startsWith('gtn_')) return;
+                let localValue = null;
+                try { localValue = localStorage.getItem(key); } catch (_) {}
+                if (localValue !== String(value)) {
+                    try { localStorage.setItem(key, String(value)); changed = true; } catch (_) {}
+                }
+            });
+            localStorage.setItem('gtn_settings_sync_at', serverUpdatedAt);
+            // 本机还有服务端没有的键 → 一并补推。
+            scheduleClientSettingsSync();
+            const reloadKey = 'gtn_settings_restored_for';
+            let restoredFor = '';
+            try { restoredFor = String(sessionStorage.getItem(reloadKey) || ''); } catch (_) {}
+            if (changed && restoredFor !== String(currentAccount.id)) {
+                try { sessionStorage.setItem(reloadKey, String(currentAccount.id)); } catch (_) {}
+                location.reload();
+            }
+        } else {
+            // 本地版本即最新：内容有差（上次推送失败/新增键）就补推。
+            const local = collectLocalClientSettings();
+            const same = Object.keys(local).length === Object.keys(serverSettings).length
+                && Object.entries(local).every(([key, value]) => serverSettings[key] === value);
+            if (!same) scheduleClientSettingsSync();
+        }
+    } catch (_) {
+        // 未登录/离线：跳过，等下次写入触发。
+    }
+}
+
+(() => {
+    try {
+        if (localStorage.__gtnSettingsHook) return;
+        const nativeSetItem = localStorage.setItem.bind(localStorage);
+        localStorage.setItem = function gtnSettingsAwareSetItem(key, value) {
+            nativeSetItem(key, value);
+            if (String(key).startsWith('gtn_') && key !== 'gtn_settings_sync_at') {
+                scheduleClientSettingsSync();
+            }
+        };
+        localStorage.__gtnSettingsHook = true;
+    } catch (_) {}
+})();
+
 function cacheAccount(user) {
     if (accountIntegritySession && Number(user?.id) !== accountIntegritySession.userId) clearAccountIntegrity();
     try {
@@ -22270,6 +22379,7 @@ async function refreshAuthMe() {
         loadFriends(false);
         loadFeedbackSummary();
         startSocialUnreadPolling(true);
+        syncClientSettingsOnAuth();
     } else {
         stopSocialUnreadPolling();
     }
@@ -22291,6 +22401,7 @@ async function onAccountLogin() {
         loadFriends(false);
         loadAccountReplays();
         startSocialUnreadPolling(true);
+        syncClientSettingsOnAuth();
     } catch (err) {
         setAccountError(err.message || UI.account_error);
     }
@@ -22315,6 +22426,7 @@ async function onAccountRegister() {
         loadFriends(false);
         loadAccountReplays();
         startSocialUnreadPolling(true);
+        syncClientSettingsOnAuth();
     } catch (err) {
         setAccountError(err.message || UI.account_error);
     }

@@ -2198,6 +2198,18 @@ def init_db(
         )
         conn.execute('CREATE INDEX IF NOT EXISTS idx_dm_messages_thread ON dm_messages(thread_id, created_at)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_dm_messages_recipient ON dm_messages(recipient_user_id, read_at, created_at)')
+        # GB-391：客户端设置账号侧备份——部分国产浏览器的隐私模式会随机清
+        # localStorage，设置“莫名变更”。gtn_* 设置键镜像到账号，登录时恢复。
+        conn.execute(
+            '''
+            CREATE TABLE IF NOT EXISTS client_settings (
+                user_id INTEGER PRIMARY KEY,
+                settings_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            '''
+        )
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS feedback_threads (
@@ -13725,6 +13737,55 @@ def get_dm_messages(user_id, thread_id, mark_read=True, limit=50):
             ],
             'unread_count': unread_count,
         }, None
+
+
+# ------------------------------------------------- 客户端设置账号侧备份（GB-391）
+
+def get_client_settings(user_id):
+    uid = int(user_id)
+    with closing(get_db_connection()) as conn:
+        row = conn.execute(
+            'SELECT settings_json, updated_at FROM client_settings WHERE user_id = ?',
+            (uid,),
+        ).fetchone()
+    if row is None:
+        return None
+    try:
+        settings = json.loads(row['settings_json'] or '{}')
+    except (TypeError, ValueError):
+        settings = {}
+    return {
+        'settings': settings if isinstance(settings, dict) else {},
+        'updated_at': row['updated_at'],
+    }
+
+
+def save_client_settings(user_id, settings):
+    uid = int(user_id)
+    if not isinstance(settings, dict):
+        return False
+    clean = {
+        str(key): str(value)
+        for key, value in settings.items()
+        if str(key).startswith('gtn_') and 0 < len(str(key)) <= 64 and len(str(value)) <= 512
+    }
+    if len(json.dumps(clean, ensure_ascii=False)) > 32768:
+        return False
+    now = utc_iso(utc_now_dt())
+    with closing(get_db_connection()) as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        conn.execute(
+            '''
+            INSERT INTO client_settings (user_id, settings_json, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                settings_json = excluded.settings_json,
+                updated_at = excluded.updated_at
+            ''',
+            (uid, json.dumps(clean, ensure_ascii=False, separators=(',', ':')), now),
+        )
+        conn.commit()
+    return True
 
 
 def send_dm_message(sender_user_id, target_identifier=None, target_user_id=None, message='', normalized_message='', risk_level=0, hidden=False):
