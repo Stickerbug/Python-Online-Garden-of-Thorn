@@ -9632,8 +9632,13 @@ function getGalleryTypeOptions() {
 }
 
 function getDefaultGallerySelectedModKeys(modOptions = getGalleryModOptions()) {
-    // 图鉴中间默认展示全部模组的卡；启用状态在左侧以徽标展示。勾选只做筛选。
-    return new Set((modOptions || []).map(item => item && item.key).filter(Boolean));
+    // 反馈 #380：默认全选约 400 张卡，进入图鉴严重卡顿——改为默认只选原版；
+    // 想看全部在左侧勾选（全选按钮保留）。
+    const vanilla = (modOptions || []).filter(item => item && (item.isVanilla || item.key === 'vanilla'));
+    if (vanilla.length) {
+        return new Set(vanilla.map(item => item.key));
+    }
+    return new Set(((modOptions || []).slice(0, 1)).map(item => item && item.key).filter(Boolean));
 }
 
 function ensureGalleryCardFilterState() {

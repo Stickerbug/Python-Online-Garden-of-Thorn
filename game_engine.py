@@ -13499,7 +13499,8 @@ class GameEngine:
         dmg = self._modified_attack_damage(8, card)
         dealt = self.deal_attack_damage(1 - player_id, dmg)
         if dealt > 0:
-            heal = max(0, int(math.floor(int(dealt or 0) * 0.8)))
+            # 平衡调整（反馈 #389）：吸血 80% → 50%（与模组 v2 步骤/文本对齐）
+            heal = max(0, int(math.floor(int(dealt or 0) * 0.5)))
             if heal > 0:
                 self.players[player_id].heal(heal)
             self.log_msg(f"{self.pn(player_id)}使用尖牙！造成{dealt}伤害，回复{heal}H")

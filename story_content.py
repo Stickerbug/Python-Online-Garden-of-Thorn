@@ -2402,6 +2402,7 @@ STORY_CARDS = {
         'special',
         '无法打出；回合结束时若仍在手牌中，将其放逐。',
         tags=('unplayable', 'void'),
+        owner='neutral',
     ),
     'confused': _card(
         None,
@@ -2412,6 +2413,7 @@ STORY_CARDS = {
         'special',
         '无法打出。',
         tags=('unplayable',),
+        owner='neutral',
     ),
     'static_electricity': _card(
         None,
@@ -2423,6 +2425,7 @@ STORY_CARDS = {
         '抽到时，使自己所有手牌获得1层电荷；回合结束时若仍在手牌中，将其放逐。',
         tags=('unplayable', 'void'),
         script='static_electricity',
+        owner='neutral',
     ),
     'corruption': _card(
         'Corruption',
@@ -2448,6 +2451,7 @@ STORY_CARDS = {
         tags=('exile',),
         effects=(),
         script='factory_waste',
+        owner='neutral',
     ),
     'daisy': _card(
         'Daisy',
