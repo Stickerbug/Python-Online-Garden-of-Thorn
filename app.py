@@ -31364,6 +31364,24 @@ def on_story_chat_join(data=None):
     emit('story_chat_ready', {'success': True})
 
 
+@socketio.on('chat_check_replay_refs')
+def on_chat_check_replay_refs(data=None):
+    """客户端批量复检对局编号（未来编号在对局生成后升级为可点 chip）。"""
+    sid = request.sid
+    data = socket_guard('chat_check_replay_refs', data, require_player=False, allow_empty=True)
+    if data is None:
+        return
+    if not rate_limiter(f'chat-refs:{sid}', limit=30, window=10):
+        return
+    raw_refs = data.get('refs') if isinstance(data, dict) else None
+    if not isinstance(raw_refs, list):
+        return
+    refs = [str(item) for item in raw_refs[:CHAT_REPLAY_REF_RECHECK_MAX]]
+    validity = validate_chat_replay_refs(refs)
+    if validity:
+        emit('chat_check_replay_refs_result', {'refs': validity})
+
+
 @socketio.on('story_chat_send')
 def on_story_chat_send(data=None):
     sid = request.sid
@@ -31446,6 +31464,7 @@ def on_story_chat_send(data=None):
         chat_data['matched_rules'] = matched_rules[:5]
     chat_data.update(special_public_fields(profile))
     chat_data['sender_role'] = _chat_role_for_account(profile.get('user_id'), profile)
+    attach_chat_replay_refs(chat_data, text)
 
     if risk_action == 'reject_mute' or risk_level >= 4:
         if DB_AVAILABLE:
@@ -31586,6 +31605,70 @@ def _chat_role_for_account(user_id=None, fallback=None):
     if (fallback or {}).get('is_admin_player'):
         return 'admin'
     return 'player'
+
+
+# —— 聊天对局编号校验（2026-10-06 设计）——
+# 聊天里的 R-12345 / P-12345 只在「真实存在 + 前缀正确 + 30 天内」时识别为
+# 可点 chip；格式正确但暂不存在的（未来编号）存为 pending，客户端拉历史时
+# 批量复检，对局生成后自动升级。正则与客户端 shared-chat-actions 保持一致。
+CHAT_REPLAY_REF_PATTERN = re.compile(r'(?<![\w-])[RP]-\d{5}(?![\w-])')
+CHAT_REPLAY_REF_MAX_PER_MESSAGE = 8
+CHAT_REPLAY_REF_RECHECK_MAX = 25
+CHAT_REPLAY_RECENT_WINDOW_DAYS = 30
+
+
+def validate_chat_replay_refs(refs):
+    """批量校验对局编号，返回 {REF: bool}（键为大写规范形）。
+
+    判定 = match_replays 里存在该 id 且 replay_prefix 匹配且 created_at 在
+    30 天窗口内。DB 不可用/查询异常时按「未验证」处理（不识别）。
+    """
+    result = {}
+    ordered = []
+    for raw in refs:
+        ref = str(raw or '').strip().upper()
+        if not ref or ref in result or not CHAT_REPLAY_REF_PATTERN.fullmatch(ref):
+            continue
+        result[ref] = False
+        ordered.append(ref)
+    if not ordered or not DB_AVAILABLE:
+        return result
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=CHAT_REPLAY_RECENT_WINDOW_DAYS)) \
+        .strftime('%Y-%m-%dT%H:%M:%SZ')
+    try:
+        with get_db_connection() as conn:
+            for ref in ordered:
+                row = conn.execute(
+                    'SELECT 1 FROM match_replays'
+                    ' WHERE id = ? AND replay_prefix = ? AND created_at > ? LIMIT 1',
+                    (int(ref[2:]), ref[0], cutoff),
+                ).fetchone()
+                result[ref] = row is not None
+    except Exception as exc:
+        admin_event('error', f'chat replay ref validation failed: {exc}')
+    return result
+
+
+def attach_chat_replay_refs(chat_data, text):
+    """发送时扫描消息文本，把编号校验结果挂到聊天载荷上。
+
+    chat_data['replay_refs'] = {'v': [已验证], 'p': [待定]}，随载荷一起
+    持久化（normalized_message 存的就是这份 JSON）并在历史恢复时回带。
+    """
+    try:
+        refs = CHAT_REPLAY_REF_PATTERN.findall(str(text or ''))[:CHAT_REPLAY_REF_MAX_PER_MESSAGE]
+        if not refs:
+            return chat_data
+        validity = validate_chat_replay_refs(refs)
+        if not validity:
+            return chat_data
+        chat_data['replay_refs'] = {
+            'v': [ref for ref, ok in validity.items() if ok],
+            'p': [ref for ref, ok in validity.items() if not ok],
+        }
+    except Exception as exc:
+        admin_event('error', f'attach chat replay refs failed: {exc}')
+    return chat_data
 
 
 def _chat_recall_actor(sid):
@@ -32012,6 +32095,9 @@ def on_chat(data):
         player_snapshot.get('user_id'),
         player_snapshot,
     )
+    # 对局编号校验（R-12345/P-12345）：只识别存在+前缀正确+30天内的；
+    # 暂不存在的记 pending 供客户端复检升级。
+    attach_chat_replay_refs(chat_data, text)
 
     def player_name_at(room, pidx):
         if not isinstance(pidx, int) or pidx < 0 or pidx >= len(room.player_sids):

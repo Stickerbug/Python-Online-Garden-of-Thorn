@@ -533,8 +533,79 @@ function chatSplitLinkSegments(text) {
   return out;
 }
 
+/* 对局编号识别状态（2026-10-06 设计）：只有服务端已验证（随消息载荷
+   replay_refs.v 回带）或复检通过的编号才渲染为可点 chip；其余（不存在/
+   前缀写错/超 30 天/尚未生成的未来编号）渲染为纯文本样式的 pending span，
+   复检通过后原位升级——未来编号在对局生成后的下一次复检自动变可点。 */
+const chatReplayRefValidated = new Set();
+
+function normalizeChatReplayRef(ref) {
+  return String(ref || '').trim().toUpperCase();
+}
+
+function isChatReplayRefValidated(ref) {
+  return chatReplayRefValidated.has(normalizeChatReplayRef(ref));
+}
+
+function seedChatReplayRefs(entry) {
+  const refs = entry && entry.replay_refs;
+  if (refs && Array.isArray(refs.v)) {
+    refs.v.forEach((ref) => chatReplayRefValidated.add(normalizeChatReplayRef(ref)));
+  }
+}
+
+function collectPendingChatReplayRefs(root) {
+  const found = new Set();
+  (root || document).querySelectorAll('.chat-replay-pending[data-replay-ref]').forEach((el) => {
+    const ref = normalizeChatReplayRef(el.dataset.replayRef);
+    if (ref) found.add(ref);
+  });
+  return [...found];
+}
+
+function upgradeChatReplayRefs(validity) {
+  Object.entries(validity || {}).forEach(([ref, ok]) => {
+    if (ok) chatReplayRefValidated.add(normalizeChatReplayRef(ref));
+  });
+  let upgraded = 0;
+  document.querySelectorAll('.chat-replay-pending[data-replay-ref]').forEach((el) => {
+    if (chatReplayRefValidated.has(normalizeChatReplayRef(el.dataset.replayRef))) {
+      el.className = 'chat-replay-link';
+      upgraded += 1;
+    }
+  });
+  return upgraded;
+}
+
+/* 复检调度：渲染后调用，收集 pending 编号批量问服务端（去重 + 节流）。
+   emitFn 由各页面注入自己的 socket（主连接/故事连接）。 */
+let chatReplayRefCheckTimer = null;
+const chatReplayRefChecked = new Set();
+function scheduleChatReplayRefRecheck(emitFn, delayMs = 8000) {
+  if (chatReplayRefCheckTimer != null || typeof emitFn !== 'function') return;
+  chatReplayRefCheckTimer = window.setTimeout(() => {
+    chatReplayRefCheckTimer = null;
+    const refs = collectPendingChatReplayRefs()
+      .filter((ref) => !chatReplayRefValidated.has(ref) && !chatReplayRefChecked.has(ref))
+      .slice(0, 25);
+    if (!refs.length) return;
+    refs.forEach((ref) => chatReplayRefChecked.add(ref));
+    try {
+      emitFn({ refs });
+    } catch (_) { /* 页面已卸载等：忽略 */ }
+  }, Math.max(1000, Number(delayMs) || 8000));
+}
+
 function chatAppendSegment(parent, segment, confirmExternal) {
   if (segment.replayRef !== undefined) {
+    if (!chatReplayRefValidated.has(normalizeChatReplayRef(segment.replayRef))) {
+      const pending = document.createElement('span');
+      pending.className = 'chat-replay-pending';
+      pending.textContent = segment.display || segment.replayRef;
+      pending.dataset.replayRef = segment.replayRef;
+      parent.appendChild(pending);
+      return;
+    }
     const chip = document.createElement('span');
     chip.className = 'chat-replay-link';
     chip.textContent = segment.display || segment.replayRef;
@@ -568,9 +639,11 @@ function chatAppendSegment(parent, segment, confirmExternal) {
 }
 
 /* DOM 版：把文本按提及+URL 分段渲染进 parent（转义在前、协议白名单在后）。
-   options.appendPlain(parent, slice) 可接管纯文本渲染（提及管线用）。 */
+   options.appendPlain(parent, slice) 可接管纯文本渲染（提及管线用）；
+   options.entry 为聊天条目时顺带播种服务端已验证的编号。 */
 function appendChatTextWithLinks(parent, text, options = {}) {
   const confirmExternal = typeof options.confirmExternal === 'function' ? options.confirmExternal : null;
+  if (options.entry) seedChatReplayRefs(options.entry);
   chatSplitLinkSegments(text).forEach((segment) => {
     if (segment.url === undefined && segment.replayRef === undefined && typeof options.appendPlain === 'function') {
       options.appendPlain(parent, segment.text);
@@ -581,9 +654,13 @@ function appendChatTextWithLinks(parent, text, options = {}) {
 }
 
 /* HTML 版（小游戏页）：返回 HTML 字符串；输入必须已是 escapeHtml 后的文本。 */
-function chatLinkHtml(escapedText) {
+function chatLinkHtml(escapedText, entry = null) {
+  if (entry) seedChatReplayRefs(entry);
   return chatSplitLinkSegments(escapedText).map((segment) => {
     if (segment.replayRef !== undefined) {
+      if (!chatReplayRefValidated.has(normalizeChatReplayRef(segment.replayRef))) {
+        return `<span class="chat-replay-pending" data-replay-ref="${segment.replayRef}">${segment.display || segment.replayRef}</span>`;
+      }
       return `<span class="chat-replay-link" data-replay-ref="${segment.replayRef}">${segment.display || segment.replayRef}</span>`;
     }
     if (segment.url === undefined) return segment.text;
@@ -632,6 +709,11 @@ window.GtnChatLinks = {
   internalAllowed: chatLinkTargetAllowed,
   appendTextWithLinks: appendChatTextWithLinks,
   html: chatLinkHtml,
+  isReplayRefValidated: isChatReplayRefValidated,
+  seedReplayRefs: seedChatReplayRefs,
+  collectPendingReplayRefs: collectPendingChatReplayRefs,
+  upgradeReplayRefs: upgradeChatReplayRefs,
+  scheduleReplayRefRecheck: scheduleChatReplayRefRecheck,
 };
 
 if (typeof document !== 'undefined') startChatRecallExpiryWatcher();

@@ -4879,6 +4879,7 @@
         mentions = [],
         ownMentionTokens = new Set(),
         shouldFlashOwnMention = false,
+        entry = null,
     ) {
         const raw = String(text || '');
         const mentionNames = [];
@@ -4889,7 +4890,7 @@
         });
         const unique = [...new Set(mentionNames.filter(Boolean))].sort((left, right) => right.length - left.length);
         if (!unique.length) {
-            parent.appendChild(document.createTextNode(raw));
+            appendStoryChatLinkSegment(parent, raw, entry);
             return;
         }
         const escaped = unique.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
@@ -4909,21 +4910,42 @@
             last = offset + match.length;
             return match;
         });
-        if (last < raw.length) appendStoryChatLinkSegment(parent, raw.slice(last));
+        if (last < raw.length) appendStoryChatLinkSegment(parent, raw.slice(last), entry);
     }
 
     /* 聊天链接化（统一走 shared-chat-actions 的 GtnChatLinks）；站外链接先确认。 */
-    function appendStoryChatLinkSegment(parent, slice) {
+    function appendStoryChatLinkSegment(parent, slice, entry = null) {
         const links = globalThis.GtnChatLinks;
         if (links && typeof links.appendTextWithLinks === 'function') {
             links.appendTextWithLinks(parent, slice, {
                 confirmExternal: (url) => globalThis.confirm(
                     `${t.chatLinkExternal || '这不是本站链接（非 *.stickerbug.top），确定要打开吗？'}\n${url}`,
                 ),
+                entry,
             });
+            scheduleStoryChatReplayRefRecheck();
             return;
         }
         parent.appendChild(document.createTextNode(slice));
+    }
+
+    /* 对局编号复检：故事聊天渲染后收集 pending 批量问服务端，结果原位升级
+       （未来编号在对局生成后的下一次复检自动变可点）。 */
+    let storyChatReplayRefListenerBound = false;
+    function scheduleStoryChatReplayRefRecheck() {
+        const links = globalThis.GtnChatLinks;
+        if (!links || typeof links.scheduleReplayRefRecheck !== 'function') return;
+        if (!storyChatReplayRefListenerBound && storyChatSocket) {
+            storyChatReplayRefListenerBound = true;
+            storyChatSocket.on('chat_check_replay_refs_result', (data = {}) => {
+                if (links.upgradeReplayRefs) links.upgradeReplayRefs(data && data.refs);
+            });
+        }
+        links.scheduleReplayRefRecheck((payload) => {
+            if (storyChatSocket && storyChatSocket.connected) {
+                storyChatSocket.emit('chat_check_replay_refs', payload);
+            }
+        });
     }
 
     function appendStoryChatIdentity(parent, entry = {}) {
@@ -5107,6 +5129,7 @@
             entry.mentions || [],
             ownMentionTokens,
             shouldFlashOwnMention,
+            entry,
         );
         row.appendChild(message);
 

@@ -35867,7 +35867,7 @@ function currentUserMentionTokens(entry = {}) {
     return tokens;
 }
 
-function appendChatTextWithMentions(parent, text, mentions = [], ownMentionTokens = new Set(), shouldFlashOwnMention = false) {
+function appendChatTextWithMentions(parent, text, mentions = [], ownMentionTokens = new Set(), shouldFlashOwnMention = false, entry = null) {
     const raw = String(text || '');
     const mentionNames = [];
     (Array.isArray(mentions) ? mentions : []).forEach(item => {
@@ -35877,7 +35877,7 @@ function appendChatTextWithMentions(parent, text, mentions = [], ownMentionToken
     });
     const unique = [...new Set(mentionNames.filter(Boolean))].sort((a, b) => b.length - a.length);
     if (!unique.length) {
-        appendChatLinkSegment(parent, raw);
+        appendChatLinkSegment(parent, raw, entry);
         return;
     }
     const pattern = new RegExp('(@(?:' + unique.map(name => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + '))(?![\\w\\u4e00-\\u9fff\\u3040-\\u30ff\\uac00-\\ud7af-])', 'gi');
@@ -35898,7 +35898,7 @@ function appendChatTextWithMentions(parent, text, mentions = [], ownMentionToken
         last = offset + match.length;
         return match;
     });
-    if (last < raw.length) appendChatLinkSegment(parent, raw.slice(last));
+    if (last < raw.length) appendChatLinkSegment(parent, raw.slice(last), entry);
 }
 
 /* 聊天链接化（统一走 shared-chat-actions 的 GtnChatLinks）：识别 http(s) URL 变蓝可点，
@@ -35917,10 +35917,10 @@ function chatExternalLinkConfirm(url) {
     });
 }
 
-function appendChatLinkSegment(parent, slice) {
+function appendChatLinkSegment(parent, slice, entry = null) {
     const links = window.GtnChatLinks;
     if (links && typeof links.appendTextWithLinks === 'function') {
-        links.appendTextWithLinks(parent, slice, { confirmExternal: chatExternalLinkConfirm });
+        links.appendTextWithLinks(parent, slice, { confirmExternal: chatExternalLinkConfirm, entry });
         return;
     }
     parent.appendChild(document.createTextNode(slice));
@@ -36077,7 +36077,7 @@ function appendLobbyChatEntry(entry = {}, options = {}) {
     if (shouldFlashOwnMention) {
         el.dataset.mentionId = mentionKey;
     }
-    appendChatTextWithMentions(el, entry.text || '', entry.mentions || [], ownMentionTokens, shouldFlashOwnMention);
+    appendChatTextWithMentions(el, entry.text || '', entry.mentions || [], ownMentionTokens, shouldFlashOwnMention, entry);
     const repeatCount = Number(entry.repeat_count || entry.repeatCount || 1);
     if (repeatCount > 1) {
         const repeatSpan = document.createElement('span');
@@ -36096,6 +36096,24 @@ function appendLobbyChatEntry(entry = {}, options = {}) {
     if (recallBtn) el.appendChild(recallBtn);
     container.appendChild(el);
     if (shouldAutoScroll) container.scrollTop = container.scrollHeight;
+    scheduleLobbyChatReplayRefRecheck();
+}
+
+/* 对局编号复检（未来编号 → 对局生成后升级为可点 chip）：
+   渲染完聊天后收集 pending 编号批量问服务端，结果原位升级。 */
+let lobbyChatReplayRefListenerBound = false;
+function scheduleLobbyChatReplayRefRecheck() {
+    const links = window.GtnChatLinks;
+    if (!links || typeof links.scheduleReplayRefRecheck !== 'function') return;
+    if (!lobbyChatReplayRefListenerBound && socket) {
+        lobbyChatReplayRefListenerBound = true;
+        socket.on('chat_check_replay_refs_result', (data = {}) => {
+            if (links.upgradeReplayRefs) links.upgradeReplayRefs(data && data.refs);
+        });
+    }
+    links.scheduleReplayRefRecheck((payload) => {
+        if (socket && socket.connected) socket.emit('chat_check_replay_refs', payload);
+    });
 }
 
 function renderLobbyChatHistory(data = {}) {

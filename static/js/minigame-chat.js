@@ -169,11 +169,32 @@
         out = out.replace(pattern,
           `<span class="chat-mention-token${isSelf ? ' mention-self' : ''}">${token}</span>`);
       });
-      /* 链接化：先转义再包装（chatLinkHtml 只对未进入 span 的 http(s) 片段生效）。 */
+      /* 链接化：先转义再包装（chatLinkHtml 只对未进入 span 的 http(s) 片段生效）。
+         entry 传入以播种服务端已验证的对局编号；渲染后调度 pending 复检。 */
       if (typeof actions.chatLinkHtml === 'function') {
-        out = actions.chatLinkHtml(out);
+        out = actions.chatLinkHtml(out, item);
       }
+      scheduleReplayRefRecheck();
       return out;
+    }
+
+    /* 对局编号复检（与 game.js/story.js 同一套 shared 实现）：渲染后收集
+       pending 批量问服务端，结果原位升级为可点 chip。 */
+    let replayRefListenerBound = false;
+    function scheduleReplayRefRecheck() {
+      const links = window.GtnChatLinks;
+      if (!links || typeof links.scheduleReplayRefRecheck !== 'function') return;
+      if (!replayRefListenerBound && options.socket) {
+        replayRefListenerBound = true;
+        options.socket.on('chat_check_replay_refs_result', (data = {}) => {
+          if (links.upgradeReplayRefs) links.upgradeReplayRefs(data && data.refs);
+        });
+      }
+      links.scheduleReplayRefRecheck((payload) => {
+        if (options.socket && options.socket.connected) {
+          options.socket.emit('chat_check_replay_refs', payload);
+        }
+      });
     }
 
     function actionsHtml(item) {

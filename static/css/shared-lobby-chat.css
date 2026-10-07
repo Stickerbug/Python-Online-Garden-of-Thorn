@@ -482,6 +482,13 @@
   color: #c8c3ff;
 }
 
+/* 未通过校验的编号（不存在/前缀错/超 30 天/未来的）：按普通文本渲染，
+   不可点；服务端复检通过后由 JS 原位升级为 .chat-replay-link。 */
+.chat-replay-pending {
+  color: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
 :root[data-theme='dark'] .chat-msg a.chat-link:hover,
 :root[data-theme='dark'] .story-chat-message a.chat-link:hover,
 :root[data-theme='dark'] .chat-msg a.chat-link:focus-visible,
