@@ -146,10 +146,11 @@ class Gb402BubbleBombTests(unittest.TestCase):
 
 
 class Gb404MagicRelativityTests(unittest.TestCase):
-    def test_random_target_card_needs_no_manual_target(self):
+    def test_relativity_targets_chosen_enemy(self):
+        """表15 红标：魔法相对论从随机目标改为对目标（玩家选定敌人）。"""
         state = _orbiter_combat('gb404')
         values = _card_values(_new_card(state, 'magic_relativity', False))
-        self.assertEqual(values.get('target'), 'random')
+        self.assertEqual(values.get('target'), 'enemy')
         health_before = sum(
             int(e.get('health') or 0) for e in state['combat']['enemies']
         )

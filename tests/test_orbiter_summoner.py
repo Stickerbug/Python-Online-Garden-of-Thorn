@@ -86,30 +86,35 @@ class TestOrbit:
         assert int(combat['shield']) == shield_before + 3  # 只有网给护盾
         assert orbit['rotations_this_combat'] == 2
 
-    def test_turn_end_auto_rotates_once(self):
+    def test_turn_end_does_not_rotate_without_talent(self):
+        """表15 天赋表：回合结束不自动旋转——旋转来自环绕轨道天赋。"""
         state = _orbiter_combat('orbit-turnend')
+        state['player']['relics'] = [
+            r for r in state['player']['relics'] if r != 'orbital_surround'
+        ]
         web = _new_card(state, 'web', False)
         state['combat']['hand'] = [web]
         state, _ = apply_story_action(state, 'play_card', {'card_instance_id': web['instance_id']}, 'orbit-turnend')
         durability_before = state['combat']['orbit']['petals'][0]['durability']
         state, _ = apply_story_action(state, 'end_turn', {}, 'orbit-turnend')
         if state.get('phase') == 'combat':
-            assert state['combat']['orbit']['petals'][0]['durability'] == durability_before - 1
+            assert state['combat']['orbit']['petals'][0]['durability'] == durability_before
 
-    def test_orbital_surround_rotates_full_circle(self):
+    def test_orbital_surround_rotates_once(self):
+        """表15 天赋表：环绕轨道=回合结束时轨道旋转一次（不是一圈）。"""
         from story_engine import _prepare_player_turn_end
 
         state = _orbiter_combat('orbit-surround')
         assert 'orbital_surround' in state['player']['relics']
-        for card_id in ('web', 'electric_web'):
-            card = _new_card(state, card_id, False)
+        for _ in range(2):
+            card = _new_card(state, 'web', False)
             state['combat']['hand'] = [card]
             state, _ = _play(state, card, seed='orbit-surround')
         combat = state['combat']
         shield_before = int(combat['shield'])
         _prepare_player_turn_end(state, 'orbit-surround', [])
-        assert int(combat['shield']) == shield_before + 3 + 5
-        assert combat['orbit']['rotations_this_combat'] == 2
+        assert int(combat['shield']) == shield_before + 3  # 只触发最右侧1个网花瓣
+        assert combat['orbit']['rotations_this_combat'] == 1
 
     def test_magic_relativity_requires_empty_orbit(self):
         state = _orbiter_combat('orbit-empty')
@@ -143,7 +148,7 @@ class TestOrbit:
         assert int(enemy.get('poison') or 0) >= 0
 
     def test_enemy_targeted_petals_hit_enemies_not_player(self):
-        """GB-394：敌向花瓣（堆芯 中毒）触发时必须打敌人，不能落到玩家。"""
+        """GB-394 + 表15 I232：敌向花瓣触发时打随机敌方目标，不能落到玩家。"""
         state = _orbiter_combat('petal-dir')
         core = _new_card(state, 'reactor_core', False)
         state['combat']['hand'] = [core]
@@ -151,9 +156,16 @@ class TestOrbit:
         combat = state['combat']
         petal = next(p for p in combat['orbit']['petals'] if p['def_id'] == 'reactor_core')
         assert petal.get('target') == 'enemy'
-        enemy_poison_before = int(combat['enemies'][0].get('poison') or 0)
+        poison_before = {
+            enemy['id']: int(enemy.get('poison') or 0)
+            for enemy in combat['enemies']
+        }
         _rotate_orbit(state, 1, 'petal-dir', [], source='test')
-        assert int(combat['enemies'][0].get('poison') or 0) > enemy_poison_before
+        # I232：默认目标改为随机敌方——只要有一个敌人中毒即符合规则。
+        assert any(
+            int(enemy.get('poison') or 0) > poison_before[enemy['id']]
+            for enemy in combat['enemies']
+        )
         assert int(combat.get('poison') or 0) == 0  # 玩家不中毒
 
     def test_carrot_free_when_orbit_card_played(self):

@@ -227,8 +227,8 @@ STORY_TAGS = {
     'orbit': {
         'name': {'zh': '轨道', 'en': 'Orbit'},
         'description': {
-            'zh': '轨道:X：打出并结算后，在轨道末尾生成耐久为X的花瓣；旋转会触发转到的花瓣效果并使其耐久-1，耐久归零后花瓣消失；每回合结束时轨道自动旋转一次。',
-            'en': 'Orbit: X — after this card is played and resolved, add a petal with X durability to the end of the orbit; each rotation triggers the petal it reaches and reduces its durability by 1; the petal vanishes at 0; the orbit rotates once automatically at the end of each turn.',
+            'zh': '轨道:X：打出并结算后，在轨道末尾生成耐久为X的花瓣；旋转会触发转到的花瓣效果并使其耐久-1，耐久归零后花瓣消失。',
+            'en': 'Orbit: X — after this card is played and resolved, add a petal with X durability to the end of the orbit; each rotation triggers the petal it reaches and reduces its durability by 1; the petal vanishes at 0.',
         },
     },
     'ready': {
@@ -2634,7 +2634,7 @@ STORY_CARDS.update({
         upgrade={'description': {'zh': '自己回合内每抽1张牌，旋转轨道1次；花费-1', 'en': 'Whenever you draw a card on your turn, rotate the orbit once; costs 1 less'}, 'cost_e': 2},
     ),
     'uranium': _card(
-        'Uranium', '铀', 'Uranium', 2, 'root', 'rare',
+        'Uranium', '铀', 'Uranium', 2, 'bloom', 'rare',
         '对所有敌人施加1层虚弱和1层易损',
         description_en='Apply 1 Weak and 1 Vulnerable to all enemies',
         owner='orbiter', orbit=2, tags=('wide',),
@@ -2644,13 +2644,16 @@ STORY_CARDS.update({
         ),
         upgrade={'description': {'zh': '对所有敌人施加1层虚弱和1层易损；获得固有，花费-1', 'en': 'Apply 1 Weak and 1 Vulnerable to all enemies; Innate, costs 1 less'}, 'cost_e': 1, 'tags': ('wide', 'innate')},
     ),
+    # 表15 红标：齿轮（轨道使）更名为暗物质，升级改为获得保留。
+    # id 保留 'gear' 以兼容已有旅程/存档中的卡牌实例；
+    # 普通的花花的「齿轮」是独立的 cogwheel（抽牌+攻击牌暂时力量）。
     'gear': _card(
-        'Gear', '齿轮', 'Gear', 1, 'bloom', 'ultra',
+        'DarkMatter', '暗物质', 'Dark Matter', 1, 'bloom', 'ultra',
         '旋转轨道一圈',
         description_en='Rotate the orbit a full circle',
         owner='orbiter', tags=('exile',),
         effects=(_effect('rotate_orbit_full', 1),),
-        upgrade={'description': {'zh': '旋转轨道一圈；取消放逐', 'en': 'Rotate the orbit a full circle; no longer exiles'}, 'tags': ()},
+        upgrade={'description': {'zh': '旋转轨道一圈；获得保留', 'en': 'Rotate the orbit a full circle; gains Retain'}, 'tags': ('exile', 'retain')},
     ),
     'magic_gear': _card(
         'MagicGear', '魔法齿轮', 'Magic Gear', 1, 'root', 'rare',
@@ -2679,13 +2682,13 @@ STORY_CARDS.update({
     ),
     'date_palm': _card(
         'DatePalm', '海枣', 'Date Palm', 1, 'thorn', 'rare',
-        '对随机敌人造成4D；此花瓣的伤害永久+3',
-        description_en='Deal 4 D to a random enemy; this petal permanently deals 3 more',
+        '对目标造成4D；此卡在轨道上的伤害永久+3',
+        description_en='Deal 4 D to the target; this petal permanently deals 3 more',
         owner='orbiter', orbit=3,
         effects=(_effect('date_palm_strike', 4, growth=3),),
         orbit_effects=(_effect('date_palm_strike', 4),),
         upgrade={
-            'description': {'zh': '对随机敌人造成4D；此花瓣的伤害永久+5', 'en': 'Deal 4 D; this petal permanently deals 5 more'},
+            'description': {'zh': '对目标造成4D；此卡在轨道上的伤害永久+5', 'en': 'Deal 4 D; this petal permanently deals 5 more'},
             'effects': (_effect('date_palm_strike', 4, growth=5),),
             'orbit_effects': (_effect('date_palm_strike', 4),),
         },
@@ -2700,11 +2703,11 @@ STORY_CARDS.update({
     ),
     'magic_relativity': _card(
         'MagicRelativity', '魔法相对论', 'Magic Relativity', 1, 'thorn', 'rare',
-        '只有轨道为空时才能打出；对随机敌人造成20D',
-        description_en='Can only be played while the orbit is empty; deal 20 D to a random enemy',
-        owner='orbiter', orbit=2, requires_empty_orbit=True, target='random',
-        effects=(_effect('random_damage', 20),),
-        upgrade={'description': {'zh': '只有轨道为空时才能打出；对随机敌人造成25D', 'en': 'Only while the orbit is empty; deal 25 D to a random enemy'}, 'effects': (_effect('random_damage', 25),)},
+        '只有轨道为空时才能打出；对目标造成20D',
+        description_en='Can only be played while the orbit is empty; deal 20 D to the target',
+        owner='orbiter', orbit=2, requires_empty_orbit=True,
+        effects=(_effect('damage', 20),),
+        upgrade={'description': {'zh': '只有轨道为空时才能打出；对目标造成25D', 'en': 'Only while the orbit is empty; deal 25 D to the target'}, 'effects': (_effect('damage', 25),)},
     ),
     'bugatti_card': _card(
         'Bugatti', '布加迪', 'Bugatti', 1, 'root', 'rare',
@@ -2788,15 +2791,15 @@ STORY_CARDS.update({
     ),
     'knife': _card(
         'Knife', '刀', 'Knife', 1, 'thorn', 'rare',
-        '对自己造成2D，对随机敌人造成12D，旋转轨道1次',
-        description_en='Deal 2 D to yourself and 12 D to a random enemy, rotate the orbit once',
+        '对自己造成2D，对目标造成12D，旋转轨道1次',
+        description_en='Deal 2 D to yourself and 12 D to the target, rotate the orbit once',
         owner='orbiter', orbit=3,
         effects=(
             _effect('lose_health', 2),
-            _effect('random_damage', 12),
+            _effect('damage', 12),
             _effect('rotate_orbit', 1),
         ),
-        upgrade={'description': {'zh': '对自己造成2D，对随机敌人造成12D，旋转轨道1次；改为轨道5', 'en': 'Deal 2 D to yourself and 12 D to a random enemy; Orbit 5'}, 'orbit': 5},
+        upgrade={'description': {'zh': '对自己造成2D，对目标造成12D，旋转轨道1次；改为轨道5', 'en': 'Deal 2 D to yourself and 12 D to the target; Orbit 5'}, 'orbit': 5},
     ),
     'orbit_thorn': _card(
         'OrbitThorn', '荆棘', 'Thorn', 1, 'infect', 'special',
@@ -2846,11 +2849,11 @@ STORY_CARDS.update({
     ),
     'grape': _card(
         'Grape', '葡萄', 'Grape', 1, 'bloom', 'common',
-        '对随机敌人施加3层中毒',
-        description_en='Apply 3 Poison to a random enemy',
-        owner='orbiter', orbit=2,
-        effects=(_effect('random_status', 3, status='poison'),),
-        upgrade={'description': {'zh': '对随机敌人施加3层中毒；改为轨道3', 'en': 'Apply 3 Poison to a random enemy; Orbit 3'}, 'orbit': 3},
+        '对目标施加3层中毒',
+        description_en='Apply 3 Poison to the target',
+        owner='orbiter', orbit=2, target='enemy',
+        effects=(_effect('status', 3, status='poison'),),
+        upgrade={'description': {'zh': '对目标施加3层中毒；改为轨道3', 'en': 'Apply 3 Poison to the target; Orbit 3'}, 'orbit': 3},
     ),
     'black_death': _card(
         'BlackDeath', '黑死病', 'Black Death', 2, 'bloom', 'rare',
@@ -2862,21 +2865,22 @@ STORY_CARDS.update({
     ),
     'candy_stick': _card(
         'CandyStick', '糖棍', 'Joystick', 2, 'thorn', 'ultra',
-        '将轨道上所有花瓣变为糖棍花瓣，旋转轨道1次，对随机敌人造成6D',
-        description_en='Turn all petals into Joystick petals, rotate once, deal 6 D to a random enemy',
+        '将轨道上所有花瓣变为糖棍花瓣，旋转轨道1次，对目标造成6D',
+        description_en='Turn all petals into Joystick petals, rotate once, deal 6 D to the target',
         owner='orbiter', orbit=2,
-        # GB-399：糖棍花瓣被转到时只结算随机伤害，不再继承打出效果
-        # （否则变形→旋转→再变形的链会无限自旋）。
+        # GB-399：糖棍花瓣被转到时只结算随机伤害（不享受力量、随机目标），
+        # 不再继承打出效果（否则变形→旋转→再变形的链会无限自旋）。
+        # 表15 红标：手动打出时对目标（选定敌人）造成伤害。
         orbit_effects=(_effect('random_damage', 6),),
         effects=(
             _effect('orbit_transform_all', 1, durability=2),
             _effect('rotate_orbit', 1),
-            _effect('random_damage', 6),
+            _effect('damage', 6),
         ),
-        upgrade={'description': {'zh': '将轨道上所有花瓣变为糖棍+花瓣，旋转轨道1次，对随机敌人造成9D', 'en': 'Turn all petals into Joystick+ petals, rotate once, deal 9 D to a random enemy'}, 'orbit_effects': (_effect('random_damage', 9),), 'effects': (
+        upgrade={'description': {'zh': '将轨道上所有花瓣变为糖棍+花瓣，旋转轨道1次，对目标造成9D', 'en': 'Turn all petals into Joystick+ petals, rotate once, deal 9 D to the target'}, 'orbit_effects': (_effect('random_damage', 9),), 'effects': (
             _effect('orbit_transform_all', 1, durability=2),
             _effect('rotate_orbit', 1),
-            _effect('random_damage', 9),
+            _effect('damage', 9),
         )},
     ),
     'golden_cactus': _card(
@@ -2904,12 +2908,12 @@ STORY_CARDS.update({
         upgrade={'description': {'zh': '对目标施加5层中毒，抽3张牌', 'en': 'Apply 5 Poison and draw 3 cards'}, 'effects': (_effect('status', 5, status='poison'), _effect('draw', 3))},
     ),
     'snowflake': _card(
-        'Snowflake', '雪花', 'Snowflake', 3, 'thorn', 'common',
-        '对随机敌人造成20D',
-        description_en='Deal 20 D to a random enemy',
-        owner='orbiter', orbit=2, target='random',
-        effects=(_effect('random_damage', 20),),
-        upgrade={'description': {'zh': '对随机敌人造成20D；改为轨道3', 'en': 'Deal 20 D to a random enemy; Orbit 3'}, 'orbit': 3},
+        'Snowflake', '雪花', 'Snowflake', 3, 'thorn', 'rare',
+        '对目标造成20D',
+        description_en='Deal 20 D to the target',
+        owner='orbiter', orbit=2,
+        effects=(_effect('damage', 20),),
+        upgrade={'description': {'zh': '对目标造成20D；改为轨道3', 'en': 'Deal 20 D to the target; Orbit 3'}, 'orbit': 3},
     ),
     'banana': _card(
         'Banana', '香蕉', 'Banana', 2, 'bloom', 'common',
@@ -2921,14 +2925,14 @@ STORY_CARDS.update({
     ),
     'carrot': _card(
         'Carrot', '胡萝卜', 'Carrot', 1, 'thorn', 'common',
-        '对随机敌人造成5D；本回合使用过轨道牌时，此牌免费打出',
-        description_en='Deal 5 D to a random enemy; if an Orbit card was played this turn, this card costs 0',
-        owner='orbiter', orbit=2, free_if_orbit_played=True, target='random',
-        effects=(_effect('random_damage', 5),),
-        upgrade={'description': {'zh': '对随机敌人造成7D；本回合使用过轨道牌时，此牌免费打出', 'en': 'Deal 7 D to a random enemy; costs 0 if an Orbit card was played this turn'}, 'effects': (_effect('random_damage', 7),)},
+        '对目标造成5D；本回合使用过轨道牌时，此牌免费打出',
+        description_en='Deal 5 D to the target; if an Orbit card was played this turn, this card costs 0',
+        owner='orbiter', orbit=2, free_if_orbit_played=True,
+        effects=(_effect('damage', 5),),
+        upgrade={'description': {'zh': '对目标造成7D；本回合使用过轨道牌时，此牌免费打出', 'en': 'Deal 7 D to the target; costs 0 if an Orbit card was played this turn'}, 'effects': (_effect('damage', 7),)},
     ),
     'magic_splitter': _card(
-        'MagicSplitter', '魔法分裂器', 'Magic Splitter', 0, 'root', 'rare',
+        'MagicSplitter', '魔法分裂器', 'Magic Splitter', 1, 'bloom', 'rare',
         '抉择：选择攻击牌或技能牌；使抽牌堆中随机1张该类型牌的轨道耐久+2',
         description_en='Choose one: Attack or Skill; a random card of that type in the draw pile gains 2 Orbit durability',
         owner='orbiter',
@@ -3053,7 +3057,7 @@ STORY_CARDS.update({
         'Chitin', '甲壳质', 'Chitin', 0, 'bloom', 'rare',
         '获得8层护盾',
         description_en='Gain 8 S',
-        owner='orbiter', tags=('innate',),
+        owner='orbiter', tags=('innate', 'exile'),
         effects=(_effect('shield', 8),),
         upgrade={'description': {'zh': '获得11层护盾', 'en': 'Gain 11 S'}, 'effects': (_effect('shield', 11),)},
     ),
@@ -3065,13 +3069,16 @@ STORY_CARDS.update({
         effects=(_effect('random_status', 4, status='poison', hits=5),),
         upgrade={'description': {'zh': '对随机敌人施加4层中毒，重复7次', 'en': 'Apply 4 Poison to a random enemy, 7 times'}, 'effects': (_effect('random_status', 4, status='poison', hits=7),)},
     ),
+    # 表15 红标：魔法量子（轨道使的弃牌入轨道设计）更名为蛋白石，
+    # 且只把攻击/技能牌放入轨道；魔法师的同名卡是独立的 mage_quantum。
+    # id 保留 'magic_quantum' 以兼容已有旅程/存档中的卡牌实例。
     'magic_quantum': _card(
-        'MagicQuantum', '魔法量子', 'Magic Quantum', 2, 'bloom', 'ultra',
-        '将弃牌堆所有牌放入轨道（各为轨道1花瓣）',
-        description_en='Put every card in the discard pile onto the orbit as Orbit 1 petals',
+        'Opal', '蛋白石', 'Opal', 2, 'bloom', 'ultra',
+        '将弃牌堆所有攻击和技能牌放入轨道（各为轨道1花瓣）',
+        description_en='Put every Attack and Skill in the discard pile onto the orbit as Orbit 1 petals',
         owner='orbiter',
-        effects=(_effect('discard_to_orbit', 1, durability=1),),
-        upgrade={'description': {'zh': '将弃牌堆所有牌放入轨道（各为轨道1花瓣）；花费-1', 'en': 'Put the discard pile onto the orbit; costs 1 less'}, 'cost_e': 1},
+        effects=(_effect('discard_to_orbit', 1, durability=1, card_types=('thorn', 'bloom')),),
+        upgrade={'description': {'zh': '将弃牌堆所有攻击和技能牌放入轨道（各为轨道1花瓣）；花费-1', 'en': 'Put the discard pile onto the orbit; costs 1 less'}, 'cost_e': 1},
     ),
     'poison_gas': _card(
         'PoisonGas', '毒气', 'Poison Gas', 1, 'root', 'rare',
@@ -3588,8 +3595,8 @@ STORY_RELICS = {
     # 表15 新增天赋
     'orbital_surround': _relic(
         '环绕轨道', 'Orbital Surround',
-        '回合结束时轨道旋转一圈。',
-        rarity='special', script='orbit_end_full_rotate',
+        '回合结束时轨道旋转一次。',
+        rarity='special', script='orbit_end_rotate',
     ),
     'third_eye_summon': _relic(
         '第三只眼', 'Third Eye',
@@ -4777,7 +4784,7 @@ def validate_story_content():
         'reward_card_choices', 'first_attack_double', 'make_wide',
         'favorite_card', 'discard_mine', 'infect_card', 'kill_reward',
         'deck_count_power', 'shop_refresh', 'grant_innate',
-        'orbit_end_full_rotate',
+        'orbit_end_rotate',
     }
     enemy_effect_types = {
         'add_draw_card', 'adjacent_shield', 'allies_heal', 'allies_power',

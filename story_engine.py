@@ -3831,10 +3831,12 @@ def _orbit_resolve_petal(state, petal, seed, events, depth=0):
     living = _living_enemies(combat)
     default_payload = {}
     if values['target'] == 'enemy' and living:
-        # GB-394：敌向花瓣触发时没有玩家选择——自动取首个存活敌人，
-        # 此前缺省目标会让效果落到自己（如鸢尾给玩家上毒）或无处结算。
-        first_id = str(living[0].get('id') or '')
-        default_payload = {'target_id': first_id, 'target_player': first_id, 'target_player_id': first_id}
+        # GB-394 + 表15 I232 红标注释：敌向花瓣触发时没有玩家选择——
+        # 若非指向自己或所有敌人，则默认指向随机敌方目标。
+        picked_id = str(
+            _rng(state, seed, 'orbit_petal_target').choice(living).get('id') or ''
+        )
+        default_payload = {'target_id': picked_id, 'target_player': picked_id, 'target_player_id': picked_id}
     for _ in range(repeats):
         if state.get('phase') != 'combat':
             return
@@ -4332,14 +4334,21 @@ def _resolve_effect(state, card, values, effect, targets, payload, seed, events,
         return
     if effect_type == 'discard_to_orbit':
         durability = max(1, int(effect.get('durability') or 1))
+        # 表15 红标（蛋白石）：可限制只把某些类型的牌（攻击/技能）放入轨道。
+        allowed_types = tuple(effect.get('card_types') or ())
+        remaining = []
         for item in list(combat.get('discard_pile') or []):
             item_values = _card_values(item)
+            if allowed_types and item_values.get('type') not in allowed_types:
+                remaining.append(item)
+                continue
             _orbit_new_petal(
                 state, combat, item.get('def_id'), item_values,
-                durability, events, source='magic_quantum',
+                durability, events,
+                source=str(effect.get('source') or 'discard_to_orbit'),
                 effects_override=(),
             )
-        combat['discard_pile'] = []
+        combat['discard_pile'] = remaining
         events.append({'type': 'orbit_from_discard', 'durability': durability})
         return
     if effect_type == 'shield_plus_orbit_count':
@@ -4360,8 +4369,15 @@ def _resolve_effect(state, card, values, effect, targets, payload, seed, events,
         if context.get('orbit'):
             bonus = int(orbit_vars.get('damage_bonus') or 0)
         living = _living_enemies(combat)
-        if living:
-            enemy = _rng(state, seed, 'date_palm_strike').choice(living)
+        if context.get('orbit'):
+            # 花瓣触发：无玩家选择，随机敌方目标。
+            enemy = _rng(state, seed, 'date_palm_strike').choice(living) if living else None
+        else:
+            # 手动打出：用玩家选定的目标（表15 红标：对目标造成 XD）。
+            enemy = next((t for t in targets if isinstance(t, dict) and int(t.get('health') or 0) > 0), None)
+            if enemy is None:
+                enemy = living[0] if living else None
+        if enemy is not None:
             _enemy_physical_damage(
                 state, enemy, max(0, int(amount or 0)) + bonus, 1, events,
                 _localized(values.get('name')),
@@ -8762,12 +8778,11 @@ def _turn_boundary(state, seed, events, extra=False):
 def _prepare_player_turn_end(state, seed, events, reason=None):
     combat = state['combat']
     combat['blind_active'] = False
-    # 轨道（表15）：每回合结束时自动旋转一次；环绕轨道天赋改为旋转一圈。
+    # 轨道（表15 天赋表）：回合结束不自动旋转；环绕轨道天赋（轨道使初始
+    # 天赋）的效果是回合结束时旋转一次。
     if state.get('phase') == 'combat' and (combat.get('orbit', {}).get('petals') or []):
         if _has_relic(state, 'orbital_surround'):
-            _rotate_orbit_full(state, seed, events, source='orbital_surround')
-        else:
-            _rotate_orbit(state, 1, seed, events, source='turn_end')
+            _rotate_orbit(state, 1, seed, events, source='orbital_surround')
     combat.pop('orbit_cancer_poison', None)
     # 召唤（表15）：每个召唤物的被动效果在回合结束自动触发一次；
     # 奇迹之春天赋：回合结束可选择一个召唤物再触发一次其被动。
