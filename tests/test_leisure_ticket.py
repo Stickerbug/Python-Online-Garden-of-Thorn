@@ -47,26 +47,24 @@ class TicketBalanceTests(_TempDbCase):
 
 
 class FreeWindowTests(unittest.TestCase):
-    def test_free_windows_weekday_cn_time(self):
-        # 2026-09-28 是周一
-        moment = datetime(2026, 9, 28, 9, 0, tzinfo=leisure_ticket._CN_TZ)
-        self.assertTrue(leisure_ticket.is_free_entry_now(moment))
-        moment = datetime(2026, 9, 28, 16, 30, tzinfo=leisure_ticket._CN_TZ)
-        self.assertTrue(leisure_ticket.is_free_entry_now(moment))
-        moment = datetime(2026, 9, 28, 10, 0, tzinfo=leisure_ticket._CN_TZ)
-        self.assertFalse(leisure_ticket.is_free_entry_now(moment))
-        moment = datetime(2026, 9, 28, 12, 0, tzinfo=leisure_ticket._CN_TZ)
-        self.assertFalse(leisure_ticket.is_free_entry_now(moment))
+    """2026-10-09 设计：取消免费开放——任何时刻进入都需要门票。
 
-    def test_weekend_not_free(self):
-        # 2026-09-26 是周六
+    原时段判定保留在函数里，FREE_ENTRY_ENABLED 置回 True 即恢复；
+    这里锁住「恒为 False」，防止免费时段悄悄回流。
+    """
+
+    def test_free_entry_disabled_always(self):
+        self.assertFalse(leisure_ticket.FREE_ENTRY_ENABLED)
+        # 2026-09-28 是周一，原免费窗口 09:00 / 16:30 —— 现在也不再免费
+        for hour, minute in ((9, 0), (16, 30), (12, 0)):
+            moment = datetime(2026, 9, 28, hour, minute, tzinfo=leisure_ticket._CN_TZ)
+            self.assertFalse(leisure_ticket.is_free_entry_now(moment))
+        # 周六同样不免费
         moment = datetime(2026, 9, 26, 9, 0, tzinfo=leisure_ticket._CN_TZ)
         self.assertFalse(leisure_ticket.is_free_entry_now(moment))
-
-    def test_utc_input_maps_to_cn_window(self):
-        # UTC 01:30 = UTC+8 的 09:30 → 免费
+        # UTC 输入也不免费
         moment = datetime(2026, 9, 28, 1, 30, tzinfo=timezone.utc)
-        self.assertTrue(leisure_ticket.is_free_entry_now(moment))
+        self.assertFalse(leisure_ticket.is_free_entry_now(moment))
 
 
 class SigninTicketTests(_TempDbCase):

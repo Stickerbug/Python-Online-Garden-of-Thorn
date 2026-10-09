@@ -11525,7 +11525,7 @@ ADMIN_COMMAND_TREE = {
     },
     'minigame': {
         'summary': '休闲花园小游戏（2048 / 合成大花花）管理',
-        'usage': 'minigame <state|score|record|reset|top|periods|settle> <2048|suika> ...',
+        'usage': 'minigame <state|score|record|reset|top|periods|settle|history> <2048|suika> ...',
         'children': {
             'state': {'summary': '查看账号活动局与最近记录', 'usage': 'minigame state <2048|suika> <账号>'},
             'score': {'summary': '设置账号活动局分数（云端权威存档）', 'usage': 'minigame score <2048|suika> <账号> <分数>'},
@@ -11541,6 +11541,7 @@ ADMIN_COMMAND_TREE = {
             'top': {'summary': '查看榜单', 'usage': 'minigame top <2048|suika> [14d|all] [数量]'},
             'periods': {'summary': '查看周榜奖期历史', 'usage': 'minigame periods <2048|suika> [数量]'},
             'settle': {'summary': '立即结算到期奖期（幂等）', 'usage': 'minigame settle <2048|suika>'},
+            'history': {'summary': '查看账号游玩记录（两游戏合并：种类/最终得分/结算荆露）', 'usage': 'minigame history <账号> [数量]'},
         },
     },
     'community': {
@@ -11923,6 +11924,7 @@ ADMIN_COMMAND_DIRECT_TRANSLATIONS = {
     ('minigame', 'top'): 'minigame-top',
     ('minigame', 'periods'): 'minigame-periods',
     ('minigame', 'settle'): 'minigame-settle',
+    ('minigame', 'history'): 'minigame-history',
     ('publicfeedback', 'hide', 'issue'): ('publicfeedback-hide', 'issue'),
     ('publicfeedback', 'hide', 'comment'): ('publicfeedback-hide', 'comment'),
     ('publicfeedback', 'audit'): 'publicfeedback-audit',
@@ -14326,6 +14328,7 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
         'minigame-top',
         'minigame-periods',
         'minigame-settle',
+        'minigame-history',
     }:
         if not DB_AVAILABLE:
             return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
@@ -14456,6 +14459,59 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
                     ' ORDER BY id DESC LIMIT 1', (uid,)).fetchone()
 
             try:
+                if cmd == 'minigame-history':
+                    # 休闲花园游玩记录（两游戏合并）：游戏种类 + 最终得分 + 结算荆露。
+                    token = parts[1] if len(parts) >= 2 else ''
+                    if not token:
+                        return {'success': False, 'output': '用法：minigame history <账号> [数量]'}
+                    limit = 20
+                    if len(parts) >= 3 and re.fullmatch(r'[0-9]+', parts[2]):
+                        limit = min(100, max(1, int(parts[2])))
+                    with closing(get_db_connection()) as conn:
+                        minigame_2048_service.ensure_schema(conn)
+                        minigame_suika_service.ensure_schema(conn)
+                        account = _mg_resolve_account(conn, token)
+                        if account is None:
+                            return {'success': False, 'output': '账号不存在：' + token}
+                        uid = int(account['id'])
+                        rows = conn.execute(
+                            '''
+                            SELECT g.kind, g.game_id, g.score, g.best, g.play_mode, g.status, g.updated_at,
+                                   (SELECT r.amount FROM minigame_2048_rewards r
+                                    WHERE r.period_key = 'gameover-' || g.kind || '-' || g.game_id
+                                      AND r.user_id = ?) AS dew
+                            FROM (
+                                SELECT '2048' AS kind, id AS game_id, score, max_tile AS best,
+                                       play_mode, status, updated_at
+                                FROM minigame_2048_games WHERE user_id = ?
+                                UNION ALL
+                                SELECT 'suika' AS kind, id AS game_id, score, max_tier AS best,
+                                       play_mode, status, updated_at
+                                FROM minigame_suika_games WHERE user_id = ?
+                            ) AS g
+                            ORDER BY g.updated_at DESC LIMIT ?
+                            ''',
+                            (uid, uid, uid, limit),
+                        ).fetchall()
+                    if not rows:
+                        return {'success': True,
+                                'output': account['username'] + '(#' + str(account['id']) + ') 没有休闲花园游玩记录'}
+                    titles = {'2048': 'Craft Eternal', 'suika': '合成大花花'}
+                    lines = [account['username'] + '(#' + str(account['id']) + ') 最近 '
+                             + str(len(rows)) + ' 局游玩记录：']
+                    for row in rows:
+                        kind = str(row['kind'])
+                        mode = '门票' if str(row['play_mode'] or '') == 'ticket' else '普通'
+                        state = '进行中' if str(row['status'] or '') == 'active' else '已结束'
+                        best = ('最高方块 ' + str(int(row['best'] or 0))) if kind == '2048' \
+                            else ('最高档 ' + str(int(row['best'] or 0)))
+                        dew_txt = ''
+                        if int(row['dew'] or 0) > 0:
+                            dew_txt = '，结算 +' + str(int(row['dew'])) + ' 荆露'
+                        lines.append('  ' + titles.get(kind, kind) + ' ' + str(int(row['score'] or 0)) + '分（'
+                                     + best + '）' + dew_txt + ' ' + mode + ' ' + state + ' '
+                                     + str(row['updated_at'])[:16])
+                    return {'success': True, 'output': chr(10).join(lines)}
                 game_key = parts[1].lower() if len(parts) >= 2 else ''
                 if game_key not in ('2048', 'suika'):
                     return {'success': False, 'output': '游戏必须是 2048 或 suika'}
@@ -28843,7 +28899,7 @@ def on_minigame_presence(data=None):
             remaining = None
         if remaining is None or remaining <= 0:
             emit('server_error', {
-                'message': '休闲花园需要门票：请先使用门票进入（或等待免费时段）',
+                'message': '休闲花园需要门票：请先使用门票进入',
                 'reason': 'leisure_ticket_required',
             })
             return
@@ -37946,6 +38002,30 @@ def api_minigame_suika_state():
     })
 
 
+@app.route('/api/minigame/history', methods=['GET'])
+def api_minigame_history():
+    """玩家自查休闲花园游玩记录（两游戏合并：种类/最终得分/结算荆露）。"""
+
+    identity, denied = _minigame_suika_guard()  # 登录即可查自己的记录
+    if denied is not None:
+        return denied
+    if _minigame_2048_rate_limited(f'u{identity[0]}', 'minigame_history', limit=60):
+        return _json_error('查询太频繁，请稍后再试', 429)
+    try:
+        limit = min(50, max(1, int(request.args.get('limit') or 20)))
+    except (TypeError, ValueError):
+        limit = 20
+    try:
+        with get_db_connection() as conn:
+            minigame_2048_service.ensure_schema(conn)
+            minigame_suika_service.ensure_schema(conn)
+            records = minigame_2048_service.player_history(conn, identity[0], limit)
+    except Exception as exc:
+        admin_event('error', f'minigame history failed: {exc}')
+        return _json_error('查询失败，请稍后再试', 500)
+    return jsonify({'success': True, 'records': records})
+
+
 @app.route('/api/minigame/suika/sync', methods=['POST'])
 def api_minigame_suika_sync():
     """增量同步：立刻落库 + 启发式校验（物理游戏没法逐位重放，见服务模块注释）。"""
@@ -37974,6 +38054,7 @@ def api_minigame_suika_sync():
                 claimed_max_tier=None if claimed_max_tier is None else int(claimed_max_tier),
                 source=source,
                 play_mode=_leisure_play_mode_for(identity[0]),
+                game_over=bool(payload.get('game_over')),
             )
     except Exception as exc:
         admin_event('error', f'suika sync failed: {exc}')

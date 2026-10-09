@@ -153,6 +153,7 @@ const syncState = {
   gameUid: '',
   acked: 0,          // 服务端已确认的投放数
   verified: 0,       // 已验证入榜的最高分
+  gameOverSynced: false, // 结束标记是否已上报（荆露结算每局只发一次）
   timer: null,
   inflight: false,
   lastError: '',
@@ -962,6 +963,7 @@ async function restartCloudGame() {
       if (remote && remote.game_uid) {
         syncState.gameUid = String(remote.game_uid);
         syncState.acked = 0;
+        syncState.gameOverSynced = false;
       }
     } catch (_) { /* 离线：下次同步时会走 state 分支 */ }
   })();
@@ -1001,7 +1003,9 @@ async function syncNow() {
     } catch (_) { syncState.lastError = 'offline'; return; }
   }
   const drops = game.dropLog.slice(syncState.acked).map((entry) => ({ t: entry.t, x: entry.x }));
-  if (!drops.length && game.score === syncState.verified) return;
+  // 结束标记还没上报过的话，即使没有新投放/新分数也要同步一次（结算荆露）。
+  const gameOverPending = !!(game && game.gameOver) && !syncState.gameOverSynced;
+  if (!drops.length && game.score === syncState.verified && !gameOverPending) return;
   syncState.inflight = true;
   try {
     const response = await fetch('/api/minigame/suika/sync', {
@@ -1015,6 +1019,7 @@ async function syncNow() {
         claimed_score: game.score,
         claimed_max_tier: Math.max(0, Math.min(MAX_TIER, Number(game.maxTierSeen) || 0)),
         source: navigator.onLine === false ? 'offline' : 'online',
+        game_over: !!(game && game.gameOver),
       }),
     });
     if (!response.ok) throw new Error(`http ${response.status}`);
@@ -1026,10 +1031,14 @@ async function syncNow() {
       if (remote.game_uid) syncState.gameUid = String(remote.game_uid);
       syncState.acked = Math.max(0, Number(remote.drop_index) || 0);
       if (Number(remote.score) > syncState.verified) syncState.verified = Number(remote.score);
+      if (data.status === 'ok') syncState.gameOverSynced = syncState.gameOverSynced || !!(game && game.gameOver);
       setVerifiedText();
       saveLocal();
     }
-    if (data && data.verified === false) {
+    const dewAwarded = Number((data && data.dew_awarded) || 0);
+    if (dewAwarded > 0) {
+      setStatus(lt({ zh: `本局结算：+${dewAwarded} 荆露已到账`, en: `Run reward: +${dewAwarded} Thorn Dew`, fr: `Récompense : +${dewAwarded} rosée d'épine`, ja: `報酬：+${dewAwarded} 荆露` }));
+    } else if (data && data.verified === false) {
       setStatus(lt({ zh: '本批成绩未通过校验，未计入排行榜（进度已保留）', en: 'Batch failed verification — not ranked (progress kept)', fr: 'Lot non validé — non classé (progression conservée)', ja: '検証に失敗したためランキングに反映されません（進捗は保持）' }), { offline: true });
     } else if (data && data.verified) {
       setStatus(lt({ zh: '成绩已上榜', en: 'Score ranked', fr: 'Score classé', ja: 'スコアをランキングに反映しました' }));
@@ -1187,6 +1196,8 @@ function handleEvents(events) {
       if (window.GtnLeisureTicket && CONFIG.userId) {
         void window.GtnLeisureTicket.recordResult('suika', game.score || 0, game.maxTierSeen || 0);
       }
+      // 结束立刻同步：服务端按已验证分数结算荆露（每局一次）。
+      scheduleSync(300);
     }
   }
 }

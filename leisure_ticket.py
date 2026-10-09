@@ -9,8 +9,8 @@
   - 故事模式通关一次（非 EZ 难度）。
 - 库存上限 5 张，存 users 表（跨设备一致）。
 
-使用：工作日（UTC+8）08:00-10:00 / 15:00-17:00 免费开放（不限时）；
-其余时段消耗 1 张门票换取 10 分钟游玩期（断线暂停倒计时）。
+使用：进入休闲花园消耗 1 张门票换取 10 分钟游玩期（断线暂停倒计时）。
+2026-10-09 起取消工作日免费开放时段，任何时间都需要门票。
 """
 
 from datetime import datetime, timedelta, timezone
@@ -23,6 +23,9 @@ STREAK_BONUS_EVERY_DAYS = 7
 DAILY_CHANNEL_CAP = 1
 
 PLAY_SESSION_SECONDS = 10 * 60
+# 免费开放时段（设计 2026-10-09 取消）：任何时间进入休闲花园都需要门票。
+# 常量与函数签名保留，把 FREE_ENTRY_ENABLED 置回 True 即可恢复免费时段。
+FREE_ENTRY_ENABLED = False
 FREE_WINDOW_SECONDS = 2 * 60 * 60
 # UTC+8 免费时段起点（小时）：08:00-10:00、15:00-17:00（工作日）。
 FREE_WINDOW_START_HOURS = (8, 15)
@@ -65,10 +68,13 @@ def _date_key(moment=None):
 
 
 def is_free_entry_now(moment=None):
-    """工作日 UTC+8 的 08:00-10:00 / 15:00-17:00 免费开放。
+    """免费开放判定（2026-10-09 起取消：恒为 False，休闲花园始终需要门票）。
 
-    传入时刻先换算到 UTC+8（accepts aware datetime of any tz）。
+    原规则为工作日 UTC+8 的 08:00-10:00 / 15:00-17:00 免费开放；
+    恢复时把 FREE_ENTRY_ENABLED 置回 True 即可。
     """
+    if not FREE_ENTRY_ENABLED:
+        return False
     if moment is None:
         moment = _now_cn()
     elif moment.tzinfo is None:
@@ -223,7 +229,7 @@ def ticket_payload(conn, user_id):
         'free_windows': [
             {'start_hour': hour, 'minutes': int(FREE_WINDOW_SECONDS / 60)}
             for hour in FREE_WINDOW_START_HOURS
-        ],
+        ] if FREE_ENTRY_ENABLED else [],
         'play_seconds': PLAY_SESSION_SECONDS,
         'channels_claimed': sorted(claimed),
     }

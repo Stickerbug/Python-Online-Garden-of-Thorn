@@ -9,7 +9,7 @@ import unittest
 import app
 import db
 import minigame_2048_service as base2048
-import minigame_suika_service as suika
+import minigame_suika_service as suika_svc
 
 
 class MinigameConsoleCommandTests(unittest.TestCase):
@@ -51,6 +51,27 @@ class MinigameConsoleCommandTests(unittest.TestCase):
         # 不存在的游戏名/账号
         self.assertFalse(self.run_command('minigame state tetris MgConsole')['success'])
         self.assertFalse(self.run_command('minigame state 2048 NoSuchUser')['success'])
+
+    def test_history_lists_both_games_with_scores(self):
+        # 两个游戏各来一局：2048 设分 + suika 同步结束后结算。
+        base2048.load_state(self._conn(), self.user['id'])  # 确保有活动局
+        self.assertTrue(self.run_command('minigame score 2048 MgConsole 4321')['success'])
+        conn = self._conn()
+        suika_state = suika_svc.load_state(conn, self.user['id'])
+        suika_svc.sync_progress(
+            conn, self.user['id'], suika_state['game_uid'], 0,
+            [{'t': float(i * 1000), 'x': 0.5} for i in range(5)],
+            claimed_score=1234, claimed_max_tier=3, game_over=True,
+        )
+        out = self.run_command('minigame history MgConsole')
+        self.assertTrue(out['success'], out)
+        self.assertIn('Craft Eternal', out['output'])
+        self.assertIn('4321', out['output'])
+        self.assertIn('合成大花花', out['output'])
+        self.assertIn('1234', out['output'])
+        self.assertIn('+123 荆露', out['output'])
+        # 账号不存在与无记录
+        self.assertFalse(self.run_command('minigame history NoSuchUser')['success'])
 
     def _bust_leaderboard_cache(self):
         # 榜单有 15 秒进程内缓存：改完记录后清掉，让 top 立即反映新数据

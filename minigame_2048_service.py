@@ -45,6 +45,9 @@ CHAMPION_MIN_ACCOUNTS = 3
 RULES_WINDOW_DAYS = 14
 DEFAULT_LEADERBOARD_LIMIT = 100
 MAX_SYNC_OPS = 4096
+# 游戏结束直接奖励（设计 2026-10-09）：2048 结算 floor(分数/50) 荆露，
+# 合成大花花结算 floor(分数/10) 荆露；与周榜名次奖并行，各自独立发放。
+GAME_OVER_DEW_DIVISOR = 50
 
 # 2048 操作限速（设计 2026-09-26）：全程累计「每经过 1 秒最多 2 次操作」。
 # 以本局第一次操作的时间为起点，操作数 op_index 超过 2×经过秒数 + 突发余量则拒绝该批。
@@ -584,6 +587,14 @@ def sync_progress(conn, user_id: int, game_uid: str, from_index: int, ops,
         conn, state, board, source=source, now=now,
         play_mode=game_mode if game_mode in PLAY_MODES else play_mode,
     )
+    # 游戏结束直接奖励（2026-10-09）：分数由服务端重放得出，结算可信；
+    # 幂等键见 credit_game_over_dew，重复同步不会重复发。
+    dew_awarded = 0
+    if bool(board.get("game_over")):
+        dew_awarded = credit_game_over_dew(
+            conn, user_id, int(state["game_id"]), int(board["score"]),
+            divisor=GAME_OVER_DEW_DIVISOR, now=now,
+        )
     conn.commit()
     verified_index, verified_score = _progress_at(conn, state["game_id"])
     return {
@@ -595,6 +606,7 @@ def sync_progress(conn, user_id: int, game_uid: str, from_index: int, ops,
         "cells": board["cells"],
         "rng_state": int(board["rng_state"]),
         "game_over": bool(board.get("game_over")),
+        "dew_awarded": dew_awarded,
         "reached_2048": bool(state["reached_2048"]),
         "verified": {"op_index": verified_index, "score": verified_score},
         "record": record,
@@ -874,6 +886,92 @@ def _credit_dew(conn, user_id: int, amount: int, *, period_key: str, reason: str
          free_after, paid_before, now_iso(now)),
     )
     return True
+
+
+def credit_game_over_dew(conn, user_id: int, game_id: int, score: int, *,
+                         divisor: int, game_key: str = GAME_KEY, now=None) -> int:
+    """游戏结束直接发荆露（2026-10-09 设计：2048=分数/50，suika=分数/10）。
+
+    幂等复用奖期表的 ``UNIQUE(period_key, user_id)``：period_key 固定为
+    ``gameover-<game_key>-<game_id>``，同一局无论同步/补传/重试多少次都只发一次。
+    返回实际入账的荆露数（不该发或已发过返回 0）。
+    """
+
+    amount = max(0, int(score)) // max(1, int(divisor))
+    if amount <= 0:
+        return 0
+    period_key = f"gameover-{game_key}-{int(game_id)}"
+    cursor = conn.execute(
+        "INSERT OR IGNORE INTO minigame_2048_rewards (period_key, user_id, amount, created_at)"
+        " VALUES (?, ?, ?, ?)",
+        (period_key, int(user_id), amount, now_iso(now)),
+    )
+    if not cursor.rowcount:
+        return 0
+    row = conn.execute("SELECT * FROM users WHERE id = ?", (int(user_id),)).fetchone()
+    if row is None:
+        conn.execute("DELETE FROM minigame_2048_rewards WHERE period_key=? AND user_id=?",
+                     (period_key, int(user_id)))
+        return 0
+    free_before = max(0, int(row["thorn_dew_free"] or 0)) if "thorn_dew_free" in row.keys() else 0
+    paid_before = max(0, int(row["thorn_dew_paid"] or 0)) if "thorn_dew_paid" in row.keys() else 0
+    free_after = free_before + amount
+    conn.execute("UPDATE users SET thorn_dew_free = ? WHERE id = ?", (free_after, int(user_id)))
+    conn.execute(
+        """INSERT INTO user_currency_transactions
+           (user_id, currency, free_delta, paid_delta, reason, source_type, source_id,
+            balance_free_after, balance_paid_after, admin_username, created_at)
+           VALUES (?, 'thorn_dew', ?, 0, ?, ?, ?, ?, ?, '', ?)""",
+        (int(user_id), amount,
+         f"游戏结束奖励：{int(score)} 分 ÷ {int(divisor)}",
+         f"minigame_{game_key}_gameover", period_key, free_after, paid_before, now_iso(now)),
+    )
+    _audit(conn, user_id, int(game_id), "game_over_dew",
+           {"score": int(score), "amount": amount, "divisor": int(divisor)})
+    return amount
+
+
+def player_history(conn, user_id: int, limit: int = 20) -> List[Dict[str, object]]:
+    """玩家的休闲花园游玩记录（两游戏合并）：游戏种类 + 最终得分等。
+
+    供玩家自查与管理终端共用；调用方需先对两个服务 ``ensure_schema``。
+    """
+
+    uid = int(user_id)
+    rows = conn.execute(
+        """
+        SELECT g.kind, g.game_id, g.score, g.best, g.play_mode, g.status, g.updated_at,
+               (SELECT r.amount FROM minigame_2048_rewards r
+                WHERE r.period_key = 'gameover-' || g.kind || '-' || g.game_id
+                  AND r.user_id = ?) AS dew
+        FROM (
+            SELECT '2048' AS kind, id AS game_id, score, max_tile AS best,
+                   play_mode, status, updated_at
+            FROM minigame_2048_games WHERE user_id = ?
+            UNION ALL
+            SELECT 'suika' AS kind, id AS game_id, score, max_tier AS best,
+                   play_mode, status, updated_at
+            FROM minigame_suika_games WHERE user_id = ?
+        ) AS g
+        ORDER BY g.updated_at DESC LIMIT ?
+        """,
+        (uid, uid, uid, max(1, min(100, int(limit)))),
+    ).fetchall()
+    titles = {"2048": "Craft Eternal", "suika": "合成大花花"}
+    return [
+        {
+            "game": str(row["kind"]),
+            "title": titles.get(str(row["kind"]), str(row["kind"])),
+            "score": int(row["score"] or 0),
+            "best": int(row["best"] or 0),
+            "best_kind": "tile" if str(row["kind"]) == "2048" else "tier",
+            "play_mode": str(row["play_mode"] or "normal"),
+            "status": str(row["status"] or ""),
+            "dew": int(row["dew"] or 0),
+            "updated_at": str(row["updated_at"] or ""),
+        }
+        for row in rows
+    ]
 
 
 def settle_due(conn, *, now=None,

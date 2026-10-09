@@ -49,6 +49,10 @@ MAX_TOTAL_DROPS = 100_000           # 一局的累计投放上限（防挂机脚
 TIME_ANCHOR_RATE = 1.5              # 允许的游戏时间/墙钟比（正常 ≤1.0，留抖动余量）
 TIME_ANCHOR_SLACK_MS = 120_000      # 固定余量：容忍刚开局 / 离线回来后的第一批小时间差
 
+# 游戏结束直接奖励（设计 2026-10-09）：合成大花花结算 floor(分数/10) 荆露；
+# 幂等与入账复用 2048 那套（base.credit_game_over_dew），与周榜名次奖并行。
+GAME_OVER_DEW_DIVISOR = 10
+
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS minigame_suika_games (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -237,8 +241,13 @@ def _check_time_anchor(row, kept: List[Dict[str, float]],
 
 def sync_progress(conn, user_id: int, game_uid: str, from_index: int, drops,
                   *, claimed_score=None, claimed_max_tier=None, source: str = "online",
-                  now=None, play_mode: str = "normal") -> Dict[str, object]:
-    """把"这一批新增投放 + 新的总分"立刻落库，并按启发式判断能不能计入榜单。"""
+                  now=None, play_mode: str = "normal",
+                  game_over: bool = False) -> Dict[str, object]:
+    """把"这一批新增投放 + 新的总分"立刻落库，并按启发式判断能不能计入榜单。
+
+    ``game_over`` 由客户端在结束时置 True：物理游戏服务端判不了终局，
+    发奖金额用的是**服务端已存的分数**（只有启发式校验通过的批次才会抬分）。
+    """
 
     ensure_schema(conn)
     # 分档存档：优先按客户端带来的 game_uid 精确对局（两模式各有活动局），
@@ -314,6 +323,14 @@ def sync_progress(conn, user_id: int, game_uid: str, from_index: int, drops,
                  record_mode),
             )
             verified_score = int(score)
+    # 游戏结束直接奖励（2026-10-09）：floor(已存分数/10)，幂等见
+    # base.credit_game_over_dew——同一局重复上报 game_over 只发一次。
+    dew_awarded = 0
+    if game_over:
+        dew_awarded = base.credit_game_over_dew(
+            conn, user_id, int(state["game_id"]), next_score,
+            divisor=GAME_OVER_DEW_DIVISOR, game_key=GAME_KEY,
+        )
     conn.commit()
     fresh = _game_state(row)
     return {
@@ -321,6 +338,7 @@ def sync_progress(conn, user_id: int, game_uid: str, from_index: int, drops,
         "verified": bool(ok),
         "reason": reason,
         "verified_score": verified_score,
+        "dew_awarded": dew_awarded,
         "game": fresh,
     }
 

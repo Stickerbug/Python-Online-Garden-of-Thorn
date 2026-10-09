@@ -103,7 +103,7 @@
       data = await response.json().catch(() => ({}));
       if (!response.ok || !data.success) {
         showGateScreen(data.error || '进入失败', data.code === 'NO_TICKET'
-          ? '门票不足：每天签到 +1（连续 7 天再 +1）；故事模式非 EZ 难度通关每日 +1；工作日 8:00–10:00、15:00–17:00 免费开放。'
+          ? '门票不足：每天签到 +1（连续 7 天再 +1）；天梯胜 3 场且无人被扣信誉 每日 +1；故事模式非 EZ 难度通关每日 +1。1 张门票 = 10 分钟游玩。'
           : '');
         return false;
       }

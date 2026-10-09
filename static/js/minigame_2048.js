@@ -585,6 +585,11 @@ async function syncNow() {
       : '已同步（本次没有新增计分）';
     if (body.verified) verifiedEl.textContent = String(body.verified.score);
     if (body.record) scheduleLeaderboardRefresh();   // 有新成绩，最多 15 秒刷一次榜单
+    const dewAwarded = Number(body.dew_awarded || 0);
+    if (dewAwarded > 0) {
+      // 游戏结束直接奖励（2026-10-09）：服务端按重放分数结算，每局一次。
+      setSyncText(lt({ zh: `本局结算：+${dewAwarded} 荆露已到账`, en: `Run reward: +${dewAwarded} Thorn Dew`, fr: `Récompense : +${dewAwarded} rosée d'épine`, ja: `報酬：+${dewAwarded} 荆露` }), 'ok');
+    }
     retryDelay = RETRY_BASE_MS;
     saveLocal();
     // 不要重绘棋盘：会打断正在播放的出现/合并/滑动动画。只更新同步状态那行字。

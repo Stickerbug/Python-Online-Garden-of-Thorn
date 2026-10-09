@@ -37,8 +37,8 @@
         <span class="mh-ticket-session" id="mh-ticket-session" hidden></span>
       </div>
       <div class="mh-ticket-hint" data-i18n="ticket_hint">
-        获取方式：每日签到 +1（连续 7 天再 +1）；故事模式非 EZ 难度通关每日 +1；
-        工作日 8:00–10:00 / 15:00–17:00 免费开放，无需门票。
+        获取方式：每日签到 +1（连续 7 天再 +1）；天梯胜 3 场且无人被扣信誉 每日 +1；
+        故事模式非 EZ 难度通关每日 +1。1 张门票可游玩 10 分钟。
       </div>
     </div>
   </div>
@@ -75,6 +75,14 @@
       <a class="mh-play" id="mh-play-suika" href="{{ game_card_links.get('suika', '/minigame/suika') }}" data-i18n="play">开始游戏</a>
     </article>
   </section>
+
+  {% if user_id %}
+  <section class="mh-history" id="mh-history" hidden>
+    <h2 class="mh-history-title" data-i18n="history_title">我的记录</h2>
+    <ul class="mh-history-list" id="mh-history-list"></ul>
+    <p class="mh-history-empty" id="mh-history-empty" hidden data-i18n="history_empty">还没有游玩记录，开一局试试吧。</p>
+  </section>
+  {% endif %}
 </main>
 <script nonce="{{ csp_nonce }}">
 (() => {
@@ -86,23 +94,26 @@
           guest: 'Guest mode: playable, but scores do not rank.', login: 'Sign up / Log in',
           play: 'Play', back: '← Back',
           free_now: 'Free entry now',
-          ticket_hint: 'How to get: daily check-in +1 (7-day streak → +1 extra); beat a story stage on non-EZ difficulty once a day +1; weekdays 8:00–10:00 & 15:00–17:00 free entry, no ticket needed.',
+          ticket_hint: 'How to get: daily check-in +1 (7-day streak → +1 extra); win 3 ranked games with no reputation loss +1/day; beat a story stage on non-EZ difficulty +1/day. One ticket = 10 minutes of play.',
           desc_2048: 'Merge tiles to reach 2048 and beyond. Same tile values collide and add up; the board ends when no move is left.',
-          desc_suika: 'Merge bubbles all the way to the Mecha Flower and the Player: two alike collide and level up; the run ends when the stack crosses the lose line. All 11 tiers use story-mode bugs and props, the last one is your own skin.' },
+          desc_suika: 'Merge bubbles all the way to the Mecha Flower and the Player: two alike collide and level up; the run ends when the stack crosses the lose line. All 11 tiers use story-mode bugs and props, the last one is your own skin.',
+          history_title: 'My runs', history_empty: 'No runs yet — start one!' },
     fr: { tag: 'Jardin décontracté', title: 'Jardin décontracté', sub: 'Mini-jeux détente — les scores se synchronisent automatiquement.',
           guest: 'Mode visiteur : jouable, mais les scores ne sont pas classés.', login: 'Inscription / Connexion',
           play: 'Jouer', back: '← Retour',
           free_now: 'Entrée libre actuellement',
-          ticket_hint: 'Comment en obtenir : connexion quotidienne +1 (7 jours d’affilée → +1 en plus) ; terminer une étape du mode histoire hors difficulté EZ +1/jour ; en semaine 8h–10h et 15h–17h, entrée libre sans ticket.',
+          ticket_hint: 'Comment en obtenir : connexion quotidienne +1 (7 jours d’affilée → +1 en plus) ; gagner 3 parties classées sans perte de réputation +1/jour ; terminer une étape du mode histoire hors difficulté EZ +1/jour. Un ticket = 10 minutes de jeu.',
           desc_2048: 'Fusionnez jusqu’à 2048 et au-delà. Les tuiles identiques fusionnent ; la partie s’arrête sans mouvement possible.',
-          desc_suika: 'Fusionnez jusqu’à la Fleur Méca et au Joueur : deux identiques fusionnent ; la partie s’arrête au-delà de la ligne de défaite. Les 11 paliers utilisent les insectes du mode histoire, le dernier est votre propre skin.' },
+          desc_suika: 'Fusionnez jusqu’à la Fleur Méca et au Joueur : deux identiques fusionnent ; la partie s’arrête au-delà de la ligne de défaite. Les 11 paliers utilisent les insectes du mode histoire, le dernier est votre propre skin.',
+          history_title: 'Mes parties', history_empty: 'Aucune partie — lancez-en une !' },
     ja: { tag: 'カジュアルガーデン', title: 'カジュアルガーデン', sub: '気軽なミニゲーム。スコアは自動で同期されます。',
           guest: 'ゲストモード：プレイ可能ですが、ランキングには載りません。', login: 'ログイン / 登録',
           play: 'プレイ', back: '← 戻る',
           free_now: '現在無料開放中',
-          ticket_hint: '入手方法：毎日ログイン +1（7日連続でさらに +1）；ストーリーモードを EZ 以外の難易度でクリア +1/日；平日 8:00–10:00・15:00–17:00 は無料開放（チケット不要）。',
+          ticket_hint: '入手方法：毎日ログイン +1（7日連続でさらに +1）；ランクマッチ3勝かつ評判減点なし +1/日；ストーリーモードを EZ 以外の難易度でクリア +1/日。チケット1枚 = 10分間プレイ。',
           desc_2048: 'タイルを合わせて2048以上を目指す。同じ数値は合体し、動かせなくなったら終了です。',
-          desc_suika: '泡を合成して機械花とプレイヤーまで育てよう：同じものが触れるとレベルアップ。敗北ラインを超えると終了。全11段階はストーリーモードの虫と小物、最後はあなた自身のスキンです。' },
+          desc_suika: '泡を合成して機械花とプレイヤーまで育てよう：同じものが触れるとレベルアップ。敗北ラインを超えると終了。全11段階はストーリーモードの虫と小物、最後はあなた自身のスキンです。',
+          history_title: '自分の記録', history_empty: 'まだ記録がありません。プレイしてみましょう！' },
   }[lang];
   if (!T) return;
   document.querySelectorAll('[data-i18n]').forEach((el) => {
@@ -142,6 +153,65 @@
         const m = Math.floor(remaining / 60);
         const s = Math.round(remaining % 60);
         if (el) { el.textContent = dict.session(`${m}:${String(s).padStart(2, '0')}`); el.hidden = false; }
+      }
+    })
+    .catch(() => {});
+})();
+</script>
+<script nonce="{{ csp_nonce }}">
+/* 我的记录：玩家自查休闲花园游玩历史（/api/minigame/history）。 */
+(() => {
+  const section = document.getElementById('mh-history');
+  if (!section) return;   // 游客不渲染
+  let lang = 'zh';
+  try { lang = localStorage.getItem('gtn_lang') || 'zh'; } catch (_) {}
+  const dict = {
+    zh: { score: (r) => `${r.score}分`, tile: (v) => `最高方块 ${v}`, tier: (v) => `最高档 ${v}`,
+          dew: (v) => `结算 +${v} 荆露`, ticket: '门票', normal: '普通',
+          active: '进行中', closed: '已结束' },
+    en: { score: (r) => `${r.score} pts`, tile: (v) => `best tile ${v}`, tier: (v) => `best tier ${v}`,
+          dew: (v) => `+${v} Thorn Dew`, ticket: 'ticket', normal: 'normal',
+          active: 'in progress', closed: 'finished' },
+    fr: { score: (r) => `${r.score} pts`, tile: (v) => `meilleure tuile ${v}`, tier: (v) => `meilleur palier ${v}`,
+          dew: (v) => `+${v} rosée d'épine`, ticket: 'ticket', normal: 'normal',
+          active: 'en cours', closed: 'terminée' },
+    ja: { score: (r) => `${r.score}点`, tile: (v) => `最高タイル ${v}`, tier: (v) => `最高段階 ${v}`,
+          dew: (v) => `報酬 +${v} 荆露`, ticket: 'チケット', normal: '通常',
+          active: '進行中', closed: '終了' },
+  }[lang] || {};
+  const d = Object.assign({ score: (r) => `${r.score}分`, tile: (v) => `最高方块 ${v}`, tier: (v) => `最高档 ${v}`,
+    dew: (v) => `结算 +${v} 荆露`, ticket: '门票', normal: '普通', active: '进行中', closed: '已结束' }, dict);
+  fetch('/api/minigame/history?limit=20', { credentials: 'same-origin' })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((data) => {
+      if (!data || !data.success) return;   // 未登录/失败：保持隐藏
+      const records = data.records || [];
+      section.hidden = false;
+      const list = document.getElementById('mh-history-list');
+      if (!records.length) {
+        const empty = document.getElementById('mh-history-empty');
+        if (empty) empty.hidden = false;
+        return;
+      }
+      for (const r of records) {
+        const li = document.createElement('li');
+        li.className = 'mh-history-item';
+        const meta = [];
+        meta.push(r.best_kind === 'tile' ? d.tile(r.best) : d.tier(r.best));
+        if (Number(r.dew) > 0) meta.push(d.dew(r.dew));
+        meta.push(r.play_mode === 'ticket' ? d.ticket : d.normal);
+        meta.push(r.status === 'active' ? d.active : d.closed);
+        meta.push(String(r.updated_at || '').slice(5, 16).replace('T', ' '));
+        li.innerHTML = '';
+        const name = document.createElement('span');
+        name.className = 'mh-history-game';
+        name.textContent = `${r.title} · ${d.score(r)}`;
+        const info = document.createElement('span');
+        info.className = 'mh-history-meta';
+        info.textContent = meta.join(' · ');
+        li.appendChild(name);
+        li.appendChild(info);
+        list.appendChild(li);
       }
     })
     .catch(() => {});
