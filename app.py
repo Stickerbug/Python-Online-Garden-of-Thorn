@@ -23260,6 +23260,55 @@ def api_story_run_abandon():
         raise
 
 
+@app.route('/api/story/runs/history', methods=['GET'])
+def api_story_runs_history():
+    """旅程历史列表（玩家自查自己的）。"""
+
+    user_id, _, error = _require_account_json()
+    if error:
+        return error
+    try:
+        limit = min(50, max(1, int(request.args.get('limit') or 20)))
+    except (TypeError, ValueError):
+        limit = 20
+    result_filter = str(request.args.get('result') or '').strip().lower()
+    character_filter = str(request.args.get('character') or '').strip()
+    try:
+        with closing(get_db_connection()) as conn:
+            import story_history
+            records = story_history.list_history(
+                conn, user_id,
+                limit=limit,
+                result=result_filter if result_filter in ('victory', 'defeat', 'abandoned') else None,
+                character_id=character_filter or None,
+            )
+    except sqlite3.OperationalError as exc:
+        if 'locked' in str(exc).lower():
+            return _json_error('故事记录暂时不可用，请稍后重试', 503)
+        raise
+    return jsonify({'success': True, 'records': records})
+
+
+@app.route('/api/story/runs/history/<run_id>', methods=['GET'])
+def api_story_runs_history_detail(run_id):
+    """单局旅程详情：摘要 + 最终卡组 + 遗物 + 地图路线（回看）。"""
+
+    user_id, _, error = _require_account_json()
+    if error:
+        return error
+    try:
+        with closing(get_db_connection()) as conn:
+            import story_history
+            detail = story_history.get_history_detail(conn, user_id, run_id)
+    except sqlite3.OperationalError as exc:
+        if 'locked' in str(exc).lower():
+            return _json_error('故事记录暂时不可用，请稍后重试', 503)
+        raise
+    if detail is None:
+        return _json_error('没有这条旅程记录', 404, code='HISTORY_NOT_FOUND')
+    return jsonify({'success': True, **detail})
+
+
 @app.route('/api/story/run/saves', methods=['GET'])
 def api_story_run_saves():
     user_id, _, error = _require_account_json()

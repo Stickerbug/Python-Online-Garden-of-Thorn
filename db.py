@@ -5029,6 +5029,15 @@ def commit_story_run_action(
                 )
             except Exception as exc:
                 print(f'[story] reward settle failed: {type(exc).__name__}: {exc}', flush=True)
+            # 旅程历史（2026-10-09）：通关摘要落库，与上面同事务。
+            try:
+                from story_history import record_run_summary_conn
+                record_run_summary_conn(
+                    conn, run_id, user_id, next_state or {},
+                    started_at=row['created_at'], ended_at=now, result='victory',
+                )
+            except Exception as exc:
+                print(f'[story] history summary failed: {type(exc).__name__}: {exc}', flush=True)
         conn.commit()
         updated = conn.execute(
             'SELECT * FROM story_runs WHERE id = ?', (run_id,),
@@ -5121,6 +5130,37 @@ def abandon_story_run(user_id, run_id=None):
         clauses.append('id = ?')
         params.append(str(run_id))
     with closing(get_db_connection()) as conn:
+        # 旅程历史（2026-10-09）：弃局前先落摘要——快照 phase=game_over 记为
+        # defeat（战败后重开/弃局都走这里），其余记为 abandoned。
+        try:
+            import json as _json
+            from story_history import record_run_summary_conn
+            from story_history import ensure_schema as _history_ensure_schema
+            _history_ensure_schema(conn)
+            for row in conn.execute(
+                f"SELECT id, created_at, state_json FROM story_runs WHERE {' AND '.join(clauses)}",
+                params,
+            ).fetchall():
+                try:
+                    state = _json.loads(row['state_json'] or '{}')
+                except (TypeError, ValueError, _json.JSONDecodeError):
+                    state = {}
+                # 已有摘要（如通关后 UI 走 abandon 关闭旧局）不覆盖：
+                # victory 的记录以结算分支为准。
+                existing = conn.execute(
+                    'SELECT 1 FROM story_run_summaries WHERE run_id = ? LIMIT 1',
+                    (str(row['id']),),
+                ).fetchone()
+                if existing is not None:
+                    continue
+                record_run_summary_conn(
+                    conn, row['id'], user_id, state,
+                    started_at=row['created_at'], ended_at=now,
+                    result='defeat' if str(state.get('phase') or '') == 'game_over' else 'abandoned',
+                )
+            conn.commit()
+        except Exception as exc:
+            print(f'[story] abandon history summary failed: {type(exc).__name__}: {exc}', flush=True)
         cursor = conn.execute(
             f"UPDATE story_runs SET status = 'abandoned', updated_at = ?, completed_at = ? "
             f"WHERE {' AND '.join(clauses)}",

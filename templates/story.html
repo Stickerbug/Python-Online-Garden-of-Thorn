@@ -174,6 +174,47 @@
         </section>
         <p id="story-character-not-ready" class="story-character-not-ready hidden" aria-live="polite"></p>
         <button id="story-start" class="story-command story-command-primary" type="button">开始</button>
+        <button id="story-history-open" class="story-command story-history-open" type="button">旅程历史</button>
+      </section>
+
+      <section id="story-history" class="story-history hidden" aria-label="旅程历史">
+        <header class="story-history-header">
+          <button id="story-history-back" class="story-history-back" type="button">←</button>
+          <h2 id="story-history-title">旅程历史</h2>
+          <div id="story-history-filters" class="story-history-filters">
+            <select id="story-history-filter-result" aria-label="结果筛选">
+              <option value="">全部结果</option>
+              <option value="victory">通关</option>
+              <option value="defeat">战败</option>
+              <option value="abandoned">放弃</option>
+            </select>
+            <select id="story-history-filter-character" aria-label="角色筛选"></select>
+          </div>
+        </header>
+        <div id="story-history-list" class="story-history-list" role="list"></div>
+        <p id="story-history-empty" class="story-history-empty hidden">还没有已结束的旅程记录。</p>
+
+        <article id="story-history-detail" class="story-history-detail hidden">
+          <header class="story-history-detail-header">
+            <button id="story-history-detail-back" class="story-history-back" type="button">←</button>
+            <div id="story-history-detail-summary" class="story-history-detail-summary"></div>
+          </header>
+          <div class="story-history-detail-columns">
+            <section class="story-history-detail-map" aria-label="路线回看">
+              <h3>路线回看</h3>
+              <p id="story-history-route-stats" class="story-history-route-stats"></p>
+              <div class="story-history-map-scroll">
+                <svg id="story-history-map" class="story-map story-history-map" viewBox="0 0 760 1040" role="img" aria-label="历史路线"></svg>
+              </div>
+            </section>
+            <section class="story-history-detail-side" aria-label="最终构筑">
+              <h3 id="story-history-relics-title">遗物</h3>
+              <div id="story-history-relics" class="story-history-relics"></div>
+              <h3 id="story-history-deck-title">最终卡组</h3>
+              <div id="story-history-deck" class="story-history-deck"></div>
+            </section>
+          </div>
+        </article>
       </section>
 
       <section id="story-version-old" class="story-empty hidden" aria-live="polite">

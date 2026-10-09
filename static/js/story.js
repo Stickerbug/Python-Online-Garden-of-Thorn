@@ -16,7 +16,7 @@
     });
     const VIEWS = [
         'story-loading', 'story-empty', 'story-version-old', 'story-blessing', 'story-run',
-        'story-combat', 'story-room', 'story-reward', 'story-terminal',
+        'story-combat', 'story-room', 'story-reward', 'story-terminal', 'story-history',
     ];
     let activeRun = null;
     let storyContent = null;
@@ -5740,6 +5740,212 @@
         void sendStoryPresence();
     }
 
+    /* ---------- 旅程历史（2026-10-09）：玩家自查过往旅程（列表 + 详情回看） ---------- */
+
+    const STORY_HISTORY_RESULT_LABELS = {
+        victory: { zh: '通关', en: 'Victory', fr: 'Victoire', ja: 'クリア' },
+        defeat: { zh: '战败', en: 'Defeat', fr: 'Défaite', ja: '敗北' },
+        abandoned: { zh: '放弃', en: 'Abandoned', fr: 'Abandon', ja: '中断' },
+    };
+
+    function storyHistoryResultLabel(result) {
+        const entry = STORY_HISTORY_RESULT_LABELS[result] || STORY_HISTORY_RESULT_LABELS.abandoned;
+        return String(entry[lang] || entry.zh);
+    }
+
+    function storyHistoryCharacterName(characterId) {
+        const definition = storyContent?.characters?.[String(characterId || '')];
+        return localize(definition?.name) || String(characterId || '?');
+    }
+
+    function storyHistoryDifficultyLabel(difficulty) {
+        const definition = storyContent?.difficulties?.[String(difficulty || '')];
+        return localize(definition?.name) || String(difficulty || '');
+    }
+
+    function storyHistoryDuration(seconds) {
+        const total = Math.max(0, Number(seconds) || 0);
+        const hours = Math.floor(total / 3600);
+        const minutes = Math.floor((total % 3600) / 60);
+        if (hours > 0) return `${hours}h ${minutes}m`;
+        if (minutes > 0) return `${minutes}m`;
+        return `${total}s`;
+    }
+
+    function storyHistoryStamp(text) {
+        const raw = String(text || '');
+        return raw.length >= 16 ? raw.slice(5, 16).replace('T', ' ') : raw;
+    }
+
+    function openStoryHistory() {
+        showView('story-history');
+        $('story-history-detail')?.classList.add('hidden');
+        $('story-history-list')?.classList.remove('hidden');
+        $('story-history-filters')?.classList.remove('hidden');
+        const characterFilter = $('story-history-filter-character');
+        if (characterFilter && !characterFilter.options.length) {
+            const allOption = document.createElement('option');
+            allOption.value = '';
+            allOption.textContent = lang === 'en' ? 'All characters' : '全部角色';
+            characterFilter.appendChild(allOption);
+            const characters = storyContent?.characters || {};
+            for (const [characterId, definition] of Object.entries(characters)) {
+                const option = document.createElement('option');
+                option.value = characterId;
+                option.textContent = localize(definition?.name) || characterId;
+                characterFilter.appendChild(option);
+            }
+        }
+        loadStoryHistoryList();
+    }
+
+    async function loadStoryHistoryList() {
+        const list = $('story-history-list');
+        const emptyEl = $('story-history-empty');
+        if (!list) return;
+        const resultFilter = String($('story-history-filter-result')?.value || '');
+        const characterFilter = String($('story-history-filter-character')?.value || '');
+        const params = new URLSearchParams({ limit: '20' });
+        if (resultFilter) params.set('result', resultFilter);
+        if (characterFilter) params.set('character', characterFilter);
+        list.replaceChildren();
+        try {
+            const response = await fetch(`/api/story/runs/history?${params}`, { credentials: 'same-origin' });
+            if (!response.ok) throw new Error(`http ${response.status}`);
+            const data = await response.json();
+            const records = data?.records || [];
+            if (emptyEl) emptyEl.classList.toggle('hidden', records.length > 0);
+            for (const record of records) list.appendChild(renderStoryHistoryRow(record));
+        } catch (_) {
+            if (emptyEl) {
+                emptyEl.classList.remove('hidden');
+                emptyEl.textContent = lang === 'en' ? 'Failed to load history — try again later.' : '历史读取失败，请稍后再试。';
+            }
+        }
+    }
+
+    function renderStoryHistoryRow(record) {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = `story-history-item is-${record.result}`;
+        item.addEventListener('click', () => { openStoryHistoryDetail(record.run_id); });
+        const left = document.createElement('span');
+        left.className = 'story-history-item-main';
+        left.textContent = `${storyHistoryCharacterName(record.character_id)} · ${storyHistoryDifficultyLabel(record.difficulty)}`;
+        const result = document.createElement('span');
+        result.className = 'story-history-item-result';
+        result.textContent = storyHistoryResultLabel(record.result);
+        const meta = document.createElement('span');
+        meta.className = 'story-history-item-meta';
+        meta.textContent = `${record.stage_reached}幕${record.floor_reached}层 · 牌${record.deck_size}张 · 遗物${record.relic_count} · ${storyHistoryDuration(record.duration_seconds)} · ${storyHistoryStamp(record.ended_at)}`;
+        item.append(result, left, meta);
+        return item;
+    }
+
+    async function openStoryHistoryDetail(runId) {
+        const detailEl = $('story-history-detail');
+        if (!detailEl) return;
+        try {
+            const response = await fetch(`/api/story/runs/history/${encodeURIComponent(runId)}`, { credentials: 'same-origin' });
+            if (!response.ok) throw new Error(`http ${response.status}`);
+            const data = await response.json();
+            renderStoryHistoryDetail(data || {});
+            detailEl.classList.remove('hidden');
+            $('story-history-list')?.classList.add('hidden');
+            $('story-history-filters')?.classList.add('hidden');
+            $('story-history-empty')?.classList.add('hidden');
+        } catch (_) {
+            window.alert(lang === 'en' ? 'Failed to load this run.' : '这条记录读取失败，请稍后再试。');
+        }
+    }
+
+    function renderStoryHistoryDetail(detail) {
+        const summary = detail.summary || {};
+        const summaryEl = $('story-history-detail-summary');
+        if (summaryEl) {
+            summaryEl.replaceChildren();
+            const title = document.createElement('strong');
+            title.textContent = `${storyHistoryCharacterName(summary.character_id)} · ${storyHistoryDifficultyLabel(summary.difficulty)} · ${storyHistoryResultLabel(summary.result)}`;
+            const meta = document.createElement('span');
+            meta.textContent = `${summary.stage_reached}幕${summary.floor_reached}层 · H ${summary.health}/${summary.max_health} · G ${summary.gold} · ${storyHistoryDuration(summary.duration_seconds)} · ${storyHistoryStamp(summary.ended_at)}`;
+            summaryEl.append(title, meta);
+        }
+        const routeEl = $('story-history-route-stats');
+        if (routeEl) {
+            routeEl.replaceChildren();
+            const visited = detail.route?.visited || [];
+            if (!visited.length) {
+                routeEl.textContent = lang === 'en' ? 'No nodes visited' : '尚未走过节点';
+            } else {
+                visited.forEach((node, index) => {
+                    if (index) {
+                        const arrow = document.createElement('span');
+                        arrow.className = 'story-history-route-arrow';
+                        arrow.textContent = '→';
+                        routeEl.appendChild(arrow);
+                    }
+                    const chip = document.createElement('span');
+                    chip.className = 'story-history-route-chip' + (node.final ? ' story-history-route-chip-final' : '');
+                    chip.textContent = `${node.floor}·${t.rooms?.[node.type] || node.type}`;
+                    if (node.final) chip.title = lang === 'en' ? 'Journey ended here' : '旅程在此结束';
+                    routeEl.appendChild(chip);
+                });
+            }
+        }
+        const mapEl = $('story-history-map');
+        if (mapEl) {
+            renderMap(detail.map || { floors: [], edges: [] }, detail.map?.current_node_id || '', {
+                readOnly: true,
+                target: mapEl,
+            });
+        }
+        const relicsEl = $('story-history-relics');
+        if (relicsEl) {
+            relicsEl.replaceChildren();
+            const relics = detail.relics || [];
+            for (const relicId of relics) {
+                const chip = document.createElement('span');
+                chip.className = 'story-history-relic-chip';
+                chip.textContent = localize(storyContent?.relics?.[String(relicId)]?.name) || String(relicId);
+                chip.title = t.codexViewRelated;
+                chip.addEventListener('contextmenu', (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (!storyCodexTargetIsDiscovered('talents', String(relicId), 'relic')) {
+                        openStoryTermDetail('relic', String(relicId));
+                        return;
+                    }
+                    const codexWasOpen = Boolean($('story-codex-dialog')?.open);
+                    if (!codexWasOpen) openStoryCodex();
+                    navigateStoryCodex('talents', String(relicId), { kind: 'relic', push: codexWasOpen });
+                });
+                relicsEl.appendChild(chip);
+            }
+            const relicsTitle = $('story-history-relics-title');
+            if (relicsTitle) relicsTitle.textContent = (lang === 'en' ? 'Relics' : '遗物') + `（${relics.length}）`;
+        }
+        const deckEl = $('story-history-deck');
+        if (deckEl) {
+            deckEl.replaceChildren();
+            const deck = detail.deck || [];
+            for (const card of deck) {
+                try {
+                    deckEl.appendChild(createStoryCard(
+                        { def_id: card.def_id, instance_id: `h-${card.def_id}`, upgraded: card.upgraded, modifiers: {} },
+                        { interactive: false, compact: true },
+                    ));
+                } catch (_) {
+                    const chip = document.createElement('span');
+                    chip.className = 'story-history-relic-chip';
+                    chip.textContent = card.def_id;
+                    deckEl.appendChild(chip);
+                }
+            }
+            const deckTitle = $('story-history-deck-title');
+            if (deckTitle) deckTitle.textContent = (lang === 'en' ? 'Final deck' : '最终卡组') + `（${deck.length}）`;
+        }
+    }
+
     function showView(name) {
         if (name !== 'story-combat') removeStoryEquipmentPreview();
         removeStoryCardHoverPreview();
@@ -6747,7 +6953,7 @@
     }
 
     function renderMap(map, currentNodeId, options = {}) {
-        const svg = $('story-map');
+        const svg = options.target || $('story-map');
         if (!svg || !map || !Array.isArray(map.floors)) return;
         svg.replaceChildren();
         const floorBounds = storyMapFloorBounds(map);
@@ -15430,6 +15636,16 @@
             if (event.target?.closest?.('img')) event.preventDefault();
         });
         $('story-start')?.addEventListener('click', startRun);
+        $('story-history-open')?.addEventListener('click', openStoryHistory);
+        $('story-history-back')?.addEventListener('click', () => showView('story-empty'));
+        $('story-history-detail-back')?.addEventListener('click', () => {
+            $('story-history-detail')?.classList.add('hidden');
+            $('story-history-list')?.classList.remove('hidden');
+            $('story-history-filters')?.classList.remove('hidden');
+            $('story-history-empty')?.classList.remove('hidden');
+        });
+        $('story-history-filter-result')?.addEventListener('change', () => { loadStoryHistoryList(); });
+        $('story-history-filter-character')?.addEventListener('change', () => { loadStoryHistoryList(); });
         $('story-version-old-restart')?.addEventListener('click', replaceLegacyRun);
         if (window.__STORY_COOP_ACCESS__) {
             $('story-coop-entry')?.addEventListener('click', openCooperativeStoryPreview);
