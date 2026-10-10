@@ -58,14 +58,26 @@ class FirstPlayerOpeningTests(unittest.TestCase):
         self.assertEqual(first.elixir, 7)
 
     def test_opening_pressure_both_pick_still_applies_randomly(self):
-        # 双选不再互相抵消：随机一人获得先手并享受效果，另一人按后手结算。
+        # 双选不再互相抵消：随机一人获得先手；增益与先手解耦——两个选择者
+        # 都拿 +1 张 +4E（2026-10-11 调整：不论先手后手）。
         engine = _start_engine(opening=(7, 7))
         first = engine.players[engine.first_player]
         second = engine.players[1 - engine.first_player]
         self.assertEqual(engine.opening_event_picks[engine.first_player], 7)
         self.assertEqual(len(first.hand), 4)
         self.assertEqual(first.elixir, 7)
-        self.assertEqual(len(second.hand), 5)
+        self.assertEqual(len(second.hand), 6)   # 5+1
+        self.assertEqual(second.elixir, 9)      # 5+4
+
+    def test_opening_pressure_buff_only_for_pickers(self):
+        # 只有对手选压制：对手得先手+增益；未选择者按普通后手结算（5张5E）。
+        engine = _start_engine(opening=(1, 7))
+        first = engine.players[engine.first_player]
+        second = engine.players[1 - engine.first_player]
+        self.assertEqual(engine.first_player, 1)
+        self.assertEqual(len(first.hand), 4)
+        self.assertEqual(first.elixir, 7)
+        self.assertEqual(len(second.hand), 5)   # 普通后手 5 张 5E
         self.assertEqual(second.elixir, 5)
 
 

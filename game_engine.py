@@ -5664,8 +5664,9 @@ class GameEngine:
             if i == self.first_player:
                 ps.elixir = FIRST_PLAYER_ELIXIR
                 hand_size = FIRST_PLAYER_HAND_SIZE
-                if self.opening_event_picks[i] == 7 and i == self.first_player:
-                    # 先手压制：第一回合在先手基础上多 4E，起手多 1 张牌。
+                if self.opening_event_picks[i] == 7:
+                    # 先手压制：所有选择者（不论是否赢得先手）第一回合多 4E、
+                    # 起手多 1 张牌；先手归属只由随机争夺决定。
                     hand_size = FIRST_PLAYER_HAND_SIZE + 1
                     ps.elixir = FIRST_PLAYER_ELIXIR + 4
                 if self.opening_event_picks[i] == 5:
@@ -5674,7 +5675,12 @@ class GameEngine:
                 # 与调度补抽同口径（_draw_opening_swap_cards 绕过到手回调）。
                 self._draw_opening_swap_cards(i, hand_size)
             else:
+                ps.elixir = INITIAL_ELIXIR
                 hand_size = INITIAL_HAND_SIZE
+                if self.opening_event_picks[i] == 7:
+                    # 同上：后手选择者同样获得压制增益（+1 张、+4E）。
+                    hand_size = INITIAL_HAND_SIZE + 1
+                    ps.elixir = INITIAL_ELIXIR + 4
                 if self.opening_event_picks[i] == 5:
                     hand_size = max(0, hand_size - 1)
                 # 对局开始时不触发任何抽取效果（萌芽/玉米等），
