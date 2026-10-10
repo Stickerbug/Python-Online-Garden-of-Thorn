@@ -2903,7 +2903,7 @@ STORY_CARDS.update({
         'PoisonSting', '毒刺', 'Poison Sting', 1, 'bloom', 'common',
         '对目标施加5层中毒，抽2张牌',
         description_en='Apply 5 Poison to the target and draw 2 cards',
-        owner='orbiter',
+        owner='orbiter', target='enemy',
         effects=(_effect('status', 5, status='poison'), _effect('draw', 2)),
         upgrade={'description': {'zh': '对目标施加5层中毒，抽3张牌', 'en': 'Apply 5 Poison and draw 3 cards'}, 'effects': (_effect('status', 5, status='poison'), _effect('draw', 3))},
     ),
