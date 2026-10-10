@@ -30,8 +30,16 @@ class RankSettlementTests(unittest.TestCase):
         r = rs.apply_match_result(5, 10, 0, outcome='loss', opponent_tier_avg=5)
         self.assertEqual(r['delta'], -2)
 
-    def test_loss_shield_cancels_loss_and_demotion(self):
+    def test_loss_shield_blocks_points_but_not_demotion_at_zero(self):
+        # 2026-10-11 平衡：0 分时保分卡无法阻止掉段（卡照常消耗）
         r = rs.apply_match_result(12, 0, 3, outcome='loss', opponent_tier_avg=12, loss_shield=True)
+        self.assertTrue(r['demoted'])
+        self.assertFalse(r.get('shielded'))
+        self.assertEqual(r['tier_index'], 11)
+        self.assertEqual(r['streak'], 0)
+
+    def test_loss_shield_blocks_points_loss_when_points_above_zero(self):
+        r = rs.apply_match_result(12, 10, 2, outcome='loss', opponent_tier_avg=12, loss_shield=True)
         self.assertTrue(r.get('shielded'))
         self.assertEqual(r['delta'], 0)
         self.assertFalse(r['demoted'])

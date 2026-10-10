@@ -4,7 +4,7 @@
 花阶分（GR/ELO）继续在后台运行但不再对玩家展示；玩家看到的是段位：
 11 个大段（Craft Eternal 稀有度顺序）× 4 个小段（basic/sewage/disc/
 golden nazar，由低到高）共 44 个段位。段位分只在 0 与该段上限之间变动；
-到上限后再两连胜升段，到 0 后再败一局降段。
+到上限后赢一局即升段（2026-10-11 取消两连胜要求），到 0 后再败一局降段。
 
 本模块只放纯函数与常量；数据库读写与结算 worker 在 db.py / app.py。
 """
@@ -231,13 +231,16 @@ def apply_match_result(
     """一局计分对局后的段位变化（纯函数）。
 
     outcome: 'win' | 'loss' | 'draw'。
-    升段：段位分已在上限，再累计 2 连胜 → 升一段、归 0。
+    升段：开局段位分已满时，赢一局 → 立即升一段、归 0（2026-10-11 平衡：
+    取消"满段后再 2 连胜"要求；未满段的一胜最多打到满）。
     降段：段位分已在 0，再输一局 → 降一段、置为新段上限（最低段不再降）。
     平局：分不变，连胜清零。
     daily_double: 每日前 5 局的胜利加分 ×2（封顶 +10 之后再乘）。
     double_card: 双倍卡——同上 ×2；与每日双倍共存时合计 ×3（设计 2026-10-02）。
-    loss_shield: 保分卡——本局失败不扣分、不降段（连胜照旧清零）。
+    loss_shield: 保分卡——本局失败不扣分；但段位分为 0 时无法阻止掉段
+    （2026-10-11 平衡：0 分时保分卡不再拦截降段，卡照常消耗）。
     common 大段失败不掉分（含降段）；unusual 扣分减半向上取整。
+    streak：普通连胜计数（展示用），胜 +1、负/平清零，升段归零。
     """
     tier_index = clamp_tier(tier_index)
     cap = rank_cap(tier_index)
@@ -271,25 +274,24 @@ def apply_match_result(
         result['delta'] = new_points - points
         result['points'] = new_points
         result['changed'] = True
+        # 2026-10-11 平衡：取消"满段后再 2 连胜"——开局已满段的胜利直接升段；
+        # 未满段的一胜最多打到满（打满后下一胜升段）。
         if was_at_cap and new_points >= cap:
-            # 已在上限后的连胜计数：第 2 胜升段。
-            new_streak = streak + 1
-            if new_streak >= 2:
-                if tier_index >= RANK_COUNT:
-                    result['streak'] = 0     # 最高段封顶，不再累计
-                else:
-                    result['tier_index'] = tier_index + 1
-                    result['points'] = 0
-                    result['streak'] = 0
-                    result['promoted'] = True
+            if tier_index >= RANK_COUNT:
+                result['streak'] = streak + 1   # 最高段封顶，连胜继续展示
             else:
-                result['streak'] = new_streak
+                result['tier_index'] = tier_index + 1
+                result['points'] = 0
+                result['streak'] = 0
+                result['promoted'] = True
         else:
-            result['streak'] = 0
+            result['streak'] = streak + 1
         return result
     if outcome == 'loss':
         major = rank_major(tier_index)
-        if loss_shield:
+        if loss_shield and points > 0:
+            # 保分卡只在有分可保时拦截扣分；0 分时无法阻止掉段
+            # （2026-10-11 平衡），卡在对局结算层照常消耗。
             result['shielded'] = True
             result['streak'] = 0
             result['changed'] = bool(streak)

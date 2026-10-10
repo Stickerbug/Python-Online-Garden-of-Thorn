@@ -2,8 +2,9 @@
 """段位系统（设计 2026-10-02）：纯函数 + 对局结算集成 + 月度结算。
 
 11 大段（Craft Eternal 顺序）× 4 小段（basic/sewage/disc/golden nazar）
-共 44 段；胜利 +5+修正（至少 1），失败 -3+修正（至少 1）；上限后 2 连胜
-升段、归零后再败降段；每日（北京）前 5 局胜利翻倍；月末 23:59 结算发
+共 44 段；胜利 +5+修正（至少 1），失败 -3+修正（至少 1）；胜利后到达上限
+即升段（2026-10-11 平衡，取消两连胜要求）、归零后再败降段（0 分时保分卡
+不拦截掉段）；每日（北京）前 5 局胜利翻倍；月末 23:59 结算发
 段位×1000 荆露并按规则掉段。花阶分（GR）只在后台运行。
 """
 
@@ -42,23 +43,50 @@ class RankMathTests(unittest.TestCase):
         self.assertEqual(5, rs.match_loss(12, 1, 0))    # 3+11 → 封顶 5
         self.assertEqual(1, rs.match_loss(1, 9, 0))     # 3-8 → 至少 1
 
-    def test_promote_after_two_wins_at_cap(self):
+    def test_promote_on_single_win_at_cap(self):
+        """2026-10-11 平衡：满段后赢一局即升段（取消两连胜要求）。"""
         r1 = rs.apply_match_result(1, 20, 0, outcome='win', opponent_tier_avg=1)
-        self.assertEqual(20, r1['points'])
-        self.assertEqual(1, r1['streak'])
-        self.assertFalse(r1['promoted'])
-        r2 = rs.apply_match_result(1, 20, 1, outcome='win', opponent_tier_avg=1)
-        self.assertTrue(r2['promoted'])
-        self.assertEqual(2, r2['tier_index'])
-        self.assertEqual(0, r2['points'])
-        self.assertEqual(0, r2['streak'])
+        self.assertTrue(r1['promoted'])
+        self.assertEqual(2, r1['tier_index'])
+        self.assertEqual(0, r1['points'])
+        self.assertEqual(0, r1['streak'])
 
-    def test_cap_win_then_loss_breaks_streak(self):
+    def test_promote_when_win_fills_to_cap(self):
+        """未满段的一胜只打到满（48+5 → 50/50），不升段；下一胜升。"""
+        r = rs.apply_match_result(9, 48, 0, outcome='win', opponent_tier_avg=9)
+        self.assertFalse(r['promoted'])
+        self.assertEqual(9, r['tier_index'])
+        self.assertEqual(50, r['points'])
+        r2 = rs.apply_match_result(9, 50, 1, outcome='win', opponent_tier_avg=9)
+        self.assertTrue(r2['promoted'])
+        self.assertEqual(10, r2['tier_index'])
+
+    def test_win_below_cap_counts_streak(self):
+        """未到上限的胜利：普通连胜计数 +1，不升段。"""
+        r = rs.apply_match_result(9, 10, 0, outcome='win', opponent_tier_avg=9)
+        self.assertFalse(r['promoted'])
+        self.assertEqual(15, r['points'])
+        self.assertEqual(1, r['streak'])
+
+    def test_cap_loss_breaks_streak(self):
         # 2026-10-02：common 不掉分——改用 unusual（tier5，cap30；loss 3→减半 2）
         r = rs.apply_match_result(5, 30, 1, outcome='loss', opponent_tier_avg=5)
         self.assertFalse(r['promoted'])
         self.assertEqual(0, r['streak'])
         self.assertEqual(28, r['points'])   # 30-ceil(3/2)
+
+    def test_loss_shield_blocks_points_but_not_demotion_at_zero(self):
+        """2026-10-11 平衡：保分卡 0 分时无法阻止掉段。"""
+        r = rs.apply_match_result(12, 0, 3, outcome='loss', opponent_tier_avg=12, loss_shield=True)
+        self.assertTrue(r['demoted'])
+        self.assertEqual(11, r['tier_index'])
+        self.assertEqual(50, r['points'])   # 降段后 = 新段上限
+        self.assertFalse(r.get('shielded'))
+        # 有分可保时照常拦截
+        r2 = rs.apply_match_result(12, 10, 0, outcome='loss', opponent_tier_avg=12, loss_shield=True)
+        self.assertTrue(r2.get('shielded'))
+        self.assertFalse(r2['demoted'])
+        self.assertEqual(10, r2['points'])
 
     def test_demote_at_zero(self):
         # 2026-10-02：common 不降段——改用 unusual basic（tier5）验证降段

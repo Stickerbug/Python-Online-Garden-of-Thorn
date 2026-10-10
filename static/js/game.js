@@ -18504,9 +18504,9 @@ function renderRankProgressHtml(rank) {
     const data = normalizeRankData(rank);
     if (!data) return '<div class="account-replay-sub">-</div>';
     const pct = Math.min(100, Math.round((data.points / data.cap) * 100));
-    const hint = data.streak > 0
-        ? lt({ zh: `距升段还需 ${2 - data.streak} 胜`, en: `${2 - data.streak} wins to promote`, fr: `${2 - data.streak} victoires pour monter`, ja: `昇段まであと${2 - data.streak}勝` })
-        : lt({ zh: '到上限后再 2 连胜升段', en: 'Reach cap, then 2 wins to promote', fr: 'Atteignez le plafond puis 2 victoires', ja: '上限後2連勝で昇段' });
+    const hint = data.points >= data.cap
+        ? lt({ zh: '下胜一局即升段', en: 'Next win promotes', fr: 'La prochaine victoire fait monter', ja: '次の勝利で昇段' })
+        : lt({ zh: '打满段位分后，获胜即升段', en: 'Fill the bar, then a win promotes', fr: 'Remplissez la barre, puis une victoire fait monter', ja: '満点後に勝てば昇段' });
     return `
         <div class="rank-progress" style="--rank-color:${data.color}">
             ${renderRankBadgeHtml(data)}
@@ -20035,7 +20035,7 @@ function renderRankCardsShop(user) {
         double: lt({ zh: '双倍卡', en: 'Double Card', fr: 'Carte Double', ja: '倍増カード' }),
     };
     const descs = {
-        shield: lt({ zh: '下一局失败不扣分不降段', en: 'Next loss costs no points and no demotion', fr: 'La prochaine défaite ne coûte rien', ja: '次の負けで減点・降段なし' }),
+        shield: lt({ zh: '下一局失败不扣分（段位分为0时仍会掉段）', en: 'Next loss costs no points (still demotes at 0 points)', fr: 'La prochaine défaite ne coûte pas de points (démotion maintenue à 0)', ja: '次の負けで減点なし（0点時は降段する）' }),
         double: lt({ zh: '下一局胜利得分×2', en: 'Next win gains ×2', fr: 'La prochaine victoire rapporte ×2', ja: '次の勝利で獲得×2' }),
     };
     const dewLabel = lt({ zh: '荆露', en: 'dew', fr: 'brume', ja: '荊露' });
@@ -20261,7 +20261,7 @@ function confirmRankCardPurchase(kind, onDone) {
         double: lt({ zh: '双倍卡', en: 'Double Card', fr: 'Carte Double', ja: '倍増カード' }),
     };
     const descs = {
-        shield: lt({ zh: '下一局失败不扣分不降段', en: 'Next loss costs no points and no demotion', fr: 'La prochaine défaite ne coûte rien', ja: '次の負けで減点・降段なし' }),
+        shield: lt({ zh: '下一局失败不扣分（段位分为0时仍会掉段）', en: 'Next loss costs no points (still demotes at 0 points)', fr: 'La prochaine défaite ne coûte pas de points (démotion maintenue à 0)', ja: '次の負けで減点なし（0点時は降段する）' }),
         double: lt({ zh: '下一局胜利得分×2', en: 'Next win gains ×2', fr: 'La prochaine victoire rapporte ×2', ja: '次の勝利で獲得×2' }),
     };
     const dewLabel = lt({ zh: '荆露', en: 'dew', fr: 'brume', ja: '荊露' });
