@@ -15762,11 +15762,30 @@
         $('story-card-choice-dialog')?.addEventListener('cancel', (event) => {
             if (event.currentTarget.dataset.required === '1') event.preventDefault();
         });
+        // WebView 兼容：部分内嵌浏览器在事件处理器内调用 dialog.close()（含
+        // <form method="dialog"> 原生提交）后不派发 close 事件——确认/取消被
+        // 吞掉，required 锁不解除、后续操作在 storyAction 入口被静默丢弃
+        // （表现为小扁豆选花瓣后整个对局卡死）。统一拦截 submit 改为程序化
+        // close 并补派一次合成 close 事件；原生事件正常的环境里，第二次分发
+        // 会因 cardChoiceContext 已消费而成为无操作。
+        document.querySelectorAll('dialog form[method="dialog"]').forEach((form) => {
+            form.addEventListener('submit', (event) => {
+                const dialog = form.closest('dialog');
+                if (!dialog?.open) return;
+                event.preventDefault();
+                const returnValue = String(event.submitter?.value || 'cancel');
+                dialog.close(returnValue);
+                dialog.dispatchEvent(new Event('close'));
+            });
+        });
         $('story-card-choice-dialog')?.addEventListener('close', (event) => {
             const context = cardChoiceContext;
             cardChoiceContext = null;
             if (!context) return;
-            const selected = [...context.selected];
+            // option_choice（选花瓣/抉择/召唤物）的 context 没有 selected 集合——
+            // 旧写法 [...context.selected] 在此抛 TypeError，close 监听链中断，
+            // 确认请求永不发出、required 锁不解除，对局被彻底卡死。
+            const selected = [...(context.selected || [])];
             if (context.mode === 'deck_operation') {
                 if (event.target.returnValue !== 'confirm') {
                     requestAnimationFrame(() => openPendingStoryDeckOperation(activeRun?.state));

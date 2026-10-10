@@ -3463,6 +3463,35 @@ def _resolve_pending_card_choice(state, payload, seed, events):
     pending = combat.get('pending_card_choice')
     if not isinstance(pending, dict):
         _fail('NO_CARD_CHOICE', '当前没有待处理的卡牌选择')
+
+    def finish_pending_choice():
+        """选完后的公共收尾：裂变重复结算的续行（若有）+ 手牌自动结算 + 战斗终检。
+
+        与 _resolve_card_choice 尾部语义一致——此前 orbit_petal/effect_choice
+        分支直接 return，若选择发生在重复结算中途（after_choice_repeat），
+        剩余重复段会被静默丢弃。"""
+        after_choice_repeat = pending.get('after_choice_repeat')
+        if isinstance(after_choice_repeat, dict):
+            continuation_card = after_choice_repeat.get('card')
+            if not isinstance(continuation_card, dict):
+                _fail('INVALID_CARD_REPEAT', '待继续结算的卡牌数据无效')
+            _continue_repeated_card_play(
+                state,
+                continuation_card,
+                after_choice_repeat.get('target_ids') or [],
+                after_choice_repeat.get('payload') or {},
+                after_choice_repeat.get('repeat_index') or 0,
+                after_choice_repeat.get('repeat_count') or 0,
+                after_choice_repeat.get('context') or {},
+                bool(after_choice_repeat.get('sewage_was_active')),
+                seed,
+                events,
+            )
+            if combat.get('pending_card_choice'):
+                return
+        _play_ready_cards_in_hand(state, seed, events)
+        _check_combat_end(state, seed, events)
+
     kind = str(pending.get('kind') or '')
     if kind == 'summon_pick':
         summon_id = int(payload.get('selected_summon_id') or 0)
@@ -3475,6 +3504,7 @@ def _resolve_pending_card_choice(state, payload, seed, events):
             _fail('INVALID_SUMMON', '所选召唤物无效')
         combat.pop('pending_card_choice', None)
         _resolve_summon_effects(state, summon, 'passive', seed, events)
+        finish_pending_choice()
         return
     if kind == 'orbit_petal':
         petal_id = int(payload.get('selected_petal_id') or 0)
@@ -3490,6 +3520,7 @@ def _resolve_pending_card_choice(state, payload, seed, events):
         orbit['pointer'] = pos % len(petals) if petals else 0
         events.append({'type': 'orbit_pointer_set', 'pointer': orbit['pointer']})
         _rotate_orbit(state, 1, seed, events, source='orbit_pick_and_rotate')
+        finish_pending_choice()
         return
     if kind == 'effect_choice':
         # 抉择（表15 轨道使）：魔法碎片/魔法分裂器等在两个效果间选择一项。
@@ -3526,6 +3557,7 @@ def _resolve_pending_card_choice(state, payload, seed, events):
                 state, pseudo_card, source_values, effect, targets,
                 payload, seed, events, {'autoplay_depth': 0},
             )
+        finish_pending_choice()
         return
     raw_ids = payload.get('selected_card_ids')
     if not isinstance(raw_ids, list):
