@@ -1028,7 +1028,7 @@ class GameEngine:
             'desc': '回合开始回复[[icon:E]]时，每剩余2[[icon:E]]（回复前），本回合额外回复1[[icon:E]]',
             'position': 3,
         },
-        7: {'id': 7, 'name': '先手压制', 'desc': '必定先手，先手回复7E并抽5张牌', 'position': 3},
+        7: {'id': 7, 'name': '先手压制', 'desc': '尽可能获得先手（多人同选时随机一人），第一回合多4E，起手多1张牌', 'position': 3},
         9: {'id': 9, 'name': '多重瓣', 'desc': '多子瓣牌子瓣+1，将3张[[card:Dust|flag=exile]]随机洗入抽牌堆', 'position': 1},
         10: {'id': 10, 'name': '魔力加速', 'desc': '每回合打出的第奇数张不消耗[[icon:M]]的牌，回复1[[icon:M]]', 'position': 1},
         11: {'id': 11, 'name': '花序编排', 'desc': '调整自己抽牌堆的顺序；本局始终可见抽牌堆顺序', 'position': 2},
@@ -5621,8 +5621,10 @@ class GameEngine:
         for i in range(2):
             if self.opening_event_picks[i] == 7:
                 force_first.append(i)
-        if len(force_first) == 1:
-            self.first_player = force_first[0]
+        # 先手压制：尽可能生效——只要有人选择，就从选择者中随机一人拿先手
+        # （双选时也生效，不再互相抵消）。
+        if force_first:
+            self.first_player = random.choice(force_first)
         else:
             self.first_player = random.randint(0, 1)
         self.current_player = self.first_player
@@ -5662,9 +5664,10 @@ class GameEngine:
             if i == self.first_player:
                 ps.elixir = FIRST_PLAYER_ELIXIR
                 hand_size = FIRST_PLAYER_HAND_SIZE
-                if self.opening_event_picks[i] == 7 and len(force_first) == 1:
-                    hand_size = 5
-                    ps.elixir = 7
+                if self.opening_event_picks[i] == 7 and i == self.first_player:
+                    # 先手压制：第一回合在先手基础上多 4E，起手多 1 张牌。
+                    hand_size = FIRST_PLAYER_HAND_SIZE + 1
+                    ps.elixir = FIRST_PLAYER_ELIXIR + 4
                 if self.opening_event_picks[i] == 5:
                     hand_size = max(0, hand_size - 1)
                 # 对局开始时不触发任何抽取效果（萌芽/玉米等），
@@ -6232,7 +6235,7 @@ class GameEngine:
                 "每剩余2E（回复前）额外回复1E"
             )
         elif event_id == 7:
-            self.log_msg(f"{self.pn(player_id)}【先手压制】：先手回复7E并抽5张牌")
+            self.log_msg(f"{self.pn(player_id)}【先手压制】：第一回合多4E，起手多1张牌")
         elif event_id == 8:
             ps.max_health -= 20
             ps.base_max_health -= 20

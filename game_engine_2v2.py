@@ -382,16 +382,11 @@ class GameEngine2v2(GameEngine):
         return {'success': True, 'picks': self.draft_picks[player_id], 'all_done': all_done}
 
     def _effective_first_pressure_players(self) -> Set[int]:
-        team_picks: List[List[int]] = []
-        for team in self.teams:
-            team_picks.append([pid for pid in team if self.opening_event_picks[pid] == 7])
-        counts = [len(picks) for picks in team_picks]
-        if not counts or counts[0] == counts[1]:
+        # 先手压制：所有选择者（不分队伍）中随机一人获得先手；无人选择则无人生效。
+        pickers = [pid for pid in range(len(self.players)) if self.opening_event_picks[pid] == 7]
+        if not pickers:
             return set()
-        winner_team = 0 if counts[0] > counts[1] else 1
-        if not team_picks[winner_team]:
-            return set()
-        return {random.choice(team_picks[winner_team])}
+        return {random.choice(pickers)}
 
     def start_game(self, *, skip_pregame_validation: bool = False, mulligan: bool = True):
         self.mulligan_enabled = bool(mulligan)
@@ -440,8 +435,9 @@ class GameEngine2v2(GameEngine):
                 ps.elixir = FIRST_PLAYER_ELIXIR
                 hand_size = FIRST_PLAYER_HAND_SIZE
                 if i in self._first_pressure_effective_players:
-                    hand_size = 5
-                    ps.elixir = 7
+                    # 先手压制：第一回合在先手基础上多 4E，起手多 1 张牌。
+                    hand_size = FIRST_PLAYER_HAND_SIZE + 1
+                    ps.elixir = FIRST_PLAYER_ELIXIR + 4
                 if self.opening_event_picks[i] == 5:
                     hand_size = max(0, hand_size - 1)
                 # 对局开始时不触发任何抽取效果（萌芽/玉米等），

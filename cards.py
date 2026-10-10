@@ -686,7 +686,7 @@ FIRST_PLAYER_ELIXIR = 3
 SECOND_PLAYER_HEALTH = 100
 DECK_SIZE = 15
 INITIAL_HAND_SIZE = 5
-FIRST_PLAYER_HAND_SIZE = 4
+FIRST_PLAYER_HAND_SIZE = 3
 
 
 def fixed_same_type_draw_ratio(def_id: str) -> Optional[float]:

@@ -275,7 +275,7 @@ OPENING_EVENT_I18N = {
     },
     7: {
         'name': _t('先手压制', 'Opening Pressure', 'Pression initiale', 'Pressão Inicial', 'Стартовое давление', '先手圧制'),
-        'desc': _t('必定先手(对面未选同事件时)，先手回复7E并抽5张牌', 'You go first unless the opponent chose the same event; the first player recovers to 7E and draws 5 cards', 'Vous commencez sauf si l’adversaire a choisi le même événement ; le premier joueur récupère jusqu’à 7E et pioche 5 cartes', 'Você começa, a menos que o oponente tenha escolhido o mesmo evento; o primeiro jogador recupera até 7E e compra 5 cartas', 'Вы ходите первым, если противник не выбрал то же событие; первый игрок восстанавливается до 7E и берёт 5 карт', '相手が同じイベントを選んでいなければ必ず先手。先手は7Eまで回復し、5枚引く'),
+        'desc': _t('尽可能获得先手（多人同选时随机一人），第一回合多4E，起手多1张牌', 'Whenever possible you go first (random among players who chose this event); +4E on turn 1 and 1 extra opening card', 'Vous commencez autant que possible (aléatoire entre les joueurs ayant choisi cet événement) ; +4E au premier tour et 1 carte de départ supplémentaire', 'Você começa sempre que possível (aleatório entre quem escolheu este evento); +4E no 1º turno e 1 carta inicial extra', 'По возможности ходите первым (случайно среди выбравших это событие); +4E в первый ход и +1 карта в начальную руку', '可能な限り先手を取る（同イベント選択者からランダムに1人）。第1ターンに+4E、初期手札が1枚増える'),
     },
     9: {
         'name': _t('多重瓣', 'Multi-Petal', 'Multi-pétale', 'Multi-Pétala', 'Много лепестков', '多重子弁'),
