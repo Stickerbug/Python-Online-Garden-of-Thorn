@@ -25092,12 +25092,62 @@ def admin_user_detail(user_id):
     return jsonify({'success': True, **detail})
 
 
+_card_mod_catalog_cache = {'sig': None, 'card_to_mod': None, 'catalog': None}
+
+
+def _card_mod_catalog():
+    """卡牌 → 模组 目录（卡牌统计的模组筛选用）。
+
+    官方基础牌归入 key='__base__'；模组卡按 load_all_mods 的注册归属。
+    以 (文件名, 卡数) 签名缓存，模组增删/更新后自动失效。
+    返回 (card_to_mod 映射, [{key,label,count}] 目录)。
+    """
+    import mod_loader
+    try:
+        mods = [m for m in mod_loader.load_all_mods() if not m.errors]
+        sig = tuple(sorted((str(m.filename), len(m.cards)) for m in mods))
+    except Exception:
+        mods, sig = [], ()
+    cache = _card_mod_catalog_cache
+    if cache['sig'] == sig and cache['card_to_mod'] is not None:
+        return cache['card_to_mod'], cache['catalog']
+    card_to_mod = {card_id: '__base__' for card_id in BASE_CARD_IDS}
+    labels = {'__base__': '官方基础'}
+    order_hint = {'__base__': 0}
+    for mod in mods:
+        key = str(mod.filename)
+        label = str(mod.info.name) if getattr(mod, 'info', None) and mod.info.name else key
+        labels[key] = label
+        order_hint.setdefault(key, len(order_hint))
+        for mc in mod.cards:
+            if mc.id not in card_to_mod:
+                card_to_mod[mc.id] = key
+    counts = {}
+    for mod_key in card_to_mod.values():
+        counts[mod_key] = counts.get(mod_key, 0) + 1
+    catalog = [
+        {'key': key, 'label': labels.get(key, key), 'count': counts.get(key, 0)}
+        for key in sorted(counts, key=lambda k: (order_hint.get(k, 99), -counts.get(k, 0), k))
+    ]
+    cache['sig'] = sig
+    cache['card_to_mod'] = card_to_mod
+    cache['catalog'] = catalog
+    return card_to_mod, catalog
+
+
 @app.route('/api/admin/draft-stats')
 def admin_draft_stats():
     started = time.perf_counter()
     if not DB_AVAILABLE:
         return db_unavailable_response()
     try:
+        card_to_mod, mods_catalog = _card_mod_catalog()
+        labels = {entry['key']: entry['label'] for entry in mods_catalog}
+        selected_mods = [part.strip() for part in str(request.args.get('mods', '') or '').split(',') if part.strip()]
+        card_ids = None
+        if selected_mods:
+            selected_set = set(selected_mods)
+            card_ids = {cid for cid, mod_key in card_to_mod.items() if mod_key in selected_set} & set(CARD_DEFS.keys())
         data = list_card_draft_stats(
             mode=request.args.get('mode', ''),
             sort=request.args.get('sort', 'pick_rate'),
@@ -25108,6 +25158,7 @@ def admin_draft_stats():
             scope=request.args.get('scope', 'total'),
             week_start=request.args.get('week_start'),
             winner_only=str(request.args.get('winner_only', '')).lower() in ('1', 'true', 'yes', 'on'),
+            card_ids=card_ids,
         )
     except Exception as exc:
         admin_event('error', f'admin draft stats failed: {exc}')
@@ -25119,6 +25170,9 @@ def admin_draft_stats():
         item['name_en'] = card_def.name_en if card_def else item.get('card_id')
         item['card_type'] = card_def.card_type if card_def else ''
         item['quality'] = card_def.quality if card_def else ''
+        item['mod_label'] = labels.get(card_to_mod.get(item.get('card_id'), ''), '')
+    data['mods_catalog'] = mods_catalog
+    data['selected_mods'] = selected_mods
     log_admin_api_timing(
         '/api/admin/draft-stats',
         (time.perf_counter() - started) * 1000,

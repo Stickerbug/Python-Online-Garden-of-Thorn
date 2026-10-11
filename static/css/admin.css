@@ -1575,3 +1575,38 @@ button {
     height: calc(100vh - 240px);
   }
 }
+
+/* 卡牌统计：模组筛选 chips */
+.mod-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0;
+  flex: 1 1 100%;
+}
+
+.mod-chip {
+  border: 1px solid var(--admin-border, #3a3f4a);
+  background: transparent;
+  color: inherit;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  line-height: 1.6;
+}
+
+.mod-chip:hover {
+  border-color: var(--admin-accent, #6ea8fe);
+}
+
+.mod-chip.active {
+  background: var(--admin-accent, #6ea8fe);
+  border-color: var(--admin-accent, #6ea8fe);
+  color: #fff;
+}
+
+.mod-chip .mod-chip-count {
+  opacity: .65;
+  margin-left: 2px;
+}

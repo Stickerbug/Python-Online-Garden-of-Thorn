@@ -11897,8 +11897,22 @@ def rebuild_card_draft_win_stats_from_matches():
     }
 
 
-def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, offset=0, merge_modes=False, scope='total', week_start=None, winner_only=False):
+def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, offset=0, merge_modes=False, scope='total', week_start=None, winner_only=False, card_ids=None):
     mode_key = str(mode or '').strip()
+    # 卡牌 ID 白名单（卡牌统计按模组筛选用）；空集合表示选中模组没有任何卡牌。
+    card_id_filter = None
+    if card_ids is not None:
+        card_id_filter = sorted({str(c or '').strip() for c in card_ids if str(c or '').strip()})
+        if not card_id_filter:
+            return {
+                'items': [], 'total': 0, 'limit': max(1, min(int(limit or 300), 1000)),
+                'offset': max(0, int(offset or 0)),
+                'sort': sort if sort in CARD_DRAFT_STAT_SORTS else 'pick_rate',
+                'order': 'asc' if str(order or '').lower() == 'asc' else 'desc',
+                'merge_modes': bool(merge_modes),
+                'scope': 'week' if str(scope or '').lower() in ('week', 'weekly') else 'total',
+                'card_filter': True,
+            }
     sort_key = str(sort or 'pick_rate')
     sort_expr = CARD_DRAFT_STAT_SORTS.get(sort_key, CARD_DRAFT_STAT_SORTS['pick_rate'])
     direction = 'ASC' if str(order or '').lower() == 'asc' else 'DESC'
@@ -11927,6 +11941,15 @@ def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, of
         else:
             mode_where = f'WHERE {week_clause}'
             mode_params = [selected_week]
+    if card_id_filter is not None:
+        # 卡牌白名单子句：与模式/周筛选 AND 组合（merge 分支的两个 CTE 复用同一组参数）。
+        card_clause = f'card_id IN ({",".join(["?"] * len(card_id_filter))})'
+        if mode_where:
+            mode_where = f'{mode_where} AND {card_clause}'
+            mode_params = mode_params + card_id_filter
+        else:
+            mode_where = f'WHERE {card_clause}'
+            mode_params = list(card_id_filter)
     order_clause = f'{sort_expr} {direction}, shown_count DESC, card_id ASC'
     with get_db_connection() as conn:
         if merge:
@@ -11979,9 +12002,9 @@ def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, of
                 mode_params + mode_params + [safe_limit, safe_offset],
             ).fetchall()
         else:
-            draft_mode_where = mode_where.replace('week_start', 'draft.week_start').replace('mode', 'draft.mode')
+            draft_mode_where = mode_where.replace('week_start', 'draft.week_start').replace('mode', 'draft.mode').replace('card_id', 'draft.card_id')
             if winner_filter:
-                wins_mode_where = mode_where.replace('week_start', 'wins.week_start').replace('mode', 'wins.mode')
+                wins_mode_where = mode_where.replace('week_start', 'wins.week_start').replace('mode', 'wins.mode').replace('card_id', 'wins.card_id')
                 winner_where = f'{wins_mode_where} AND wins.win_games > 0' if wins_mode_where else 'WHERE wins.win_games > 0'
                 base_query = f'''
                     SELECT

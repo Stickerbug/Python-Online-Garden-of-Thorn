@@ -32,6 +32,8 @@ let lastStatusErrorAt = 0;
 let draftStatsState = { items: [], total: 0 };
 let draftStatsWinnerOnly = false;
 let draftStatsRequestSeq = 0;
+let draftStatsModsCatalog = [];
+let draftStatsSelectedMods = new Set();
 let reportState = { items: [], total: 0, selectedId: null };
 let statusRequestInFlight = false;
 let gameChatRequestInFlight = false;
@@ -640,6 +642,42 @@ function renderPlayers(players) {
     </table>`;
 }
 
+function renderDraftStatsModChips() {
+  const wrap = $('draft-stats-mods');
+  if (!wrap) return;
+  const chips = [{ key: '__all__', label: '全部模组', count: null }]
+    .concat(draftStatsModsCatalog.map((m) => ({ key: m.key, label: m.label, count: m.count })));
+  wrap.replaceChildren();
+  chips.forEach((chip) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'mod-chip';
+    const active = chip.key === '__all__'
+      ? draftStatsSelectedMods.size === 0
+      : draftStatsSelectedMods.has(chip.key);
+    if (active) button.classList.add('active');
+    button.textContent = chip.label;
+    if (chip.count != null) {
+      const count = document.createElement('span');
+      count.className = 'mod-chip-count';
+      count.textContent = `${chip.count}`;
+      button.append(count);
+    }
+    button.addEventListener('click', () => {
+      if (chip.key === '__all__') {
+        draftStatsSelectedMods.clear();
+      } else if (draftStatsSelectedMods.has(chip.key)) {
+        draftStatsSelectedMods.delete(chip.key);
+      } else {
+        draftStatsSelectedMods.add(chip.key);
+      }
+      renderDraftStatsModChips();
+      loadDraftStats();
+    });
+    wrap.append(button);
+  });
+}
+
 function draftStatsQuery() {
   const params = new URLSearchParams();
   params.set('scope', $('draft-stats-scope')?.value || 'total');
@@ -649,6 +687,7 @@ function draftStatsQuery() {
   params.set('limit', '100');
   if ($('draft-stats-merge')?.checked) params.set('merge_modes', '1');
   if (draftStatsWinnerOnly) params.set('winner_only', '1');
+  if (draftStatsSelectedMods.size) params.set('mods', [...draftStatsSelectedMods].join(','));
   return params;
 }
 
@@ -685,6 +724,14 @@ async function loadDraftStats() {
     ]);
     if (requestSeq !== draftStatsRequestSeq) return;
     draftStatsState = data;
+    if (Array.isArray(data.mods_catalog) && data.mods_catalog.length
+        && JSON.stringify(data.mods_catalog) !== JSON.stringify(draftStatsModsCatalog)) {
+      // 目录变化（模组增删）时清掉已失效的选中项，保留仍然存在的。
+      draftStatsModsCatalog = data.mods_catalog;
+      const valid = new Set(data.mods_catalog.map((m) => m.key));
+      draftStatsSelectedMods = new Set([...draftStatsSelectedMods].filter((k) => valid.has(k)));
+      renderDraftStatsModChips();
+    }
     renderDraftStats(draftStatsState);
     if (eventData) renderOpeningEventStats(eventData);
   } catch (error) {
@@ -738,7 +785,7 @@ function renderDraftStats(data) {
   }
   table.innerHTML = `
     <table>
-      <thead><tr><th>范围</th><th>模式</th><th>卡牌</th><th>类型</th><th>抽取率</th><th>抽到胜率</th><th>胜者选择率</th><th>抽取</th><th>刷出</th><th>${winnerOnly ? '胜者选中' : '抽到胜利'}</th><th>抽到局数</th><th>最近更新</th></tr></thead>
+      <thead><tr><th>范围</th><th>模式</th><th>卡牌</th><th>类型</th><th>模组</th><th>抽取率</th><th>抽到胜率</th><th>胜者选择率</th><th>抽取</th><th>刷出</th><th>${winnerOnly ? '胜者选中' : '抽到胜利'}</th><th>抽到局数</th><th>最近更新</th></tr></thead>
       <tbody>
         ${items.map((item) => `
           <tr>
@@ -749,6 +796,7 @@ function renderDraftStats(data) {
               <span class="muted"> ${escapeHtml(item.card_id || '')}</span>
             </td>
             <td>${escapeHtml(cardTypeLabel(item.card_type))}</td>
+            <td>${escapeHtml(item.mod_label || '-')}</td>
             <td class="admin-data">${escapeHtml(formatPercent(item.pick_rate || 0))}</td>
             <td class="admin-data">${escapeHtml(formatPercent(item.card_win_rate || 0))}</td>
             <td class="admin-data">${escapeHtml(formatPercent(item.winner_pick_rate || 0))}</td>
