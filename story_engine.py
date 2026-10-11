@@ -3872,7 +3872,18 @@ def _orbit_resolve_petal(state, petal, seed, events, depth=0):
     for _ in range(repeats):
         if state.get('phase') != 'combat':
             return
-        targets = _card_targets(combat, values, default_payload)
+        try:
+            targets = _card_targets(combat, values, default_payload)
+        except StoryActionError as exc:
+            # 目标解析失败（如本回合结束旋转中前置花瓣已击杀全部敌人）
+            # 不能向上传播——否则 end_turn 等自动动作会失败并软锁死旅程。
+            # 与效果级异常同口径：记 orbit_petal_skipped 后结束本花瓣。
+            events.append({
+                'type': 'orbit_petal_skipped',
+                'petal_id': petal.get('petal_id'),
+                'code': str(getattr(exc, 'code', '') or ''),
+            })
+            return
         for effect in values['effects']:
             try:
                 _resolve_effect(
@@ -4849,6 +4860,15 @@ def _resolve_effect(state, card, values, effect, targets, payload, seed, events,
                 'cards': candidates,
                 'source': card.get('def_id'),
             }
+    elif effect_type == 'self_damage':
+        # 刀/荆棘的自伤（2026-10-11 调整）：按「受到伤害」结算，
+        # 可被护盾/魔法护盾等阻挡，区别于 lose_health 的直接失去生命。
+        _player_raw_damage(
+            state,
+            max(0, int(amount)),
+            events,
+            card.get('def_id') or 'self_damage',
+        )
     elif effect_type == 'lose_health':
         lost = max(0, int(amount))
         before = int(state['player'].get('health') or 0)
@@ -8143,6 +8163,43 @@ def _enemy_turn(state, seed, events):
     combat = state['combat']
     combat['turn'] = 'enemy'
     _prepare_enemy_turn_defenses(combat)
+    # 中毒结算（2026-10-11 调整）：从“下个玩家回合开始时”提前到“敌人行动前”。
+    # 结算口径不变（伤害→无滞留则减半→剧毒追加；剧毒转化敌人改为回血）。
+    for enemy in combat['enemies']:
+        if int(enemy.get('health') or 0) <= 0:
+            continue
+        poison = max(0, int(enemy.get('poison') or 0))
+        if not poison:
+            continue
+        if 'toxic_conversion' in STORY_ENEMIES[enemy['def_id']].get('traits', ()):
+            before = int(enemy.get('health') or 0)
+            enemy['health'] = min(int(enemy.get('max_health') or before), before + poison)
+            events.append({
+                'type': 'enemy_heal',
+                'enemy_id': enemy['id'],
+                'amount': int(enemy['health']) - before,
+                'before': before,
+                'after': int(enemy['health']),
+                'source': 'toxic_conversion',
+            })
+        else:
+            _enemy_raw_damage(
+                state,
+                enemy,
+                poison,
+                events,
+                'poison',
+                player_caused=True,
+            )
+        if int(enemy.get('stagnation') or 0) <= 0:
+            enemy['poison'] = math.floor(poison / 2)
+        enemy['poison'] = int(enemy.get('poison') or 0) + max(
+            0,
+            int(enemy.get('toxic_poison') or 0),
+        )
+    if state.get('phase') != 'combat':
+        _check_combat_end(state, seed, events)
+        return
     action_order = list(combat['enemies'])
     for enemy in action_order:
         if int(enemy.get('health') or 0) <= 0:
@@ -8499,34 +8556,7 @@ def _turn_boundary(state, seed, events, extra=False):
             if enemy['wither'] <= 0:
                 enemy['health'] = 0
                 events.append({'type': 'enemy_withered', 'enemy_id': enemy['id']})
-        poison = max(0, int(enemy.get('poison') or 0))
-        if poison:
-            if 'toxic_conversion' in STORY_ENEMIES[enemy['def_id']].get('traits', ()):
-                before = int(enemy.get('health') or 0)
-                enemy['health'] = min(int(enemy.get('max_health') or before), before + poison)
-                events.append({
-                    'type': 'enemy_heal',
-                    'enemy_id': enemy['id'],
-                    'amount': int(enemy['health']) - before,
-                    'before': before,
-                    'after': int(enemy['health']),
-                    'source': 'toxic_conversion',
-                })
-            else:
-                _enemy_raw_damage(
-                    state,
-                    enemy,
-                    poison,
-                    events,
-                    'poison',
-                    player_caused=True,
-                )
-            if int(enemy.get('stagnation') or 0) <= 0:
-                enemy['poison'] = math.floor(poison / 2)
-            enemy['poison'] = int(enemy.get('poison') or 0) + max(
-                0,
-                int(enemy.get('toxic_poison') or 0),
-            )
+        # 中毒已改为敌人行动前结算（_enemy_turn 开头），此处不再重复结算。
         if int(enemy.get('fire') or 0) > 0 and int(enemy.get('health') or 0) > 0:
             _enemy_raw_damage(
                 state,
@@ -8810,11 +8840,8 @@ def _turn_boundary(state, seed, events, extra=False):
 def _prepare_player_turn_end(state, seed, events, reason=None):
     combat = state['combat']
     combat['blind_active'] = False
-    # 轨道（表15 天赋表）：回合结束不自动旋转；环绕轨道天赋（轨道使初始
-    # 天赋）的效果是回合结束时旋转一次。
-    if state.get('phase') == 'combat' and (combat.get('orbit', {}).get('petals') or []):
-        if _has_relic(state, 'orbital_surround'):
-            _rotate_orbit(state, 1, seed, events, source='orbital_surround')
+    # 轨道（表15 天赋表）：回合结束不自动旋转；环绕轨道天赋与魔法齿轮的
+    # 回合结束旋转统一移到弃牌之后（2026-10-11 调整，见函数收尾处）。
     combat.pop('orbit_cancer_poison', None)
     # 召唤（表15）：每个召唤物的被动效果在回合结束自动触发一次；
     # 奇迹之春天赋：回合结束可选择一个召唤物再触发一次其被动。
@@ -8869,6 +8896,20 @@ def _prepare_player_turn_end(state, seed, events, reason=None):
         combat['broken'] = 0
         events.append({'type': 'status_cleared', 'target_id': 'player', 'status': 'broken'})
     _discard_hand_at_turn_end(state, seed, events)
+    # 回合结束旋转（2026-10-11 调整：统一在失去所有费用和卡牌之后执行）：
+    # 环绕轨道天赋 1 次 → 魔法齿轮装备 N 次。
+    if state.get('phase') == 'combat' and (combat.get('orbit', {}).get('petals') or []):
+        if _has_relic(state, 'orbital_surround'):
+            _rotate_orbit(state, 1, seed, events, source='orbital_surround')
+    for equipment, effect in list(_equipment_effects(combat, 'orbit_end_rotate')):
+        if state.get('phase') == 'combat':
+            _rotate_orbit(
+                state,
+                max(1, int(effect.get('amount') or 1)),
+                seed,
+                events,
+                source=f"equipment:{equipment.get('def_id') or 'orbit_end_rotate'}",
+            )
     event = {'type': 'turn_ended', 'turn_kind': combat.get('turn_kind')}
     if reason:
         event['reason'] = reason

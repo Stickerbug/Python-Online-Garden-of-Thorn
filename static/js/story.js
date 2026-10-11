@@ -6735,6 +6735,10 @@
             await playStoryOrbitRotate(event);
         } else if (eventType === 'orbit_petal_expired') {
             await settleStoryOrbitTrigger(event);
+        } else if (eventType === 'orbit_transformed') {
+            const defId = String(event?.def_id || '');
+            const name = localize(storyContent?.cards?.[defId]?.name) || defId || '花瓣变形';
+            spawnStoryFloat($('story-player-target'), `花瓣→${name}`, 'status');
         } else if (eventType === 'orbit_cleared') {
             spawnStoryFloat($('story-player-target'), `清轨×${storyEventAmount(event.destroyed)}`, 'elixir');
         } else if (eventType === 'summon_added') {
@@ -12216,7 +12220,9 @@
             run
             && run.compatible !== false
             && state
-            && !['journey_setup', 'easy_relic', 'blessing'].includes(String(state.phase || ''))
+            // journey_setup（选模式/难度）阶段还没有地图与存档，不显示快捷操作；
+            // 赐福与简单天赋阶段（2026-10-11）与其他房间一样显示，便于查看地图等。
+            && String(state.phase || '') !== 'journey_setup'
         );
         hud?.classList.toggle('hidden', !visible);
         if (!visible) return;
@@ -12530,6 +12536,7 @@
         const item = document.createElement('div');
         item.className = 'story-orbit-petal';
         item.dataset.petalId = String(petal?.petal_id || '');
+        item.dataset.defId = String(petal?.def_id || '');
         const label = localize(definition?.name) || String(petal?.def_id || '');
         item.setAttribute('aria-label', `轨道花瓣 ${label}（耐久${Number(petal?.durability || 0)}）`);
         item.title = `${label}｜耐久 ${Number(petal?.durability || 0)}`;
@@ -12623,7 +12630,17 @@
                 ring.appendChild(item);
                 window.requestAnimationFrame(() => item.classList.remove('is-entering'));
             } else {
-                syncStoryOrbitPetalBadge(byId.get(id), Number(petal?.durability || 0));
+                const existing = byId.get(id);
+                if (String(existing.dataset.defId || '') !== String(petal.def_id || '')) {
+                    // 花瓣变形（糖棍等）：petal_id 不变但卡面已换——增量更新
+                    // 旧节点只刷耐久角标，必须重建才能显示新卡外观。
+                    const fresh = buildStoryOrbitPetal(petal);
+                    fresh.classList.add('is-entering');
+                    existing.replaceWith(fresh);
+                    window.requestAnimationFrame(() => fresh.classList.remove('is-entering'));
+                } else {
+                    syncStoryOrbitPetalBadge(existing, Number(petal?.durability || 0));
+                }
             }
         });
         layoutStoryOrbitPetals(ring);

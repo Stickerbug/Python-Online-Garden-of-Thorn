@@ -2657,11 +2657,11 @@ STORY_CARDS.update({
     ),
     'magic_gear': _card(
         'MagicGear', '魔法齿轮', 'Magic Gear', 1, 'root', 'rare',
-        '回合开始时，旋转轨道2次',
-        description_en='At the start of your turn, rotate the orbit twice',
+        '回合结束时，在失去所有费用和卡牌后，旋转轨道2次',
+        description_en='At the end of your turn, after losing all resources and cards, rotate the orbit twice',
         owner='orbiter',
-        effects=(_effect('equipment', 2, script='orbit_start_rotate'),),
-        upgrade={'description': {'zh': '回合开始时，旋转轨道3次', 'en': 'At the start of your turn, rotate the orbit 3 times'}, 'effects': (_effect('equipment', 3, script='orbit_start_rotate'), )},
+        effects=(_effect('equipment', 2, script='orbit_end_rotate'),),
+        upgrade={'description': {'zh': '回合结束时，在失去所有费用和卡牌后，旋转轨道3次', 'en': 'At the end of your turn, after losing all resources and cards, rotate the orbit 3 times'}, 'effects': (_effect('equipment', 3, script='orbit_end_rotate'), )},
     ),
     'cat_card': _card(
         'Cat', '小猫', 'Cat', 1, 'bloom', 'rare',
@@ -2795,7 +2795,7 @@ STORY_CARDS.update({
         description_en='Deal 2 D to yourself and 12 D to the target, rotate the orbit once',
         owner='orbiter', orbit=3,
         effects=(
-            _effect('lose_health', 2),
+            _effect('self_damage', 2),
             _effect('damage', 12),
             _effect('rotate_orbit', 1),
         ),
@@ -2803,11 +2803,11 @@ STORY_CARDS.update({
     ),
     'orbit_thorn': _card(
         'OrbitThorn', '荆棘', 'Thorn', 1, 'infect', 'special',
-        '此花瓣被转到时：失去1H',
-        description_en='When this petal is rotated to: lose 1 H',
+        '此花瓣被转到时：对自己造成1D',
+        description_en='When this petal is rotated to: deal 1 D to yourself',
         owner='orbiter',
         effects=(),
-        orbit_effects=(_effect('lose_health', 1),),
+        orbit_effects=(_effect('self_damage', 1),),
     ),
     'blood_feather': _card(
         'BloodFeather', '血羽毛', 'Blood Feather', 0, 'bloom', 'common',
@@ -3118,9 +3118,11 @@ STORY_CARDS.update({
     ),
     'magic_shard': _card(
         'MagicShard', '魔法碎片', 'Magic Shard', 1, 'bloom', 'rare',
-        '抽2张牌，抉择：额外抽1张牌，或将1个轨道1魔法碎片花瓣加入轨道',
-        description_en='Draw 2 cards, then choose: draw 1 more, or add an Orbit 1 Magic Shard petal',
+        '抽2张牌，抉择：额外抽1张牌，或将1个轨道1魔法碎片花瓣加入轨道（花瓣被转到时：抽2张牌）',
+        description_en='Draw 2 cards, then choose: draw 1 more, or add an Orbit 1 Magic Shard petal (petal draws 2 when rotated to)',
         owner='orbiter',
+        # 花瓣被转到时不重复抉择，只抽2张牌（2026-10-11 调整）。
+        orbit_effects=(_effect('draw', 2),),
         effects=(_effect('draw', 2), _effect('choose_effect', 1, options=(
             {
                 'id': 'draw_more',
@@ -3135,7 +3137,7 @@ STORY_CARDS.update({
                 'effects': (_effect('orbit_add_petal', 1, def_id='magic_shard', durability=1),),
             },
         )),),
-        upgrade={'description': {'zh': '抽2张牌，抉择：额外抽2张牌，或将1个轨道2魔法碎片花瓣加入轨道', 'en': 'Draw 2 cards, then choose: draw 2 more, or add an Orbit 2 Magic Shard petal'}, 'effects': (_effect('draw', 2), _effect('choose_effect', 1, options=(
+        upgrade={'description': {'zh': '抽2张牌，抉择：额外抽2张牌，或将1个轨道2魔法碎片花瓣加入轨道（花瓣被转到时：抽2张牌）', 'en': 'Draw 2 cards, then choose: draw 2 more, or add an Orbit 2 Magic Shard petal (petal draws 2 when rotated to)'}, 'effects': (_effect('draw', 2), _effect('choose_effect', 1, options=(
             {
                 'id': 'draw_more',
                 'label': {'zh': '额外抽2张', 'en': 'Draw 2 more'},
@@ -4704,7 +4706,7 @@ def validate_story_content():
         'draw_selected', 'draw_to_limit', 'elixir', 'elixir_from_hand', 'equipment',
         'elixir_if_active_discard',
         'exile_hand_for_shield', 'first_use_power', 'next_attack_multiplier',
-        'heal', 'immediate_extra_turn', 'inspect_draw_choose', 'lose_health',
+        'heal', 'immediate_extra_turn', 'inspect_draw_choose', 'lose_health', 'self_damage',
         'magic', 'make_card_free', 'next_skill_repeats', 'next_turn_draw',
         'permanent_damage_growth', 'permanent_swift', 'power', 'self_swift',
         'random_active_discard', 'random_damage_per_discards', 'random_exile',
@@ -4758,7 +4760,7 @@ def validate_story_content():
         'magic_gain_temp_power', 'magic_random_static',
         # 表15 轨道使/召唤师装备脚本
         'orbit_on_rotate_shield', 'orbit_on_rotate_damage', 'orbit_on_draw',
-        'orbit_start_rotate', 'orbit_splitter', 'orbit_rotate_draw',
+        'orbit_start_rotate', 'orbit_end_rotate', 'orbit_splitter', 'orbit_rotate_draw',
         'orbit_rotate_extra', 'orbit_poison_shield', 'orbit_poison_damage',
         'orbit_poison_draw', 'orbit_poison_bonus', 'orbit_poison_multiplier',
         'summon_each_turn',
