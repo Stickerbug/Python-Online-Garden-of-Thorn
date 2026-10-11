@@ -280,6 +280,7 @@ from db import (
     record_user_ip_event,
     record_card_draft_counts,
     record_card_draft_win_result,
+    get_user_rank_tiers,
     record_opening_event_pick_counts,
     record_opening_event_win_result,
     record_story_discoveries,
@@ -2326,6 +2327,7 @@ def admin_match_record(room, result='finished'):
                         player_draft_cards,
                         stats_winner_player_indices,
                         'draw' if stats_result == 'draw' else 'finished',
+                        player_rank_tiers=_room_player_rank_tiers(room),
                     )
                     record_opening_event_win_result(
                         room.mode,
@@ -6539,7 +6541,7 @@ def _auto_complete_draft_locked(room, pidx):
             and getattr(room, 'record_pregame_stats', True)
         ):
             try:
-                enqueue_card_draft_pick(room.mode, options_before, def_id)
+                enqueue_card_draft_pick(room.mode, options_before, def_id, rank_tier=_room_rank_tier_for(room, pidx))
             except Exception as exc:
                 admin_event('error', f'auto draft stats enqueue failed: {exc}', room_id=room.room_id)
         record_room_replay_action(room, 'draft_pick', pidx, {'def_id': def_id, 'auto': True})
@@ -10256,7 +10258,43 @@ def record_socket_broadcast(room, duration_ms, recipients=0):
     })
 
 
-def enqueue_card_draft_pick(mode, option_ids, picked_id):
+
+def _room_player_rank_tiers(room):
+    """房间当前对局各座位（按 player_sids 顺序）的段位快照。
+
+    以 engine 对象为缓存令牌——同房间重赛换引擎后自动重查；游客/未登录
+    座位为 0（未知段位口径，与历史数据一致）。
+    """
+    engine = getattr(room, 'engine', None)
+    token = id(engine)
+    cached = getattr(room, '_player_rank_tiers_cache', None)
+    if cached and cached[0] == token:
+        return cached[1]
+    tiers = []
+    if DB_AVAILABLE:
+        uids = []
+        for psid in getattr(room, 'player_sids', []) or []:
+            profile = room_player_profile(room, psid) or {}
+            try:
+                uids.append(int(profile.get('user_id') or 0))
+            except (TypeError, ValueError):
+                uids.append(0)
+        lookup = get_user_rank_tiers([u for u in uids if u])
+        tiers = [lookup.get(u, 0) if u else 0 for u in uids]
+    room._player_rank_tiers_cache = (token, tiers)
+    return tiers
+
+
+def _room_rank_tier_for(room, pidx):
+    try:
+        pidx = int(pidx)
+    except (TypeError, ValueError):
+        return 0
+    tiers = _room_player_rank_tiers(room)
+    return tiers[pidx] if 0 <= pidx < len(tiers) else 0
+
+
+def enqueue_card_draft_pick(mode, option_ids, picked_id, rank_tier=0):
     global _DRAFT_STATS_PENDING_EVENTS
     if not DB_AVAILABLE:
         return False
@@ -10266,6 +10304,10 @@ def enqueue_card_draft_pick(mode, option_ids, picked_id):
     picked = str(picked_id or '').strip()
     if not picked:
         return False
+    try:
+        rank_value = max(0, int(rank_tier or 0))
+    except (TypeError, ValueError):
+        rank_value = 0
     counts = {}
     for raw_id in option_ids or []:
         card_id = str(raw_id or '').strip()
@@ -10275,7 +10317,9 @@ def enqueue_card_draft_pick(mode, option_ids, picked_id):
     if not counts:
         return False
     with _DRAFT_STATS_LOCK:
-        bucket = _DRAFT_STATS_PENDING.setdefault(mode_key, {})
+        # 段位维度（2026-10-11）：pending 按 (mode, rank_tier) 分桶，落库时
+        # 分别写入对应段位行；0 = 未知（游客/旧数据口径）。
+        bucket = _DRAFT_STATS_PENDING.setdefault((mode_key, rank_value), {})
         for card_id, shown_inc in counts.items():
             current = bucket.setdefault(card_id, [0, 0])
             current[0] += int(shown_inc)
@@ -10323,7 +10367,7 @@ def enqueue_opening_event_pick(mode, option_ids, picked_id):
 def _drain_draft_stats_pending():
     global _DRAFT_STATS_PENDING_EVENTS
     with _DRAFT_STATS_LOCK:
-        pending = {mode: {card_id: list(counts) for card_id, counts in cards.items()} for mode, cards in _DRAFT_STATS_PENDING.items()}
+        pending = {(mode, rank): {card_id: list(counts) for card_id, counts in cards.items()} for (mode, rank), cards in _DRAFT_STATS_PENDING.items()}
         event_pending = {mode: {event_id: list(counts) for event_id, counts in events.items()} for mode, events in _OPENING_EVENT_STATS_PENDING.items()}
         _DRAFT_STATS_PENDING.clear()
         _OPENING_EVENT_STATS_PENDING.clear()
@@ -10336,14 +10380,14 @@ def flush_draft_stats_once():
     if not pending and not event_pending:
         return 0
     written = 0
-    for mode, card_counts in pending.items():
+    for (mode, rank_value), card_counts in pending.items():
         try:
-            if record_card_draft_counts(mode, card_counts):
+            if record_card_draft_counts(mode, card_counts, rank_tier=rank_value):
                 written += len(card_counts)
         except Exception as exc:
             admin_event('error', f'draft stats flush failed: {exc}')
             with _DRAFT_STATS_LOCK:
-                bucket = _DRAFT_STATS_PENDING.setdefault(mode, {})
+                bucket = _DRAFT_STATS_PENDING.setdefault((mode, rank_value), {})
                 for card_id, counts in card_counts.items():
                     current = bucket.setdefault(card_id, [0, 0])
                     current[0] += int((counts or [0, 0])[0] or 0)
@@ -25148,6 +25192,18 @@ def admin_draft_stats():
         if selected_mods:
             selected_set = set(selected_mods)
             card_ids = {cid for cid, mod_key in card_to_mod.items() if mod_key in selected_set} & set(CARD_DEFS.keys())
+
+        def _parse_rank_bound(value):
+            try:
+                return max(0, int(str(value).strip()))
+            except (TypeError, ValueError):
+                return None
+
+        rank_min = _parse_rank_bound(request.args.get('rank_min', ''))
+        rank_max = _parse_rank_bound(request.args.get('rank_max', ''))
+        exact_rank = _parse_rank_bound(request.args.get('rank_tier', ''))
+        if exact_rank is not None:
+            rank_min = rank_max = exact_rank
         data = list_card_draft_stats(
             mode=request.args.get('mode', ''),
             sort=request.args.get('sort', 'pick_rate'),
@@ -25159,6 +25215,8 @@ def admin_draft_stats():
             week_start=request.args.get('week_start'),
             winner_only=str(request.args.get('winner_only', '')).lower() in ('1', 'true', 'yes', 'on'),
             card_ids=card_ids,
+            rank_min=rank_min,
+            rank_max=rank_max,
         )
     except Exception as exc:
         admin_event('error', f'admin draft stats failed: {exc}')
@@ -25173,6 +25231,23 @@ def admin_draft_stats():
         item['mod_label'] = labels.get(card_to_mod.get(item.get('card_id'), ''), '')
     data['mods_catalog'] = mods_catalog
     data['selected_mods'] = selected_mods
+    data['rank_filter'] = {'min': rank_min, 'max': rank_max}
+    # 段位选项（供前端下拉）：未知(0) + 44 段（按大段分组，含“整大段”区间项）。
+    try:
+        import rank_system as _rs
+        rank_options = [{'value': 0, 'label': '未知段位（旧数据/游客）', 'band': None}]
+        for major_i, major in enumerate(_rs.MAJOR_TIERS):
+            band_start = major_i * len(_rs.SUB_TIERS) + 1
+            band_end = band_start + len(_rs.SUB_TIERS) - 1
+            rank_options.append({
+                'value': -band_start, 'label': f'{major}（整段）', 'band': [band_start, band_end],
+            })
+            for sub_i, sub in enumerate(_rs.SUB_TIERS):
+                tier = band_start + sub_i
+                rank_options.append({'value': tier, 'label': _rs.rank_label(tier), 'band': None})
+        data['rank_options'] = rank_options
+    except Exception:
+        data['rank_options'] = []
     log_admin_api_timing(
         '/api/admin/draft-stats',
         (time.perf_counter() - started) * 1000,
@@ -32611,7 +32686,7 @@ def on_draft_pick(data):
             _add_draft_pick_time_bonus(room, pidx)
             if DB_AVAILABLE and room.mode in ('1v1', '2v2'):
                 try:
-                    enqueue_card_draft_pick(room.mode, draft_options_before, def_id)
+                    enqueue_card_draft_pick(room.mode, draft_options_before, def_id, rank_tier=_room_rank_tier_for(room, pidx))
                 except Exception as exc:
                     admin_event('error', f'draft stats enqueue failed: {exc}')
             record_room_replay_action(

@@ -1613,11 +1613,12 @@ def init_db(
             '''
             CREATE TABLE IF NOT EXISTS card_draft_stats (
                 mode TEXT NOT NULL,
+                rank_tier INTEGER NOT NULL DEFAULT 0,
                 card_id TEXT NOT NULL,
                 shown_count INTEGER NOT NULL DEFAULT 0,
                 picked_count INTEGER NOT NULL DEFAULT 0,
                 updated_at TEXT NOT NULL,
-                PRIMARY KEY (mode, card_id)
+                PRIMARY KEY (mode, rank_tier, card_id)
             )
             '''
         )
@@ -1627,12 +1628,13 @@ def init_db(
             '''
             CREATE TABLE IF NOT EXISTS card_draft_win_stats (
                 mode TEXT NOT NULL,
+                rank_tier INTEGER NOT NULL DEFAULT 0,
                 card_id TEXT NOT NULL,
                 picked_games INTEGER NOT NULL DEFAULT 0,
                 win_games INTEGER NOT NULL DEFAULT 0,
                 draw_games INTEGER NOT NULL DEFAULT 0,
                 updated_at TEXT NOT NULL,
-                PRIMARY KEY (mode, card_id)
+                PRIMARY KEY (mode, rank_tier, card_id)
             )
             '''
         )
@@ -1732,11 +1734,12 @@ def init_db(
             CREATE TABLE IF NOT EXISTS card_draft_stats_weekly (
                 week_start TEXT NOT NULL,
                 mode TEXT NOT NULL,
+                rank_tier INTEGER NOT NULL DEFAULT 0,
                 card_id TEXT NOT NULL,
                 shown_count INTEGER NOT NULL DEFAULT 0,
                 picked_count INTEGER NOT NULL DEFAULT 0,
                 updated_at TEXT NOT NULL,
-                PRIMARY KEY (week_start, mode, card_id)
+                PRIMARY KEY (week_start, mode, rank_tier, card_id)
             )
             '''
         )
@@ -1747,17 +1750,49 @@ def init_db(
             CREATE TABLE IF NOT EXISTS card_draft_win_stats_weekly (
                 week_start TEXT NOT NULL,
                 mode TEXT NOT NULL,
+                rank_tier INTEGER NOT NULL DEFAULT 0,
                 card_id TEXT NOT NULL,
                 picked_games INTEGER NOT NULL DEFAULT 0,
                 win_games INTEGER NOT NULL DEFAULT 0,
                 draw_games INTEGER NOT NULL DEFAULT 0,
                 updated_at TEXT NOT NULL,
-                PRIMARY KEY (week_start, mode, card_id)
+                PRIMARY KEY (week_start, mode, rank_tier, card_id)
             )
             '''
         )
         conn.execute('CREATE INDEX IF NOT EXISTS idx_card_draft_win_stats_weekly_week_mode ON card_draft_win_stats_weekly(week_start, mode)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_card_draft_win_stats_weekly_rate ON card_draft_win_stats_weekly(week_start, win_games, picked_games)')
+        # 段位维度迁移（2026-10-11）：四张卡牌统计表把 rank_tier 纳入主键，
+        # 旧库缺列时重建（历史数据以 rank_tier=0「未知段位」保留）。
+        for _stats_table, _value_cols in (
+            ('card_draft_stats', 'shown_count, picked_count'),
+            ('card_draft_win_stats', 'picked_games, win_games, draw_games'),
+            ('card_draft_stats_weekly', 'shown_count, picked_count'),
+            ('card_draft_win_stats_weekly', 'picked_games, win_games, draw_games'),
+        ):
+            _cols = {row['name'] for row in conn.execute(f'PRAGMA table_info({_stats_table})').fetchall()}
+            if not _cols or 'rank_tier' in _cols:
+                continue
+            _week_prefix = 'week_start, ' if 'week_start' in _cols else ''
+            conn.execute(f'ALTER TABLE {_stats_table} RENAME TO {_stats_table}__legacy_rank')
+            conn.execute(
+                f'''
+                CREATE TABLE {_stats_table} (
+                    {_week_prefix}mode TEXT NOT NULL,
+                    rank_tier INTEGER NOT NULL DEFAULT 0,
+                    card_id TEXT NOT NULL,
+                    {_value_cols.replace('shown_count', 'shown_count INTEGER NOT NULL DEFAULT 0').replace('picked_count', 'picked_count INTEGER NOT NULL DEFAULT 0').replace('picked_games', 'picked_games INTEGER NOT NULL DEFAULT 0').replace('win_games', 'win_games INTEGER NOT NULL DEFAULT 0').replace('draw_games', 'draw_games INTEGER NOT NULL DEFAULT 0')},
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY ({_week_prefix}mode, rank_tier, card_id)
+                )
+                '''
+            )
+            conn.execute(
+                f'INSERT INTO {_stats_table} ({_week_prefix}mode, rank_tier, card_id, {_value_cols}, updated_at) '
+                f'SELECT {_week_prefix}mode, 0, card_id, {_value_cols}, updated_at FROM {_stats_table}__legacy_rank'
+            )
+            conn.execute(f'DROP TABLE {_stats_table}__legacy_rank')
+            print(f'[startup] 卡牌统计表已迁移：{_stats_table} 增加 rank_tier 维度（历史数据归入未知段位）', flush=True)
         conn.execute(
             '''
             CREATE TABLE IF NOT EXISTS opening_event_pick_stats (
@@ -11457,11 +11492,15 @@ OPENING_EVENT_STAT_SORTS = {
 }
 
 
-def record_card_draft_pick(mode, option_ids, picked_id):
+def record_card_draft_pick(mode, option_ids, picked_id, rank_tier=0):
     mode_key = str(mode or '').strip()
     if mode_key not in ('1v1', '2v2'):
         return False
     picked = str(picked_id or '').strip()
+    try:
+        rank_value = max(0, int(rank_tier or 0))
+    except (TypeError, ValueError):
+        rank_value = 0
     counts = {}
     for raw_id in option_ids or []:
         card_id = str(raw_id or '').strip()
@@ -11477,34 +11516,38 @@ def record_card_draft_pick(mode, option_ids, picked_id):
             picked_inc = 1 if card_id == picked else 0
             conn.execute(
                 '''
-                INSERT INTO card_draft_stats (mode, card_id, shown_count, picked_count, updated_at)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(mode, card_id) DO UPDATE SET
+                INSERT INTO card_draft_stats (mode, rank_tier, card_id, shown_count, picked_count, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(mode, rank_tier, card_id) DO UPDATE SET
                     shown_count = shown_count + excluded.shown_count,
                     picked_count = picked_count + excluded.picked_count,
                     updated_at = excluded.updated_at
                 ''',
-                (mode_key, card_id, int(shown_inc), int(picked_inc), now),
+                (mode_key, rank_value, card_id, int(shown_inc), int(picked_inc), now),
             )
             conn.execute(
                 '''
-                INSERT INTO card_draft_stats_weekly (week_start, mode, card_id, shown_count, picked_count, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(week_start, mode, card_id) DO UPDATE SET
+                INSERT INTO card_draft_stats_weekly (week_start, mode, rank_tier, card_id, shown_count, picked_count, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(week_start, mode, rank_tier, card_id) DO UPDATE SET
                     shown_count = shown_count + excluded.shown_count,
                     picked_count = picked_count + excluded.picked_count,
                     updated_at = excluded.updated_at
                 ''',
-                (week_start, mode_key, card_id, int(shown_inc), int(picked_inc), now),
+                (week_start, mode_key, rank_value, card_id, int(shown_inc), int(picked_inc), now),
             )
         conn.commit()
     return True
 
 
-def record_card_draft_counts(mode, card_counts):
+def record_card_draft_counts(mode, card_counts, rank_tier=0):
     mode_key = str(mode or '').strip()
     if mode_key not in ('1v1', '2v2') or not isinstance(card_counts, dict):
         return False
+    try:
+        rank_value = max(0, int(rank_tier or 0))
+    except (TypeError, ValueError):
+        rank_value = 0
     rows = []
     for raw_id, counts in card_counts.items():
         card_id = str(raw_id or '').strip()
@@ -11533,25 +11576,25 @@ def record_card_draft_counts(mode, card_counts):
     with get_db_connection() as conn:
         conn.executemany(
             '''
-            INSERT INTO card_draft_stats (mode, card_id, shown_count, picked_count, updated_at)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(mode, card_id) DO UPDATE SET
+            INSERT INTO card_draft_stats (mode, rank_tier, card_id, shown_count, picked_count, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(mode, rank_tier, card_id) DO UPDATE SET
                 shown_count = shown_count + excluded.shown_count,
                 picked_count = picked_count + excluded.picked_count,
                 updated_at = excluded.updated_at
             ''',
-            [(mode_key, card_id, shown_inc, picked_inc, now) for card_id, shown_inc, picked_inc in rows],
+            [(mode_key, rank_value, card_id, shown_inc, picked_inc, now) for card_id, shown_inc, picked_inc in rows],
         )
         conn.executemany(
             '''
-            INSERT INTO card_draft_stats_weekly (week_start, mode, card_id, shown_count, picked_count, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(week_start, mode, card_id) DO UPDATE SET
+            INSERT INTO card_draft_stats_weekly (week_start, mode, rank_tier, card_id, shown_count, picked_count, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(week_start, mode, rank_tier, card_id) DO UPDATE SET
                 shown_count = shown_count + excluded.shown_count,
                 picked_count = picked_count + excluded.picked_count,
                 updated_at = excluded.updated_at
             ''',
-            [(week_start, mode_key, card_id, shown_inc, picked_inc, now) for card_id, shown_inc, picked_inc in rows],
+            [(week_start, mode_key, rank_value, card_id, shown_inc, picked_inc, now) for card_id, shown_inc, picked_inc in rows],
         )
         conn.commit()
     return True
@@ -11675,7 +11718,7 @@ def record_opening_event_win_result(mode, player_event_ids, winner_indices=None,
     return True
 
 
-def record_card_draft_win_result(mode, player_card_ids, winner_indices=None, result='finished'):
+def record_card_draft_win_result(mode, player_card_ids, winner_indices=None, result='finished', player_rank_tiers=None):
     mode_key = str(mode or '').strip()
     if mode_key not in ('1v1', '2v2'):
         return False
@@ -11688,21 +11731,26 @@ def record_card_draft_win_result(mode, player_card_ids, winner_indices=None, res
         except (TypeError, ValueError):
             continue
     is_draw = str(result or '').lower() == 'draw'
+    rank_tiers = player_rank_tiers if isinstance(player_rank_tiers, (list, tuple)) else []
     rows = {}
     for pidx, raw_cards in enumerate(player_card_ids):
+        try:
+            rank_value = max(0, int(rank_tiers[pidx] or 0)) if pidx < len(rank_tiers) else 0
+        except (TypeError, ValueError):
+            rank_value = 0
         unique_cards = set()
         for raw_id in raw_cards or []:
             card_id = str(raw_id or '').strip()
             if card_id:
                 unique_cards.add(card_id)
         for card_id in unique_cards:
-            picked_inc, win_inc, draw_inc = rows.get(card_id, (0, 0, 0))
+            picked_inc, win_inc, draw_inc = rows.get((rank_value, card_id), (0, 0, 0))
             picked_inc += 1
             if is_draw:
                 draw_inc += 1
             elif pidx in winner_set:
                 win_inc += 1
-            rows[card_id] = (picked_inc, win_inc, draw_inc)
+            rows[(rank_value, card_id)] = (picked_inc, win_inc, draw_inc)
     if not rows:
         return False
     now = utc_now()
@@ -11710,32 +11758,32 @@ def record_card_draft_win_result(mode, player_card_ids, winner_indices=None, res
     with get_db_connection() as conn:
         conn.executemany(
             '''
-            INSERT INTO card_draft_win_stats (mode, card_id, picked_games, win_games, draw_games, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(mode, card_id) DO UPDATE SET
+            INSERT INTO card_draft_win_stats (mode, rank_tier, card_id, picked_games, win_games, draw_games, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(mode, rank_tier, card_id) DO UPDATE SET
                 picked_games = picked_games + excluded.picked_games,
                 win_games = win_games + excluded.win_games,
                 draw_games = draw_games + excluded.draw_games,
                 updated_at = excluded.updated_at
             ''',
             [
-                (mode_key, card_id, picked_inc, win_inc, draw_inc, now)
-                for card_id, (picked_inc, win_inc, draw_inc) in rows.items()
+                (mode_key, rank_value, card_id, picked_inc, win_inc, draw_inc, now)
+                for (rank_value, card_id), (picked_inc, win_inc, draw_inc) in rows.items()
             ],
         )
         conn.executemany(
             '''
-            INSERT INTO card_draft_win_stats_weekly (week_start, mode, card_id, picked_games, win_games, draw_games, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(week_start, mode, card_id) DO UPDATE SET
+            INSERT INTO card_draft_win_stats_weekly (week_start, mode, rank_tier, card_id, picked_games, win_games, draw_games, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(week_start, mode, rank_tier, card_id) DO UPDATE SET
                 picked_games = picked_games + excluded.picked_games,
                 win_games = win_games + excluded.win_games,
                 draw_games = draw_games + excluded.draw_games,
                 updated_at = excluded.updated_at
             ''',
             [
-                (week_start, mode_key, card_id, picked_inc, win_inc, draw_inc, now)
-                for card_id, (picked_inc, win_inc, draw_inc) in rows.items()
+                (week_start, mode_key, rank_value, card_id, picked_inc, win_inc, draw_inc, now)
+                for (rank_value, card_id), (picked_inc, win_inc, draw_inc) in rows.items()
             ],
         )
         conn.commit()
@@ -11897,7 +11945,7 @@ def rebuild_card_draft_win_stats_from_matches():
     }
 
 
-def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, offset=0, merge_modes=False, scope='total', week_start=None, winner_only=False, card_ids=None):
+def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, offset=0, merge_modes=False, scope='total', week_start=None, winner_only=False, card_ids=None, rank_min=None, rank_max=None):
     mode_key = str(mode or '').strip()
     # 卡牌 ID 白名单（卡牌统计按模组筛选用）；空集合表示选中模组没有任何卡牌。
     card_id_filter = None
@@ -11950,6 +11998,26 @@ def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, of
         else:
             mode_where = f'WHERE {card_clause}'
             mode_params = list(card_id_filter)
+    rank_bounds = None
+    if rank_min is not None or rank_max is not None:
+        try:
+            lo = max(0, int(rank_min if rank_min is not None else rank_max))
+        except (TypeError, ValueError):
+            lo = 0
+        try:
+            hi = max(0, int(rank_max if rank_max is not None else rank_min))
+        except (TypeError, ValueError):
+            hi = 0
+        if hi < lo:
+            lo, hi = hi, lo
+        rank_bounds = (lo, hi)
+        rank_clause = f'rank_tier BETWEEN ? AND ?'
+        if mode_where:
+            mode_where = f'{mode_where} AND {rank_clause}'
+            mode_params = mode_params + [lo, hi]
+        else:
+            mode_where = f'WHERE {rank_clause}'
+            mode_params = [lo, hi]
     order_clause = f'{sort_expr} {direction}, shown_count DESC, card_id ASC'
     with get_db_connection() as conn:
         if merge:
@@ -15497,6 +15565,26 @@ def recalc_ranks_from_gr(since_iso=None, dry_run=True, recent_weight=1.0, limit=
                 raise
     summary['dry_run'] = bool(dry_run)
     return summary, rows_out
+
+
+def get_user_rank_tiers(user_ids):
+    """批量取用户当前段位序号（卡牌统计的段位维度用）。无记录/异常 → 0。"""
+    ids = []
+    for raw in user_ids or []:
+        try:
+            value = int(raw or 0)
+        except (TypeError, ValueError):
+            continue
+        if value > 0 and value not in ids:
+            ids.append(value)
+    if not ids:
+        return {}
+    with get_db_connection() as conn:
+        rows = conn.execute(
+            f'SELECT id, COALESCE(rank_tier, 1) AS rank_tier FROM users WHERE id IN ({",".join(["?"] * len(ids))})',
+            ids,
+        ).fetchall()
+    return {int(row['id']): int(row['rank_tier'] or 1) for row in rows}
 
 
 def get_rank_global_special(conn=None) -> float:

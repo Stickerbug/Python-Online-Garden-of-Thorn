@@ -688,7 +688,51 @@ function draftStatsQuery() {
   if ($('draft-stats-merge')?.checked) params.set('merge_modes', '1');
   if (draftStatsWinnerOnly) params.set('winner_only', '1');
   if (draftStatsSelectedMods.size) params.set('mods', [...draftStatsSelectedMods].join(','));
+  const rankValue = String($('draft-stats-rank')?.value || '');
+  if (rankValue) {
+    const rank = Number(rankValue);
+    if (rank === 0) {
+      params.set('rank_min', '0');
+      params.set('rank_max', '0');
+    } else if (rank > 0) {
+      params.set('rank_min', String(rank));
+      params.set('rank_max', String(rank));
+    } else {
+      const bandStart = -rank;
+      params.set('rank_min', String(bandStart));
+      params.set('rank_max', String(bandStart + 3));
+    }
+  }
   return params;
+}
+
+function populateDraftStatsRankOptions(options) {
+  const select = $('draft-stats-rank');
+  if (!select || !Array.isArray(options) || !options.length) return;
+  const current = select.value;
+  select.replaceChildren();
+  const allOption = document.createElement('option');
+  allOption.value = '';
+  allOption.textContent = '全部段位';
+  select.append(allOption);
+  let currentGroup = null;
+  options.forEach((option) => {
+    let element = select;
+    if (option.band && Array.isArray(option.band)) {
+      const bandStart = option.band[0];
+      const major = Math.floor((bandStart - 1) / 4);
+      const groupLabel = String(option.label || '').replace(/（整段）$/, '');
+      currentGroup = document.createElement('optgroup');
+      currentGroup.label = groupLabel;
+      select.append(currentGroup);
+      element = currentGroup;
+    }
+    const opt = document.createElement('option');
+    opt.value = String(option.value);
+    opt.textContent = option.label;
+    element.append(opt);
+  });
+  if (current && [...select.options].some((o) => o.value === current)) select.value = current;
 }
 
 function openingEventStatsQuery() {
@@ -732,6 +776,7 @@ async function loadDraftStats() {
       draftStatsSelectedMods = new Set([...draftStatsSelectedMods].filter((k) => valid.has(k)));
       renderDraftStatsModChips();
     }
+    populateDraftStatsRankOptions(data.rank_options);
     renderDraftStats(draftStatsState);
     if (eventData) renderOpeningEventStats(eventData);
   } catch (error) {
@@ -2196,6 +2241,7 @@ function bindEvents() {
     loadDraftStats();
   });
   $('draft-stats-scope')?.addEventListener('change', loadDraftStats);
+  $('draft-stats-rank')?.addEventListener('change', loadDraftStats);
   $('draft-stats-mode')?.addEventListener('change', loadDraftStats);
   $('draft-stats-sort')?.addEventListener('change', loadDraftStats);
   $('draft-stats-order')?.addEventListener('change', loadDraftStats);
