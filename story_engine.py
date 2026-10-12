@@ -1565,7 +1565,6 @@ def _apply_status(state, target, status, amount, events, source='card'):
         return
     if (
         _has_relic(state, 'story_pill')
-        and status in _NEGATIVE_STATUSES
         and source in STORY_ENEMIES
     ):
         events.append({
