@@ -12027,8 +12027,9 @@
         document.body.appendChild(dlg);
         const msg = (t) => { $('coop-demo-lobby-msg').textContent = t || ''; };
         const enterRoom = (seat) => {
-            localStorage.setItem('gtv_coop_demo', '1');
-            sessionStorage.setItem('gtv_coop_demo_seat', String(seat));
+            // localStorage 可能配额超限（回放缓存等占满）——URL 参数已足够识别模式。
+            try { localStorage.setItem('gtv_coop_demo', '1'); } catch (quotaErr) { /* 忽略 */ }
+            try { sessionStorage.setItem('gtv_coop_demo_seat', String(seat)); } catch (quotaErr) { /* 忽略 */ }
             dlg.close();
             location.href = `/story?coopdemo=1&seat=${seat}`;
         };
