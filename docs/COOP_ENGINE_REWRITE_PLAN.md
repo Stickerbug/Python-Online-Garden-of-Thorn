@@ -65,5 +65,6 @@ story_coop_content.py 的白名单执行器）被判定不合格：
 
 ## 进度
 
-- fb2b0ec（2026-10-12）：第 1 步完成，单人 806 项零回归，轨道套件 91 项全绿。
-- 下一步：第 2 步（victim_seat）+ 第 3 步（ready 栅栏）。
+- eaaee12（2026-10-12，rebase 后）：第 1 步席位化基础，单人 809 项零回归（基线随 main 更新为 14 既有失败/809 通过）。
+- 第 2/3 步（2026-10-12）：victim_seat 伤害包装（物理/原始/完整三管线，挂载作用域递归）、ready 栅栏（ready_seats + combat_seat_ready 事件、cancel_ready 撤回、就绪席 SEAT_ALREADY_READY 封锁出牌）、敌方逐席受害席（每敌人每轮具名 RNG 锁定 coop_enemy_target:{combat}:{round}:{enemy}，效果结算后清理 _victim_seat）、单席倒地不判负（seat_downed 事件）、胜利复活 20%（seat_revived 事件）。双席测试 test_coop_engine_seats.py 7 项全过。
+- 下一步：第 4 步（pending per-seat + 投影 per-seat + 事件席位化）→ 双席回合结束逐席处理（当前全员就绪后只结算挂载席的回合结束，弃牌/重抽需逐席循环）→ 编排层。
