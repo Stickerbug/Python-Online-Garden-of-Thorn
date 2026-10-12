@@ -5,8 +5,20 @@
     const STORY_COOP_DEMO = new URLSearchParams(location.search).get('coopdemo') === '1'
         || localStorage.getItem('gtv_coop_demo') === '1';
     if (STORY_COOP_DEMO) localStorage.setItem('gtv_coop_demo', '1');
-    const storyRunApiUrl = () => (STORY_COOP_DEMO ? '/api/coop-demo/run' : '/api/story/run');
+    const storyRunApiUrl = () => {
+        if (!STORY_COOP_DEMO) return '/api/story/run';
+        const seat = storyCoopDemoSeat();
+        return seat ? `/api/coop-demo/run?seat=${seat}` : '/api/coop-demo/run';
+    };
     const storyActionApiUrl = () => (STORY_COOP_DEMO ? '/api/coop-demo/action' : '/api/story/run/action');
+    function storyCoopDemoSeat() {
+        if (!STORY_COOP_DEMO) return 0;
+        const fromUrl = new URLSearchParams(location.search).get('seat');
+        const seat = fromUrl != null ? Number(fromUrl) : Number(sessionStorage.getItem('gtv_coop_demo_seat') || 0);
+        const clamped = Number.isFinite(seat) ? Math.max(0, Math.min(3, seat)) : 0;
+        sessionStorage.setItem('gtv_coop_demo_seat', String(clamped));
+        return clamped;
+    }
 
     const $ = (id) => document.getElementById(id);
     const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -6841,6 +6853,7 @@
                     action_id: createActionId(),
                     action_type: actionType,
                     payload,
+                    ...(STORY_COOP_DEMO ? { demo_seat: storyCoopDemoSeat() } : {}),
                     client_id: STORY_PRESENCE_CLIENT_ID,
                 }),
             });
@@ -11969,12 +11982,28 @@
         storyCodexHistory = [];
     }
 
+    let coopDemoPollTimer = 0;
+    function ensureCoopDemoPolling() {
+        if (!STORY_COOP_DEMO || coopDemoPollTimer) return;
+        coopDemoPollTimer = window.setInterval(async () => {
+            try {
+                if (document.hidden || actionInFlight) return;
+                const data = await requestStoryLoadJson(storyRunApiUrl());
+                const run = data && data.run;
+                if (!run || !run.state) return;
+                if (activeRun && Number(run.state_version) <= Number(activeRun.state_version)) return;
+                activeRun = { ...run, state: run.state };
+                renderRun(activeRun);
+            } catch (err) { /* 轮询失败忽略，下次再试 */ }
+        }, 2500);
+    }
+
     function ensureCoopDemoControls() {
         if (!STORY_COOP_DEMO) return;
-        if ($('story-coop-demo-bar')) return;
+        if (!$('story-coop-demo-bar')) {
         const bar = document.createElement('div');
         bar.id = 'story-coop-demo-bar';
-        bar.style.cssText = 'position:fixed;top:10px;right:12px;z-index:9999;';
+        bar.style.cssText = 'position:fixed;top:10px;right:12px;z-index:9999;display:flex;gap:10px;align-items:center;font-size:13px;background:rgba(20,26,18,.9);padding:6px 10px;border-radius:8px;border:1px solid #6b7d4f;';
         const exitBtn = document.createElement('button');
         exitBtn.type = 'button';
         exitBtn.textContent = '退出合作演示';
@@ -11983,8 +12012,28 @@
             localStorage.removeItem('gtv_coop_demo');
             location.href = '/story';
         });
+        const seats = document.createElement('span');
+        seats.id = 'story-coop-demo-seats';
+        seats.style.color = '#e8e4d8';
+        bar.appendChild(seats);
         bar.appendChild(exitBtn);
         document.body.appendChild(bar);
+        }
+        const seatsEl = $('story-coop-demo-seats');
+    if (seatsEl && activeRun && activeRun.state) {
+        const state = activeRun.state;
+        const combat = state.combat || {};
+        const ready = new Set(combat.ready_seats || []);
+        const mySeat = storyCoopDemoSeat();
+        const parts = (state.players || []).map((p, seat) => {
+            const hp = `${Math.max(0, Number(p.health) || 0)}/${Number(p.max_health) || 0}`;
+            const mark = seat === mySeat ? '（你）' : '';
+            const readyMark = ready.has(seat) ? '✓就绪' : '行动中';
+            const down = Number(p.health) <= 0 ? '💀' : '';
+            return `席${seat}${mark}: ${down}${hp} ${readyMark}`;
+        });
+        seatsEl.textContent = parts.join(' | ') + `  ·  第${combat.round || 1}回合`;
+    }
     }
 
     function renderBlessing(state) {
@@ -14717,6 +14766,7 @@
         }
         const state = run.state || {};
         ensureCoopDemoControls();
+        ensureCoopDemoPolling();
         renderStoryPersistentHud(run);
         const hasFloorCheckpoint = Boolean(state.floor_entry_checkpoint?.state);
         updateStoryManualSaveControls(run);

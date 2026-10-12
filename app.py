@@ -38215,7 +38215,12 @@ def coop_demo_run_get():
     if not entry:
         return jsonify({'success': True, 'run': None,
                         'progress': {}, 'discoveries': [], 'new_discoveries': []})
-    _mount_seat(entry['state'], entry['active_seat'])
+    try:
+        seat = int(request.args.get('seat') or 0)
+    except (TypeError, ValueError):
+        seat = 0
+    seat = max(0, min(seat, len(entry['state'].get('players') or [{}]) - 1))
+    _mount_seat(entry['state'], seat)
     return jsonify({
         'success': True,
         'run': {
@@ -38242,30 +38247,25 @@ def coop_demo_story_action():
         entry = _COOP_DEMO_RUNS.get(int(user['id']))
         if not entry:
             return _json_error('尚未开始战斗，请先打开演示入口', 400)
-        from story_engine import StoryActionError, _living_seats, _mount_seat, apply_story_action
+        from story_engine import StoryActionError, _mount_seat, apply_story_action
         data = request.get_json(silent=True) or {}
         action_type = str(data.get('action_type') or '').strip().lower()
         state = entry['state']
-        active = entry['active_seat']
-        _mount_seat(state, active)
+        try:
+            seat = int(data.get('demo_seat') or 0)
+        except (TypeError, ValueError):
+            seat = 0
+        seat = max(0, min(seat, len(state.get('players') or [{}]) - 1))
+        entry['active_seat'] = seat
+        _mount_seat(state, seat)
         try:
             state, events = apply_story_action(state, action_type, data.get('payload') or {}, 'coop-demo')
-            # 演示：本席就绪后自动替其余存活席就绪（真实多人由各玩家自己点）。
-            if action_type == 'end_turn' and state.get('phase') == 'combat':
-                combat = state['combat']
-                for seat in _living_seats(state):
-                    if seat in (combat.get('ready_seats') or []):
-                        continue
-                    _mount_seat(state, seat)
-                    state, extra = apply_story_action(state, 'end_turn', {}, 'coop-demo')
-                    events.extend(extra)
-                _mount_seat(state, active)
         except StoryActionError as exc:
-            _mount_seat(state, active)
+            _mount_seat(state, seat)
             return _json_error(exc.message, 400, code=exc.code)
         entry['state'] = state
         entry['version'] = int(entry.get('version') or 0) + 1
-        _mount_seat(state, active)
+        _mount_seat(state, seat)
         return jsonify({
             'success': True,
             'duplicate': False,
