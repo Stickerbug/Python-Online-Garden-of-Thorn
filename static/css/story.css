@@ -8228,3 +8228,52 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
   gap: 8px;
 }
+
+/* 合作演示（coopdemo）：意图目标徽标 + 队友面板 */
+.story-intent-target-badge {
+  margin-left: 6px;
+  padding: 0 6px;
+  border: 1px solid #8a9a78;
+  border-radius: 8px;
+  font-size: 11px;
+  color: #b8c9a0;
+}
+
+.story-intent-target-badge.is-me {
+  border-color: #c0604f;
+  color: #e8a598;
+  font-weight: 700;
+}
+
+.coop-teammate-row {
+  padding: 6px 8px;
+  border: 1px solid #4a5a3e;
+  border-radius: 8px;
+  background: rgba(30, 38, 26, .85);
+  opacity: .92;
+}
+
+.coop-teammate-row.is-me { outline: 1.5px solid #d8b84a; opacity: 1; }
+.coop-teammate-row.is-ready { border-color: #d8b84a; }
+.coop-teammate-row.is-down { opacity: .55; }
+
+.coop-teammate-title { font-weight: 600; font-size: 12.5px; color: #e8e4d8; }
+
+.coop-teammate-hpbar {
+  height: 6px;
+  margin: 4px 0 3px;
+  border-radius: 3px;
+  background: #3a3f35;
+  overflow: hidden;
+}
+
+.coop-teammate-hpbar i { display: block; height: 100%; background: #7fae6a; }
+
+.coop-teammate-stats { font-size: 11.5px; color: #b8c4a8; }
+
+.coop-teammate-round {
+  text-align: center;
+  color: #d8b84a;
+  font-size: 12px;
+  padding-top: 2px;
+}

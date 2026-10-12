@@ -605,10 +605,10 @@ def test_story_presence_and_status_surfaces_are_wired():
 def test_story_initial_load_retries_transient_failures_without_retrying_actions():
     assert 'async function requestStoryLoadJson(url)' in STORY_JS
     assert "requestStoryLoadJson('/api/story/content')" in STORY_JS
-    assert "requestStoryLoadJson('/api/story/run')" in STORY_JS
+    assert "storyRunApiUrl()" in STORY_JS
     assert 'const retryDelays = [350, 1000];' in STORY_JS
     assert '[408, 429, 502, 503, 504].includes(Number(error.status))' in STORY_JS
-    assert "requestJson('/api/story/run/action'" in STORY_JS
+    assert "storyActionApiUrl()" in STORY_JS
 
 
 def test_story_exit_glyph_is_visually_centered_in_its_button():

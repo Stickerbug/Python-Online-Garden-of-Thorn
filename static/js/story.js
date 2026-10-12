@@ -12003,7 +12003,7 @@
         if (!$('story-coop-demo-bar')) {
         const bar = document.createElement('div');
         bar.id = 'story-coop-demo-bar';
-        bar.style.cssText = 'position:fixed;top:10px;right:12px;z-index:9999;display:flex;gap:10px;align-items:center;font-size:13px;background:rgba(20,26,18,.9);padding:6px 10px;border-radius:8px;border:1px solid #6b7d4f;';
+        bar.style.cssText = 'position:fixed;top:60px;right:12px;z-index:9999;display:flex;flex-direction:column;gap:6px;font-size:12.5px;background:rgba(20,26,18,.92);padding:8px 10px;border-radius:10px;border:1px solid #6b7d4f;max-width:190px;';
         const exitBtn = document.createElement('button');
         exitBtn.type = 'button';
         exitBtn.textContent = '退出合作演示';
@@ -12025,14 +12025,37 @@
         const combat = state.combat || {};
         const ready = new Set(combat.ready_seats || []);
         const mySeat = storyCoopDemoSeat();
-        const parts = (state.players || []).map((p, seat) => {
-            const hp = `${Math.max(0, Number(p.health) || 0)}/${Number(p.max_health) || 0}`;
-            const mark = seat === mySeat ? '（你）' : '';
-            const readyMark = ready.has(seat) ? '✓就绪' : '行动中';
-            const down = Number(p.health) <= 0 ? '💀' : '';
-            return `席${seat}${mark}: ${down}${hp} ${readyMark}`;
+        const seatStates = combat.seat_states || {};
+        seatsEl.replaceChildren();
+        (state.players || []).forEach((p, seat) => {
+            const row = document.createElement('div');
+            row.className = 'coop-teammate-row'
+                + (seat === mySeat ? ' is-me' : '')
+                + (Number(p.health) <= 0 ? ' is-down' : '')
+                + (ready.has(seat) ? ' is-ready' : '');
+            const health = Math.max(0, Number(p.health) || 0);
+            const maxHealth = Number(p.max_health) || 1;
+            const seatState = seatStates[seat] || {};
+            const title = document.createElement('div');
+            title.className = 'coop-teammate-title';
+            title.textContent = `席${seat}${seat === mySeat ? '（你）' : ''}`
+                + (Number(p.health) <= 0 ? ' 💀' : '')
+                + (ready.has(seat) ? ' ✓就绪' : '');
+            const hpBar = document.createElement('div');
+            hpBar.className = 'coop-teammate-hpbar';
+            const fill = document.createElement('i');
+            fill.style.width = `${Math.round(100 * health / maxHealth)}%`;
+            hpBar.append(fill);
+            const stats = document.createElement('div');
+            stats.className = 'coop-teammate-stats';
+            stats.textContent = `H${health}/${maxHealth} · E${Number(seatState.elixir) || 0} · 盾${Number(seatState.shield) || 0} · 手牌${(seatState.hand || []).length}`;
+            row.append(title, hpBar, stats);
+            seatsEl.append(row);
         });
-        seatsEl.textContent = parts.join(' | ') + `  ·  第${combat.round || 1}回合`;
+        const roundRow = document.createElement('div');
+        roundRow.className = 'coop-teammate-round';
+        roundRow.textContent = `第${combat.round || 1}回合`;
+        seatsEl.append(roundRow);
     }
     }
 
@@ -13569,6 +13592,18 @@
         const intentName = localize(enemy.intent?.name);
         intentLabel.className = 'story-intent-title';
         intentLabel.textContent = [t.intent, intentName].filter(Boolean).join(' · ');
+        if (STORY_COOP_DEMO && enemy.intent?.target_seat != null) {
+            const targetSeat = Number(enemy.intent.target_seat);
+            const badge = document.createElement('span');
+            badge.className = 'story-intent-target-badge';
+            if (targetSeat === storyCoopDemoSeat()) {
+                badge.textContent = '→你';
+                badge.classList.add('is-me');
+            } else {
+                badge.textContent = `→席${targetSeat}`;
+            }
+            intentLabel.append(badge);
+        }
         const intentEntries = document.createElement('div');
         intentEntries.className = 'story-intent-entries';
         const structuredEntries = Array.isArray(enemy.intent?.entries) ? enemy.intent.entries : [];
@@ -13777,10 +13812,22 @@
             if (labelNode) labelNode.textContent = title.trim();
         });
         const endTurn = $('story-end-turn');
+        let coopMyReady = false;
+        if (STORY_COOP_DEMO) {
+            coopMyReady = (combat.ready_seats || []).includes(storyCoopDemoSeat());
+            if (coopMyReady) {
+                const waitingLabel = (combat.ready_seats || []).length >= ((state.players || []).length)
+                    ? '' : '等待队友…';
+                setText('story-end-turn-label', waitingLabel || t.endTurn);
+            } else {
+                setText('story-end-turn-label', t.endTurn);
+            }
+        }
         if (endTurn) endTurn.disabled = (
             combat.turn !== 'player'
             || Boolean(combat.opening_redraw_pending)
             || Boolean(combat.pending_card_choice)
+            || coopMyReady
         );
         showView('story-combat');
         scheduleStoryAimUpdate(state);

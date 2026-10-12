@@ -6355,6 +6355,7 @@ def _enemy_intent(state, enemy):
             'entries': [],
             'summary': '',
         }
+    # 多席位：意图附带本轮受害席（与敌方结算同一把纯哈希锁）。
     if (
         definition.get('script') == 'brick_pile'
         and bool(enemy.get('cover_enemy'))
@@ -6716,6 +6717,8 @@ def _enemy_intent(state, enemy):
         'name': move['name'],
         'entries': entries,
         'summary': '；'.join(parts),
+        # 多席位：本轮受害席（纯哈希锁，与敌方结算一致；单人 None）。
+        'target_seat': _enemy_victim_seat(state, enemy) if _seat_count(state) > 1 else None,
     }
 
 
@@ -8354,7 +8357,7 @@ def _living_seats(state):
     ]
 
 
-def _enemy_victim_seat(state, enemy, seed):
+def _enemy_victim_seat(state, enemy, seed=None):
     """本轮该敌人攻击的受害席：具名 RNG 锁定一个存活席（倒地后顺位重指）。
     单人恒为 0。"""
     seats = _living_seats(state)
@@ -8364,7 +8367,11 @@ def _enemy_victim_seat(state, enemy, seed):
         return seats[0]
     combat = state.get('combat') or {}
     namespace = f"coop_enemy_target:{combat.get('id') or 'combat'}:{combat.get('round') or 1}:{enemy.get('id')}"
-    return _rng(state, seed, namespace).choice(seats)
+    # 纯确定性哈希（不消耗RNG流）：意图展示与敌方结算重复调用同一函数，结果一致。
+    digest = hashlib.sha256(
+        f"{state.get('journey_seed')}:story-rng-v2:{namespace}".encode('utf-8')
+    ).hexdigest()
+    return seats[int(digest[:8], 16) % len(seats)]
 
 
 def _enemy_turn(state, seed, events):
