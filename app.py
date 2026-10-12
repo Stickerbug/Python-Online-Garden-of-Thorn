@@ -38256,7 +38256,18 @@ def api_minigame_exit():
         return denied
     import leisure_sessions
     outcome = leisure_sessions.force_settle_now(identity[0])
-    return jsonify({'success': True, 'settled': bool(outcome.get('settled'))})
+    # 同时清零玩家的游玩计时（门票 10 分钟会话）：主动退出视为时间用尽，
+    # 防止暂停/恢复分支把剩余时间留着跨局白嫖。
+    ticket_session = None
+    try:
+        ticket_session = leisure_ticket.finish_play_session(identity[0])
+    except Exception as exc:
+        admin_event('error', f'leisure exit finish session failed: {exc}')
+    return jsonify({
+        'success': True,
+        'settled': bool(outcome.get('settled')),
+        'ticket_remaining': float(ticket_session['remaining']) if ticket_session else 0,
+    })
 
 
 @app.route('/api/minigame/suika/sync', methods=['POST'])
