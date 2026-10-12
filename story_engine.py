@@ -8023,13 +8023,16 @@ def _resolve_mechanical_track_card(state, enemy, card, seed, events):
             elif effect_type == 'power':
                 _mechanical_track_gain_power(enemy, amount, events, card['def_id'])
             elif effect_type == 'status':
+                # 机械轨道是敌方在执行这张牌：对玩家施加的负面状态来源记为
+                # 该敌人（否则「药丸」的 source in STORY_ENEMIES 免疫判定
+                # 会漏过——如机械花通过玩家的毒刺给玩家上毒）。
                 _apply_status(
                     state,
                     state['combat'],
                     str(effect.get('status') or ''),
                     amount,
                     events,
-                    source=card['def_id'],
+                    source=enemy['def_id'] if enemy.get('def_id') in STORY_ENEMIES else card['def_id'],
                 )
             elif effect_type == 'status_self':
                 _apply_status(
