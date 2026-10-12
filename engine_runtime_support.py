@@ -1927,3 +1927,36 @@ def forced_choice_target(engine, actor_id: int, card: Optional[CardInstance], ch
     if chosen in owner_targets:
         return int(chosen)
     return int(owner_targets[0])
+
+
+_OPPONENT_AFFECTING_SELECTORS = frozenset({
+    'opponent', 'enemy', 'opponents', 'enemies', 'both', 'all_players',
+    'all', 'random_enemy', 'random_opponent', 'other', 'others',
+})
+
+
+def card_declares_opponent_affect(card, player_id: int) -> bool:
+    """静态扫描：牌的声明效果是否含固定作用于对手的步骤（无需选择目标）。
+
+    用于 targeted 反制（氮气）开窗判定——GS-292 后无选择目标的出牌不再
+    默认视为以对手为目标，但"效果写死打对手/全体"的牌应当开窗。
+    只看 v2_events（含 request/target 的选择型步骤不算——那些由显式
+    选择路径处理）。
+    """
+    events = getattr(getattr(card, 'card_def', None), 'v2_events', None)
+    if not isinstance(events, dict):
+        return False
+
+    def walk(node):
+        if isinstance(node, dict):
+            target = str(node.get('target') or node.get('from') or '')
+            if target in _OPPONENT_AFFECTING_SELECTORS:
+                return True
+            if node.get('op') in ('damage', 'direct_damage') and str(node.get('target') or '') in _OPPONENT_AFFECTING_SELECTORS:
+                return True
+            return any(walk(value) for value in node.values())
+        if isinstance(node, list):
+            return any(walk(item) for item in node)
+        return False
+
+    return walk(events)

@@ -9691,6 +9691,12 @@ class GameEngine:
         response_target_id = self._choice_target_from_choice(choice, implicit_target)
         if not (0 <= response_target_id < len(self.players)):
             response_target_id = implicit_target
+        # 2026-10-12 氮气修复：无选择目标但效果写死作用于对手的牌，
+        # 反制窗口的目标记为对手（targeted 反制据此获得响应资格）。
+        if not (0 <= response_target_id < len(self.players)):
+            from engine_runtime_support import card_declares_opponent_affect
+            if card.card_type != 'thorn' and card_declares_opponent_affect(card, player_id):
+                response_target_id = 1 - player_id
         secondary_targets = self._secondary_attack_target_ids(card, choice)
         if response_target_id == player_id and 1 - player_id in secondary_targets:
             response_target_id = 1 - player_id
@@ -9915,6 +9921,9 @@ class GameEngine:
         target_id = self._choice_target_from_choice(getattr(self, '_active_choice', None), implicit_target)
         secondary_targets = self._secondary_attack_target_ids(card, getattr(self, '_active_choice', None))
         targets_opponent = target_id == 1 - player_id or 1 - player_id in secondary_targets
+        if not targets_opponent and card.card_type != 'thorn':
+            from engine_runtime_support import card_declares_opponent_affect
+            targets_opponent = card_declares_opponent_affect(card, player_id)
         from engine_runtime_support import card_applies_hand_charge
         if targets_opponent and card_applies_hand_charge(card):
             if any(
@@ -10245,6 +10254,7 @@ class GameEngine:
                             self, responder_id, counter_removed, card,
                             resolution.get('after_resolution'),
                         )
+                        self._counter_card_after_resolution(responder_id, counter_removed)
                         return self._after_response_result(player_id, result)
                     if is_precision:
                         self._execute_card_effect_half_damage(
@@ -10255,13 +10265,15 @@ class GameEngine:
                             self, responder_id, counter_removed, card,
                             resolution.get('after_resolution'),
                         )
-                        return self._after_response_result(player_id, {'success': True, 'countered': True, 'precision_halved': True, 'card': card.to_dict()})
+                        self._counter_card_after_resolution(responder_id, counter_removed)
+                    return self._after_response_result(player_id, {'success': True, 'countered': True, 'precision_halved': True, 'card': card.to_dict()})
                     self._execute_card_effect(player_id, card, choice)
                     self._clamp_response_props(responder_id, responder_prop_snapshot)
                     run_response_after_resolution(
                         self, responder_id, counter_removed, card,
                         resolution.get('after_resolution'),
                     )
+                    self._counter_card_after_resolution(responder_id, counter_removed)
                     return self._after_response_result(player_id, {'success': True, 'countered': True, 'card': card.to_dict()})
                 if resolution.get('negate_bloom'):
                     self.negated_card = True
@@ -10278,11 +10290,31 @@ class GameEngine:
                     self, responder_id, counter_removed, card,
                     resolution.get('after_resolution'),
                 )
+                self._counter_card_after_resolution(responder_id, counter_removed)
                 return self._after_response_result(player_id, result)
             finally:
                 self._game_over_defer_depth -= 1
                 self._check_game_over()
         return self._after_response_result(player_id, self._execute_card_effect(player_id, card, choice))
+
+    def _counter_card_after_resolution(self, responder_id: int, counter_removed) -> None:
+        """响应结算完成后的反制牌收尾（2026-10-12 氮气修复）：
+        标记 mark:ocean:nitro 的牌获得1层暂时沉重（本牌，非下一张牌；
+        下次打出费用+1，打出后清除——等效费用 4,5,5,5…）。
+        必须在响应结算/reset 之后执行，否则会被 reset_card_after_play 清掉。"""
+        try:
+            if 'mark:ocean:nitro' in (
+                getattr(counter_removed.card_def, 'flags', set()) or set()
+            ):
+                counter_removed.temp_heavy_value = (
+                    max(0, int(getattr(counter_removed, 'temp_heavy_value', 0) or 0)) + 1
+                )
+                counter_removed.instance_flags.add('temp_heavy')
+                self.log_msg(
+                    f"{counter_removed.name_cn}获得1层暂时沉重（下次打出费用+1）"
+                )
+        except Exception:
+            pass
 
     def _after_response_result(self, player_id: int, result: dict) -> dict:
         self._enforce_unique_cards_for_all()
