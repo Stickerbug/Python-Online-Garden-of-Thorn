@@ -214,6 +214,14 @@ class GameEngine2v2(GameEngine):
                     for_player,
                     teammate_id,
                 )
+            # 2026-10-12：队友抽牌堆只显示内容、不显示顺序（按 def_id 排序下发，
+            # 与本人"抽牌堆顺序常驻可见"区分）；标记供前端展示"乱序"提示。
+            if isinstance(teammate_data.get('deck'), list):
+                teammate_data['deck'] = sorted(
+                    teammate_data['deck'],
+                    key=lambda card: str((card or {}).get('def_id') or ''),
+                )
+                teammate_data['deck_order_hidden'] = True
             teammate_blind = 0
             if not self._is_status_immune(teammate_id):
                 teammate_blind = effective_blind(self, teammate_id)

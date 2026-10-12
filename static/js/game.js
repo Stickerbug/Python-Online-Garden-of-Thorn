@@ -961,7 +961,7 @@ const I18N = {
         gallery_title: 'Compendium', gallery_cards: 'Cards', gallery_tags: 'Tags', gallery_events: 'Opening Events', gallery_statuses: 'States', gallery_attrs: 'Attributes', gallery_search: 'Search', gallery_no_items: 'No entries.', gallery_cards_with_tag: 'Cards with this tag', gallery_card_count: '{0} cards',
         gallery_type: 'Type', gallery_cost: 'Cost', gallery_tags_label: 'Tags', gallery_description: 'Description', gallery_effect: 'Effect', gallery_trigger: 'Trigger',
         choose_convert_count: 'Choose convert count', choose_magic_card_n: 'Choose magic card #{0}', choose_source_card_n: 'Choose source card #{0}', choose_light_cards: 'Choose Attack cards to convert', choose_yggdrasil_card: 'Choose Yggdrasil card', opening_sequence_title: 'Floral Arrangement', opening_sequence_message: 'Drag cards to rearrange your draw pile. The top card is drawn first.',
-        convert_label: 'Convert', convert_per_type: 'Max {0} per type', selected_count: 'Selected {0}/{1}', max_selection_warning: 'Cannot exceed {0}', deck_total: 'Deck: {0} cards', view_deck_title: 'View Deck', teammate_picks_label: 'picked',
+        convert_label: 'Convert', convert_per_type: 'Max {0} per type', selected_count: 'Selected {0}/{1}', max_selection_warning: 'Cannot exceed {0}', deck_total: 'Deck: {0} cards', view_deck_title: 'View Deck', teammate_picks_label: 'picked', deck_order_hidden_note: 'unordered',
         foresight_replace_title: 'Foresight', foresight_replace_desc: 'Discard up to {0} cards from your hand, then draw that many cards', foresight_replace_confirm: 'Replace',
         hand_deck_info_opp: 'Hand: {0} Deck: {1}', hand_deck_discard_info: 'Hand: {0} Deck: {1} Discard: {2}', round_status: 'Round {0} - {1}', server_broadcast: 'Server: {0}', error_msg: 'Error: {0}',
         lobby_status: 'Lobby - {0}', no_counter_countdown: 'No Counter ({0})', select_event_desc: 'Select an opening event', start_draft: 'Start Draft', opponent_selected: 'Opponent selected', opponent_selecting: 'Opponent selecting...',
@@ -1099,7 +1099,7 @@ I18N.zh = { ...I18N.en,
     choose_convert_count: '选择转化数量', choose_magic_card_n: '选择第 {0} 张魔法牌', choose_source_card_n: '选择第 {0} 张源牌', choose_light_cards: '选择要转化的攻击牌', choose_yggdrasil_card: '选择世界树之叶牌', opening_sequence_title: '花序编排', opening_sequence_message: '拖动卡牌调整抽牌堆顺序，最上方的牌最先抽取。',
     convert_label: '转化', convert_per_type: '每种最多 {0} 张', selected_count: '已选择 {0}/{1}', max_selection_warning: '不能超过 {0}',
     foresight_replace_title: '预知', foresight_replace_desc: '选择最多{0}张手牌丢弃，然后抽对应张牌', foresight_replace_confirm: '替换',
-    deck_total: '牌堆：{0} 张', view_deck_title: '查看牌堆', teammate_picks_label: '已选', hand_deck_info_opp: '手牌：{0} 牌堆：{1}', hand_deck_discard_info: '手牌：{0} 牌堆：{1} 弃牌：{2}',
+    deck_total: '牌堆：{0} 张', view_deck_title: '查看牌堆', teammate_picks_label: '已选', deck_order_hidden_note: '乱序', hand_deck_info_opp: '手牌：{0} 牌堆：{1}', hand_deck_discard_info: '手牌：{0} 牌堆：{1} 弃牌：{2}',
     round_status: '第 {0} 回合 - {1}', server_broadcast: '系统：{0}', error_msg: '错误：{0}', lobby_status: '大厅 - {0}', no_counter_countdown: '不反制（{0}）',
     select_event_desc: '选择一个配装倾向', start_draft: '开始选牌', opponent_selected: '对方已选择', opponent_selecting: '对方选择中...',
     settings_title: '设置', settings_appearance: '外观', settings_theme: '主题', settings_lang: '语言', settings_mods: '模组', settings_audio: '音频', settings_theme_light: '明亮', settings_theme_dark: '黑暗',
@@ -1229,7 +1229,7 @@ I18N.fr = { ...I18N.en,
     flag_precision: 'Précision', flag_exile: 'Exil', flag_non_stackable: 'Non-cumul', flag_indestructible: 'Indestructible', flag_sprout: 'Pousse', flag_symbiosis: 'Symbiose', flag_copy: 'Copie', flag_unique: 'Unique', flag_swift: 'Rapidité', flag_stealth: 'Furtif', flag_revealed: 'Révélé',
     choose_convert_count: 'Nombre de conversions', choose_magic_card_n: 'Carte magie n°{0}', choose_source_card_n: 'Carte source n°{0}',
     choose_light_cards: 'Choisissez les cartes Attaque à convertir', choose_yggdrasil_card: 'Carte Arbre-Monde', opening_sequence_title: 'Arrangement floral', opening_sequence_message: 'Faites glisser les cartes pour réorganiser votre pioche. La carte du haut sera piochée en premier.', convert_label: 'Convertir', convert_per_type: 'Max {0} par type',
-    selected_count: 'Sélectionné {0}/{1}', max_selection_warning: 'Ne peut pas dépasser {0}', deck_total: 'Deck : {0} cartes', view_deck_title: 'Voir le deck', teammate_picks_label: 'choisies',
+    selected_count: 'Sélectionné {0}/{1}', max_selection_warning: 'Ne peut pas dépasser {0}', deck_total: 'Deck : {0} cartes', view_deck_title: 'Voir le deck', teammate_picks_label: 'choisies', deck_order_hidden_note: 'ordre masqué',
     mode_select: 'Mode', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: 'Feu infini', mode_random_deck: 'Deck aléatoire',
     ai_1v1_test: 'Affronter Phelren V2.2', ai_1v1_test_title: 'Affronter Phelren V2.2', ai_1v1_test_pending: 'Confirmer un duel 1v1 contre Phelren ? Cette partie ne modifie pas le Garden Rating et utilise uniquement le jeu de base Vanilla.', ai_1v1_test_loading: 'Chargement de Phelren V2.2…',
     ai_1v1_test_health_label: 'PV de l’IA', ai_1v1_test_health_note: 'PV de l’IA',
@@ -1318,7 +1318,7 @@ I18N.ja = { ...I18N.en,
     flag_precision: '精密', flag_exile: '追放', flag_non_stackable: '非スタック', flag_indestructible: '破壊不可', flag_sprout: '発芽', flag_symbiosis: '共生', flag_copy: '複製', flag_unique: '唯一', flag_swift: '迅捷', flag_stealth: '隠密', flag_revealed: '公開',
     choose_convert_count: '変換回数を選択', choose_magic_card_n: 'マジックカード第{0}枚', choose_source_card_n: 'ソースカード第{0}枚',
     choose_light_cards: '変化させる攻撃カードを選択', choose_yggdrasil_card: '世界樹変換カードを選択', opening_sequence_title: '花序編成', opening_sequence_message: 'カードをドラッグして山札の順序を変更します。一番上のカードから引きます。', convert_label: '変換', convert_per_type: 'タイプごとに最大{0}枚',
-    selected_count: '選択済み {0}/{1}', max_selection_warning: '{0}を超えることはできません', deck_total: 'デッキ: {0}枚', view_deck_title: 'デッキ確認', teammate_picks_label: '選択済み',
+    selected_count: '選択済み {0}/{1}', max_selection_warning: '{0}を超えることはできません', deck_total: 'デッキ: {0}枚', view_deck_title: 'デッキ確認', teammate_picks_label: '選択済み', deck_order_hidden_note: '順不同',
     mode_select: 'モード', mode_1v1: '1v1', mode_2v2: '2v2', mode_urf: '無限火力', mode_random_deck: 'ランダムデッキ',
         ai_1v1_test: 'Phelren V2.2 と対戦', ai_1v1_test_title: 'Phelren V2.2 と対戦', ai_1v1_test_pending: 'Phelren との1v1対戦を開始しますか？この対戦では Garden Rating は変動せず、Vanilla カードのみを使用します。', ai_1v1_test_loading: 'Phelren V2.2 を読み込んでいます…',
         ai_1v1_test_health_label: 'AI HP', ai_1v1_test_health_note: 'AI HP',
@@ -39131,7 +39131,11 @@ function onViewPile(pileType = 'deck') {
         if (showOwner) {
             const owner = document.createElement('h4');
             owner.className = 'deck-owner-title';
-            owner.textContent = getPileViewerName(pilePlayer) || '?';
+            let ownerText = getPileViewerName(pilePlayer) || '?';
+            if (isDeckPile && pilePlayer && pilePlayer.deck_order_hidden) {
+                ownerText += ` (${UI.deck_order_hidden_note || '乱序'})`;
+            }
+            owner.textContent = ownerText;
             content.appendChild(owner);
         }
         const total = document.createElement('p');
