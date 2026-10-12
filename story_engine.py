@@ -2235,7 +2235,14 @@ def _enchantment_prevent_player_damage(state, dealt, blocked, events, source):
     return 0, blocked + dealt
 
 
-def _player_physical_hit(state, base_amount, attacker, events, source):
+def _player_physical_hit(state, base_amount, attacker, events, source, victim_seat=None):
+    # 多席位（合作）：指定 victim_seat 时临时挂载该席结算，单人零影响。
+    if victim_seat is not None and _seat_count(state) > 1:
+        _combat_ref = state.get('combat') or {}
+        if int(victim_seat) != int(_combat_ref.get('mounted_seat') or 0):
+            with _seat_scope(state, int(victim_seat)):
+                return _player_physical_hit(state, base_amount, attacker, events, source)
+
     combat = state['combat']
     amount = _enemy_physical_hit_amount(state, attacker, base_amount)
     health_before = int(state['player'].get('health') or 0)
@@ -2287,7 +2294,14 @@ def _player_physical_hit(state, base_amount, attacker, events, source):
     return dealt, blocked + magic_blocked + beeswax_blocked, before
 
 
-def _player_raw_damage(state, amount, events, source):
+def _player_raw_damage(state, amount, events, source, victim_seat=None):
+    # 多席位（合作）：指定 victim_seat 时临时挂载该席结算，单人零影响。
+    if victim_seat is not None and _seat_count(state) > 1:
+        _combat_ref = state.get('combat') or {}
+        if int(victim_seat) != int(_combat_ref.get('mounted_seat') or 0):
+            with _seat_scope(state, int(victim_seat)):
+                return _player_raw_damage(state, amount, events, source)
+
     amount = max(0, int(amount))
     combat = state['combat']
     amount, beeswax_blocked = _halve_damage_to_player_shield(combat, amount, events, source)
@@ -2338,7 +2352,14 @@ def _player_raw_damage(state, amount, events, source):
     return dealt
 
 
-def _player_damage(state, amount, hits, events, source, attacker=None):
+def _player_damage(state, amount, hits, events, source, attacker=None, victim_seat=None):
+    # 多席位（合作）：指定 victim_seat 时临时挂载该席结算，单人零影响。
+    if victim_seat is not None and _seat_count(state) > 1:
+        _combat_ref = state.get('combat') or {}
+        if int(victim_seat) != int(_combat_ref.get('mounted_seat') or 0):
+            with _seat_scope(state, int(victim_seat)):
+                return _player_damage(state, amount, hits, events, source, attacker=attacker)
+
     attacker = attacker or {}
     total = 0
     hit_count = max(1, int(hits))
@@ -3234,6 +3255,18 @@ def _enemy_physical_damage(
 def _resolve_player_death(state, events):
     if int(state['player'].get('health') or 0) > 0:
         return False
+    # 多席位（合作）：单席倒地不判负——倒地席退出行动，其余席位继续。
+    if _seat_count(state) > 1:
+        downed_seat = int((state.get('combat') or {}).get('mounted_seat') or 0)
+        if any(
+            seat != downed_seat
+            and int(state['players'][seat].get('health') or 0) > 0
+            for seat in range(_seat_count(state))
+        ):
+            if not state.get('flags', {}).get(f'coop_seat_downed_{downed_seat}'):
+                state.setdefault('flags', {})[f'coop_seat_downed_{downed_seat}'] = True
+                events.append({'type': 'seat_downed', 'seat': downed_seat})
+            return False
     flags = state.setdefault('flags', {})
     used_leaves = max(0, int(flags.get('world_tree_leaf_used') or 0))
     if used_leaves < _relic_count(state, 'world_tree_leaf'):
@@ -6065,6 +6098,13 @@ def _card_has_favorite(card) -> bool:
 
 
 def _play_card(state, payload, seed, events, autoplay_depth=0):
+    combat_gate = state.get('combat') or {}
+    if (
+        _seat_count(state) > 1
+        and combat_gate.get('turn') == 'player'
+        and int(combat_gate.get('mounted_seat') or 0) in (combat_gate.get('ready_seats') or [])
+    ):
+        _fail('SEAT_ALREADY_READY', '本回合已就绪，等待其他玩家')
     if state.get('phase') != 'combat':
         _fail('NOT_IN_COMBAT', '当前不在战斗中')
     combat = state['combat']
@@ -7515,6 +7555,7 @@ def _resolve_enemy_effect(state, enemy, effect, move, seed, events):
             events,
             _localized(move['name']),
             enemy,
+            victim_seat=enemy.get('_victim_seat'),
         )
         if int(enemy.get('charging') or 0) > 0:
             before = int(enemy['charging'])
@@ -8305,6 +8346,26 @@ def _finish_enemy_turn_effects(state, enemy, seed, events):
             })
 
 
+def _living_seats(state):
+    return [
+        seat for seat in range(_seat_count(state))
+        if int(state['players'][seat].get('health') or 0) > 0
+    ]
+
+
+def _enemy_victim_seat(state, enemy, seed):
+    """本轮该敌人攻击的受害席：具名 RNG 锁定一个存活席（倒地后顺位重指）。
+    单人恒为 0。"""
+    seats = _living_seats(state)
+    if not seats:
+        return None
+    if len(seats) == 1:
+        return seats[0]
+    combat = state.get('combat') or {}
+    namespace = f"coop_enemy_target:{combat.get('id') or 'combat'}:{combat.get('round') or 1}:{enemy.get('id')}"
+    return _rng(state, seed, namespace).choice(seats)
+
+
 def _enemy_turn(state, seed, events):
     combat = state['combat']
     combat['turn'] = 'enemy'
@@ -8448,6 +8509,8 @@ def _enemy_turn(state, seed, events):
             continue
         move = _next_enemy_move(state, enemy)
         move_index = definition['moves'].index(move)
+        # 多席位：锁定本敌人本轮的受害席（效果结算内读取；单人 None=挂载席）。
+        enemy['_victim_seat'] = _enemy_victim_seat(state, enemy, seed) if _seat_count(state) > 1 else None
         has_attack = any(
             effect.get('type') in {
                 'damage', 'damage_from_shield', 'damage_from_player_status',
@@ -8488,6 +8551,7 @@ def _enemy_turn(state, seed, events):
                         'parallel_group',
                         f'{group_prefix}:hit:{hit_index}' if hit_index else group_prefix,
                     )
+        enemy.pop('_victim_seat', None)
         _advance_enemy_move(state, enemy, move_index, seed)
         _finish_enemy_turn_effects(state, enemy, seed, events)
         if (
@@ -9062,7 +9126,8 @@ def _prepare_player_turn_end(state, seed, events, reason=None):
     events.append(event)
 
 
-def _end_turn(state, seed, events):
+def _end_turn(state, seed, events, payload=None):
+    payload = payload if isinstance(payload, dict) else {}
     if state.get('phase') != 'combat' or state.get('combat', {}).get('turn') != 'player':
         _fail('END_TURN_NOT_ALLOWED', '当前不能结束回合')
     combat = state['combat']
@@ -9070,6 +9135,23 @@ def _end_turn(state, seed, events):
         _fail('OPENING_REDRAW_PENDING', '请先处理冷却效果')
     if combat.get('pending_card_choice'):
         _fail('CARD_CHOICE_PENDING', '请先处理待选择的卡牌')
+    if _seat_count(state) > 1:
+        seat = int(combat.get('mounted_seat') or 0)
+        ready = set(combat.get('ready_seats') or [])
+        if payload.get('cancel_ready'):
+            ready.discard(seat)
+            combat['ready_seats'] = sorted(ready)
+            events.append({'type': 'combat_seat_ready', 'seat': seat, 'ready': False})
+            return
+        ready.add(seat)
+        combat['ready_seats'] = sorted(ready)
+        living = _living_seats(state)
+        if not living or not set(living) <= ready:
+            # 还有存活席位未就绪：等待（不结算回合结束）。
+            events.append({'type': 'combat_seat_ready', 'seat': seat, 'ready': True})
+            return
+        combat['ready_seats'] = []
+        events.append({'type': 'combat_seat_ready', 'seat': seat, 'ready': True, 'all_ready': True})
     _prepare_player_turn_end(state, seed, events)
     if combat.get('turn_kind') == 'normal':
         extra_limits = [
@@ -9405,6 +9487,21 @@ def _chest_claims(room):
 
 
 def _finish_combat(state, seed, events):
+    # 多席位（合作）：胜利时倒地席复活到 ceil(20% 最大生命)。
+    if _seat_count(state) > 1:
+        for seat in range(_seat_count(state)):
+            player = state['players'][seat]
+            if int(player.get('health') or 0) > 0:
+                continue
+            revived = max(1, math.ceil(int(player.get('max_health') or 1) * 0.2))
+            player['health'] = revived
+            state.get('flags', {}).pop(f'coop_seat_downed_{seat}', None)
+            events.append({
+                'type': 'seat_revived',
+                'seat': seat,
+                'amount': revived,
+                'after': revived,
+            })
     from story_mode import STORY_STAGES
 
     # 反馈 #173：战斗结束后已经进入奖励/结算，失明不该继续遮住牌库查看。
@@ -13161,7 +13258,7 @@ def apply_story_action(source_state, action_type, payload, seed):
         'opening_redraw': lambda: _resolve_opening_redraw(state, payload, seed, events),
         'resolve_card_choice': lambda: _resolve_pending_card_choice(state, payload, seed, events),
         'play_card': lambda: _play_card(state, payload, seed, events),
-        'end_turn': lambda: _end_turn(state, seed, events),
+        'end_turn': lambda: _end_turn(state, seed, events, payload),
         'choose_reward': lambda: _choose_reward(state, payload, seed, events),
         'resolve_room': lambda: _resolve_room(state, payload, seed, events),
         'choose_stage': lambda: _resolve_stage_choice(state, payload, seed, events),
