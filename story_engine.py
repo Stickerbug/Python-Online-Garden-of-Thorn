@@ -1563,13 +1563,12 @@ def _apply_status(state, target, status, amount, events, source='card'):
     amount = int(amount)
     if not status or not amount:
         return
-    if (
-        _has_relic(state, 'story_pill')
-        and source in STORY_ENEMIES
-    ):
+    if _has_relic(state, 'story_pill') and not target.get('id'):
+        # 药丸（2026-10-12 终版）：玩家免疫任何来源的状态；
+        # 对敌方目标施加状态（如玩家上毒）不受影响。
         events.append({
             'type': 'status_blocked',
-            'target_id': target.get('id') or 'player',
+            'target_id': 'player',
             'status': status,
             'amount': amount,
             'immunity_before': None,
