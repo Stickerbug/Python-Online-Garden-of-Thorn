@@ -399,8 +399,8 @@ class PlayerState:
         # 无敌是否在 until_player 的下个回合开始时到期（世界树型专用；
         # R-29467：随授予/清除一起维护，防止残留污染后续"到回合结束"型无敌）
         self.invincible_expire_on_turn_start: bool = False
-        # 2v2 血盾（设计 9.29 改为按玩家各自持有/衰减）：floor(2/3×最大生命)
-        # → 自己回合开始 → floor(1/3×最大生命) → 再下个自己回合 → 0。
+        # 2v2 血盾（设计 9.29 / 调整 2026-10-12）：开局 3/4×最大生命，
+        # 每个自己回合开始统一减一档：3/4 → 2/4 → 1/4 → 0。
         self.blood_shield: int = 0
         self.skip_turn: int = 0
         self.forced_skip_turn: int = 0

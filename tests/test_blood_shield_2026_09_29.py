@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
-"""2v2 血盾（设计 2026-09-29，平衡 2026-10-07 修订）：按玩家各自持有、
-各自回合开始衰减，且首个自己回合不衰减。
-
-开局 floor(2/3×最大生命) → 第2个自己回合开始 floor(1/3×最大生命) →
-第3个自己回合开始 0；血量不会被伤害打到自己的护盾值以下。
+"""2v2 血盾（设计 2026-09-29；调整 2026-10-12 统一减少）：按玩家各自持有，
+每个自己回合开始统一减一档——3/4 → 2/4 → 1/4 → 0（档值动态取当前最大生命）。
+血量不会被伤害打到自己的护盾值以下。
 """
 
 import unittest
@@ -34,14 +32,16 @@ class BloodShieldTests(unittest.TestCase):
         return engine
 
     def test_decay_schedule_per_own_turn(self):
-        """100 最大生命：首个自己回合不衰减 66 → 第2回合 33 → 第3回合 0 → 不再变动。"""
+        """100 最大生命：第1回合 75 → 第2回合 50 → 第3回合 25 → 第4回合 0。"""
         engine = self.build_engine()
         ps = engine.players[1]
-        ps.blood_shield = 100 * 2 // 3
+        ps.blood_shield = 100 * 3 // 4
         engine._apply_turn_start_effects_2v2(1)
-        self.assertEqual(100 * 2 // 3, ps.blood_shield)  # 首回合不衰减
+        self.assertEqual(75, ps.blood_shield)
         engine._apply_turn_start_effects_2v2(1)
-        self.assertEqual(100 // 3, ps.blood_shield)
+        self.assertEqual(50, ps.blood_shield)
+        engine._apply_turn_start_effects_2v2(1)
+        self.assertEqual(25, ps.blood_shield)
         engine._apply_turn_start_effects_2v2(1)
         self.assertEqual(0, ps.blood_shield)
         engine._apply_turn_start_effects_2v2(1)
@@ -51,13 +51,14 @@ class BloodShieldTests(unittest.TestCase):
         """玩家2衰减不影响玩家3的护盾。"""
         engine = self.build_engine()
         p2, p3 = engine.players[2], engine.players[3]
-        p2.blood_shield = 66
-        p3.blood_shield = 66
+        p2.blood_shield = 75
+        p3.blood_shield = 75
         engine._apply_turn_start_effects_2v2(2)
-        self.assertEqual(66, p2.blood_shield)  # 首回合不衰减
+        self.assertEqual(75, p2.blood_shield)  # 第1个自己回合仍是 3/4
+        self.assertEqual(75, p3.blood_shield)
         engine._apply_turn_start_effects_2v2(2)
-        self.assertEqual(100 // 3, p2.blood_shield)
-        self.assertEqual(66, p3.blood_shield)
+        self.assertEqual(50, p2.blood_shield)
+        self.assertEqual(75, p3.blood_shield)
 
     def test_health_floor_uses_own_shield(self):
         """伤害结算：血量不会低于自己的护盾值。"""
@@ -74,18 +75,20 @@ class BloodShieldTests(unittest.TestCase):
         self.assertEqual(33, ps.health)
 
     def test_fractional_max_health_floors(self):
-        """最大生命 95：floor(2/3)=63 首回合不变 → 第2回合 floor(1/3)=31。"""
+        """最大生命 95：3/4=71 → 2/4=47 → 1/4=23（向下取整）。"""
         engine = self.build_engine()
         ps = engine.players[0]
         ps.max_health = 95
         ps.health = 95
-        ps.blood_shield = 95 * 2 // 3
-        self.assertEqual(63, ps.blood_shield)
+        ps.blood_shield = 95 * 3 // 4
+        self.assertEqual(71, ps.blood_shield)
         engine._apply_turn_start_effects_2v2(0)
-        self.assertEqual(63, ps.blood_shield)  # 首回合不衰减
+        self.assertEqual(71, ps.blood_shield)  # 第1个自己回合仍是 3/4
         engine._apply_turn_start_effects_2v2(0)
-        self.assertEqual(95 // 3, ps.blood_shield)
-        self.assertEqual(31, ps.blood_shield)
+        self.assertEqual(95 * 2 // 4, ps.blood_shield)
+        self.assertEqual(47, ps.blood_shield)
+        engine._apply_turn_start_effects_2v2(0)
+        self.assertEqual(23, ps.blood_shield)
 
 
 if __name__ == '__main__':
