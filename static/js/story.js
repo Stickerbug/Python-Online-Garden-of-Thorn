@@ -9469,6 +9469,8 @@
             note.className = 'story-card-note';
             note.textContent = options.note;
             element.append(note);
+            // 价格条绝对定位在卡底，会盖住底部的标签行——加类让标签让位。
+            element.classList.add('has-note');
         }
         if (options.disabled) element.disabled = true;
         if (typeof options.onClick === 'function') element.addEventListener('click', options.onClick);

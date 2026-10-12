@@ -3732,6 +3732,11 @@ button.story-settings-row:hover:not(:disabled) { border-color: var(--story-green
   font-size: 8.6cqi;
   font-weight: 700;
 }
+/* 有价格条（note）时标签行让位，避免被绝对定位的价格条盖住（2026-10-12） */
+.story-card.has-note .story-card-tags {
+  margin-bottom: 22px;
+}
+
 .story-card-note {
   position: absolute;
   right: 5px;
