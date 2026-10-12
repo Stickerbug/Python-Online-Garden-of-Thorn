@@ -1,0 +1,25 @@
+
+/* 2v2 选牌界面：队友已选卡牌 chips（2026-10-12） */
+.draft-teammate-picks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  max-width: min(920px, 92vw);
+}
+
+.draft-teammate-picks-label {
+  font-size: 13px;
+  opacity: .85;
+}
+
+.draft-teammate-pick-chip {
+  display: inline-block;
+  padding: 2px 9px;
+  border: 1px solid var(--panel-border, #b8c4cc);
+  border-radius: 999px;
+  font-size: 12.5px;
+  background: var(--panel, #f4f7f9);
+  white-space: nowrap;
+}

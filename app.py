@@ -17923,11 +17923,25 @@ def send_draft_state(room, pidx):
         others_picks_count[opp_pidx] = len(engine.draft_picks[opp_pidx])
         others_status[opp_pidx] = engine.get_player_status(opp_pidx)
         others_total_rounds[opp_pidx] = engine.draft_target_count(opp_pidx) if hasattr(engine, 'draft_target_count') else DECK_SIZE
+    # 2v2：给队友看彼此已选的牌（不含对手），方便协同构筑。
+    teammate_pidx = None
+    if room.mode == '2v2' and hasattr(engine, 'teams'):
+        for pair in (engine.teams or []):
+            if pidx in pair:
+                teammate_pidx = next((i for i in pair if i != pidx), None)
+                break
+    teammate_picks = (
+        list(engine.draft_picks[teammate_pidx] or [])
+        if teammate_pidx is not None and teammate_pidx < len(engine.draft_picks)
+        else []
+    )
     payload = {
         'options': [c.to_dict() for c in options],
         'picks': picks,
         'setup_preview_cards': engine.preview_setup_cards(pidx) if hasattr(engine, 'preview_setup_cards') else [],
         'rerolls': rerolls,
+        'teammate_pidx': teammate_pidx,
+        'teammate_picks': teammate_picks,
         'round': len(picks) + 1,
         'total_rounds': total_rounds,
         'others_picks_count': others_picks_count,
