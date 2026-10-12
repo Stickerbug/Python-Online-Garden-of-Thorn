@@ -38105,6 +38105,8 @@ def ensure_rank_monthly_settlement_worker():
 # 合作重写第2-4步的可玩切片：真实主引擎（席位化）驱动，单账号操控双席。
 # 仅 staff/admin 可见（演示用途，正式入口走后续的编排层）。
 _COOP_DEMO_RUNS = {}
+_COOP_DEMO_ROOMS = {}      # 邀请码 -> {'state','version','members':{user_id:seat}}
+_COOP_DEMO_USER_ROOM = {}  # user_id -> 邀请码
 _COOP_DEMO_LOCK = threading.Lock()
 
 
@@ -38222,6 +38224,14 @@ def coop_demo_run_get():
         seat = 0
     seat = max(0, min(seat, len(entry['state'].get('players') or [{}]) - 1))
     from story_coop_engine import coop_coord_summary
+    # 联机房间成员：读写共享对局，席位以房间分配为准。
+    room_code = _COOP_DEMO_USER_ROOM.get(int(user['id']))
+    if room_code and room_code in _COOP_DEMO_ROOMS:
+        room = _COOP_DEMO_ROOMS[room_code]
+        member_seat = room['members'].get(int(user['id']))
+        if member_seat is not None:
+            entry = room
+            seat = member_seat
     _mount_seat(entry['state'], seat)
     return jsonify({
         'success': True,
@@ -38248,6 +38258,12 @@ def coop_demo_story_action():
         return _json_error('仅工作人员可见的引擎演示', 403)
     with _COOP_DEMO_LOCK:
         entry = _COOP_DEMO_RUNS.get(int(user['id']))
+        room_code = _COOP_DEMO_USER_ROOM.get(int(user['id']))
+        if room_code and room_code in _COOP_DEMO_ROOMS:
+            room = _COOP_DEMO_ROOMS[room_code]
+            member_seat = room['members'].get(int(user['id']))
+            if member_seat is not None:
+                entry = room
         if not entry:
             return _json_error('尚未开始战斗，请先打开演示入口', 400)
         from story_engine import StoryActionError, _mount_seat
@@ -38255,11 +38271,15 @@ def coop_demo_story_action():
         data = request.get_json(silent=True) or {}
         action_type = str(data.get('action_type') or '').strip().lower()
         state = entry['state']
-        try:
-            seat = int(data.get('demo_seat') or 0)
-        except (TypeError, ValueError):
-            seat = 0
-        seat = max(0, min(seat, len(state.get('players') or [{}]) - 1))
+        if room_code and room_code in _COOP_DEMO_ROOMS:
+            member_seat = _COOP_DEMO_ROOMS[room_code]['members'].get(int(user['id']))
+            seat = member_seat if member_seat is not None else 0
+        else:
+            try:
+                seat = int(data.get('demo_seat') or 0)
+            except (TypeError, ValueError):
+                seat = 0
+            seat = max(0, min(seat, len(state.get('players') or [{}]) - 1))
         entry['active_seat'] = seat
         _mount_seat(state, seat)
         try:
@@ -38294,6 +38314,78 @@ def coop_demo_page():
     if not user or not _coop_demo_allowed(user.get('id')):
         return _json_error('仅工作人员可见的引擎演示', 403)
     return render_template('coop_demo.html')
+
+
+@app.route('/api/coop-demo/host', methods=['POST'])
+def coop_demo_host():
+    """创建联机对局：房主=席0，返回邀请码。"""
+    user = _coop_demo_session_user()
+    if not user or not _coop_demo_allowed(user.get('id')):
+        return _json_error('仅工作人员可见的引擎演示', 403)
+    import copy as _copy
+    import secrets as _secrets
+    import story_mode as _sm
+    from story_engine import _prepare_blessing as _pb
+    state = _sm.build_initial_story_state('coop-demo', 'common_flower')
+    state['players'] = [_copy.deepcopy(state['player']), _copy.deepcopy(state['player'])]
+    state['coord'] = {}
+    state['room'] = None
+    state['phase'] = 'map'
+    state['current_floor'] = 1
+    first = state['map']['floors'][0]['nodes'][0]
+    state['current_node_id'] = first['id']
+    _pb(state, 'coop-demo', 'stage:1')
+    code = ''.join(_secrets.choice('ABCDEFGHJKMNPQRSTUVWXYZ23456789') for _ in range(6))
+    with _COOP_DEMO_LOCK:
+        _COOP_DEMO_ROOMS[code] = {
+            'state': state, 'version': 1, 'members': {int(user['id']): 0},
+        }
+        _COOP_DEMO_USER_ROOM[int(user['id'])] = code
+        # 房主同时拥有单人演示入口（兼容原 ?coopdemo 通道）。
+        _COOP_DEMO_RUNS[int(user['id'])] = {'state': state, 'active_seat': 0, 'version': 1}
+    return jsonify({'success': True, 'invite_code': code, 'seat': 0})
+
+
+@app.route('/api/coop-demo/join', methods=['POST'])
+def coop_demo_join():
+    """凭邀请码加入：加入者=席1（席位已满则拒绝）。"""
+    user = _coop_demo_session_user()
+    if not user or not _coop_demo_allowed(user.get('id')):
+        return _json_error('仅工作人员可见的引擎演示', 403)
+    payload = request.get_json(silent=True) or {}
+    code = str(payload.get('invite_code') or '').strip().upper()
+    with _COOP_DEMO_LOCK:
+        room = _COOP_DEMO_ROOMS.get(code)
+        if not room:
+            return _json_error('邀请码无效或对局已结束', 404)
+        if int(user['id']) in room['members']:
+            seat = room['members'][int(user['id'])]
+        else:
+            taken = set(room['members'].values())
+            free = [seat for seat in (0, 1) if seat not in taken]
+            if not free:
+                return _json_error('该对局已满员（2席）', 409)
+            seat = free[0]
+            room['members'][int(user['id'])] = seat
+        _COOP_DEMO_USER_ROOM[int(user['id'])] = code
+        _COOP_DEMO_RUNS[int(user['id'])] = {
+            'state': room['state'], 'active_seat': seat, 'version': room['version'],
+        }
+    return jsonify({'success': True, 'invite_code': code, 'seat': seat})
+
+
+@app.route('/api/coop-demo/leave', methods=['POST'])
+def coop_demo_leave():
+    """退出联机对局（不清对局，其他成员可继续）。"""
+    user = _coop_demo_session_user()
+    if not user:
+        return _json_error('未登录', 403)
+    with _COOP_DEMO_LOCK:
+        code = _COOP_DEMO_USER_ROOM.pop(int(user['id']), None)
+        if code and code in _COOP_DEMO_ROOMS:
+            _COOP_DEMO_ROOMS[code]['members'].pop(int(user['id']), None)
+        _COOP_DEMO_RUNS.pop(int(user['id']), None)
+    return jsonify({'success': True})
 
 
 @app.route('/api/coop-demo/start', methods=['POST'])

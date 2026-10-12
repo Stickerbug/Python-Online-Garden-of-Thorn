@@ -12004,6 +12004,62 @@
         }, 2500);
     }
 
+    function openCoopDemoLobby() {
+        let dlg = $('story-coop-demo-lobby');
+        if (dlg) {
+            dlg.open = true;
+            return;
+        }
+        dlg = document.createElement('dialog');
+        dlg.id = 'story-coop-demo-lobby';
+        dlg.style.cssText = 'border:1px solid #6b7d4f;border-radius:12px;background:#222a1e;color:#e8e4d8;padding:22px;min-width:300px;';
+        dlg.innerHTML = `
+            <h3 style="margin:0 0 14px;font-size:16px;">多人爬塔（开发中）</h3>
+            <button type="button" id="coop-demo-host-btn" style="width:100%;padding:10px;margin-bottom:12px;border-radius:8px;border:1px solid #d8b84a;background:#3a321a;color:#f0e0b0;cursor:pointer;font-size:14px;">创建对局（我是席0）</button>
+            <div style="display:flex;gap:6px;">
+                <input id="coop-demo-join-code" placeholder="邀请码" maxlength="6"
+                    style="flex:1;padding:9px;border-radius:8px;border:1px solid #6b7d4f;background:#1a2116;color:#e8e4d8;font-size:14px;text-transform:uppercase;">
+                <button type="button" id="coop-demo-join-btn" style="padding:9px 14px;border-radius:8px;border:0;background:#4a5a3e;color:#fff;cursor:pointer;font-size:14px;">加入</button>
+            </div>
+            <p id="coop-demo-lobby-msg" style="min-height:18px;font-size:12.5px;color:#e8a598;margin:10px 0 0;"></p>
+            <button type="button" id="coop-demo-lobby-close" style="margin-top:10px;background:none;border:0;color:#b8c4a8;cursor:pointer;font-size:12.5px;">关闭</button>
+        `;
+        document.body.appendChild(dlg);
+        const msg = (t) => { $('coop-demo-lobby-msg').textContent = t || ''; };
+        const enterRoom = (seat) => {
+            localStorage.setItem('gtv_coop_demo', '1');
+            sessionStorage.setItem('gtv_coop_demo_seat', String(seat));
+            dlg.close();
+            location.href = `/story?coopdemo=1&seat=${seat}`;
+        };
+        $('coop-demo-host-btn').addEventListener('click', async () => {
+            msg('');
+            try {
+                const r = await fetch('/api/coop-demo/host', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+                const data = await r.json();
+                if (!data.success) { msg(data.error || '创建失败'); return; }
+                window.__coop_invite_code = data.invite_code;
+                enterRoom(data.seat);
+            } catch (err) { msg('网络错误'); }
+        });
+        $('coop-demo-join-btn').addEventListener('click', async () => {
+            msg('');
+            const code = $('coop-demo-join-code').value.trim().toUpperCase();
+            if (!code) { msg('请输入邀请码'); return; }
+            try {
+                const r = await fetch('/api/coop-demo/join', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ invite_code: code }),
+                });
+                const data = await r.json();
+                if (!data.success) { msg(data.error || '加入失败'); return; }
+                enterRoom(data.seat);
+            } catch (err) { msg('网络错误'); }
+        });
+        $('coop-demo-lobby-close').addEventListener('click', () => dlg.close());
+        dlg.showModal();
+    }
+
     function ensureCoopDemoControls() {
         if (!STORY_COOP_DEMO) return;
         if (!$('story-coop-demo-bar')) {
@@ -12014,10 +12070,17 @@
         exitBtn.type = 'button';
         exitBtn.textContent = '退出合作演示';
         exitBtn.style.cssText = 'padding:6px 10px;border-radius:6px;border:1px solid #b03a2e;background:#3a1e1a;color:#f0c9c0;cursor:pointer;';
-        exitBtn.addEventListener('click', () => {
+        exitBtn.addEventListener('click', async () => {
+            try { await fetch('/api/coop-demo/leave', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); } catch (err) { /* 忽略 */ }
             localStorage.removeItem('gtv_coop_demo');
             location.href = '/story';
         });
+        if (window.__coop_invite_code) {
+            const codeEl = document.createElement('div');
+            codeEl.textContent = `邀请码 ${window.__coop_invite_code}`;
+            codeEl.style.cssText = 'color:#d8b84a;font-weight:700;text-align:center;letter-spacing:2px;';
+            bar.appendChild(codeEl);
+        }
         const seats = document.createElement('span');
         seats.id = 'story-coop-demo-seats';
         seats.style.color = '#e8e4d8';
@@ -15886,19 +15949,7 @@
         $('story-version-old-restart')?.addEventListener('click', replaceLegacyRun);
         if (window.__STORY_COOP_ACCESS__) {
             $('story-coop-entry')?.addEventListener('click', openCooperativeStoryPreview);
-            $('story-coop-demo-entry')?.addEventListener('click', async () => {
-                // 多人爬塔（开发中）：开新演示局并进入，本标签页操控席0。
-                try {
-                    await fetch('/api/coop-demo/start', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: '{}',
-                    });
-                } catch (err) { /* 开局失败时进入页面后可手动重开 */ }
-                localStorage.setItem('gtv_coop_demo', '1');
-                sessionStorage.setItem('gtv_coop_demo_seat', '0');
-                location.href = '/story?coopdemo=1&seat=0';
-            });
+            $('story-coop-demo-entry')?.addEventListener('click', openCoopDemoLobby);
             $('story-coop-preview-dialog')?.addEventListener('close', closeStoryCoopLobby);
             $('story-coop-create')?.addEventListener('click', createStoryCoopParty);
             $('story-coop-join')?.addEventListener('click', joinStoryCoopParty);
