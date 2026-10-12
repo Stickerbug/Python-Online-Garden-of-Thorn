@@ -8567,7 +8567,16 @@ def _enemy_turn(state, seed, events):
     _check_combat_end(state, seed, events)
     if state.get('phase') != 'combat':
         return
-    _turn_boundary(state, seed, events)
+    if _seat_count(state) > 1:
+        _previous_mount = int(combat.get('mounted_seat') or 0)
+        _first_boundary_seat = True
+        for seat in _living_seats(state):
+            _mount_seat(state, seat)
+            _turn_boundary(state, seed, events, advance_round=_first_boundary_seat)
+            _first_boundary_seat = False
+        _mount_seat(state, _previous_mount)
+    else:
+        _turn_boundary(state, seed, events)
 
 
 def _discard_hand_at_turn_end(state, seed, events):
@@ -8701,7 +8710,7 @@ def _activate_player_blind(combat, events):
     })
 
 
-def _turn_boundary(state, seed, events, extra=False):
+def _turn_boundary(state, seed, events, extra=False, advance_round=True):
     combat = state['combat']
     combat['damage_taken_last_turn'] = max(0, int(combat.get('damage_taken_this_turn') or 0))
     combat['damage_taken_this_turn'] = 0
@@ -8893,7 +8902,7 @@ def _turn_boundary(state, seed, events, extra=False):
     _check_combat_end(state, seed, events)
     if state.get('phase') != 'combat':
         return
-    combat['round'] = int(combat.get('round') or 1) + (0 if extra else 1)
+    combat['round'] = int(combat.get('round') or 1) + (0 if (extra or not advance_round) else 1)
     combat['turn'] = 'player'
     combat['turn_kind'] = 'extra' if extra else 'normal'
     combat['cards_played_this_turn'] = 0
@@ -9153,7 +9162,15 @@ def _end_turn(state, seed, events, payload=None):
             return
         combat['ready_seats'] = []
         events.append({'type': 'combat_seat_ready', 'seat': seat, 'ready': True, 'all_ready': True})
-    _prepare_player_turn_end(state, seed, events)
+    if _seat_count(state) > 1:
+        # 多席位：逐席结算回合结束（弃牌、装备、轨道旋转等各席独立）。
+        _previous_mount = int(combat.get('mounted_seat') or 0)
+        for seat in _living_seats(state):
+            _mount_seat(state, seat)
+            _prepare_player_turn_end(state, seed, events)
+        _mount_seat(state, _previous_mount)
+    else:
+        _prepare_player_turn_end(state, seed, events)
     if combat.get('turn_kind') == 'normal':
         extra_limits = [
             int(effect.get('amount') or 1)

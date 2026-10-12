@@ -38101,6 +38101,176 @@ def ensure_rank_monthly_settlement_worker():
                          name='rank-monthly-settlement', daemon=True).start()
 
 
+# ---------------------------------------------------------------- 双人爬塔引擎演示
+# 合作重写第2-4步的可玩切片：真实主引擎（席位化）驱动，单账号操控双席。
+# 仅 staff/admin 可见（演示用途，正式入口走后续的编排层）。
+_COOP_DEMO_RUNS = {}
+_COOP_DEMO_LOCK = threading.Lock()
+
+
+def _coop_demo_allowed(user_id):
+    try:
+        return DB_AVAILABLE and user_id and feedback_is_staff(int(user_id))
+    except Exception:
+        return False
+
+
+def _coop_demo_session_user():
+    user_id = session.get('user_id')
+    if not user_id:
+        return None
+    try:
+        with get_db_connection() as conn:
+            row = conn.execute(
+                'SELECT id, username FROM users WHERE id = ?', (int(user_id),)
+            ).fetchone()
+        return {'id': int(row['id']), 'username': row['username']} if row else None
+    except Exception:
+        return None
+
+
+def _coop_demo_snapshot(user_id):
+    from story_engine import _mount_seat, _card_values
+    entry = _COOP_DEMO_RUNS.get(int(user_id))
+    if not entry:
+        return None
+    state, active = entry['state'], entry['active_seat']
+    state = entry['state']
+    _mount_seat(state, active)
+    combat = state.get('combat') or {}
+    seats = []
+    for seat in range(len(state['players'])):
+        _mount_seat(state, seat)
+        seats.append({
+            'hp': int(state['players'][seat].get('health') or 0),
+            'max_hp': int(state['players'][seat].get('max_health') or 0),
+            'elixir': int(combat.get('elixir') or 0),
+            'shield': int(combat.get('shield') or 0),
+            'hand_count': len(combat.get('hand') or []),
+            'ready': seat in (combat.get('ready_seats') or []),
+        })
+    _mount_seat(state, active)
+    hand = []
+    for card in (combat.get('hand') or []):
+        values = _card_values(card)
+        hand.append({
+            'instance_id': card['instance_id'],
+            'name': (values.get('name') or {}).get('zh', card['def_id']),
+            'cost_e': int(card.get('cost_e') or values.get('cost_e') or 0),
+            'desc': '',
+        })
+    enemy = None
+    for e in combat.get('enemies') or []:
+        if int(e.get('health') or 0) > 0:
+            intent = (e.get('intent') or {})
+            enemy = {
+                'name': (intent.get('name') or {}).get('zh', e['def_id']) if isinstance(intent.get('name'), dict) else e['def_id'],
+                'hp': int(e['health']), 'max_hp': int(e['max_health']),
+                'shield': int(e.get('shield') or 0),
+                'intent': '眩晕' if int(e.get('stun') or 0) > 0 else str((intent.get('name') or {}).get('zh', '') if isinstance(intent.get('name'), dict) else ''),
+            }
+            break
+    return {
+        'phase': state.get('phase'),
+        'round': combat.get('round'),
+        'active_seat': active,
+        'my_ready': active in (combat.get('ready_seats') or []),
+        'seats': seats,
+        'enemy': enemy,
+        'hand': hand,
+    }
+
+
+def _coop_demo_event_lines(events):
+    lines = []
+    for e in events or []:
+        t = e.get('type')
+        if t == 'enemy_damage':
+            lines.append(f"⚔ 席{e.get('seat', '?')}打出的牌对敌造成 {e.get('amount')} 伤害")
+        elif t == 'player_damage':
+            lines.append(f"💔 席? 受到 {e.get('amount')} 伤害（剩 {e.get('after')}H）")
+        elif t == 'combat_seat_ready':
+            lines.append(f"席{e.get('seat')} {'就绪' if e.get('ready') else '撤回就绪'}" + ('——全员就绪，敌方回合！' if e.get('all_ready') else ''))
+        elif t == 'seat_downed':
+            lines.append(f"💀 席{e.get('seat')} 倒地！")
+        elif t == 'seat_revived':
+            lines.append(f"✨ 席{e.get('seat')} 胜利复活至 {e.get('after')}H")
+        elif t == 'enemy_skipped':
+            lines.append('💤 敌人被眩晕跳过')
+        elif t == 'combat_start':
+            lines.append('🏁 战斗开始')
+        elif t == 'game_over':
+            lines.append('💀 全席倒地，战斗失败')
+    return lines[-12:]
+
+
+@app.route('/coop-demo')
+def coop_demo_page():
+    user = _coop_demo_session_user()
+    if not user or not _coop_demo_allowed(user.get('id')):
+        return _json_error('仅工作人员可见的引擎演示', 403)
+    return render_template('coop_demo.html')
+
+
+@app.route('/api/coop-demo/start', methods=['POST'])
+def coop_demo_start():
+    user = _coop_demo_session_user()
+    if not user or not _coop_demo_allowed(user.get('id')):
+        return _json_error('仅工作人员可见的引擎演示', 403)
+    import copy as _copy
+    import story_mode as _sm
+    from story_engine import _start_combat as _sc
+    state = _sm.build_initial_story_state('coop-demo', 'common_flower')
+    state['players'] = [_copy.deepcopy(state['player']), _copy.deepcopy(state['player'])]
+    events = []
+    _sc(state, {'type': 'combat'}, 'coop-demo', events,
+        encounter_override=[{'def_id': 'mechanical_crab'}])
+    with _COOP_DEMO_LOCK:
+        _COOP_DEMO_RUNS[int(user['id'])] = {'state': state, 'active_seat': 0}
+    return jsonify({'success': True, 'snapshot': _coop_demo_snapshot(user['id']),
+                    'events': _coop_demo_event_lines(events)})
+
+
+@app.route('/api/coop-demo/action', methods=['POST'])
+def coop_demo_action():
+    user = _coop_demo_session_user()
+    if not user or not _coop_demo_allowed(user.get('id')):
+        return _json_error('仅工作人员可见的引擎演示', 403)
+    payload = request.get_json(silent=True) or {}
+    atype = str(payload.get('type') or '')
+    with _COOP_DEMO_LOCK:
+        entry = _COOP_DEMO_RUNS.get(int(user['id']))
+        if not entry:
+            return _json_error('尚未开始战斗', 400)
+        from story_engine import StoryActionError, _mount_seat, apply_story_action
+        state = entry['state']
+        active = entry['active_seat']
+        _mount_seat(state, active)
+        combat = state.get('combat') or {}
+        try:
+            if atype == 'switch':
+                entry['active_seat'] = 1 - active
+                events = []
+            elif state.get('phase') != 'combat':
+                return _json_error('战斗已结束，请开新的一局', 400)
+            elif atype == 'play_card':
+                state, events = apply_story_action(state, 'play_card', {
+                    'card_instance_id': payload.get('card_instance_id'),
+                    'target_id': (combat.get('enemies') or [{}])[0].get('id'),
+                }, 'coop-demo')
+            elif atype == 'end_turn':
+                state, events = apply_story_action(state, 'end_turn', {}, 'coop-demo')
+            elif atype == 'cancel_ready':
+                state, events = apply_story_action(state, 'end_turn', {'cancel_ready': True}, 'coop-demo')
+            else:
+                return _json_error('未知操作', 400)
+        except StoryActionError as exc:
+            return jsonify({'success': False, 'error': str(exc)})
+        entry['state'] = state
+    return jsonify({'success': True, 'snapshot': _coop_demo_snapshot(user['id']),
+                    'events': _coop_demo_event_lines(events)})
+
+
 @app.route('/minigame')
 def minigame_hub_page():
     """休闲花园首页：小游戏列表。

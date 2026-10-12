@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>双人爬塔 · 引擎演示</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #1e241c; color: #e8e4d8; margin: 0; padding: 18px; }
+  h1 { font-size: 18px; } h1 span { font-size: 12px; opacity: .6; font-weight: 400; }
+  .board { display: flex; gap: 14px; flex-wrap: wrap; align-items: stretch; }
+  .panel { background: #2a3325; border: 1px solid #4a5a3e; border-radius: 10px; padding: 12px; min-width: 200px; }
+  .panel h3 { margin: 0 0 6px; font-size: 14px; }
+  .seat { border-color: #6b7d4f; }
+  .seat.active { outline: 2px solid #d8b84a; }
+  .seat.down { opacity: .55; }
+  .stats { font-size: 13px; line-height: 1.7; }
+  .badge { display: inline-block; padding: 0 6px; border-radius: 8px; font-size: 11px; border: 1px solid #888; margin-left: 4px; }
+  .badge.ready { border-color: #d8b84a; color: #d8b84a; }
+  .hand { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .card { background: #f4f0e2; color: #333; border-radius: 6px; padding: 6px 8px; width: 108px; font-size: 12px; border: 1px solid #b8b09a; cursor: pointer; text-align: left; }
+  .card:disabled { opacity: .45; cursor: default; }
+  .card b { display: block; font-size: 13px; }
+  .cost { float: right; color: #1a7a2a; font-weight: 700; }
+  .actions { margin: 12px 0; display: flex; gap: 8px; flex-wrap: wrap; }
+  button.act { background: #4a5a3e; color: #fff; border: 0; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-size: 13px; }
+  button.act:disabled { opacity: .4; }
+  button.act.gold { background: #8a6d1c; }
+  #log { font-size: 12px; line-height: 1.6; opacity: .85; max-width: 640px; white-space: pre-wrap; }
+  .enemy { text-align: center; }
+  .enemy .hpbar { height: 10px; background: #444; border-radius: 5px; overflow: hidden; margin: 6px 0; }
+  .enemy .hpbar i { display: block; height: 100%; background: #b03a2e; }
+  .intent { font-size: 12px; color: #d8b84a; }
+</style>
+</head>
+<body>
+<h1>双人爬塔 · 引擎演示 <span>真实主引擎驱动 · 单人操控双席（点"切换席位"换边）</span></h1>
+<div class="actions">
+  <button class="act gold" onclick="start()">新的战斗（机械螃蟹）</button>
+  <button class="act" onclick="switchSeat()">切换操控席位</button>
+  <button class="act" onclick="endTurn()">结束回合（就绪）</button>
+  <button class="act" onclick="cancelReady()" id="cancel-btn">撤回就绪</button>
+</div>
+<div class="board" id="board"></div>
+<div class="hand" id="hand"></div>
+<h3 style="font-size:13px;margin-top:14px;">战斗记录</h3>
+<div id="log">点"新的战斗"开始……</div>
+<script src="/static/js/coop_demo.js"></script>
+</body>
+</html>
