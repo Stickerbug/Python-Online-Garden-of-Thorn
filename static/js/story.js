@@ -12036,11 +12036,17 @@
             msg('');
             try {
                 const r = await fetch('/api/coop-demo/host', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-                const data = await r.json();
+                let data;
+                try {
+                    data = await r.json();
+                } catch (parseErr) {
+                    msg(`服务器暂时不可用（HTTP ${r.status}），稍等片刻后重试`);
+                    return;
+                }
                 if (!data.success) { msg(data.error || '创建失败'); return; }
                 window.__coop_invite_code = data.invite_code;
                 enterRoom(data.seat);
-            } catch (err) { msg('网络错误'); }
+            } catch (err) { msg('网络错误，请检查连接'); }
         });
         $('coop-demo-join-btn').addEventListener('click', async () => {
             msg('');
@@ -12051,10 +12057,16 @@
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ invite_code: code }),
                 });
-                const data = await r.json();
+                let data;
+                try {
+                    data = await r.json();
+                } catch (parseErr) {
+                    msg(`服务器暂时不可用（HTTP ${r.status}），稍等片刻后重试`);
+                    return;
+                }
                 if (!data.success) { msg(data.error || '加入失败'); return; }
                 enterRoom(data.seat);
-            } catch (err) { msg('网络错误'); }
+            } catch (err) { msg('网络错误，请检查连接'); }
         });
         $('coop-demo-lobby-close').addEventListener('click', () => dlg.close());
         dlg.showModal();
