@@ -8277,3 +8277,12 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   font-size: 12px;
   padding-top: 2px;
 }
+
+/* 合作演示：地图投票覆盖层与已投票节点标记 */
+#story-coop-vote-overlay {
+  box-shadow: 0 2px 8px rgba(0,0,0,.4);
+}
+
+.story-map-node.is-coop-voted {
+  filter: drop-shadow(0 0 4px #d8b84a);
+}

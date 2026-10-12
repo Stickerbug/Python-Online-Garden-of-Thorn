@@ -7028,6 +7028,7 @@
             const group = svgElement('g', {
                 class: `story-map-node${actionable ? ' is-actionable' : ''}${routeCurrent ? ' is-route-current' : ''}`,
                 transform: `translate(${point.x} ${point.y})`,
+                'data-node-id': node.id,
                 'data-room-type': node.type,
                 'data-status': node.status || 'locked',
                 role: actionable ? 'button' : 'img',
@@ -11992,7 +11993,7 @@
                 const run = data && data.run;
                 if (!run || !run.state) return;
                 if (activeRun && Number(run.state_version) <= Number(activeRun.state_version)) return;
-                activeRun = { ...run, state: run.state };
+                activeRun = { ...run, state: run.state, coopCoord: run.coop_coord || null };
                 renderRun(activeRun);
             } catch (err) { /* 轮询失败忽略，下次再试 */ }
         }, 2500);
@@ -12319,6 +12320,39 @@
         showView('story-room');
     }
 
+    function renderCoopVoteOverlay(state) {
+        if (!STORY_COOP_DEMO) return;
+        const coord = activeRun?.coopCoord || state.coord || {};
+        const votes = coord.votes || {};
+        const mySeat = storyCoopDemoSeat();
+        const seatCount = (state.players || []).length || 1;
+        let overlay = $('story-coop-vote-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'story-coop-vote-overlay';
+            overlay.style.cssText = 'position:sticky;top:6px;z-index:60;margin:0 auto 8px;width:fit-content;padding:5px 14px;border-radius:8px;border:1px solid #d8b84a;background:rgba(24,28,18,.92);font-size:13px;color:#e8e4d8;';
+            const mapPanel = document.querySelector('#story-run .story-map-panel');
+            (mapPanel || document.body).prepend(overlay);
+        }
+        const voteCount = Object.keys(votes).length;
+        const mine = votes[mySeat];
+        if (voteCount === 0) {
+            overlay.textContent = `点击节点投票（${seatCount} 席都投票后进入）`;
+        } else if (voteCount < seatCount) {
+            overlay.textContent = mine
+                ? `你已投票，等待其他席位（${voteCount}/${seatCount}）…`
+                : `席${Object.keys(votes).join('/')} 已投票，等待中（${voteCount}/${seatCount}）`;
+        } else {
+            overlay.textContent = '投票完成，正在进入…';
+        }
+        // 已投票节点打标记
+        document.querySelectorAll('.story-map-node.is-coop-voted').forEach((n) => n.classList.remove('is-coop-voted'));
+        Object.entries(votes).forEach(([seat, nodeId]) => {
+            $( 'story-map')?.querySelectorAll(`.story-map-node[data-node-id="${nodeId}"]`)
+                .forEach((g) => g.classList.add('is-coop-voted'));
+        });
+    }
+
     function renderMapView(state, options = {}) {
         const player = state.player || {};
         const node = currentNode(state);
@@ -12331,6 +12365,7 @@
         setText('story-floor-value', t.floor(state.current_floor || node?.floor || 1));
         setText('story-room-value', t.rooms[node?.type] || node?.type || '');
         renderLegend();
+        renderCoopVoteOverlay(state);
         const combatPreview = Boolean(options.combatPreview);
         $('story-map-return')?.classList.toggle('hidden', !combatPreview);
         if (combatPreview) {
