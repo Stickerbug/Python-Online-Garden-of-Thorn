@@ -84,6 +84,7 @@ SHARED_COMBAT_KEYS = frozenset({
     'round', 'turn', 'turn_kind', 'reward_room_type', 'enemies',
     'next_battle_reward_multiplier',
     'damage_predictions', 'playable_card_ids',
+    'ready_seats',
 })
 
 _SEAT_META_KEYS = frozenset({'seat_states', 'mounted_seat'})
