@@ -488,6 +488,10 @@ class PlayerState:
             'elixir': self.elixir,
             'magic': self.magic,
         }
+        # 安卡修复（2026-10-12）：自己回合内回退要回到「上个」自己回合开始，
+        # 因此每次回合开始存快照时把旧快照挪到这里。
+        self.prev_turn_start_snapshot: Optional[Dict[str, int]] = None
+        self.prev_turn_start_statuses: Optional[Dict[str, int]] = None
         # 安卡（平衡 2026-10-07）：状态也要能随快照回退——回合开始时的
         # 状态标签存这里。None = 本局还没存过快照（回退时不碰状态）。
         self.turn_start_statuses: Optional[Dict[str, int]] = None
@@ -612,6 +616,16 @@ class PlayerState:
             'achievement_death_round': self.achievement_death_round,
             'achievement_self_caused_death': self.achievement_self_caused_death,
             'turn_start_snapshot': dict(self.turn_start_snapshot),
+            'prev_turn_start_snapshot': (
+                dict(self.prev_turn_start_snapshot)
+                if isinstance(self.prev_turn_start_snapshot, dict)
+                else None
+            ),
+            'prev_turn_start_statuses': (
+                dict(self.prev_turn_start_statuses)
+                if isinstance(self.prev_turn_start_statuses, dict)
+                else None
+            ),
             'turn_start_statuses': (
                 dict(self.turn_start_statuses)
                 if isinstance(self.turn_start_statuses, dict)
@@ -764,6 +778,10 @@ class PlayerState:
             'elixir': ps.elixir,
             'magic': ps.magic,
         })
+        prev_snap = d.get('prev_turn_start_snapshot')
+        ps.prev_turn_start_snapshot = dict(prev_snap) if isinstance(prev_snap, dict) else None
+        prev_statuses = d.get('prev_turn_start_statuses')
+        ps.prev_turn_start_statuses = dict(prev_statuses) if isinstance(prev_statuses, dict) else None
         saved_turn_statuses = d.get('turn_start_statuses')
         ps.turn_start_statuses = (
             dict(saved_turn_statuses)
@@ -2060,6 +2078,12 @@ class GameEngine:
     def _save_turn_start_snapshot(self, player_id: int):
         if 0 <= player_id < len(self.players):
             ps = self.players[player_id]
+            ps.prev_turn_start_snapshot = dict(getattr(ps, 'turn_start_snapshot', {}) or {}) or None
+            ps.prev_turn_start_statuses = (
+                dict(getattr(ps, 'turn_start_statuses', {}) or {})
+                if isinstance(getattr(ps, 'turn_start_statuses', None), dict)
+                else None
+            )
             ps.turn_start_snapshot = {
                 'health': int(getattr(ps, 'health', 0) or 0),
                 'elixir': int(getattr(ps, 'elixir', 0) or 0),
@@ -2114,18 +2138,28 @@ class GameEngine:
         for pid in range(len(self.players)):
             self._save_match_start_snapshot(pid)
 
-    def _restore_turn_start_snapshot(self, player_id: int, extra_elixir_loss: int = 0):
+    def _restore_turn_start_snapshot(self, player_id: int, extra_elixir_loss: int = 0,
+                                     use_previous: bool = False):
         if not (0 <= player_id < len(self.players)):
             return
         ps = self.players[player_id]
         snap = dict(getattr(ps, 'turn_start_snapshot', {}) or {})
+        saved_statuses = getattr(ps, 'turn_start_statuses', None)
+        if use_previous:
+            # 安卡（2026-10-12 修复）：自己回合内回退=回到「上个」自己回合开始；
+            # 没有上一份（首个自己回合）时退回本回合开始快照。
+            prev_snap = getattr(ps, 'prev_turn_start_snapshot', None)
+            if isinstance(prev_snap, dict) and prev_snap:
+                snap = dict(prev_snap)
+                prev_statuses = getattr(ps, 'prev_turn_start_statuses', None)
+                if isinstance(prev_statuses, dict):
+                    saved_statuses = dict(prev_statuses)
         if not snap:
             snap = {'health': ps.health, 'elixir': ps.elixir, 'magic': ps.magic}
         ps.health = max(0, min(int(snap.get('health', ps.health)), int(ps.max_health)))
         ps.elixir = max(0, min(int(snap.get('elixir', ps.elixir)) - max(0, int(extra_elixir_loss or 0)), int(ps.max_elixir)))
         ps.magic = max(0, min(int(snap.get('magic', ps.magic)), int(ps.max_magic)))
         # 状态一并回退（平衡 2026-10-07 安卡口径）；未存过快照的旧对局不动状态。
-        saved_statuses = getattr(ps, 'turn_start_statuses', None)
         if isinstance(saved_statuses, dict):
             ps.custom_statuses = dict(saved_statuses)
 
@@ -22464,8 +22498,12 @@ class GameEngine:
                 continue
             if int(getattr(self.players[tid], 'health', 0) or 0) <= 0:
                 continue
-            self._restore_turn_start_snapshot(tid, extra_self_e_loss if tid == player_id else 0)
-            self.log_msg(f"{self.pn(tid)}回到自己回合开始时的状态")
+            self._restore_turn_start_snapshot(
+                tid,
+                extra_self_e_loss if tid == player_id else 0,
+                use_previous=(tid == int(self.current_player)),
+            )
+            self.log_msg(f"{self.pn(tid)}回到自己上个回合开始时的状态")
         if log:
             self.log_msg(log)
 
