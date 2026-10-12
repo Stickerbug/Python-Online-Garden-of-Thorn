@@ -7,6 +7,7 @@
 """
 
 from story_content import STORY_ENCHANTMENT_BOOKS
+import math
 from story_engine import (
     _card_values,
     _gain_enchantment_book,
@@ -77,7 +78,7 @@ def _enemy_damage_total(events):
 
 
 def test_sharp_power_applies_to_every_nuke_elixir_segment():
-    """反馈 #103：核弹每消耗 1E 的一段都应该是 9+15。"""
+    """反馈 #103 + GB-206：核弹每段 9D，锋利 15 按 ceil(15/3)=5 分摊到每段。"""
     state = _combat_state('sharp-nuke', enemies=[{'def_id': 'chimney'}])
     state, card = _enchanted_card(state, 'nuke', 'sharp', 'sharp-nuke-use')
     enemy = state['combat']['enemies'][0]
@@ -85,7 +86,7 @@ def test_sharp_power_applies_to_every_nuke_elixir_segment():
 
     assert _player_attack_effect_segment(
         state, effect, enemy, {'x_cost': 3}
-    ) == (9 + SHARP_BONUS, 3)
+    ) == (9 + math.ceil(SHARP_BONUS / 3), 3)
 
     state['combat']['elixir'] = 3
     health_before = int(enemy['health'])
@@ -97,12 +98,14 @@ def test_sharp_power_applies_to_every_nuke_elixir_segment():
     )
 
     enemy = state['combat']['enemies'][0]
-    assert _enemy_damage_total(events) == (9 + SHARP_BONUS) * 3
-    assert int(enemy['health']) == health_before - (9 + SHARP_BONUS) * 3
+    per_segment = 9 + math.ceil(SHARP_BONUS / 3)
+    assert _enemy_damage_total(events) == per_segment * 3
+    assert int(enemy['health']) == health_before - per_segment * 3
 
 
 def test_sharp_power_stays_flat_on_shield_scaled_attacks():
-    """反馈 #103：锯齿按护盾层数结算，锋利加的是固定伤害而不是倍数。"""
+    """反馈 #103：锯齿按护盾层数结算；GB-206 后锋利走 enchantment_damage_bonus
+    字段按段分摊（单段=吃满），不再折进 effect['bonus']。"""
     state = _combat_state('sharp-cutter')
     state['combat']['shield'] = 10
     state, card = _enchanted_card(state, 'cutter', 'sharp', 'sharp-cutter-use')
@@ -110,7 +113,7 @@ def test_sharp_power_stays_flat_on_shield_scaled_attacks():
     effect = _effect(_card_values(card), 'damage_from_shield')
 
     assert effect['amount'] == 1
-    assert effect['bonus'] == SHARP_BONUS
+    assert 'bonus' not in effect
     assert _player_attack_effect_segment(state, effect, enemy, {}) == (
         10 + SHARP_BONUS,
         1,
@@ -118,14 +121,14 @@ def test_sharp_power_stays_flat_on_shield_scaled_attacks():
 
 
 def test_sharp_power_applies_to_multihit_damage_as_before():
-    """回归：锋利→沙子仍然是每段 2+15、共 4 段。"""
+    """GB-206：锋利→沙子为每段 2+ceil(15/4)=6、共 4 段（加成按段分摊）。"""
     state = _combat_state('sharp-sand', enemies=[{'def_id': 'chimney'}])
     state, card = _enchanted_card(state, 'sand', 'sharp', 'sharp-sand-use')
     enemy = state['combat']['enemies'][0]
     effect = _effect(_card_values(card), 'damage')
 
     assert _player_attack_effect_segment(state, effect, enemy, {}) == (
-        2 + SHARP_BONUS,
+        2 + math.ceil(SHARP_BONUS / 4),
         4,
     )
 
@@ -138,8 +141,9 @@ def test_sharp_power_applies_to_multihit_damage_as_before():
     )
 
     enemy = state['combat']['enemies'][0]
-    assert _enemy_damage_total(events) == (2 + SHARP_BONUS) * 4
-    assert int(enemy['health']) == health_before - (2 + SHARP_BONUS) * 4
+    per_hit = 2 + math.ceil(SHARP_BONUS / 4)
+    assert _enemy_damage_total(events) == per_hit * 4
+    assert int(enemy['health']) == health_before - per_hit * 4
 
 
 def test_sharp_power_applies_to_status_scaled_attacks():
