@@ -1,10 +1,18 @@
 (() => {
     'use strict';
 
+    // 启动期兜底：模块顶层抛异常时把错误显示到加载标签，避免“载入旅程”永久转圈。
+    window.addEventListener('error', (event) => {
+        const label = document.getElementById('story-loading-label');
+        if (label && !document.getElementById('story-loading')?.classList.contains('hidden')) {
+            label.textContent = `载入失败：${String(event.message || '未知错误')}`;
+        }
+    });
+
     // 合作引擎演示通道（?coopdemo=1）：run 读写改走 /api/coop-demo/*。
     const STORY_COOP_DEMO = new URLSearchParams(location.search).get('coopdemo') === '1'
         || localStorage.getItem('gtv_coop_demo') === '1';
-    if (STORY_COOP_DEMO) localStorage.setItem('gtv_coop_demo', '1');
+    if (STORY_COOP_DEMO) { try { localStorage.setItem('gtv_coop_demo', '1'); } catch (quotaErr) { /* 配额满：URL 参数仍可识别 */ } }
     const storyRunApiUrl = () => {
         if (!STORY_COOP_DEMO) return '/api/story/run';
         const seat = storyCoopDemoSeat();
@@ -16,7 +24,7 @@
         const fromUrl = new URLSearchParams(location.search).get('seat');
         const seat = fromUrl != null ? Number(fromUrl) : Number(sessionStorage.getItem('gtv_coop_demo_seat') || 0);
         const clamped = Number.isFinite(seat) ? Math.max(0, Math.min(3, seat)) : 0;
-        sessionStorage.setItem('gtv_coop_demo_seat', String(clamped));
+        try { sessionStorage.setItem('gtv_coop_demo_seat', String(clamped)); } catch (quotaErr) { /* 配额满：忽略 */ }
         return clamped;
     }
 
