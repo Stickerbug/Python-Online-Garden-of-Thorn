@@ -179,6 +179,20 @@ class GameEngine2v2(GameEngine):
         enemy_ids = self.get_all_enemies(for_player)
         goggles_targets = self._goggles_view_targets_for(for_player)
         antennae_targets = self._antennae_view_targets_for(for_player)
+        # 2026-10-12：观察类卡（触角/护目镜）的情报同步给队友——队友
+        # 持续揭示的敌方手牌/牌堆对本视图同样可见。
+        teammate_goggles_targets = set()
+        teammate_antennae_targets = set()
+        teammate_antennae_reveal = None
+        teammate_reveal_target = None
+        if teammate_id is not None and teammate_id >= 0:
+            teammate_goggles_targets = self._goggles_view_targets_for(teammate_id)
+            teammate_antennae_targets = self._antennae_view_targets_for(teammate_id)
+            if 0 <= teammate_id < len(self._antennae_reveal or []):
+                teammate_antennae_reveal = self._antennae_reveal[teammate_id]
+            reveal_targets = getattr(self, '_antennae_reveal_targets', None)
+            if reveal_targets and 0 <= teammate_id < len(reveal_targets):
+                teammate_reveal_target = reveal_targets[teammate_id]
 
         opp_data_list = []
         for eid in enemy_ids:
@@ -189,7 +203,12 @@ class GameEngine2v2(GameEngine):
             ed['discard_count'] = len([c for c in self.players[eid].discard if c.def_id != ERROR_CARD_ID])
             ed['exile_count'] = len([c for c in self.players[eid].exile if c.def_id != ERROR_CARD_ID])
             reveal_target = getattr(self, '_antennae_reveal_targets', [None] * self.num_players)[for_player]
-            if eid in antennae_targets or (self._antennae_reveal[for_player] and reveal_target == eid):
+            if (
+                eid in antennae_targets
+                or eid in teammate_antennae_targets
+                or (self._antennae_reveal[for_player] and reveal_target == eid)
+                or (teammate_antennae_reveal and teammate_reveal_target == eid)
+            ):
                 ed['revealed_hand'] = self._visible_card_dicts(self.players[eid].hand, for_player, eid)
             revealed_tag_cards = [
                 c.to_dict()
@@ -198,7 +217,7 @@ class GameEngine2v2(GameEngine):
             ]
             if revealed_tag_cards:
                 ed['revealed_tag_cards'] = revealed_tag_cards
-            if eid in goggles_targets:
+            if eid in goggles_targets or eid in teammate_goggles_targets:
                 ed['deck_ordered'] = [c.to_dict() for c in self.players[eid].deck]
                 ed['discard_ordered'] = [c.to_dict() for c in self.players[eid].discard]
             opp_data_list.append(ed)
