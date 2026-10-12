@@ -38254,7 +38254,8 @@ def api_minigame_heartbeat():
     if denied is not None:
         return denied
     import leisure_sessions
-    session = leisure_sessions.heartbeat(identity[0])
+    # 游客/限流路径可能 identity=None 且无 denied：视为无会话，直接返回不活跃。
+    session = leisure_sessions.heartbeat(identity[0]) if identity and identity[0] is not None else None
     remaining = None
     if session:
         remaining = max(0, int(leisure_sessions.LEISURE_SESSION_LIMIT_SECONDS
@@ -38269,6 +38270,8 @@ def api_minigame_exit():
     if denied is not None:
         return denied
     import leisure_sessions
+    if not identity or identity[0] is None:
+        return jsonify({'success': True, 'settled': False})
     outcome = leisure_sessions.force_settle_now(identity[0])
     # 同时清零玩家的游玩计时（门票 10 分钟会话）：主动退出视为时间用尽，
     # 防止暂停/恢复分支把剩余时间留着跨局白嫖。
