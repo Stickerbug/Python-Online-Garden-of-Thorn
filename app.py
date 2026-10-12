@@ -38220,6 +38220,7 @@ def coop_demo_run_get():
     except (TypeError, ValueError):
         seat = 0
     seat = max(0, min(seat, len(entry['state'].get('players') or [{}]) - 1))
+    from story_coop_engine import coop_coord_summary
     _mount_seat(entry['state'], seat)
     return jsonify({
         'success': True,
@@ -38231,6 +38232,7 @@ def coop_demo_run_get():
             'status': 'active',
             'compatible': True,
             'expected_content_version': STORY_CONTENT_VERSION,
+            'coop_coord': coop_coord_summary(entry['state']),
         },
         'progress': {}, 'discoveries': [], 'new_discoveries': [],
     })
@@ -38247,7 +38249,8 @@ def coop_demo_story_action():
         entry = _COOP_DEMO_RUNS.get(int(user['id']))
         if not entry:
             return _json_error('尚未开始战斗，请先打开演示入口', 400)
-        from story_engine import StoryActionError, _mount_seat, apply_story_action
+        from story_engine import StoryActionError, _mount_seat
+        from story_coop_engine import apply_coop_action
         data = request.get_json(silent=True) or {}
         action_type = str(data.get('action_type') or '').strip().lower()
         state = entry['state']
@@ -38259,7 +38262,8 @@ def coop_demo_story_action():
         entry['active_seat'] = seat
         _mount_seat(state, seat)
         try:
-            state, events = apply_story_action(state, action_type, data.get('payload') or {}, 'coop-demo')
+            state, events = apply_coop_action(
+                state, seat, action_type, data.get('payload') or {}, 'coop-demo')
         except StoryActionError as exc:
             _mount_seat(state, seat)
             return _json_error(exc.message, 400, code=exc.code)
@@ -38298,12 +38302,18 @@ def coop_demo_start():
         return _json_error('仅工作人员可见的引擎演示', 403)
     import copy as _copy
     import story_mode as _sm
-    from story_engine import _start_combat as _sc
+    from story_engine import _prepare_blessing as _pb
     state = _sm.build_initial_story_state('coop-demo', 'common_flower')
     state['players'] = [_copy.deepcopy(state['player']), _copy.deepcopy(state['player'])]
-    events = []
-    _sc(state, {'type': 'combat'}, 'coop-demo', events,
-        encounter_override=[{'def_id': 'mechanical_crab'}])
+    state['coord'] = {}
+    # 完整旅程：直接进入赐福（跳过难度选择，按普通难度开局）。
+    state['room'] = None
+    state['phase'] = 'map'
+    state['current_floor'] = 1
+    first = state['map']['floors'][0]['nodes'][0]
+    state['current_node_id'] = first['id']
+    _pb(state, 'coop-demo', 'stage:1')
+    events = [{'type': 'combat_start', 'enemy_ids': []}]
     with _COOP_DEMO_LOCK:
         _COOP_DEMO_RUNS[int(user['id'])] = {'state': state, 'active_seat': 0, 'version': 1}
     return jsonify({'success': True, 'snapshot': _coop_demo_snapshot(user['id']),
