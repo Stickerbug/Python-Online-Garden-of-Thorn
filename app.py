@@ -38188,7 +38188,8 @@ def _coop_demo_event_lines(events):
         if t == 'enemy_damage':
             lines.append(f"⚔ 席{e.get('seat', '?')}打出的牌对敌造成 {e.get('amount')} 伤害")
         elif t == 'player_damage':
-            lines.append(f"💔 席? 受到 {e.get('amount')} 伤害（剩 {e.get('after')}H）")
+            seat_tag = f"席{e.get('seat')}" if e.get('seat') is not None else '?'
+            lines.append(f"💔 {seat_tag} 受到 {e.get('amount')} 伤害（剩 {e.get('after')}H）")
         elif t == 'combat_seat_ready':
             lines.append(f"席{e.get('seat')} {'就绪' if e.get('ready') else '撤回就绪'}" + ('——全员就绪，敌方回合！' if e.get('all_ready') else ''))
         elif t == 'seat_downed':

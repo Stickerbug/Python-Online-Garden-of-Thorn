@@ -2349,6 +2349,8 @@ def _player_raw_damage(state, amount, events, source, victim_seat=None):
         }],
         'source': source,
         'attacker_id': None,
+        # 多席位：事件生成时挂载席=受害席。
+        **({'seat': int(combat.get('mounted_seat') or 0)} if _seat_count(state) > 1 else {}),
     })
     return dealt
 
@@ -2379,6 +2381,8 @@ def _player_damage(state, amount, hits, events, source, attacker=None, victim_se
             'after': after,
             'source': source,
             'attacker_id': attacker.get('id'),
+            # 多席位：事件生成时挂载席=受害席。
+            **({'seat': int((state.get('combat') or {}).get('mounted_seat') or 0)} if _seat_count(state) > 1 else {}),
         })
         if attacker and int(attacker.get('health') or 0) > 0:
             for equipment, effect in list(_equipment_effects(state['combat'], 'static_on_attacked')):

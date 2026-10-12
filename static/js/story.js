@@ -6655,6 +6655,11 @@
             }
         } else if (eventType === 'player_damage') {
             const target = $('story-player-target');
+            // 合作演示：敌方打到其他席位时浮字标注席位号。
+            if (STORY_COOP_DEMO && event.seat != null && event.seat !== storyCoopDemoSeat()) {
+                spawnStoryFloat(target, `席${event.seat} -${Math.max(0, Number(event.amount) || 0)}H`, 'damage');
+                return;
+            }
             if (Number(event.amount) > 0) triggerStoryPlayerDamageMood();
             await waitForStoryAnimation(target, 'is-taking-hit', 280);
             const history = Array.isArray(event.history) ? event.history : [];
