@@ -4,6 +4,7 @@ import copy
 import hashlib
 import math
 import random
+from contextlib import contextmanager
 
 from story_content import (
     STORY_BLESSINGS,
@@ -73,6 +74,99 @@ _PRESENTATION_EFFECT_KEYS = (
     'reconstruction', 'integration', 'scrap', 'disc', 'toxic_pressure',
     'injured_summon', 'invincible', 'pressure',
 )
+
+
+# ---------------------------------------------------------------- 多席位（双人合作，2026-10-11）
+# combat 中的共享治理键：回合/敌人/投影等。其余键（资源、状态、牌堆、装备、
+# 轨道、召唤物、各类标记）全部属于"当前挂载席位"，挂载切换时随席位走。
+# 新增战斗内玩家侧键不需要登记——反着来：新增共享治理键才需要加到这里。
+SHARED_COMBAT_KEYS = frozenset({
+    'round', 'turn', 'turn_kind', 'reward_room_type', 'enemies',
+    'next_battle_reward_multiplier',
+    'damage_predictions', 'playable_card_ids',
+})
+
+_SEAT_META_KEYS = frozenset({'seat_states', 'mounted_seat'})
+
+
+def _seat_players(state):
+    """席位化后的玩家列表；v9 存量惰性迁移为单席。"""
+    players = state.get('players')
+    if isinstance(players, list) and players:
+        return players
+    player = state.get('player')
+    players = [player if isinstance(player, dict) else {}]
+    state['players'] = players
+    return players
+
+
+def _seat_count(state):
+    return max(1, len(_seat_players(state)))
+
+
+def _unmount_seat(state):
+    """把 combat 顶层席位键写回 seat_states[当前席]。"""
+    combat = state.get('combat')
+    if not isinstance(combat, dict) or not isinstance(combat.get('seat_states'), dict):
+        return
+    seat = int(combat.get('mounted_seat') or 0)
+    seat_state = combat['seat_states'].setdefault(seat, {})
+    for key in list(combat.keys()):
+        if key in SHARED_COMBAT_KEYS or key in _SEAT_META_KEYS:
+            continue
+        seat_state[key] = combat[key]
+
+
+def _mount_seat(state, seat):
+    """把 seat_states[seat] 挂载为 combat 顶层扁平键，并让 state['player']
+    别名指向该席的持久层数据。已挂载同席时为无操作（保护未写回的现场值）。
+    引擎内其余函数继续直接读写 combat['shield'] / state['player'] 等扁平键，
+    即"结算谁的 action，就先挂载谁"。"""
+    players = _seat_players(state)
+    seat = max(0, min(int(seat), len(players) - 1))
+    combat = state.get('combat')
+    if not isinstance(combat, dict):
+        state['player'] = players[seat]
+        return
+    if not isinstance(combat.get('seat_states'), dict):
+        combat['seat_states'] = {}
+    current = combat.get('mounted_seat')
+    if current is None:
+        current = 0
+        combat['mounted_seat'] = 0
+    if int(current) != seat:
+        _unmount_seat(state)
+        combat['mounted_seat'] = seat
+        seat_state = combat['seat_states'].setdefault(seat, {})
+        for key, value in seat_state.items():
+            combat[key] = value
+    state['player'] = players[seat]
+
+
+@contextmanager
+def _seat_scope(state, seat):
+    """临时挂载某席结算（如敌方回合攻击目标席），结束后恢复原挂载。"""
+    combat = state.get('combat')
+    previous = int(combat.get('mounted_seat') or 0) if isinstance(combat, dict) else seat
+    _mount_seat(state, seat)
+    try:
+        yield seat
+    finally:
+        _mount_seat(state, previous)
+
+
+def _sync_mounted_seat(state):
+    """把挂载席的扁平键同步写回 seat_states[mounted]（不切换挂载）。
+    保持"扁平键与 seat_states[mounted] 永远一致"的不变量，供序列化与
+    未切换路径读取。"""
+    combat = state.get('combat')
+    if not isinstance(combat, dict) or not isinstance(combat.get('seat_states'), dict):
+        return
+    seat = int(combat.get('mounted_seat') or 0)
+    combat['seat_states'][seat] = {
+        key: value for key, value in combat.items()
+        if key not in SHARED_COMBAT_KEYS and key not in _SEAT_META_KEYS
+    }
 
 
 def _story_presentation_state(state):
@@ -207,8 +301,9 @@ def _normalize_legacy_story_state(state):
             pity_offset,
         ),
     )
-    player = state.get('player') if isinstance(state.get('player'), dict) else None
-    if player is not None:
+    for player in _seat_players(state):
+        if not isinstance(player, dict) or not player:
+            continue
         raw_books = player.get('enchantment_books')
         raw_books = raw_books if isinstance(raw_books, list) else []
         normalized_books = []
@@ -248,6 +343,21 @@ def _normalize_legacy_story_state(state):
                 0,
                 int(legacy_locked),
             )
+    # 席位化：v9 存量战斗的扁平玩家键收进 seat_states[当前席] 并完成挂载。
+    # 扁平键对挂载席永远是权威值（无论来自内存还是 JSON 反序列化），因此
+    # 无条件从扁平键重建 seat_states[mounted]。
+    players = _seat_players(state)
+    if isinstance(combat, dict):
+        if not isinstance(combat.get('seat_states'), dict):
+            combat['seat_states'] = {}
+        mounted = combat.get('mounted_seat')
+        if not isinstance(mounted, int) or not 0 <= int(mounted) < len(players):
+            mounted = 0
+        combat['mounted_seat'] = int(mounted)
+        _sync_mounted_seat(state)
+        _mount_seat(state, int(mounted))
+    else:
+        state['player'] = players[0]
 
 
 def _book_instance(state, instance_id):
@@ -6858,17 +6968,6 @@ def _machine_learning_turn_start(state, seed, events):
 
 def _start_combat(state, node, seed, events, encounter_override=None):
     specs = encounter_override or _encounter_specs(state, node['type'], seed)
-    draw_pile = copy.deepcopy(state['player']['deck'])
-    if _has_relic(state, 'steady'):
-        primary_bonus = _relic_amount(state, 'steady')
-        for card in draw_pile:
-            if _is_story_primary_card(card):
-                card.setdefault('modifiers', {})['primary_bonus'] = primary_bonus
-    _rng(state, seed, 'combat_start').shuffle(draw_pile)
-    innate_cards = [card for card in draw_pile if _card_has_tag(card, 'innate')]
-    if innate_cards:
-        draw_pile = [card for card in draw_pile if not _card_has_tag(card, 'innate')]
-        draw_pile.extend(innate_cards)
     enemies = []
     for index, spec in enumerate(specs):
         enemies.append(_build_enemy(state, spec['def_id'], index + 1, spec))
@@ -6877,18 +6976,79 @@ def _start_combat(state, node, seed, events, encounter_override=None):
         for enemy in enemies:
             enemy['max_health'] = max(1, int(enemy['max_health']) * health_multiplier)
             enemy['health'] = int(enemy['max_health'])
+    next_battle_weak = max(0, int(state.pop('next_battle_weak', 0) or 0))
     state['combat'] = {
         'round': 1,
         'turn': 'player',
         'turn_kind': 'normal',
         'reward_room_type': str(node.get('type') or 'combat'),
-        'elixir': int(state['player']['max_elixir']),
-        'magic': story_combat_starting_magic(state['player']),
+        'enemies': enemies,
+        'next_battle_reward_multiplier': max(
+            1,
+            int(state.pop('next_battle_reward_multiplier', 1) or 1),
+        ),
+        'seat_states': {},
+        'mounted_seat': 0,
+    }
+    state['phase'] = 'combat'
+    # 第一遍：各席位扁平字段初始化（牌堆/资源/状态/子系统）。
+    for seat in range(_seat_count(state)):
+        _mount_seat(state, seat)
+        combat = state['combat']
+        combat.update(_initial_seat_combat_fields(state, seed, seat, next_battle_weak))
+    # 共享：敌人入场效果与开局脚本（须先于各席遗物/抽牌效果）。
+    _mount_seat(state, 0)
+    for enemy in enemies:
+        _resolve_enemy_entrance(state, enemy, events)
+    if any(enemy.get('def_id') == 'termite_mound' for enemy in enemies):
+        for enemy in enemies:
+            if int(enemy.get('psionic_connection') or 0) <= 0:
+                continue
+            enemy['psionic_connection'] = 0
+            enemy['psionic_sustain'] = 1
+            original_max = max(1, int(enemy.get('max_health') or 1))
+            enemy['max_health'] = max(1, original_max // 2)
+            enemy['health'] = min(int(enemy.get('health') or enemy['max_health']), enemy['max_health'])
+    for enemy in enemies:
+        if enemy.get('def_id') == 'reconstructor_enemy':
+            enemy['move_index'] = _rng(
+                state,
+                seed,
+                f'reconstructor_start:{enemy["id"]}',
+            ).randrange(3)
+    # 第二遍：各席位遗物/规则效果与首回合抽牌（开场闪电等对敌效果在此）。
+    for seat in range(_seat_count(state)):
+        _mount_seat(state, seat)
+        _apply_combat_start_seat_effects(state, seed, events)
+    _mount_seat(state, 0)
+    _refresh_combat_projections(state)
+    _sync_mounted_seat(state)
+    events.append({'type': 'combat_start', 'enemy_ids': [enemy['def_id'] for enemy in enemies]})
+
+
+def _initial_seat_combat_fields(state, seed, seat, next_battle_weak=0):
+    """构建某席位的战斗初始扁平字段（牌堆、资源、状态、子系统）。"""
+    player = state['player']
+    draw_pile = copy.deepcopy(player['deck'])
+    if _has_relic(state, 'steady'):
+        primary_bonus = _relic_amount(state, 'steady')
+        for card in draw_pile:
+            if _is_story_primary_card(card):
+                card.setdefault('modifiers', {})['primary_bonus'] = primary_bonus
+    shuffle_namespace = 'combat_start' if seat == 0 else f'combat_start:seat:{seat}'
+    _rng(state, seed, shuffle_namespace).shuffle(draw_pile)
+    innate_cards = [card for card in draw_pile if _card_has_tag(card, 'innate')]
+    if innate_cards:
+        draw_pile = [card for card in draw_pile if not _card_has_tag(card, 'innate')]
+        draw_pile.extend(innate_cards)
+    return {
+        'elixir': int(player['max_elixir']),
+        'magic': story_combat_starting_magic(player),
         'shield': 0,
         'power': 0,
         'temporary_power': 0,
         'endurance': 0,
-        'weak': 0,
+        'weak': next_battle_weak,
         'vulnerable': 0,
         'fragile': 0,
         'poison': 0,
@@ -6910,7 +7070,6 @@ def _start_combat(state, node, seed, events, encounter_override=None):
         'discard_pile': [],
         'exile_pile': [],
         'equipment': [],
-        'enemies': enemies,
         'cards_played_this_turn': 0,
         'cards_drawn_this_combat': 0,
         'active_discards_this_turn': 0,
@@ -6920,7 +7079,7 @@ def _start_combat(state, node, seed, events, encounter_override=None):
         'next_skill_repeats': 0,
         'salt_multipliers': [],
         'delayed_copies': [],
-        'starting_health': int(state['player']['health']),
+        'starting_health': int(player['health']),
         'damage_taken': 0,
         'damage_taken_this_turn': 0,
         'damage_taken_last_turn': 0,
@@ -6958,43 +7117,22 @@ def _start_combat(state, node, seed, events, encounter_override=None):
         'summons': [],
         'summon_serial': 0,
     }
-    state['phase'] = 'combat'
+
+
+def _apply_combat_start_seat_effects(state, seed, events):
+    """战斗开始时挂载席位的遗物/规则效果与首回合抽牌。须在挂载该席后调用。"""
     combat = state['combat']
-    next_battle_weak = max(0, int(state.pop('next_battle_weak', 0) or 0))
+    next_battle_weak = int(combat.get('weak') or 0)
     if next_battle_weak:
-        before_weak = max(0, int(combat.get('weak') or 0))
-        combat['weak'] = before_weak + next_battle_weak
         events.append({
             'type': 'status',
             'target_id': 'player',
             'status': 'weak',
             'amount': next_battle_weak,
-            'before': before_weak,
-            'after': int(combat['weak']),
+            'before': 0,
+            'after': next_battle_weak,
             'source': 'next_battle',
         })
-    combat['next_battle_reward_multiplier'] = max(
-        1,
-        int(state.pop('next_battle_reward_multiplier', 1) or 1),
-    )
-    for enemy in enemies:
-        _resolve_enemy_entrance(state, enemy, events)
-    if any(enemy.get('def_id') == 'termite_mound' for enemy in enemies):
-        for enemy in enemies:
-            if int(enemy.get('psionic_connection') or 0) <= 0:
-                continue
-            enemy['psionic_connection'] = 0
-            enemy['psionic_sustain'] = 1
-            original_max = max(1, int(enemy.get('max_health') or 1))
-            enemy['max_health'] = max(1, original_max // 2)
-            enemy['health'] = min(int(enemy.get('health') or enemy['max_health']), enemy['max_health'])
-    for enemy in enemies:
-        if enemy.get('def_id') == 'reconstructor_enemy':
-            enemy['move_index'] = _rng(
-                state,
-                seed,
-                f'reconstructor_start:{enemy["id"]}',
-            ).randrange(3)
     combat['elixir'] = _turn_elixir_baseline(state, combat)
     if _has_relic(state, 'magic_source'):
         _gain_magic(state, _relic_amount(state, 'magic_source'), events)
@@ -7055,7 +7193,7 @@ def _start_combat(state, node, seed, events, encounter_override=None):
             source='easy_peace',
         )
     _activate_player_blind(combat, events)
-    for enemy in enemies:
+    for enemy in combat['enemies']:
         if _has_relic(state, 'opening_lightning'):
             event_offset = len(events)
             _enemy_raw_damage(
@@ -7098,8 +7236,6 @@ def _start_combat(state, node, seed, events, encounter_override=None):
     _draw_cards(state, draw_count, seed, events)
     _machine_learning_turn_start(state, seed, events)
     combat['draw_phase_complete'] = True
-    _refresh_combat_projections(state)
-    events.append({'type': 'combat_start', 'enemy_ids': [enemy['def_id'] for enemy in enemies]})
 
 
 def _next_enemy_move(state, enemy):

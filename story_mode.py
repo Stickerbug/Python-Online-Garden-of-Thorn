@@ -329,7 +329,7 @@ def build_initial_story_state(seed, character_id='common_flower'):
         difficulty='normal',
     )
     first_node = story_map['floors'][0]['nodes'][0]
-    return {
+    state = {
         'schema_version': STORY_SCHEMA_VERSION,
         'content_version': STORY_CONTENT_VERSION,
         'rules_version': STORY_RULES_VERSION,
@@ -374,3 +374,5 @@ def build_initial_story_state(seed, character_id='common_flower'):
         'presentation_event_counter': 0,
         'flags': {},
     }
+    state['players'] = [state['player']]
+    return state
