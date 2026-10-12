@@ -6197,6 +6197,15 @@ def _play_card(state, payload, seed, events, autoplay_depth=0):
 
 def _enemy_intent(state, enemy):
     definition = STORY_ENEMIES[enemy['def_id']]
+    if int(enemy.get('stun') or 0) > 0:
+        # 眩晕是一种行动（图鉴口径）：被眩晕的敌人下一次行动显示为眩晕，
+        # 不再预告原招式（否则"跳过了但意图仍是攻击"看起来像眩晕无效）。
+        return {
+            'move_index': -1,
+            'name': {'zh': '眩晕', 'en': 'Stunned'},
+            'entries': [],
+            'summary': '',
+        }
     if (
         definition.get('script') == 'brick_pile'
         and bool(enemy.get('cover_enemy'))

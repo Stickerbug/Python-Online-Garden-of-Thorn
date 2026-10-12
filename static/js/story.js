@@ -6618,7 +6618,12 @@
     async function playStoryPresentationEvent(event, nextRun) {
         const eventType = String(event?.type || event?.kind || '');
         if (!eventType) return;
-        if (eventType === 'enemy_action') {
+        if (eventType === 'enemy_skipped') {
+            const target = storyEnemyActor(event.enemy_id);
+            if (target) {
+                spawnStoryFloat(target, lang === 'zh' ? '眩晕' : 'Stunned', 'status');
+            }
+        } else if (eventType === 'enemy_action') {
             await settleAllStoryMechanicalTrackActivations();
             if (event?.track_card || event?.source_card_instance_id) {
                 await animateStoryMechanicalTrackActivation(event);
