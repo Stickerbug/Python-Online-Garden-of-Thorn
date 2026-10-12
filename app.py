@@ -37957,6 +37957,35 @@ def _minigame_suika_guard():
     return _minigame_2048_guard()
 
 
+_LEISURE_SESSION_WORKER_STARTED = False
+
+
+def _leisure_session_worker():
+    """休闲花园会话守卫：每 5 秒扫一遍，超时（10 分钟）/失联（心跳超时）强制结算。"""
+    import leisure_sessions
+    while True:
+        try:
+            for outcome in leisure_sessions.sweep():
+                if outcome.get('settled'):
+                    print(f"[leisure] force settled reason={outcome.get('reason_code')} "
+                          f"service={outcome.get('service')}", flush=True)
+        except Exception as exc:
+            admin_event('error', f'leisure session worker error: {exc}')
+        time.sleep(5)
+
+
+def ensure_leisure_session_worker():
+    global _LEISURE_SESSION_WORKER_STARTED
+    if _LEISURE_SESSION_WORKER_STARTED:
+        return
+    _LEISURE_SESSION_WORKER_STARTED = True
+    try:
+        socketio.start_background_task(_leisure_session_worker)
+    except Exception:
+        threading.Thread(target=_leisure_session_worker,
+                         name='leisure-session-guard', daemon=True).start()
+
+
 def _minigame_2048_settlement_worker():
     while True:
         try:
@@ -38204,6 +38233,21 @@ def api_minigame_history():
     return jsonify({'success': True, 'records': records})
 
 
+@app.route('/api/minigame/heartbeat', methods=['POST'])
+def api_minigame_heartbeat():
+    """休闲对局心跳（客户端 10 秒一次）；断联由服务器清扫线程强制结算。"""
+    identity, denied = _minigame_guest_guard()
+    if denied is not None:
+        return denied
+    import leisure_sessions
+    session = leisure_sessions.heartbeat(identity[0])
+    remaining = None
+    if session:
+        remaining = max(0, int(leisure_sessions.LEISURE_SESSION_LIMIT_SECONDS
+                               - (time.time() - float(session['started_at']))))
+    return jsonify({'success': True, 'active': bool(session), 'remaining_seconds': remaining})
+
+
 @app.route('/api/minigame/suika/sync', methods=['POST'])
 def api_minigame_suika_sync():
     """增量同步：立刻落库 + 启发式校验（物理游戏没法逐位重放，见服务模块注释）。"""
@@ -38224,6 +38268,10 @@ def api_minigame_suika_sync():
     claimed_score = payload.get('claimed_score')
     claimed_max_tier = payload.get('claimed_max_tier')
     source = str(payload.get('source') or 'online')
+    import leisure_sessions
+    leisure_sessions.heartbeat(identity[0])
+    if not leisure_sessions.active_session(identity[0]):
+        leisure_sessions.begin_session(identity[0], 'suika', game_uid)
     try:
         with get_db_connection() as conn:
             result = minigame_suika_service.sync_progress(
@@ -38237,6 +38285,12 @@ def api_minigame_suika_sync():
     except Exception as exc:
         admin_event('error', f'suika sync failed: {exc}')
         return _json_error('同步失败，本地进度已保留', 500)
+    if bool(payload.get('game_over')):
+        # 游戏失败/结束：直接结算（服务端口径）并结束会话计时。
+        import leisure_sessions as _ls
+        _ls.force_settle_now(identity[0])
+        result = dict(result or {})
+        result['server_settled'] = True
     return jsonify({'success': True, **result})
 
 
@@ -38250,6 +38304,11 @@ def api_minigame_suika_restart():
     # 每次调用都会关一行 + 插一行，不加按账号限流就是白送的库表膨胀口子
     if _minigame_2048_rate_limited(f'u{identity[0]}', 'minigame_suika_restart', limit=60):
         return _json_error('操作太频繁，请稍后再试', 429)
+    import leisure_sessions
+    active = leisure_sessions.active_session(identity[0])
+    if active:
+        leisure_sessions.force_settle_now(identity[0], active)
+        return _json_error('上一局已由服务器结算（超时或退出），请稍后再开始新的一局', 409)
     payload = request.get_json(silent=True) or {}
     try:
         seed = int(payload.get('seed') or 1) & 0xFFFFFFFF
@@ -38262,6 +38321,9 @@ def api_minigame_suika_restart():
     except Exception as exc:
         admin_event('error', f'suika restart failed: {exc}')
         return _json_error('重新开始失败，本地进度已保留', 500)
+    if game and game.get('game_uid'):
+        import leisure_sessions as _ls
+        _ls.begin_session(identity[0], 'suika', game['game_uid'])
     return jsonify({'success': True, 'game': game})
 
 
@@ -38505,6 +38567,11 @@ def api_minigame_2048_sync():
     else:
         return _json_error('ops 必须是字符串或数组', 400)
     source = str(payload.get('source') or 'online')
+    import leisure_sessions
+    leisure_sessions.heartbeat(identity[0])
+    _sync_uid = str(payload.get('game_uid') or '')
+    if _sync_uid and not leisure_sessions.active_session(identity[0]):
+        leisure_sessions.begin_session(identity[0], '2048', _sync_uid)
     try:
         with get_db_connection() as conn:
             result = minigame_2048_service.sync_progress(
@@ -38575,6 +38642,11 @@ def api_minigame_2048_restart():
     # 与 suika 同口径：每次调用都写库（关一行 + 插一行），按账号限流防灌表
     if _minigame_2048_rate_limited(f'u{identity[0]}', 'minigame2048_restart', limit=60):
         return _json_error('请求过于频繁，请稍后再试', 429)
+    import leisure_sessions
+    active = leisure_sessions.active_session(identity[0])
+    if active:
+        leisure_sessions.force_settle_now(identity[0], active)
+        return _json_error('上一局已由服务器结算（超时或退出），请稍后再开始新的一局', 409)
     payload = request.get_json(silent=True) or {}
     seed = payload.get('seed') if payload.get('client_seed') is None else payload.get('client_seed')
     source = str(payload.get('source') or 'online')
@@ -38583,6 +38655,8 @@ def api_minigame_2048_restart():
             state = minigame_2048_service.restart_game(
                 conn, identity[0], seed=seed, source=source,
                 play_mode=_leisure_play_mode_for(identity[0]))
+        if state and state.get('game_uid'):
+            leisure_sessions.begin_session(identity[0], '2048', state['game_uid'])
         return jsonify({'success': True, **state})
     except Exception as exc:
         admin_event('error', f'2048 restart failed: {exc}')
@@ -38700,6 +38774,7 @@ if __name__ == '__main__':
     )
     # 休闲花园 2048 的周结算：不依赖有人打开小游戏，错过时点会补做。
     ensure_minigame_2048_settlement_worker()
+    ensure_leisure_session_worker()
     # 段位月度结算（2026-10-02）：北京月末 23:59 锁定，错点补做、幂等。
     ensure_rank_monthly_settlement_worker()
     threading.Thread(

@@ -1488,3 +1488,27 @@ if (document.readyState === 'loading') {
 } else {
   boot();
 }
+
+
+// ---- 休闲对局服务端心跳（2026-10-12 安全增强）----
+// 服务器对每局保持 10 分钟计时并要求 10 秒一跳；断联/超时由服务器强制结算。
+(function startLeisureHeartbeat() {
+  'use strict';
+  function beat() {
+    try {
+      fetch('/api/minigame/heartbeat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+        keepalive: true,
+      }).catch(function () {});
+    } catch (err) { /* 心跳失败本身由服务器超时判定兜底 */ }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () { beat(); setInterval(beat, 10000); });
+  } else {
+    beat();
+    setInterval(beat, 10000);
+  }
+  window.addEventListener('pagehide', function () { beat(); });
+})();
