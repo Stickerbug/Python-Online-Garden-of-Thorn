@@ -1,6 +1,13 @@
 (() => {
     'use strict';
 
+    // 合作引擎演示通道（?coopdemo=1）：run 读写改走 /api/coop-demo/*。
+    const STORY_COOP_DEMO = new URLSearchParams(location.search).get('coopdemo') === '1'
+        || localStorage.getItem('gtv_coop_demo') === '1';
+    if (STORY_COOP_DEMO) localStorage.setItem('gtv_coop_demo', '1');
+    const storyRunApiUrl = () => (STORY_COOP_DEMO ? '/api/coop-demo/run' : '/api/story/run');
+    const storyActionApiUrl = () => (STORY_COOP_DEMO ? '/api/coop-demo/action' : '/api/story/run/action');
+
     const $ = (id) => document.getElementById(id);
     const SVG_NS = 'http://www.w3.org/2000/svg';
     const STORY_MAP_NODE_RADIUS = 25;
@@ -6826,7 +6833,7 @@
         updateStorySurrenderControl();
         try {
             const previousPhase = String(activeRun?.state?.phase || '');
-            const result = await requestJson('/api/story/run/action', {
+            const result = await requestJson(storyActionApiUrl(), {
                 method: 'POST',
                 body: JSON.stringify({
                     run_id: activeRun.id,
@@ -6889,7 +6896,7 @@
 
     async function resyncStoryRunAfterNetworkError() {
         try {
-            const data = await requestStoryLoadJson('/api/story/run');
+            const data = await requestStoryLoadJson(storyRunApiUrl());
             if (data?.run) renderRun(data.run);
         } catch (_) { /* 拉取也失败就保持现状；下一次操作会走 409 重同步 */ }
     }
@@ -11962,6 +11969,24 @@
         storyCodexHistory = [];
     }
 
+    function ensureCoopDemoControls() {
+        if (!STORY_COOP_DEMO) return;
+        if ($('story-coop-demo-bar')) return;
+        const bar = document.createElement('div');
+        bar.id = 'story-coop-demo-bar';
+        bar.style.cssText = 'position:fixed;top:10px;right:12px;z-index:9999;';
+        const exitBtn = document.createElement('button');
+        exitBtn.type = 'button';
+        exitBtn.textContent = '退出合作演示';
+        exitBtn.style.cssText = 'padding:6px 10px;border-radius:6px;border:1px solid #b03a2e;background:#3a1e1a;color:#f0c9c0;cursor:pointer;';
+        exitBtn.addEventListener('click', () => {
+            localStorage.removeItem('gtv_coop_demo');
+            location.href = '/story';
+        });
+        bar.appendChild(exitBtn);
+        document.body.appendChild(bar);
+    }
+
     function renderBlessing(state) {
         const screen = $('story-blessing');
         screen?.classList.remove('is-card-selection');
@@ -14691,6 +14716,7 @@
             return;
         }
         const state = run.state || {};
+        ensureCoopDemoControls();
         renderStoryPersistentHud(run);
         const hasFloorCheckpoint = Boolean(state.floor_entry_checkpoint?.state);
         updateStoryManualSaveControls(run);
@@ -14717,7 +14743,7 @@
         try {
             const [contentPayload, runPayload] = await Promise.all([
                 requestStoryLoadJson('/api/story/content'),
-                requestStoryLoadJson('/api/story/run'),
+                requestStoryLoadJson(storyRunApiUrl()),
             ]);
             storyContent = contentPayload.content || {};
             contentVersion = contentPayload.content_version || '';
@@ -14741,7 +14767,7 @@
                 contentVersion = contentPayload.content_version || '';
                 ingestStoryDiscoveryPayload(contentPayload);
             }
-            const payload = await requestJson('/api/story/run', {
+            const payload = await requestJson(storyRunApiUrl(), {
                 method: 'POST',
                 body: JSON.stringify({ character_id: selectedStoryCharacterId }),
             });

@@ -38204,6 +38204,85 @@ def _coop_demo_event_lines(events):
     return lines[-12:]
 
 
+@app.route('/api/coop-demo/run', methods=['GET'])
+def coop_demo_run_get():
+    """合作演示：以单人 run API 的契约返回双席旅程（viewer 席位视角）。"""
+    user = _coop_demo_session_user()
+    if not user or not _coop_demo_allowed(user.get('id')):
+        return _json_error('仅工作人员可见的引擎演示', 403)
+    from story_engine import _mount_seat
+    entry = _COOP_DEMO_RUNS.get(int(user['id']))
+    if not entry:
+        return jsonify({'success': True, 'run': None,
+                        'progress': {}, 'discoveries': [], 'new_discoveries': []})
+    _mount_seat(entry['state'], entry['active_seat'])
+    return jsonify({
+        'success': True,
+        'run': {
+            'id': 'coop-demo',
+            'state': entry['state'],
+            'state_version': entry['version'],
+            'content_version': STORY_CONTENT_VERSION,
+            'status': 'active',
+            'compatible': True,
+            'expected_content_version': STORY_CONTENT_VERSION,
+        },
+        'progress': {}, 'discoveries': [], 'new_discoveries': [],
+    })
+
+
+@app.route('/api/coop-demo/action', methods=['POST'])
+def coop_demo_story_action():
+    """合作演示：接受单人模式同款 action 请求（viewer 席位结算；end_turn 后
+    演示模式下其余席位自动就绪，驱动敌方回合立即结算）。"""
+    user = _coop_demo_session_user()
+    if not user or not _coop_demo_allowed(user.get('id')):
+        return _json_error('仅工作人员可见的引擎演示', 403)
+    with _COOP_DEMO_LOCK:
+        entry = _COOP_DEMO_RUNS.get(int(user['id']))
+        if not entry:
+            return _json_error('尚未开始战斗，请先打开演示入口', 400)
+        from story_engine import StoryActionError, _living_seats, _mount_seat, apply_story_action
+        data = request.get_json(silent=True) or {}
+        action_type = str(data.get('action_type') or '').strip().lower()
+        state = entry['state']
+        active = entry['active_seat']
+        _mount_seat(state, active)
+        try:
+            state, events = apply_story_action(state, action_type, data.get('payload') or {}, 'coop-demo')
+            # 演示：本席就绪后自动替其余存活席就绪（真实多人由各玩家自己点）。
+            if action_type == 'end_turn' and state.get('phase') == 'combat':
+                combat = state['combat']
+                for seat in _living_seats(state):
+                    if seat in (combat.get('ready_seats') or []):
+                        continue
+                    _mount_seat(state, seat)
+                    state, extra = apply_story_action(state, 'end_turn', {}, 'coop-demo')
+                    events.extend(extra)
+                _mount_seat(state, active)
+        except StoryActionError as exc:
+            _mount_seat(state, active)
+            return _json_error(exc.message, 400, code=exc.code)
+        entry['state'] = state
+        entry['version'] = int(entry.get('version') or 0) + 1
+        _mount_seat(state, active)
+        return jsonify({
+            'success': True,
+            'duplicate': False,
+            'run': {
+                'id': 'coop-demo',
+                'state': state,
+                'state_version': entry['version'],
+                'content_version': state.get('content_version'),
+                'status': 'active',
+                'compatible': True,
+                'expected_content_version': state.get('content_version'),
+            },
+            'events': events,
+            'progress': {}, 'new_discoveries': [],
+        })
+
+
 @app.route('/coop-demo')
 def coop_demo_page():
     user = _coop_demo_session_user()
@@ -38226,7 +38305,7 @@ def coop_demo_start():
     _sc(state, {'type': 'combat'}, 'coop-demo', events,
         encounter_override=[{'def_id': 'mechanical_crab'}])
     with _COOP_DEMO_LOCK:
-        _COOP_DEMO_RUNS[int(user['id'])] = {'state': state, 'active_seat': 0}
+        _COOP_DEMO_RUNS[int(user['id'])] = {'state': state, 'active_seat': 0, 'version': 1}
     return jsonify({'success': True, 'snapshot': _coop_demo_snapshot(user['id']),
                     'events': _coop_demo_event_lines(events)})
 
