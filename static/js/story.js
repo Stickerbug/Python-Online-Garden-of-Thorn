@@ -7387,6 +7387,48 @@
         );
     }
 
+    let storyCardNameProbeCache = null;
+    let storyCardNameProbeFingerprint = '';
+
+    function storyCardNameProbeList() {
+        const fingerprint = String(storyContent?.fingerprint || storyContent?.content_version || '');
+        if (storyCardNameProbeCache && storyCardNameProbeFingerprint === fingerprint) {
+            return storyCardNameProbeCache;
+        }
+        // 只收录「包含某状态词」的卡牌名（如「魔法碎片」含状态「碎片」）：
+        // 防止这类卡牌名被逐字扫描截断后，其中一段被误识别为状态词。
+        const statusLabels = [];
+        for (const def of storyStatusRichDefs()) {
+            statusLabels.push(...def.labels);
+        }
+        const entries = [];
+        for (const [defId, def] of Object.entries(storyContent?.cards || {})) {
+            const name = def?.name;
+            if (!name) continue;
+            for (const label of [name.zh, name.en]) {
+                const trimmed = typeof label === 'string' ? label.trim() : '';
+                if (trimmed.length < 2) continue;
+                if (!statusLabels.some((status) => trimmed.includes(status) && trimmed !== status)) continue;
+                entries.push({ defId, label: trimmed });
+            }
+        }
+        entries.sort((a, b) => b.label.length - a.label.length);
+        storyCardNameProbeCache = entries;
+        storyCardNameProbeFingerprint = fingerprint;
+        return entries;
+    }
+
+    function matchStoryCardNameAt(rest) {
+        // 在当前位置匹配「包含状态词的卡牌名」。须在逐字输出前调用，
+        // 否则名字前半段已被当作普通文本发出（如「魔法碎片」的「魔法」）。
+        const text = String(rest || '');
+        if (!text) return null;
+        for (const entry of storyCardNameProbeList()) {
+            if (text.startsWith(entry.label)) return entry;
+        }
+        return null;
+    }
+
     function matchStoryRichStatus(rest) {
         const quantity = String.raw`(?:[+\-−]?\d+(?:\.\d+)?\s*(?:层|层数|stack(?:s)?|点)?\s*)?`;
         for (const def of storyStatusRichDefs()) {
@@ -7609,6 +7651,14 @@
         let cursor = 0;
         while (cursor < text.length) {
             const rest = text.slice(cursor);
+            const cardNameHit = matchStoryCardNameAt(rest);
+            if (cardNameHit) {
+                const chip = createStoryInlineCardChip(cardNameHit.defId);
+                if (chip) container.append(chip);
+                else container.append(document.createTextNode(cardNameHit.label));
+                cursor += cardNameHit.label.length;
+                continue;
+            }
             const unitMatch = rest.match(
                 /^([+\-−]?\d+(?:\.\d+)?)\s*(?:\[\[icon:([A-Za-z0-9_]+)\]\]|([DHEMSG]))(?![A-Za-z])/i,
             );
