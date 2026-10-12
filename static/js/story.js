@@ -12096,12 +12096,19 @@
             localStorage.removeItem('gtv_coop_demo');
             location.href = '/story';
         });
-        if (window.__coop_invite_code) {
-            const codeEl = document.createElement('div');
-            codeEl.textContent = `邀请码 ${window.__coop_invite_code}`;
-            codeEl.style.cssText = 'color:#d8b84a;font-weight:700;text-align:center;letter-spacing:2px;';
-            bar.appendChild(codeEl);
-        }
+        const codeEl = document.createElement('div');
+        codeEl.id = 'story-coop-demo-code';
+        codeEl.style.cssText = 'color:#d8b84a;font-weight:700;text-align:center;letter-spacing:2px;cursor:pointer;display:none;';
+        codeEl.title = '点击复制邀请码';
+        codeEl.addEventListener('click', async () => {
+            const code = codeEl.dataset.code || '';
+            if (!code) return;
+            try {
+                await navigator.clipboard.writeText(code);
+                codeEl.textContent = `邀请码 ${code}（已复制）`;
+            } catch (err) { /* 剪贴板不可用：保持展示原码 */ }
+        });
+        bar.appendChild(codeEl);
         const seats = document.createElement('span');
         seats.id = 'story-coop-demo-seats';
         seats.style.color = '#e8e4d8';
@@ -12110,6 +12117,13 @@
         document.body.appendChild(bar);
         }
         const seatsEl = $('story-coop-demo-seats');
+    const codeEl = $('story-coop-demo-code');
+    const inviteCode = String(window.__coop_invite_code || (activeRun && activeRun.invite_code) || '').trim();
+    if (codeEl && inviteCode && codeEl.dataset.code !== inviteCode) {
+        codeEl.dataset.code = inviteCode;
+        codeEl.textContent = `邀请码 ${inviteCode}`;
+        codeEl.style.display = '';
+    }
     if (seatsEl && activeRun && activeRun.state) {
         const state = activeRun.state;
         const combat = state.combat || {};

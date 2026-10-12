@@ -38226,12 +38226,14 @@ def coop_demo_run_get():
     from story_coop_engine import coop_coord_summary
     # 联机房间成员：读写共享对局，席位以房间分配为准。
     room_code = _COOP_DEMO_USER_ROOM.get(int(user['id']))
+    invite_code = None
     if room_code and room_code in _COOP_DEMO_ROOMS:
         room = _COOP_DEMO_ROOMS[room_code]
         member_seat = room['members'].get(int(user['id']))
         if member_seat is not None:
             entry = room
             seat = member_seat
+            invite_code = room_code
     _mount_seat(entry['state'], seat)
     return jsonify({
         'success': True,
@@ -38244,6 +38246,9 @@ def coop_demo_run_get():
             'compatible': True,
             'expected_content_version': STORY_CONTENT_VERSION,
             'coop_coord': coop_coord_summary(entry['state']),
+            # 房间成员有权知道邀请码：前端 location.href 跳页后 window 变量不存活，
+            # 必须由服务端随 run 下发才能稳定展示。
+            'invite_code': invite_code,
         },
         'progress': {}, 'discoveries': [], 'new_discoveries': [],
     })
