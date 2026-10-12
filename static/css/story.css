@@ -3732,9 +3732,18 @@ button.story-settings-row:hover:not(:disabled) { border-color: var(--story-green
   font-size: 8.6cqi;
   font-weight: 700;
 }
-/* 有价格条（note）时标签行让位，避免被绝对定位的价格条盖住（2026-10-12） */
-.story-card.has-note .story-card-tags {
+/* 有价格条（note）的卡（2026-10-12）：取消固定宽高比并允许溢出，
+   标签随内容自然排在卡内；价格条外挂在卡牌下方，不再遮挡/裁切。 */
+.story-card.has-note {
+  overflow: visible;
+  aspect-ratio: auto;
   margin-bottom: 22px;
+}
+
+.story-card.has-note .story-card-note {
+  top: 100%;
+  bottom: auto;
+  margin-top: 4px;
 }
 
 .story-card-note {
