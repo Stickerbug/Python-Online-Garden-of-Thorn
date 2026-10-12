@@ -1512,3 +1512,20 @@ if (document.readyState === 'loading') {
   }
   window.addEventListener('pagehide', function () { beat(); });
 })();
+
+// 退出按钮：先让服务器立刻结算本局，再回休闲花园主页。
+(function bindSuikaExit() {
+  'use strict';
+  const exitLink = document.getElementById('sk-exit');
+  if (!exitLink) return;
+  exitLink.addEventListener('click', (event) => {
+    event.preventDefault();
+    const href = exitLink.getAttribute('href') || '/minigame';
+    fetch('/api/minigame/exit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+      keepalive: true,
+    }).catch(function () {}).then(function () { window.location.href = href; });
+  });
+})();

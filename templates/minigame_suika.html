@@ -40,7 +40,7 @@
 
   <header class="sk-topbar">
     <div class="sk-topbar-row">
-      <a class="sk-back" href="{{ back_href|default('/minigame') }}" title="返回休闲花园">← 休闲花园</a>
+      <a id="sk-exit" class="sk-back" href="{{ back_href|default('/minigame') }}" title="退出并结算本局">← 退出</a>
       {% if not user_id %}
       <span class="sk-guest-note">游客模式 · <a class="sk-login-link" href="/?login=1" target="_blank" rel="noopener">登录 / 注册</a> 后上榜</span>
       {% endif %}
@@ -63,7 +63,6 @@
           <span class="sk-score-label">最高纪录</span>
           <strong id="sk-best" class="sk-score-value">0</strong>
         </div>
-        <button id="sk-new" class="sk-btn" type="button">新游戏</button>
       </div>
     </div>
   </header>

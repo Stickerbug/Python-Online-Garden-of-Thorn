@@ -38248,6 +38248,17 @@ def api_minigame_heartbeat():
     return jsonify({'success': True, 'active': bool(session), 'remaining_seconds': remaining})
 
 
+@app.route('/api/minigame/exit', methods=['POST'])
+def api_minigame_exit():
+    """主动退出：立刻结算当前休闲对局（服务端已存分数口径）并清除计时。"""
+    identity, denied = _minigame_guest_guard()
+    if denied is not None:
+        return denied
+    import leisure_sessions
+    outcome = leisure_sessions.force_settle_now(identity[0])
+    return jsonify({'success': True, 'settled': bool(outcome.get('settled'))})
+
+
 @app.route('/api/minigame/suika/sync', methods=['POST'])
 def api_minigame_suika_sync():
     """增量同步：立刻落库 + 启发式校验（物理游戏没法逐位重放，见服务模块注释）。"""

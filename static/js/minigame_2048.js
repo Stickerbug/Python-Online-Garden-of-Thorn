@@ -1291,7 +1291,20 @@ async function boot() {
   updateHideTitlesButton();
 }
 
-el('mg-new').addEventListener('click', () => { void restartGame(); });
+const mgNewBtn = document.getElementById('mg-new');
+if (mgNewBtn) mgNewBtn.addEventListener('click', () => { void restartGame(); });
+// 退出按钮：先让服务器立刻结算本局，再回休闲花园主页。
+(function bindExit() {
+  const exitLink = document.getElementById('mg-exit');
+  if (!exitLink) return;
+  exitLink.addEventListener('click', (event) => {
+    event.preventDefault();
+    const href = exitLink.getAttribute('href') || '/minigame';
+    fetch('/api/minigame/exit', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}', keepalive: true,
+    }).catch(() => {}).finally(() => { window.location.href = href; });
+  });
+})();
 el('mg-invite-accept').addEventListener('click', () => { void acceptInvite(); });
 el('mg-invite-decline').addEventListener('click', () => { declineInvite(); });
 el('mg-rank').addEventListener('click', () => {
