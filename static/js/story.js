@@ -15886,6 +15886,19 @@
         $('story-version-old-restart')?.addEventListener('click', replaceLegacyRun);
         if (window.__STORY_COOP_ACCESS__) {
             $('story-coop-entry')?.addEventListener('click', openCooperativeStoryPreview);
+            $('story-coop-demo-entry')?.addEventListener('click', async () => {
+                // 多人爬塔（开发中）：开新演示局并进入，本标签页操控席0。
+                try {
+                    await fetch('/api/coop-demo/start', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: '{}',
+                    });
+                } catch (err) { /* 开局失败时进入页面后可手动重开 */ }
+                localStorage.setItem('gtv_coop_demo', '1');
+                sessionStorage.setItem('gtv_coop_demo_seat', '0');
+                location.href = '/story?coopdemo=1&seat=0';
+            });
             $('story-coop-preview-dialog')?.addEventListener('close', closeStoryCoopLobby);
             $('story-coop-create')?.addEventListener('click', createStoryCoopParty);
             $('story-coop-join')?.addEventListener('click', joinStoryCoopParty);
