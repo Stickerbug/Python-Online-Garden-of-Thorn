@@ -101,16 +101,28 @@ def force_settle_now(user_id, session=None):
                 )
                 conn.commit()
             elif service_name == '2048':
-                # 2048 是服务端重放验证制（无 game_over 同步参数）：
-                # 已验证的分数在历次 sync 已入账，强制结算=关闭活动局。
-                import minigame_2048_service as svc  # noqa: F401
+                # 2048 是服务端重放验证制（无 game_over 同步参数）：强制结算
+                # = 按服务端已存分数补发结算荆露（幂等，正常结束路径同款）
+                # + 关闭活动局。
+                import minigame_2048_service as svc
+                row = conn.execute(
+                    "SELECT id, score FROM minigame_2048_games"
+                    " WHERE user_id=? AND game_uid=? AND status='active'",
+                    (user_id, game_uid),
+                ).fetchone()
+                dew_awarded = 0
+                if row is not None:
+                    dew_awarded = svc.credit_game_over_dew(
+                        conn, user_id, int(row['id']), int(row['score'] or 0),
+                        divisor=svc.GAME_OVER_DEW_DIVISOR,
+                    )
                 conn.execute(
                     "UPDATE minigame_2048_games SET status='closed', closed_at=datetime('now'),"
                     " updated_at=datetime('now') WHERE user_id=? AND game_uid=? AND status='active'",
                     (user_id, game_uid),
                 )
                 conn.commit()
-                result = {'status': 'closed'}
+                result = {'status': 'closed', 'dew_awarded': dew_awarded}
             else:
                 return {'settled': False, 'reason': 'unknown_service'}
         return {'settled': True, 'service': service_name, 'game_uid': game_uid,

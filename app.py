@@ -38677,8 +38677,9 @@ def api_minigame_2048_restart():
             state = minigame_2048_service.restart_game(
                 conn, identity[0], seed=seed, source=source,
                 play_mode=_leisure_play_mode_for(identity[0]))
-        if state and state.get('game_uid'):
-            leisure_sessions.begin_session(identity[0], '2048', state['game_uid'])
+        _new_uid = (state.get('game') or {}).get('game_uid') if isinstance(state, dict) else None
+        if _new_uid:
+            leisure_sessions.begin_session(identity[0], '2048', _new_uid)
         return jsonify({'success': True, **state})
     except Exception as exc:
         admin_event('error', f'2048 restart failed: {exc}')
