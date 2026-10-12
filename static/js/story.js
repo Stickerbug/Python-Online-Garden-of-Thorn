@@ -12046,7 +12046,7 @@
                 if (!data.success) { msg(data.error || '创建失败'); return; }
                 window.__coop_invite_code = data.invite_code;
                 enterRoom(data.seat);
-            } catch (err) { msg('网络错误，请检查连接'); }
+            } catch (err) { msg(`网络错误：${String(err && err.message || err)}`); }
         });
         $('coop-demo-join-btn').addEventListener('click', async () => {
             msg('');
@@ -12066,7 +12066,7 @@
                 }
                 if (!data.success) { msg(data.error || '加入失败'); return; }
                 enterRoom(data.seat);
-            } catch (err) { msg('网络错误，请检查连接'); }
+            } catch (err) { msg(`网络错误：${String(err && err.message || err)}`); }
         });
         $('coop-demo-lobby-close').addEventListener('click', () => dlg.close());
         dlg.showModal();
