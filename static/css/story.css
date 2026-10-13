@@ -489,6 +489,7 @@ a { font: inherit; }
   left: max(14px, env(safe-area-inset-left));
   z-index: 30000;
   display: flex;
+  flex-wrap: wrap; /* 合作队友面板换行到第二行左侧（左边UI下方） */
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;

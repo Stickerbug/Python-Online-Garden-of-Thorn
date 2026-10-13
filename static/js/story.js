@@ -12085,9 +12085,8 @@
         if (!STORY_COOP_DEMO) return;
         if (!$('story-coop-demo-bar')) {
         const hud = $('story-persistent-hud');
-        const hudActions = hud?.querySelector('.story-persistent-actions');
-        // 队友面板嵌入常驻 HUD 中栏（玩家信息与快捷操作之间）：
-        // 固定悬浮右上会盖住 HUD 的快捷操作按钮（地图/牌库/存档等）。
+        // 队友面板嵌入常驻 HUD：HUD 行设 flex-wrap，本面板追加在末尾换行到
+        // 第二行左侧（左边玩家信息下方，2026-10-12 用户指定）。
         const bar = document.createElement('section');
         bar.id = 'story-coop-demo-bar';
         bar.className = 'story-coop-hud';
@@ -12119,8 +12118,10 @@
         seats.style.color = '#e8e4d8';
         bar.appendChild(seats);
         bar.appendChild(exitBtn);
-        if (hud && hudActions) {
-            hud.insertBefore(bar, hudActions);
+        if (hud) {
+            // HUD 行设了 flex-wrap：玩家信息+快捷操作占第一行，队友面板
+            // 追加在末尾自然换行到第二行左侧（左边UI下方，2026-10-12 用户指定）。
+            hud.appendChild(bar);
         } else {
             document.body.appendChild(bar);
         }
