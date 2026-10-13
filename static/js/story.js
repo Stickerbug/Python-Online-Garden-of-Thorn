@@ -11317,6 +11317,32 @@
             ownerBadge.textContent = storyCodexOwnerLabel(ownerKey);
             ownerBadge.title = `${t.codexOwner}：${storyCodexOwnerLabel(ownerKey)}`;
             cardElement.appendChild(ownerBadge);
+            if (window.__STORY_DEV_TOOLS__ && activeRun) {
+                // 开发模式：把这张牌直接加入手牌（战斗外进卡组）
+                const devHand = document.createElement('button');
+                devHand.type = 'button';
+                devHand.className = 'story-codex-dev-hand';
+                devHand.textContent = '＋手';
+                devHand.title = `开发：将「${localize(record.definition.name)}」加入手中`;
+                devHand.addEventListener('click', async (event) => {
+                    event.stopPropagation();
+                    devHand.disabled = true;
+                    try {
+                        const result = await storyAction('dev_give_card', {
+                            card_id: record.id,
+                            upgraded,
+                            to_hand: true,
+                            count: 1,
+                        });
+                        showToast(result
+                            ? `已将「${localize(record.definition.name)}」${String(activeRun.state?.phase || '') === 'combat' ? '加入手中' : '加入卡组'}`
+                            : '加入失败');
+                    } finally {
+                        devHand.disabled = false;
+                    }
+                });
+                cardElement.appendChild(devHand);
+            }
             cardElement.dataset.storyCodexCardId = record.id;
             storyCardTermOptions.set(cardElement, { allowedUpgradeStates });
             grid.append(cardElement);

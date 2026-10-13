@@ -8363,3 +8363,22 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   .coop-teammate-stats { display: none; }
 }
 /* 合作模式左列：玩家信息在上，队友面板在其下方 */
+
+/* 图鉴开发按钮：任意牌直接加入手中（仅开发模式渲染） */
+.story-codex-dev-hand {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  z-index: 5;
+  padding: 3px 8px;
+  border: 1px solid #6b7d4f;
+  border-radius: 6px;
+  background: rgba(24, 30, 18, .92);
+  color: #d8e0c8;
+  cursor: pointer;
+  font: 700 11px/1.2 var(--font-main);
+}
+
+.story-codex-dev-hand:hover { border-color: #d8b84a; color: #d8b84a; }
+
+.story-codex-card-tile { position: relative; }

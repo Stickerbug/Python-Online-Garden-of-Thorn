@@ -12888,21 +12888,31 @@ def _dev_integer(payload, key, maximum):
 def _dev_give_card(state, payload, events):
     """建议 #334 训练场：给卡组添加任意一张卡（仅开发模式）。
 
-    payload: { card_id: str, upgraded: bool, count: int }
+    payload: { card_id: str, upgraded: bool, count: int, to_hand: bool }
+    to_hand 且处于战斗中时直接加入手牌（并登记为可打）；否则进卡组。
     """
     card_id = str(payload.get('card_id') or '').strip()
     if not card_id or card_id not in STORY_CARDS:
         _fail('UNKNOWN_CARD', f'未知卡牌: {card_id}')
     count = max(1, min(10, int(payload.get('count') or 1)))
     upgraded = bool(payload.get('upgraded'))
+    combat = state.get('combat') if state.get('phase') == 'combat' else None
+    to_hand = bool(payload.get('to_hand')) and isinstance(combat, dict)
     for _ in range(count):
         card = _new_card(state, card_id, upgraded=upgraded)
-        state['player']['deck'].append(card)
+        if to_hand:
+            combat['hand'].append(card)
+            playable = combat.setdefault('playable_card_ids', [])
+            if card['instance_id'] not in playable:
+                playable.append(card['instance_id'])
+        else:
+            state['player']['deck'].append(card)
         events.append({
             'type': 'card_gained',
             'card_id': card_id,
             'upgraded': upgraded,
             'source': 'training',
+            'to_hand': to_hand,
         })
 
 
