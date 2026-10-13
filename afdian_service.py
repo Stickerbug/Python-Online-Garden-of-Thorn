@@ -457,6 +457,17 @@ def ledger_for_user(user_id: int, limit: int = LEDGER_LIMIT) -> List[Dict[str, A
         return [dict(row) for row in rows]
 
 
+# 展示用名称剥离旧兑换数后缀：DB 名称是对账匹配键（须与爱发电平台侧
+# 商品名一致，如「一滴荆露(250荆露)」），兑换数值自 2026-10-13 起翻 4 倍，
+# 名称里的旧数字不能再展示，兑换数以 dew_amount 字段为准。
+_DISPLAY_NAME_RE = re.compile(r'[（(][0-9.,]+\s*荆露[）)]\s*$')
+
+
+def _display_name(name: str) -> str:
+    stripped = _DISPLAY_NAME_RE.sub('', str(name or '')).strip()
+    return stripped or str(name or '')
+
+
 def public_plans() -> List[Dict[str, Any]]:
     """兑换页展示的档位：SKU（售卖项价格方案，按份）+ 订阅方案（按月）合并，
     各带 kind 字段（'sku' / 'plan'）。此前只读 afdian_plans，六个真实档位
@@ -468,7 +479,7 @@ def public_plans() -> List[Dict[str, Any]]:
                 'SELECT name, sku_id, dew_amount, price FROM afdian_skus '
                 'WHERE active = 1 ORDER BY dew_amount ASC').fetchall():
             out.append({'plan_id': str(row['sku_id'] or ''),
-                        'name': str(row['name'] or ''),
+                        'name': _display_name(str(row['name'] or '')),
                         'dew_amount': int(row['dew_amount'] or 0),
                         'price': _price_key(row['price']),
                         'kind': 'sku'})
@@ -476,7 +487,7 @@ def public_plans() -> List[Dict[str, Any]]:
                 'SELECT plan_id, name, dew_amount FROM afdian_plans '
                 'WHERE active = 1 ORDER BY dew_amount ASC').fetchall():
             out.append({'plan_id': str(row['plan_id'] or ''),
-                        'name': str(row['name'] or row['plan_id'] or ''),
+                        'name': _display_name(str(row['name'] or row['plan_id'] or '')),
                         'dew_amount': int(row['dew_amount'] or 0),
                         'price': '',
                         'kind': 'plan'})
