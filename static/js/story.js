@@ -12085,11 +12085,9 @@
         if (!STORY_COOP_DEMO) return;
         if (!$('story-coop-demo-bar')) {
         const hud = $('story-persistent-hud');
-        // 队友面板嵌入常驻 HUD：HUD 行设 flex-wrap，本面板追加在末尾换行到
-        // 第二行左侧（左边玩家信息下方，2026-10-12 用户指定）。
         const bar = document.createElement('section');
         bar.id = 'story-coop-demo-bar';
-        bar.className = 'story-coop-hud';
+        bar.className = 'story-coop-teammates';
         bar.setAttribute('aria-label', '联机队友信息');
         const exitBtn = document.createElement('button');
         exitBtn.type = 'button';
@@ -12146,18 +12144,22 @@
         const mySeat = storyCoopDemoSeat();
         const seatStates = combat.seat_states || {};
         seatsEl.replaceChildren();
+        let teammateCount = 0;
         (state.players || []).forEach((p, seat) => {
+            if (seat === mySeat) return; // 我的信息在合并面板上方主块
+            teammateCount += 1;
             const row = document.createElement('div');
             row.className = 'coop-teammate-row'
-                + (seat === mySeat ? ' is-me' : '')
                 + (Number(p.health) <= 0 ? ' is-down' : '')
                 + (ready.has(seat) ? ' is-ready' : '');
             const health = Math.max(0, Number(p.health) || 0);
             const maxHealth = Number(p.max_health) || 1;
             const seatState = seatStates[seat] || {};
+            const elixir = seatState.elixir ?? p.elixir ?? p.max_elixir ?? 0;
+            const magic = seatState.magic ?? p.magic ?? 0;
             const title = document.createElement('div');
             title.className = 'coop-teammate-title';
-            title.textContent = `席${seat}${seat === mySeat ? '（你）' : ''}`
+            title.textContent = `席${seat}`
                 + (Number(p.health) <= 0 ? ' 💀' : '')
                 + (ready.has(seat) ? ' ✓就绪' : '');
             const hpBar = document.createElement('div');
@@ -12165,16 +12167,34 @@
             const fill = document.createElement('i');
             fill.style.width = `${Math.round(100 * health / maxHealth)}%`;
             hpBar.append(fill);
-            const stats = document.createElement('div');
-            stats.className = 'coop-teammate-stats';
-            stats.textContent = `H${health}/${maxHealth} · E${Number(seatState.elixir) || 0} · 盾${Number(seatState.shield) || 0} · 手牌${(seatState.hand || []).length}`;
-            row.append(title, hpBar, stats);
+            // H/E/M/G 与玩家信息主块同款四格
+            const stats = document.createElement('dl');
+            [
+                ['H', `${health}/${maxHealth}`],
+                ['E', `${Number(elixir) || 0}`],
+                ['M', `${Number(magic) || 0}`],
+                ['G', `${Number(p.gold) || 0}`],
+            ].forEach(([label, value]) => {
+                const cell = document.createElement('div');
+                const dt = document.createElement('dt');
+                dt.textContent = label;
+                const dd = document.createElement('dd');
+                dd.textContent = value;
+                cell.append(dt, dd);
+                stats.append(cell);
+            });
+            const extra = document.createElement('div');
+            extra.className = 'coop-teammate-stats';
+            extra.textContent = `盾${Number(seatState.shield) || 0} · 手牌${(seatState.hand || []).length}`;
+            row.append(title, hpBar, stats, extra);
             seatsEl.append(row);
         });
-        const roundRow = document.createElement('div');
-        roundRow.className = 'coop-teammate-round';
-        roundRow.textContent = `第${combat.round || 1}回合`;
-        seatsEl.append(roundRow);
+        if (!teammateCount) {
+            const waiting = document.createElement('div');
+            waiting.className = 'coop-teammate-stats';
+            waiting.textContent = '等待队友加入…（右上角邀请码）';
+            seatsEl.append(waiting);
+        }
     }
     }
 

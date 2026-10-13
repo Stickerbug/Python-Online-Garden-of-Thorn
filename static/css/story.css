@@ -8287,21 +8287,36 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   filter: drop-shadow(0 0 4px #d8b84a);
 }
 
-/* 合作联机面板（嵌入常驻 HUD 中栏，2026-10-12：原固定右上会盖住快捷操作） */
-.story-coop-hud {
+/* 合作联机左列（2026-10-12 合并版）：玩家信息+队友信息合成一个面板，
+   队友与主块同款 H/E/M/G 四格。 */
+.story-coop-left-column {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  min-width: 148px;
-  max-width: 190px;
-  padding: 7px 9px;
+  width: min(320px, 38vw);
+  padding: 0;
   border: 1px solid color-mix(in srgb, var(--story-line) 82%, transparent);
   border-radius: 9px;
   background: color-mix(in srgb, var(--story-surface) 88%, transparent);
   box-shadow: var(--shadow-sm);
   backdrop-filter: blur(7px);
   pointer-events: auto;
-  font-size: 12.5px;
+}
+
+/* 合并后：玩家主块融入容器，去掉自身边框 */
+.story-coop-left-column > .story-persistent-player {
+  width: auto;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.story-coop-teammates {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 7px 9px;
+  border-top: 1px solid color-mix(in srgb, var(--story-line) 70%, transparent);
 }
 
 .story-coop-code {
@@ -8325,16 +8340,29 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 
 .story-coop-exit:hover { background: #4a2620; }
 
+/* 队友 H/E/M/G 四格：与玩家主块 dl 同款 */
+.coop-teammate-row dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  margin: 3px 0 0;
+}
+
+.coop-teammate-row dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 5px;
+  padding: 3px 5px;
+  border-radius: 4px;
+  background: var(--story-surface-muted);
+  font-size: 10px;
+}
+
+.coop-teammate-row dt { color: var(--story-muted); font-weight: 800; margin: 0; }
+.coop-teammate-row dd { font-variant-numeric: tabular-nums; font-weight: 800; margin: 0; }
+
 @media (max-width: 720px) {
-  .story-coop-hud { min-width: 108px; max-width: 128px; padding: 5px 7px; }
+  .story-coop-left-column { width: min(248px, calc(100vw - 164px)); }
   .coop-teammate-stats { display: none; }
 }
-
-
 /* 合作模式左列：玩家信息在上，队友面板在其下方 */
-.story-coop-left-column {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  pointer-events: none;
-}
