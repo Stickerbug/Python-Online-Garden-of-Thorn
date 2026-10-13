@@ -466,8 +466,6 @@ class GameEngine2v2(GameEngine):
                     # 起手多 1 张牌；先手归属只由随机争夺决定。
                     hand_size = FIRST_PLAYER_HAND_SIZE + 1
                     ps.elixir = FIRST_PLAYER_ELIXIR + 4
-                if self.opening_event_picks[i] == 5:
-                    hand_size = max(0, hand_size - 1)
                 # 对局开始时不触发任何抽取效果（萌芽/玉米等），
                 # 与调度补抽同口径（_draw_opening_swap_cards 绕过到手回调）。
                 self._draw_opening_swap_cards(i, hand_size)
@@ -477,8 +475,6 @@ class GameEngine2v2(GameEngine):
                     # 同上：非先手选择者同样获得压制增益（+1 张、+4E）。
                     hand_size = INITIAL_HAND_SIZE + 1
                     ps.elixir = INITIAL_ELIXIR + 4
-                if self.opening_event_picks[i] == 5:
-                    hand_size = max(0, hand_size - 1)
                 # 对局开始时不触发任何抽取效果（萌芽/玉米等），
                 # 与调度补抽同口径（_draw_opening_swap_cards 绕过到手回调）。
                 self._draw_opening_swap_cards(i, hand_size)
