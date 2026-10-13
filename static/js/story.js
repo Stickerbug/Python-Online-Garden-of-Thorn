@@ -14890,6 +14890,18 @@
             leaveButton.textContent = t.directLeave;
             leaveButton.classList.toggle('hidden', canContinue || isMandatoryBossRushCard);
         }
+        if (STORY_COOP_DEMO) {
+            // 合作模式：本席已领完但还有席位待选 → 显示等待提示，收起跳过/离开
+            // 防止误触跳过自己的奖励（读视角 reward 为空是协调期的正常状态）。
+            const pendingSeats = (activeRun?.coopCoord?.reward_pending_seats) || [];
+            if (pendingSeats.length && !pendingSeats.includes(storyCoopDemoSeat())) {
+                skip?.classList.add('hidden');
+                leaveButton?.classList.add('hidden');
+                continueButton?.classList.add('hidden');
+                setText('story-reward-copy',
+                    `等待队友选择奖励…（待选席位：${pendingSeats.map((s) => `席${s}`).join('、')}）`);
+            }
+        }
         showView('story-reward');
     }
 
@@ -14908,7 +14920,10 @@
 
     function renderRun(run) {
         const scrollPositions = captureStoryScrollPositions();
-        activeRun = run;
+        // 归一协调态字段名（GET/动作响应带 coop_coord，轮询路径已预映射）。
+        activeRun = run && typeof run === 'object'
+            ? { ...run, coopCoord: run.coopCoord || run.coop_coord || null }
+            : run;
         renderStorySeededBackdrop(run);
         storyMapPreviewOpen = false;
         updateStoryStatusBar();

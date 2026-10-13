@@ -138,3 +138,32 @@ def test_reward_per_seat_and_completion():
     # 离场后节点完成回到地图（若节点带额外奖励流程则继续等待，不在此断言硬卡）。
     assert not state['coord'].get('rewards_by_seat')
     assert state['phase'] in ('map', 'reward')
+
+
+def test_reward_view_projection_for_waiting_seat():
+    """一席完成奖励后，另一席读视角（GET/响应投影）必须能看到自己的待选奖励。"""
+    from story_coop_engine import mount_coop_reward_view
+    state = _dual_state('orch-t6')
+    state['phase'] = 'reward'
+    state['reward'] = {
+        'gold': 30, 'cards': ['basic', 'rose'], 'claims': {}, 'source': 'combat',
+    }
+    # 席0领金币+选卡 → 完成；共享 reward 被清空、仅席1待选。
+    state, _ = apply_coop_action(state, 0, 'choose_reward', {'reward_type': 'gold'}, 'orch-t6')
+    state, _ = apply_coop_action(
+        state, 0, 'choose_reward', {'reward_type': 'card', 'card_id': 'rose'}, 'orch-t6')
+    assert state['reward'] is None
+    assert sorted(state['coord']['rewards_by_seat'].keys()) == ['1']
+    # 席1读视角投影：看到本席待选奖励（含未领金币与卡牌选项）。
+    mount_coop_reward_view(state, 1)
+    projected = state.get('reward')
+    assert projected and projected.get('gold') == 30
+    assert set(projected.get('cards') or []) == {'basic', 'rose'}
+    # 投影是副本：不影响协调账本里席1的正本。
+    assert 'rose' in state['coord']['rewards_by_seat']['1']['cards']
+    # 已完成的席0读视角：清空（不残留席1的投影副本，等待 UI 由前端负责）。
+    mount_coop_reward_view(state, 0)
+    assert state['reward'] is None
+    # 席1基于投影后的状态正常离场完成 → 全员完成。
+    state, _ = apply_coop_action(state, 1, 'choose_reward', {'reward_type': 'leave'}, 'orch-t6')
+    assert not state['coord'].get('rewards_by_seat')

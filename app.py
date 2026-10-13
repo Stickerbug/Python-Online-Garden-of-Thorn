@@ -38264,7 +38264,7 @@ def coop_demo_run_get():
     except (TypeError, ValueError):
         seat = 0
     seat = max(0, min(seat, len(entry['state'].get('players') or [{}]) - 1))
-    from story_coop_engine import coop_coord_summary
+    from story_coop_engine import coop_coord_summary, mount_coop_reward_view
     # 联机房间成员：读写共享对局，席位以房间分配为准。
     room_code = _COOP_DEMO_USER_ROOM.get(int(user['id']))
     invite_code = None
@@ -38276,6 +38276,9 @@ def coop_demo_run_get():
             seat = member_seat
             invite_code = room_code
     _mount_seat(entry['state'], seat)
+    # 奖励协调期间给观看席投影本席待选奖励（否则 state['reward'] 为空，
+    # 前端只能看到"跳过"，另一席无法选择）。
+    mount_coop_reward_view(entry['state'], seat)
     return jsonify({
         'success': True,
         'run': {
@@ -38337,6 +38340,9 @@ def coop_demo_story_action():
         entry['state'] = state
         entry['version'] = int(entry.get('version') or 0) + 1
         _mount_seat(state, seat)
+        # 行动者自己可能还有多项奖励未领完（金币+卡牌等），响应同样投影本席余下奖励。
+        from story_coop_engine import coop_coord_summary, mount_coop_reward_view
+        mount_coop_reward_view(state, seat)
         return jsonify({
             'success': True,
             'duplicate': False,
@@ -38348,6 +38354,7 @@ def coop_demo_story_action():
                 'status': 'active',
                 'compatible': True,
                 'expected_content_version': state.get('content_version'),
+                'coop_coord': coop_coord_summary(state),
             },
             'events': events,
             'progress': {}, 'new_discoveries': [],

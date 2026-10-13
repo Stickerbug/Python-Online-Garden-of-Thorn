@@ -195,6 +195,23 @@ def apply_coop_action(state, seat, action_type, payload, seed):
     return apply_story_action(state, action_type, payload, seed)
 
 
+def mount_coop_reward_view(state, seat):
+    """观看席视角投影：奖励协调期间把本席待选奖励挂到 state['reward'] 供前端渲染。
+
+    只在读路径（GET / 动作响应投影）调用。行动路径不受影响：choose_reward
+    结算前会用本席副本覆盖 state['reward']，结算后按剩余情况落账并清空。
+    每次读都归一化：本席有待选则投影，没有则清空——否则上一个观看席的
+    投影副本会残留在共享 state 上，泄漏给等待席。"""
+    if state.get('phase') != 'reward':
+        return
+    rewards_by_seat = (state.get('coord') or {}).get('rewards_by_seat')
+    if rewards_by_seat is None:
+        # 协调未开始：共享奖励仍挂载（战斗胜利后、任一席首次选择前），两席均可见。
+        return
+    own = rewards_by_seat.get(str(seat))
+    state['reward'] = copy.deepcopy(own) if own is not None else None
+
+
 def coop_coord_summary(state):
     """给前端的协调态摘要（投票进度/各席完成度）。"""
     coord = state.get('coord') or {}
