@@ -498,7 +498,7 @@ class GameEngine2v2(GameEngine):
         self.log_msg(f"2v2游戏开始！{self.pn(self.first_player)}先手。")
         self.log_msg(f"回合顺序：{' → '.join(self.pn(p) for p in self.turn_order)}")
         shield_samples = sorted({int(p.blood_shield) for p in self.players if p.health > 0})
-        self.log_msg("血盾生效：开局血量不会低于最大生命的3/4（各自回合开始时统一衰减）" + (
+        self.log_msg("血盾生效：开局血量不会低于最大生命的3/4（每回合开始时统一衰减）" + (
             f"，当前护盾值{shield_samples}" if shield_samples else ""))
         self.log_msg(f"=== 第{self.round_num}回合 ===")
         if getattr(self, 'v2_event_hooks', None):
@@ -1281,8 +1281,25 @@ class GameEngine2v2(GameEngine):
         return -1
 
 
+    def _decay_all_blood_shields_for_round(self):
+        """设计 2026-10-14：血盾在统一回合开始时全体同时衰减一档
+        （第1回合 3/4 → 第2回合 2/4 → 第3回合 1/4 → 第4回合起 0，
+        档值动态取各玩家当前最大生命）。此前按各自回合开始分别衰减，
+        同队两人的盾会在同一回合内的不同时点掉档。"""
+        quarters = max(0, 4 - max(1, int(self.round_num or 1)))
+        for ps in self.players:
+            if int(getattr(ps, 'blood_shield', 0) or 0) > 0:
+                new_shield = max(0, int(getattr(ps, 'max_health', 0) or 0)) * quarters // 4
+                if new_shield != int(ps.blood_shield):
+                    ps.blood_shield = new_shield
+                    if new_shield > 0:
+                        self.log_msg(f"血盾衰减：{self.pn(ps.player_id)}本回合血量不会低于{new_shield}")
+                    else:
+                        self.log_msg(f"{self.pn(ps.player_id)}的血盾已失效")
+
     def _start_draw_phase(self):
         self.log_msg(f"=== 第{self.round_num}回合 ===")
+        self._decay_all_blood_shields_for_round()
         self._apply_late_round_fire_pressure()
         if self.game_over:
             return
@@ -2105,21 +2122,9 @@ class GameEngine2v2(GameEngine):
             self._clear_invincible_state(expiring_id)
             self.log_msg(f"{self.pn(expiring_id)}的无敌效果结束")
         ps = self.players[player_id]
-        # 设计 9.29 / 调整 2026-10-12：血盾统一减少——每个自己回合开始按档
-        # 衰减（档值动态取玩家当前最大生命）：
-        # 第1回合 3/4 → 第2回合 2/4 → 第3回合 1/4 → 第4回合起 0。
-        shield_seen_key = 'blood_shield_own_turns_seen'
-        turns_seen = int(ps.custom_vars.get(shield_seen_key, 0) or 0) + 1
-        ps.custom_vars[shield_seen_key] = turns_seen
-        if int(getattr(ps, 'blood_shield', 0) or 0) > 0:
-            quarters = max(0, 4 - turns_seen)  # 1→3, 2→2, 3→1, ≥4→0
-            new_shield = max(0, int(getattr(ps, 'max_health', 0) or 0)) * quarters // 4
-            if new_shield != int(ps.blood_shield):
-                ps.blood_shield = new_shield
-                if new_shield > 0:
-                    self.log_msg(f"血盾衰减：{self.pn(player_id)}本回合血量不会低于{new_shield}")
-                else:
-                    self.log_msg(f"{self.pn(player_id)}的血盾已失效")
+        # 血盾衰减已移至统一回合边界（_start_draw_phase →
+        # _decay_all_blood_shields_for_round，设计 2026-10-14：此前按各自
+        # 回合开始分别衰减，同队两人的盾在同一回合内不同时点掉档）。
         self._decay_sealed_equipment_for_owner_turn(player_id)
         self._activate_pending_corruption()
         self._clear_forced_target_at_turn_start(player_id)
