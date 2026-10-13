@@ -57,9 +57,10 @@ run1 = get_run(1)
 assert run1['state']['reward'] and 'basic' in run1['state']['reward']['cards'], '选前席1应见奖励'
 print('[1] 拆分前两席均可见奖励 OK')
 
-# 2) 席0领金币 + 选卡完成
+# 2) 席0领金币 + 选卡 + 继续（2026-10-13 口径：continue 才算完成）
 act(0, {'_type': 'choose_reward', 'reward_type': 'gold'})
 act(0, {'_type': 'choose_reward', 'reward_type': 'card', 'card_id': 'rose'})
+act(0, {'_type': 'choose_reward', 'reward_type': 'continue'})
 print('[2] 席0完成奖励选择 OK')
 
 # 3) 【核心断言】席1读视角必须投影本席待选奖励（修复前这里是 None）

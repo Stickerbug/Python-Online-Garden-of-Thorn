@@ -126,18 +126,19 @@ def test_reward_per_seat_and_completion():
     assert state['players'][0]['gold'] > gold_before[0]
     assert state['players'][1]['gold'] == gold_before[1]
     assert sorted(state['coord']['rewards_by_seat'].keys()) == ['0', '1']
-    # 席0选卡完成
+    # 席0选卡：领完不等于完成（2026-10-13 口径），要点「继续」才出队
     state, _ = apply_coop_action(
         state, 0, 'choose_reward', {'reward_type': 'card', 'card_id': 'rose'}, 'orch-t5')
+    assert sorted(state['coord']['rewards_by_seat'].keys()) == ['0', '1']
+    state, _ = apply_coop_action(state, 0, 'choose_reward', {'reward_type': 'continue'}, 'orch-t5')
     assert sorted(state['coord']['rewards_by_seat'].keys()) == ['1']
     deck0 = len(state['players'][0]['deck'])
     deck1 = len(state['players'][1]['deck'])
     assert deck0 > deck1  # 席0拿卡，席1未拿
-    # 席1离场 → 全员完成 → 回地图
+    # 席1离场（最终席）→ 全员完成 → 节点推进回地图
     state, _ = apply_coop_action(state, 1, 'choose_reward', {'reward_type': 'leave'}, 'orch-t5')
-    # 离场后节点完成回到地图（若节点带额外奖励流程则继续等待，不在此断言硬卡）。
     assert not state['coord'].get('rewards_by_seat')
-    assert state['phase'] in ('map', 'reward')
+    assert state['phase'] == 'map', '全员完成后必须推进出奖励阶段'
 
 
 def test_reward_view_projection_for_waiting_seat():
@@ -148,10 +149,11 @@ def test_reward_view_projection_for_waiting_seat():
     state['reward'] = {
         'gold': 30, 'cards': ['basic', 'rose'], 'claims': {}, 'source': 'combat',
     }
-    # 席0领金币+选卡 → 完成；共享 reward 被清空、仅席1待选。
+    # 席0领金币+选卡+继续 → 完成；共享 reward 被清空、仅席1待选。
     state, _ = apply_coop_action(state, 0, 'choose_reward', {'reward_type': 'gold'}, 'orch-t6')
     state, _ = apply_coop_action(
         state, 0, 'choose_reward', {'reward_type': 'card', 'card_id': 'rose'}, 'orch-t6')
+    state, _ = apply_coop_action(state, 0, 'choose_reward', {'reward_type': 'continue'}, 'orch-t6')
     assert state['reward'] is None
     assert sorted(state['coord']['rewards_by_seat'].keys()) == ['1']
     # 席1读视角投影：看到本席待选奖励（含未领金币与卡牌选项）。

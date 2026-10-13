@@ -19,6 +19,7 @@ from story_engine import (
     StoryActionError,
     _living_seats,
     _mount_seat,
+    _reward_claims,
     _seat_count,
     apply_story_action,
 )
@@ -150,6 +151,22 @@ def apply_coop_action(state, seat, action_type, payload, seed):
         own = rewards_by_seat.get(str(seat))
         if not own:
             raise StoryActionError('NO_REWARD', '本席没有待选奖励')
+        reward_type = str(payload.get('reward_type') or '').strip().lower()
+        others_pending = any(key != str(seat) for key in rewards_by_seat)
+        if reward_type in ('continue', 'leave') and others_pending:
+            # 非最终席的离场/继续：只记账完成，不走单人结算——节点的完成与
+            # 进层推进必须等全员结束由最终席触发恰好一次（2026-10-13 修复：
+            # 此前"选了卡"即视为完成，节点推进从未发生，阶段卡死在 reward）。
+            if reward_type == 'continue':
+                claims = _reward_claims(own)
+                if not all(claims.values()):
+                    raise StoryActionError('REWARD_INCOMPLETE', '请先处理全部奖励')
+            done.add(str(seat))
+            coord['reward_done'] = sorted(done)
+            rewards_by_seat.pop(str(seat), None)
+            state['reward'] = None
+            state['phase'] = 'reward'
+            return state, [{'type': 'reward_seat_done', 'seat': seat}]
         state['reward'] = copy.deepcopy(own)
         state, events = apply_story_action(state, 'choose_reward', payload, seed)
         # apply 深拷贝了 state：到新 state 的协调簿上落账。
@@ -157,11 +174,11 @@ def apply_coop_action(state, seat, action_type, payload, seed):
         rewards_by_seat = coord.get('rewards_by_seat') or {}
         done = set(coord.get('reward_done') or [])
         remaining = state.get('reward')
-        seat_finished = (
-            remaining is None
-            or not remaining.get('cards')
-            or remaining.get('selected_card_id')
-            or remaining.get('left')
+        # 完成口径与单人一致：奖励被单人结算收尾（leave/continue 或
+        # boss_rush 起始牌的自动收尾）才视为完成；仅领完所有项不算——
+        # 客户端会显示「继续」，由 continue/leave 走上面的记账或最终结算。
+        seat_finished = remaining is None or bool(
+            isinstance(remaining, dict) and remaining.get('left')
         )
         if seat_finished:
             done.add(str(seat))
