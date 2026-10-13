@@ -30555,6 +30555,25 @@ def on_accept_team_match(data):
             if not eligible:
                 emit_match_start_failed(all_sids, '当前玩家或模组配置不符合天梯资格', reason=reason)
                 return
+            # 邀请与接受之间段位可能变化，成局前再强制一次段位差规则（2v2 取双方最高与最低）。
+            other_players = [players.get(msid, {}) for msid in other_team['members']]
+            my_players = [players.get(msid, {}) for msid in my_team['members']]
+            if other_players and my_players and (
+                _rank_match_blocked(
+                    max(other_players, key=_rank_tier_of_player),
+                    min(my_players, key=_rank_tier_of_player),
+                )
+                or _rank_match_blocked(
+                    max(my_players, key=_rank_tier_of_player),
+                    min(other_players, key=_rank_tier_of_player),
+                )
+            ):
+                emit_match_start_failed(
+                    all_sids,
+                    '段位差距过大：传奇及以上不能与普通段位对战',
+                    reason='rank_tier_gap',
+                )
+                return
         blocked_mod_unlock_sids = [
             psid for psid in all_sids
             if mod_unlock_required_for_match_mode(players.get(psid, {}), match_mode)
@@ -31373,6 +31392,13 @@ def on_invite(data):
             if not eligible:
                 emit('server_error', {'message': '当前玩家或模组配置不符合天梯资格', 'reason': reason})
                 return
+            # 设计 2026-10-02 段位差规则同样覆盖 1v1 直接邀请（挑战）路径。
+            if _rank_match_blocked(inviter, target):
+                emit('server_error', {
+                    'message': '段位差距过大：传奇及以上不能与普通段位对战',
+                    'reason': 'rank_tier_gap',
+                })
+                return
         if not same_match_mod_preference(inviter_match_mode, [inviter, target]):
             message = '模组组合不一致，无法开始对局'
             mod_mismatch_payload = {
@@ -31450,6 +31476,13 @@ def on_invite(data):
             eligible, reason = ranked_match_eligibility([inviter, target])
             if not eligible:
                 emit('server_error', {'message': '当前玩家或模组配置不符合天梯资格', 'reason': reason})
+                return
+            # 设计 2026-10-02 段位差规则同样覆盖 1v1 直接邀请（挑战）路径。
+            if _rank_match_blocked(inviter, target):
+                emit('server_error', {
+                    'message': '段位差距过大：传奇及以上不能与普通段位对战',
+                    'reason': 'rank_tier_gap',
+                })
                 return
         if not same_match_mod_preference(inviter_match_mode, [inviter, target]):
             emit('server_error', {'message': '模组组合不一致，无法开始对局', 'reason': 'mod_mismatch'})
@@ -31535,6 +31568,14 @@ def on_accept_invite(data):
             eligible, reason = ranked_match_eligibility([inviter, accepter])
             if not eligible:
                 emit_match_start_failed([inviter_sid, sid], '当前玩家或模组配置不符合天梯资格', reason=reason)
+                return
+            # 邀请与接受之间段位可能变化，成局前再强制一次段位差规则。
+            if _rank_match_blocked(inviter, accepter):
+                emit_match_start_failed(
+                    [inviter_sid, sid],
+                    '段位差距过大：传奇及以上不能与普通段位对战',
+                    reason='rank_tier_gap',
+                )
                 return
         if not same_runtime_scope_players(inviter, accepter):
             emit_match_start_failed([inviter_sid, sid], runtime_scope_mismatch_message(), reason='runtime_scope_mismatch')
