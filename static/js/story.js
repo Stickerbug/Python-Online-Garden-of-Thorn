@@ -13730,15 +13730,19 @@
         const intentName = localize(enemy.intent?.name);
         intentLabel.className = 'story-intent-title';
         intentLabel.textContent = [t.intent, intentName].filter(Boolean).join(' · ');
-        if (STORY_COOP_DEMO && enemy.intent?.target_seat != null) {
-            const targetSeat = Number(enemy.intent.target_seat);
+        if (STORY_COOP_DEMO && (enemy.intent?.target_all || enemy.intent?.target_seat != null)) {
             const badge = document.createElement('span');
             badge.className = 'story-intent-target-badge';
-            if (targetSeat === storyCoopDemoSeat()) {
-                badge.textContent = '→你';
-                badge.classList.add('is-me');
+            if (enemy.intent?.target_all) {
+                badge.textContent = '→全员';
             } else {
-                badge.textContent = `→席${targetSeat}`;
+                const targetSeat = Number(enemy.intent.target_seat);
+                if (targetSeat === storyCoopDemoSeat()) {
+                    badge.textContent = '→你';
+                    badge.classList.add('is-me');
+                } else {
+                    badge.textContent = `→席${targetSeat}`;
+                }
             }
             intentLabel.append(badge);
         }

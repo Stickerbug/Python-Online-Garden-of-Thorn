@@ -4,7 +4,7 @@ import copy
 import hashlib
 import math
 import random
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 
 from story_content import (
     STORY_BLESSINGS,
@@ -1115,6 +1115,9 @@ def _build_enemy(state, def_id, serial, spec=None):
     health_multiplier = float(spec.get('health_multiplier') or 1)
     if health_multiplier > 0 and health_multiplier != 1:
         max_health = max(1, math.ceil(base_health * health_multiplier))
+    # 合作（多席位，2026-10-12）：敌人获得双倍血量（含召唤物，走同一管线）。
+    if _seat_count(state) > 1:
+        max_health = max(1, math.ceil(max_health * _seat_count(state)))
     initial = copy.deepcopy(definition.get('initial') or {})
     if _difficulty(state) == 'lunatic':
         initial.update(copy.deepcopy(definition.get('lunatic_initial') or {}))
@@ -1123,6 +1126,9 @@ def _build_enemy(state, def_id, serial, spec=None):
         for key, value in spec.items()
         if key not in {'def_id', 'health', 'max_health'}
     })
+    # 合作：敌方初始护盾同步翻倍（与血量同口径）。
+    if _seat_count(state) > 1 and isinstance(initial.get('shield'), (int, float)):
+        initial['shield'] = max(0, int(initial['shield']) * _seat_count(state))
     enemy = {
         'id': f'enemy-{serial}',
         'def_id': def_id,
@@ -1244,6 +1250,9 @@ def _trigger_blade(state, enemy, dealt, events):
 
 def _gain_shield(state, amount, events, source='card', enemy=None):
     amount = max(0, int(amount))
+    # 合作（多席位）：敌方获得的护盾量与血量同口径翻倍。
+    if enemy is not None and _seat_count(state) > 1:
+        amount = amount * _seat_count(state)
     if enemy is not None:
         before = int(enemy.get('shield') or 0)
         enemy['shield'] = before + amount
@@ -2237,12 +2246,26 @@ def _enchantment_prevent_player_damage(state, dealt, blocked, events, source):
 
 
 def _player_physical_hit(state, base_amount, attacker, events, source, victim_seat=None):
+    # 合作（多席位，2026-10-12）：敌方攻击（attacker 为敌、未指定受击席）
+    # 同时命中全部存活席。玩家侧自伤等 attacker=None 的调用不受影响。
+    if (
+        victim_seat is None
+        and attacker is not None
+        and _seat_count(state) > 1
+    ):
+        last = None
+        for seat in _enemy_player_target_seats(state):
+            with _seat_scope(state, seat):
+                last = _player_physical_hit(
+                    state, base_amount, attacker, events, source, victim_seat=seat)
+        return last
     # 多席位（合作）：指定 victim_seat 时临时挂载该席结算，单人零影响。
     if victim_seat is not None and _seat_count(state) > 1:
         _combat_ref = state.get('combat') or {}
         if int(victim_seat) != int(_combat_ref.get('mounted_seat') or 0):
             with _seat_scope(state, int(victim_seat)):
-                return _player_physical_hit(state, base_amount, attacker, events, source)
+                return _player_physical_hit(
+                    state, base_amount, attacker, events, source, victim_seat=victim_seat)
 
     combat = state['combat']
     amount = _enemy_physical_hit_amount(state, attacker, base_amount)
@@ -2297,11 +2320,13 @@ def _player_physical_hit(state, base_amount, attacker, events, source, victim_se
 
 def _player_raw_damage(state, amount, events, source, victim_seat=None):
     # 多席位（合作）：指定 victim_seat 时临时挂载该席结算，单人零影响。
+    # 注意：本函数的调用方全是玩家状态结算（中毒/流血/腐化/自伤，按席各自
+    # 挂载），绝不能做"敌方攻击扇出"。
     if victim_seat is not None and _seat_count(state) > 1:
         _combat_ref = state.get('combat') or {}
         if int(victim_seat) != int(_combat_ref.get('mounted_seat') or 0):
             with _seat_scope(state, int(victim_seat)):
-                return _player_raw_damage(state, amount, events, source)
+                return _player_raw_damage(state, amount, events, source, victim_seat=victim_seat)
 
     amount = max(0, int(amount))
     combat = state['combat']
@@ -2356,18 +2381,37 @@ def _player_raw_damage(state, amount, events, source, victim_seat=None):
 
 
 def _player_damage(state, amount, hits, events, source, attacker=None, victim_seat=None):
+    # 合作（多席位，2026-10-12）：敌方攻击（attacker 为敌、未指定受击席）
+    # 同时命中全部存活席。玩家侧自伤等 attacker=None 的调用不受影响。
+    if (
+        victim_seat is None
+        and attacker is not None
+        and _seat_count(state) > 1
+    ):
+        last = None
+        for seat in _enemy_player_target_seats(state):
+            with _seat_scope(state, seat):
+                last = _player_damage(
+                    state, amount, hits, events, source,
+                    attacker=attacker, victim_seat=seat)
+        return last
     # 多席位（合作）：指定 victim_seat 时临时挂载该席结算，单人零影响。
     if victim_seat is not None and _seat_count(state) > 1:
         _combat_ref = state.get('combat') or {}
         if int(victim_seat) != int(_combat_ref.get('mounted_seat') or 0):
             with _seat_scope(state, int(victim_seat)):
-                return _player_damage(state, amount, hits, events, source, attacker=attacker)
+                return _player_damage(
+                    state, amount, hits, events, source,
+                    attacker=attacker, victim_seat=victim_seat)
 
     attacker = attacker or {}
     total = 0
     hit_count = max(1, int(hits))
     for hit_index in range(1, hit_count + 1):
-        dealt, blocked, before = _player_physical_hit(state, amount, attacker, events, source)
+        # victim_seat 透传给单段结算，避免内层再次按"敌方攻击扇出"重复命中。
+        dealt, blocked, before = _player_physical_hit(
+            state, amount, attacker, events, source,
+            victim_seat=victim_seat if _seat_count(state) > 1 else None)
         total += dealt
         after = int(state['player']['health'])
         events.append({
@@ -6722,7 +6766,9 @@ def _enemy_intent(state, enemy):
         'entries': entries,
         'summary': '；'.join(parts),
         # 多席位：本轮受害席（纯哈希锁，与敌方结算一致；单人 None）。
-        'target_seat': _enemy_victim_seat(state, enemy) if _seat_count(state) > 1 else None,
+        'target_seat': None,
+        # 合作（2026-10-12）：敌方攻击同时命中全部存活席，意图展示全员目标。
+        'target_all': _seat_count(state) > 1,
     }
 
 
@@ -7563,7 +7609,6 @@ def _resolve_enemy_effect(state, enemy, effect, move, seed, events):
             events,
             _localized(move['name']),
             enemy,
-            victim_seat=enemy.get('_victim_seat'),
         )
         if int(enemy.get('charging') or 0) > 0:
             before = int(enemy['charging'])
@@ -7641,11 +7686,13 @@ def _resolve_enemy_effect(state, enemy, effect, move, seed, events):
             'source': enemy['def_id'],
         })
     elif effect_type == 'player_status':
-        combat.setdefault('delayed_player_statuses', []).append({
-            'status': str(effect.get('status') or ''),
-            'amount': amount,
-            'source': enemy['def_id'],
-        })
+        for target_seat in _enemy_player_target_seats(state):
+            with (_seat_scope(state, target_seat) if target_seat is not None else nullcontext()):
+                combat.setdefault('delayed_player_statuses', []).append({
+                    'status': str(effect.get('status') or ''),
+                    'amount': amount,
+                    'source': enemy['def_id'],
+                })
     elif effect_type == 'allies_power':
         for ally in _living_enemies(combat):
             before = int(ally.get('power') or 0)
@@ -7716,11 +7763,13 @@ def _resolve_enemy_effect(state, enemy, effect, move, seed, events):
                     _gain_shield(state, amount, events, source='enemy', enemy=ally)
     elif effect_type == 'add_draw_card':
         created_ids = []
-        for _ in range(amount):
-            card = _new_card(state, effect.get('card_id'))
-            combat['draw_pile'].append(card)
-            created_ids.append(card['instance_id'])
-        _rng(state, seed, 'enemy_add_draw').shuffle(combat['draw_pile'])
+        for target_seat in _enemy_player_target_seats(state):
+            with (_seat_scope(state, target_seat) if target_seat is not None else nullcontext()):
+                for _ in range(amount):
+                    card = _new_card(state, effect.get('card_id'))
+                    combat['draw_pile'].append(card)
+                    created_ids.append(card['instance_id'])
+                _rng(state, seed, 'enemy_add_draw').shuffle(combat['draw_pile'])
         if created_ids:
             events.append({
                 'type': 'enemy_card_added',
@@ -7907,17 +7956,21 @@ def _resolve_enemy_effect(state, enemy, effect, move, seed, events):
             })
         enemy['nourished'] = True
     elif effect_type == 'delayed_hand_charge':
-        combat['delayed_hand_charge'] = int(combat.get('delayed_hand_charge') or 0) + amount
+        for target_seat in _enemy_player_target_seats(state):
+            with (_seat_scope(state, target_seat) if target_seat is not None else nullcontext()):
+                combat['delayed_hand_charge'] = int(combat.get('delayed_hand_charge') or 0) + amount
         events.append({'type': 'effect_delayed', 'effect_kind': 'hand_charge', 'amount': amount})
     elif effect_type == 'all_cards_charge':
         charged_ids = []
-        for pile_name in (
-            'hand', 'draw_pile', 'discard_pile', 'exile_pile', 'equipment',
-        ):
-            for card in combat.get(pile_name, []):
-                modifiers = card.setdefault('modifiers', {})
-                modifiers['charge'] = max(0, int(modifiers.get('charge') or 0)) + amount
-                charged_ids.append(card['instance_id'])
+        for target_seat in _enemy_player_target_seats(state):
+            with (_seat_scope(state, target_seat) if target_seat is not None else nullcontext()):
+                for pile_name in (
+                    'hand', 'draw_pile', 'discard_pile', 'exile_pile', 'equipment',
+                ):
+                    for card in combat.get(pile_name, []):
+                        modifiers = card.setdefault('modifiers', {})
+                        modifiers['charge'] = max(0, int(modifiers.get('charge') or 0)) + amount
+                        charged_ids.append(card['instance_id'])
         events.append({
             'type': 'all_cards_charged',
             'amount': amount,
@@ -7926,22 +7979,26 @@ def _resolve_enemy_effect(state, enemy, effect, move, seed, events):
         })
     elif effect_type == 'halve_player_status':
         status = str(effect.get('status') or '')
-        before = max(0, int(combat.get(status) or 0))
-        combat[status] = math.floor(before / 2)
-        events.append({
-            'type': 'status_decay',
-            'target_id': 'player',
-            'status': status,
-            'before': before,
-            'after': int(combat[status]),
-            'source': enemy['def_id'],
-        })
+        for target_seat in _enemy_player_target_seats(state):
+            with (_seat_scope(state, target_seat) if target_seat is not None else nullcontext()):
+                before = max(0, int(combat.get(status) or 0))
+                combat[status] = math.floor(before / 2)
+                events.append({
+                    'type': 'status_decay',
+                    'target_id': 'player',
+                    'status': status,
+                    'before': before,
+                    'after': int(combat[status]),
+                    'source': enemy['def_id'],
+                })
     elif effect_type == 'delayed_player_status':
-        combat.setdefault('delayed_player_statuses', []).append({
-            'status': str(effect.get('status') or ''),
-            'amount': amount,
-            'source': enemy['def_id'],
-        })
+        for target_seat in _enemy_player_target_seats(state):
+            with (_seat_scope(state, target_seat) if target_seat is not None else nullcontext()):
+                combat.setdefault('delayed_player_statuses', []).append({
+                    'status': str(effect.get('status') or ''),
+                    'amount': amount,
+                    'source': enemy['def_id'],
+                })
         events.append({
             'type': 'effect_delayed',
             'effect_kind': 'player_status',
@@ -7971,7 +8028,13 @@ def _resolve_enemy_effect(state, enemy, effect, move, seed, events):
             'after': after_max,
         })
     elif effect_type == 'stun_if_player_shield':
-        if int(combat.get('shield') or 0) > 0:
+        has_shield = False
+        for target_seat in _enemy_player_target_seats(state):
+            with (_seat_scope(state, target_seat) if target_seat is not None else nullcontext()):
+                if int(combat.get('shield') or 0) > 0:
+                    has_shield = True
+                    break
+        if has_shield:
             _apply_status(state, combat, 'stun', 1, events, source=enemy['def_id'])
             enemy['worm_digest_pending'] = True
     elif effect_type == 'consume_pearls_damage':
@@ -8361,21 +8424,12 @@ def _living_seats(state):
     ]
 
 
-def _enemy_victim_seat(state, enemy, seed=None):
-    """本轮该敌人攻击的受害席：具名 RNG 锁定一个存活席（倒地后顺位重指）。
-    单人恒为 0。"""
-    seats = _living_seats(state)
-    if not seats:
-        return None
-    if len(seats) == 1:
-        return seats[0]
-    combat = state.get('combat') or {}
-    namespace = f"coop_enemy_target:{combat.get('id') or 'combat'}:{combat.get('round') or 1}:{enemy.get('id')}"
-    # 纯确定性哈希（不消耗RNG流）：意图展示与敌方结算重复调用同一函数，结果一致。
-    digest = hashlib.sha256(
-        f"{state.get('journey_seed')}:story-rng-v2:{namespace}".encode('utf-8')
-    ).hexdigest()
-    return seats[int(digest[:8], 16) % len(seats)]
+def _enemy_player_target_seats(state):
+    """敌方"以玩家为目标"的效果结算席位：合作=全部存活席（同时攻击两席，
+    2026-10-12 设计），单人=[None]=当前挂载席（单人语义零改动）。"""
+    if _seat_count(state) > 1:
+        return _living_seats(state) or [None]
+    return [None]
 
 
 def _enemy_turn(state, seed, events):
@@ -8521,8 +8575,6 @@ def _enemy_turn(state, seed, events):
             continue
         move = _next_enemy_move(state, enemy)
         move_index = definition['moves'].index(move)
-        # 多席位：锁定本敌人本轮的受害席（效果结算内读取；单人 None=挂载席）。
-        enemy['_victim_seat'] = _enemy_victim_seat(state, enemy, seed) if _seat_count(state) > 1 else None
         has_attack = any(
             effect.get('type') in {
                 'damage', 'damage_from_shield', 'damage_from_player_status',
@@ -8563,7 +8615,6 @@ def _enemy_turn(state, seed, events):
                         'parallel_group',
                         f'{group_prefix}:hit:{hit_index}' if hit_index else group_prefix,
                     )
-        enemy.pop('_victim_seat', None)
         _advance_enemy_move(state, enemy, move_index, seed)
         _finish_enemy_turn_effects(state, enemy, seed, events)
         if (

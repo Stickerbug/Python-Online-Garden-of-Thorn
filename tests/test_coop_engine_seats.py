@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """主引擎多席位核心语义（合作重写 第2/3步，2026-10-12）：
 
-victim_seat 伤害、ready 栅栏、敌方逐席锁定目标、单席倒地不判负、
-胜利复活 20%、就绪封锁与撤回。
+敌方攻击同时命中全部存活席（2026-10-12 起）、双倍血量/护盾、ready 栅栏、
+单席倒地不判负、胜利复活 20%、就绪封锁与撤回。
 """
 
 import copy
@@ -105,7 +105,7 @@ def test_ready_seat_cannot_play_cards():
         }, 'coop-lock')
 
 
-def test_enemy_damage_hits_locked_victim_seat_only():
+def test_enemy_attack_hits_all_living_seats():
     state = _dual_state('coop-victim', enemy='chimney')
     combat = state['combat']
     # 烟囱按 (0,0,1) 出招：强制用攻击招（index 1）
@@ -120,12 +120,39 @@ def test_enemy_damage_hits_locked_victim_seat_only():
     _mount_seat(state, 1)
     state, _ = apply_story_action(state, 'end_turn', {}, 'coop-victim')
     after = [_health(state, 0), _health(state, 1)]
-    assert after != before, '敌方回合应造成伤害'
-    hit = [b - a for a, b in zip(before, after)]
-    assert (hit[0] > 0) != (hit[1] > 0) or (hit[0] > 0 and hit[1] > 0) is False, (
-        '单体攻击应只伤一席（多段也只伤同一席）'
+    hit = [a - b for a, b in zip(before, after)]  # 各席掉血量
+    assert hit[0] > 0 and hit[1] > 0, (
+        f'敌方攻击应同时命中两席（2026-10-12 设计），实际掉血={hit}'
     )
-    assert (hit[0] == 0) != (hit[1] == 0), '恰有一席受伤'
+
+
+def test_coop_enemies_get_double_health_and_shield():
+    """合作（多席）：敌人血量与护盾获取量翻倍；单人口径不变。"""
+    import story_mode
+    from story_content import STORY_ENEMIES
+
+    dual = _dual_state('coop-scale', enemy='chimney')
+    solo = build_initial_story_state('coop-scale', 'common_flower')
+    solo_events = []
+    _start_combat(
+        solo, {'type': 'combat'}, 'coop-scale', solo_events,
+        encounter_override=[{'def_id': 'chimney'}],
+    )
+    base_def = STORY_ENEMIES['chimney']
+    base_hp = int(base_def.get('max_health') or 1)
+    dual_hp = int(dual['combat']['enemies'][0]['max_health'])
+    solo_hp = int(solo['combat']['enemies'][0]['max_health'])
+    assert solo_hp == base_hp, '单人数值不变'
+    assert dual_hp == base_hp * 2, f'双席敌人血量应翻倍：{dual_hp} vs {base_hp * 2}'
+
+    # 护盾获取：走 _gain_shield 的敌方通道
+    from story_engine import _gain_shield
+    enemy_dual = dual['combat']['enemies'][0]
+    _gain_shield(dual, 3, [], source='enemy', enemy=enemy_dual)
+    assert int(enemy_dual['shield']) == 6, '双席敌方获得的护盾量应翻倍'
+    enemy_solo = solo['combat']['enemies'][0]
+    _gain_shield(solo, 3, [], source='enemy', enemy=enemy_solo)
+    assert int(enemy_solo['shield']) == 3, '单人护盾口径不变'
 
 
 def test_single_seat_downed_combat_continues_and_revives_on_victory():
