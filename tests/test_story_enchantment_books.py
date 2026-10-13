@@ -335,26 +335,27 @@ def test_sharp_power_is_consumed_when_the_enchanted_card_is_played():
     assert 'enchantment_labels' not in (played.get('modifiers') or {})
 
 
-def test_sharp_power_is_split_across_hits_like_multiplayer():
-    """GB-206：威力按段分摊——每段 +ceil(威力/段数)，与多人模式
-    ``ceil(power/hits)`` 同口径；此前每一段都吃满 +15（3 段 = +45）。"""
+def test_sharp_power_only_boosts_the_first_hit():
+    """设计 2026-10-13：卡牌威力（附魔书「伤害+D」）只加成第一段——
+    基础段值保持干净，首段全额加成由结算方读取 enchantment_damage_bonus 实现
+    （GB-206 旧口径是按 ceil(D/段数) 分摊到每段）。"""
     state = {'combat': {}}
-    # 目标 3 种状态（按种类数）：damage_per_status 打 3 段
+    # 目标 3 种状态（按种类数）：damage_per_status 打 3 段——段基础值不含威力
     target = {'poison': 2, 'fire': 1, 'bleed': 1}
     effect = {'type': 'damage_per_status', 'amount': 5, 'enchantment_damage_bonus': 15}
     base, hits = _player_attack_effect_segment(state, effect, target, {})
     assert hits == 3
-    assert base == 5 + 5            # ceil(15/3)=5 每段，总加成 15 而不是 45
+    assert base == 5                # 威力不折进段基础值
 
-    # 单段（普通 damage）吃满：6 + 15
+    # 单段（普通 damage）：段值同口径干净，首段=末段
     base1, hits1 = _player_attack_effect_segment(
         state, {'type': 'damage', 'amount': 6, 'enchantment_damage_bonus': 15}, target, {})
-    assert (base1, hits1) == (21, 1)
+    assert (base1, hits1) == (6, 1)
 
-    # hits=2：每段 +ceil(15/2)=8，总 16（向上取整的口径与多人一致）
+    # hits=2：段基础值干净
     base2, hits2 = _player_attack_effect_segment(
         state, {'type': 'damage', 'amount': 6, 'hits': 2, 'enchantment_damage_bonus': 15}, target, {})
-    assert (base2, hits2) == (14, 2)
+    assert (base2, hits2) == (6, 2)
 
     # 没有加成的卡不受影响
     base3, _ = _player_attack_effect_segment(

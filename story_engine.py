@@ -3011,11 +3011,10 @@ def _player_attack_effect_segment(state, effect, target, context):
         hits = 1 + int((state.get('combat', {}).get('orbit') or {}).get('rotations_this_turn') or 0)
     else:
         return None
-    # 附魔书/威力加成按段分摊（GB-206，与多人 ceil(power/hits) 同口径）：
-    # 每段 + ceil(D/段数)，而不是把 D 折进 amount 让每段吃满。
-    enchant_bonus = int(effect.get('enchantment_damage_bonus') or 0)
-    if enchant_bonus > 0 and hits > 0:
-        base_amount += int(math.ceil(enchant_bonus / hits))
+    # 卡牌威力（附魔书「伤害+D」）只加成第一段（2026-10-13 设计，与多人
+    # 9.27 口径一致）：不再按 ceil(D/段数) 分摊到每段（GB-206 旧口径），
+    # 基础段值保持干净，首段加成由 _enemy_physical_damage / 预测读取
+    # enchantment_damage_bonus 字段实现。
     return max(0, base_amount), max(0, hits)
 
 
@@ -3143,8 +3142,10 @@ def _enemy_physical_damage(
     hit_count = max(0, int(hits))
     if hit_count <= 0:
         return 0
-    # 力量加在每一段攻击伤害上（2026-10-13 设计：增强全部段，不再只加首段）。
+    # 力量（combat power）加在每一段；卡牌威力（附魔书伤害+D）只加首段
+    # （2026-10-13 设计：两者口径不同）。
     power_bonus = _player_power_bonus(state, values)
+    enchant_bonus = max(0, int(values.get('enchantment_damage_bonus') or 0))
     base_hit_amount = _player_attack_hit_amount(
         state,
         enemy,
@@ -3153,7 +3154,18 @@ def _enemy_physical_damage(
         attack_multiplier=attack_multiplier,
         power_bonus=power_bonus,
     )
-    first_hit_amount = base_hit_amount
+    first_hit_amount = (
+        _player_attack_hit_amount(
+            state,
+            enemy,
+            base_amount,
+            values,
+            attack_multiplier=attack_multiplier,
+            power_bonus=power_bonus + enchant_bonus,
+        )
+        if enchant_bonus > 0
+        else base_hit_amount
+    )
     tags = _card_tags(values)
     precise = 'precise' in tags
     total = 0
@@ -6803,9 +6815,18 @@ def _card_damage_prediction(state, card, enemy):
             effect,
             attack_multiplier=context.get('attack_multiplier', 1),
         )
-        # 力量加在每一段（与实际结算同口径，2026-10-13）。
+        # 力量加在每一段；卡牌威力只加首段（与实际结算同口径，2026-10-13）。
         power_bonus = _player_power_bonus(state, effect)
+        enchant_bonus = max(0, int(effect.get('enchantment_damage_bonus') or 0))
         first_value = _player_attack_hit_amount(
+            state,
+            simulated_enemy,
+            base_amount,
+            effect,
+            attack_multiplier=context.get('attack_multiplier', 1),
+            power_bonus=power_bonus + enchant_bonus,
+        )
+        raw_value = _player_attack_hit_amount(
             state,
             simulated_enemy,
             base_amount,
@@ -6813,9 +6834,8 @@ def _card_damage_prediction(state, card, enemy):
             attack_multiplier=context.get('attack_multiplier', 1),
             power_bonus=power_bonus,
         )
-        raw_value = first_value
         for hit_index in range(max(0, hits)):
-            hit_value = first_value
+            hit_value = first_value if hit_index == 0 else raw_value
             if dodge > 0:
                 dodge -= 1
                 if precise:
