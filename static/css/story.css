@@ -8290,6 +8290,10 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 
 /* 合作联机面板（嵌入常驻 HUD 中栏，2026-10-12：原固定右上会盖住快捷操作） */
 .story-coop-hud {
+  /* flex-basis:100% 强制换行到第二行左侧（左边玩家信息下方），
+     width:fit-content 让实际宽度收缩回内容宽。 */
+  flex-basis: 100%;
+  width: fit-content;
   display: flex;
   flex-direction: column;
   gap: 5px;
