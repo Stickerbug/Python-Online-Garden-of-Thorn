@@ -489,7 +489,6 @@ a { font: inherit; }
   left: max(14px, env(safe-area-inset-left));
   z-index: 30000;
   display: flex;
-  flex-wrap: wrap; /* 合作队友面板换行到第二行左侧（左边UI下方） */
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
@@ -8290,10 +8289,6 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 
 /* 合作联机面板（嵌入常驻 HUD 中栏，2026-10-12：原固定右上会盖住快捷操作） */
 .story-coop-hud {
-  /* flex-basis:100% 强制换行到第二行左侧（左边玩家信息下方），
-     width:fit-content 让实际宽度收缩回内容宽。 */
-  flex-basis: 100%;
-  width: fit-content;
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -8333,4 +8328,13 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 @media (max-width: 720px) {
   .story-coop-hud { min-width: 108px; max-width: 128px; padding: 5px 7px; }
   .coop-teammate-stats { display: none; }
+}
+
+
+/* 合作模式左列：玩家信息在上，队友面板在其下方 */
+.story-coop-left-column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: none;
 }

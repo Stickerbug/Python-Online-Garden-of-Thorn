@@ -12118,10 +12118,15 @@
         seats.style.color = '#e8e4d8';
         bar.appendChild(seats);
         bar.appendChild(exitBtn);
-        if (hud) {
-            // HUD 行设了 flex-wrap：玩家信息+快捷操作占第一行，队友面板
-            // 追加在末尾自然换行到第二行左侧（左边UI下方，2026-10-12 用户指定）。
-            hud.appendChild(bar);
+        const playerEl = hud?.querySelector('.story-persistent-player');
+        if (hud && playerEl) {
+            // 左列容器：玩家信息在上、队友面板在其下方（2026-10-12 用户指定），
+            // 快捷操作仍独占右侧，结构确定不依赖 flex 换行技巧。
+            const leftCol = document.createElement('div');
+            leftCol.className = 'story-coop-left-column';
+            hud.insertBefore(leftCol, playerEl);
+            leftCol.appendChild(playerEl);
+            leftCol.appendChild(bar);
         } else {
             document.body.appendChild(bar);
         }
