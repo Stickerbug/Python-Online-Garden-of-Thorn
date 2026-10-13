@@ -38254,7 +38254,7 @@ def coop_demo_run_get():
     user = _coop_demo_session_user()
     if not user or not _coop_demo_allowed(user.get('id')):
         return _json_error('仅工作人员可见的引擎演示', 403)
-    from story_engine import _mount_seat
+    from story_engine import _mount_seat, _refresh_combat_projections
     entry = _COOP_DEMO_RUNS.get(int(user['id']))
     if not entry:
         return jsonify({'success': True, 'run': None,
@@ -38279,6 +38279,11 @@ def coop_demo_run_get():
     # 奖励协调期间给观看席投影本席待选奖励（否则 state['reward'] 为空，
     # 前端只能看到"跳过"，另一席无法选择）。
     mount_coop_reward_view(entry['state'], seat)
+    # 可玩牌/伤害预测按"当前挂载席的手牌"计算（共享键）：读视角必须为观看席
+    # 重算，否则拿到的是队友动作时刷新的列表，本席部分手牌会被误禁用。
+    # _refresh_combat_projections 已实证不消耗 RNG，读路径重算安全。
+    if entry['state'].get('phase') == 'combat':
+        _refresh_combat_projections(entry['state'])
     return jsonify({
         'success': True,
         'run': {
@@ -38343,6 +38348,11 @@ def coop_demo_story_action():
         # 行动者自己可能还有多项奖励未领完（金币+卡牌等），响应同样投影本席余下奖励。
         from story_coop_engine import coop_coord_summary, mount_coop_reward_view
         mount_coop_reward_view(state, seat)
+        # 动作链路末尾（如敌方回合+新一轮开始）挂载的可能是另一席：为行动者
+        # 重算可玩牌/伤害预测，保证响应里的列表对应本席手牌。
+        if state.get('phase') == 'combat':
+            from story_engine import _refresh_combat_projections
+            _refresh_combat_projections(state)
         return jsonify({
             'success': True,
             'duplicate': False,
