@@ -979,70 +979,67 @@ class GameEngine2v2(GameEngine):
                     {'target_id': responder_id},
                 )
                 self._execute_counter_effect(responder_id, counter_removed, card, player_id, pending_damage_prediction)
-                # clamp_responder_props 语义（修正 2026-10-12）：反制授予的增益
-                # （如泡泡的闪避）在被反制牌结算期间临时撤销——不得闪避/抵挡它所
-                # 反制的那张牌；结算后原额恢复，留给后续攻击。
-                granted_props = self._suppress_response_granted_props(
-                    responder_id, responder_prop_snapshot)
-                try:
-                    counter_dead_ids = [
-                        candidate
-                        for candidate, was_alive in enumerate(alive_before_counter)
-                        if was_alive and self.players[candidate].health <= 0
-                    ]
-                    is_precision = pending.get('is_precision', False)
-                    reopened_result = self._reopen_response_for_others(pending, responder_id)
-                    if reopened_result is not None:
-                        # 其他被打击目标还有反制机会：先结算这张反制牌的后续，
-                        # 被打出的牌等窗口内所有人行动完再结算。
-                        run_response_after_resolution(
-                            self, responder_id, counter_removed, card,
-                            resolution.get('after_resolution'),
-                        )
-                        return self._after_response_result(player_id, reopened_result)
-                    if resolution.get('halve_precision'):
-                        # 黄瓜修复（设计 9.22）：减半/无效分支此前漏跑 after_resolution，
-                        # 导致「反制结算后获得无法选中」有时不生效。
-                        if self._is_status_immune(responder_id):
-                            result = self._execute_card_effect(player_id, card, choice)
-                            run_response_after_resolution(
-                                self, responder_id, counter_removed, card,
-                                resolution.get('after_resolution'),
-                            )
-                            return self._after_response_result(player_id, result)
-                        if is_precision:
-                            self._execute_card_effect_half_damage(
-                                player_id, card, choice, dodge_target_id=responder_id
-                            )
-                            run_response_after_resolution(
-                                self, responder_id, counter_removed, card,
-                                resolution.get('after_resolution'),
-                            )
-                            return self._after_response_result(player_id, {'success': True, 'countered': True, 'precision_halved': True, 'card': card.to_dict()})
-                        self._execute_card_effect(player_id, card, choice)
-                        run_response_after_resolution(
-                            self, responder_id, counter_removed, card,
-                            resolution.get('after_resolution'),
-                        )
-                        return self._after_response_result(player_id, {'success': True, 'countered': True, 'card': card.to_dict()})
-                    if resolution.get('negate_bloom'):
-                        self.negated_card = True
-                    if resolution.get('suppress_responder_untargetable'):
-                        old_untargetable = max(0, int(getattr(responder, 'untargetable', 0) or 0))
-                        responder.untargetable = 0
-                        try:
-                            result = self._execute_card_effect(player_id, card, choice)
-                        finally:
-                            responder.untargetable = old_untargetable
-                    else:
-                        result = self._execute_card_effect(player_id, card, choice)
+                counter_dead_ids = [
+                    candidate
+                    for candidate, was_alive in enumerate(alive_before_counter)
+                    if was_alive and self.players[candidate].health <= 0
+                ]
+                is_precision = pending.get('is_precision', False)
+                reopened_result = self._reopen_response_for_others(pending, responder_id)
+                if reopened_result is not None:
+                    # 其他被打击目标还有反制机会：先结算这张反制牌的后续，
+                    # 被打出的牌等窗口内所有人行动完再结算。
                     run_response_after_resolution(
                         self, responder_id, counter_removed, card,
                         resolution.get('after_resolution'),
                     )
-                    return self._after_response_result(player_id, result)
-                finally:
-                    self._restore_response_granted_props(responder_id, granted_props)
+                    return self._after_response_result(player_id, reopened_result)
+                if resolution.get('halve_precision'):
+                    # 黄瓜修复（设计 9.22）：减半/无效分支此前漏跑 after_resolution，
+                    # 导致「反制结算后获得无法选中」有时不生效。
+                    # 反制授予的闪避在被反制牌结算期间生效（设计：泡泡挡下它所
+                    # 反制的那张攻击、消耗该层闪避；精准牌只减半），结算后由
+                    # clamp_responder_props 夹回。
+                    if self._is_status_immune(responder_id):
+                        result = self._execute_card_effect(player_id, card, choice)
+                        run_response_after_resolution(
+                            self, responder_id, counter_removed, card,
+                            resolution.get('after_resolution'),
+                        )
+                        return self._after_response_result(player_id, result)
+                    if is_precision:
+                        self._execute_card_effect_half_damage(
+                            player_id, card, choice, dodge_target_id=responder_id
+                        )
+                        self._clamp_response_props(responder_id, responder_prop_snapshot)
+                        run_response_after_resolution(
+                            self, responder_id, counter_removed, card,
+                            resolution.get('after_resolution'),
+                        )
+                        return self._after_response_result(player_id, {'success': True, 'countered': True, 'precision_halved': True, 'card': card.to_dict()})
+                    self._execute_card_effect(player_id, card, choice)
+                    self._clamp_response_props(responder_id, responder_prop_snapshot)
+                    run_response_after_resolution(
+                        self, responder_id, counter_removed, card,
+                        resolution.get('after_resolution'),
+                    )
+                    return self._after_response_result(player_id, {'success': True, 'countered': True, 'card': card.to_dict()})
+                if resolution.get('negate_bloom'):
+                    self.negated_card = True
+                if resolution.get('suppress_responder_untargetable'):
+                    old_untargetable = max(0, int(getattr(responder, 'untargetable', 0) or 0))
+                    responder.untargetable = 0
+                    try:
+                        result = self._execute_card_effect(player_id, card, choice)
+                    finally:
+                        responder.untargetable = old_untargetable
+                else:
+                    result = self._execute_card_effect(player_id, card, choice)
+                run_response_after_resolution(
+                    self, responder_id, counter_removed, card,
+                    resolution.get('after_resolution'),
+                )
+                return self._after_response_result(player_id, result)
             finally:
                 self._game_over_defer_depth -= 1
                 if counter_dead_ids:

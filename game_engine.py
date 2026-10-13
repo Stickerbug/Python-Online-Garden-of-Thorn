@@ -10245,62 +10245,59 @@ class GameEngine:
                     {'target_id': responder_id},
                 )
                 self._execute_counter_effect(responder_id, counter_removed, card, player_id, pending_damage_prediction)
-                # clamp_responder_props 语义（修正 2026-10-12）：反制授予的增益
-                # （如泡泡的闪避）在被反制牌结算期间临时撤销——不得闪避/抵挡它所
-                # 反制的那张牌；结算后原额恢复，留给后续攻击。
-                granted_props = self._suppress_response_granted_props(
-                    responder_id, responder_prop_snapshot)
-                try:
-                    is_precision = pending.get('is_precision', False)
-                    if resolution.get('halve_precision'):
-                        # 黄瓜修复（设计 9.22）：减半/无效分支补跑 after_resolution。
-                        if self._is_status_immune(responder_id):
-                            result = self._execute_card_effect(player_id, card, choice)
-                            run_response_after_resolution(
-                                self, responder_id, counter_removed, card,
-                                resolution.get('after_resolution'),
-                            )
-                            self._counter_card_after_resolution(responder_id, counter_removed)
-                            return self._after_response_result(player_id, result)
-                        if is_precision:
-                            self._execute_card_effect_half_damage(
-                                player_id, card, choice, dodge_target_id=responder_id
-                            )
-                            run_response_after_resolution(
-                                self, responder_id, counter_removed, card,
-                                resolution.get('after_resolution'),
-                            )
-                            self._counter_card_after_resolution(responder_id, counter_removed)
-                            return self._after_response_result(player_id, {'success': True, 'countered': True, 'precision_halved': True, 'card': card.to_dict()})
-                        # 非精准：正常全额结算被反制的牌（修复 2026-10-12：此前
-                        # 这段在 return 之后是死代码——被反制的牌效果不结算、
-                        # 也从不进弃牌堆，凭空消失）。
-                        self._execute_card_effect(player_id, card, choice)
+                is_precision = pending.get('is_precision', False)
+                if resolution.get('halve_precision'):
+                    # 黄瓜修复（设计 9.22）：减半/无效分支补跑 after_resolution。
+                    # 反制授予的闪避在被反制牌结算期间生效（设计：泡泡挡下它所
+                    # 反制的那张攻击、消耗该层闪避；精准牌只减半），结算后由
+                    # clamp_responder_props 夹回。
+                    if self._is_status_immune(responder_id):
+                        result = self._execute_card_effect(player_id, card, choice)
                         run_response_after_resolution(
                             self, responder_id, counter_removed, card,
                             resolution.get('after_resolution'),
                         )
                         self._counter_card_after_resolution(responder_id, counter_removed)
-                        return self._after_response_result(player_id, {'success': True, 'countered': True, 'card': card.to_dict()})
-                    if resolution.get('negate_bloom'):
-                        self.negated_card = True
-                    if resolution.get('suppress_responder_untargetable'):
-                        old_untargetable = max(0, int(getattr(responder, 'untargetable', 0) or 0))
-                        responder.untargetable = 0
-                        try:
-                            result = self._execute_card_effect(player_id, card, choice)
-                        finally:
-                            responder.untargetable = old_untargetable
-                    else:
-                        result = self._execute_card_effect(player_id, card, choice)
+                        return self._after_response_result(player_id, result)
+                    if is_precision:
+                        self._execute_card_effect_half_damage(
+                            player_id, card, choice, dodge_target_id=responder_id
+                        )
+                        self._clamp_response_props(responder_id, responder_prop_snapshot)
+                        run_response_after_resolution(
+                            self, responder_id, counter_removed, card,
+                            resolution.get('after_resolution'),
+                        )
+                        self._counter_card_after_resolution(responder_id, counter_removed)
+                        return self._after_response_result(player_id, {'success': True, 'countered': True, 'precision_halved': True, 'card': card.to_dict()})
+                    # 非精准：被反制的牌照常走完整结算管线（修复 2026-10-12：此前
+                    # 这段在 return 之后是死代码——被反制的牌效果不结算、也从不进
+                    # 弃牌堆，凭空消失）；伤害被反制时已获得的闪避挡下。
+                    self._execute_card_effect(player_id, card, choice)
+                    self._clamp_response_props(responder_id, responder_prop_snapshot)
                     run_response_after_resolution(
                         self, responder_id, counter_removed, card,
                         resolution.get('after_resolution'),
                     )
                     self._counter_card_after_resolution(responder_id, counter_removed)
-                    return self._after_response_result(player_id, result)
-                finally:
-                    self._restore_response_granted_props(responder_id, granted_props)
+                    return self._after_response_result(player_id, {'success': True, 'countered': True, 'card': card.to_dict()})
+                if resolution.get('negate_bloom'):
+                    self.negated_card = True
+                if resolution.get('suppress_responder_untargetable'):
+                    old_untargetable = max(0, int(getattr(responder, 'untargetable', 0) or 0))
+                    responder.untargetable = 0
+                    try:
+                        result = self._execute_card_effect(player_id, card, choice)
+                    finally:
+                        responder.untargetable = old_untargetable
+                else:
+                    result = self._execute_card_effect(player_id, card, choice)
+                run_response_after_resolution(
+                    self, responder_id, counter_removed, card,
+                    resolution.get('after_resolution'),
+                )
+                self._counter_card_after_resolution(responder_id, counter_removed)
+                return self._after_response_result(player_id, result)
             finally:
                 self._game_over_defer_depth -= 1
                 self._check_game_over()
@@ -10811,33 +10808,6 @@ class GameEngine:
         for prop, value in snapshot.items():
             current = int(getattr(responder, prop, 0) or 0)
             setattr(responder, prop, min(current, int(value)))
-
-    def _suppress_response_granted_props(self, responder_id: int, snapshot: Optional[dict]) -> dict:
-        """临时撤销反制授予的增益，返回被撤销的量（供恢复）。
-
-        clamp_responder_props 的修正语义（2026-10-12）：被反制牌结算期间，
-        本次反制授予的增益（如泡泡的闪避）不得生效——否则泡泡会把被它
-        反制的那张攻击牌整个闪避掉。结算后用
-        :meth:`_restore_response_granted_props` 原额恢复，留给后续攻击。
-        """
-        if not snapshot or not (0 <= responder_id < len(self.players)):
-            return {}
-        responder = self.players[responder_id]
-        granted = {}
-        for prop, before in snapshot.items():
-            current = int(getattr(responder, prop, 0) or 0)
-            amount = max(0, current - int(before))
-            if amount > 0:
-                granted[prop] = amount
-                setattr(responder, prop, current - amount)
-        return granted
-
-    def _restore_response_granted_props(self, responder_id: int, granted: Optional[dict]) -> None:
-        if not granted or not (0 <= responder_id < len(self.players)):
-            return
-        responder = self.players[responder_id]
-        for prop, amount in granted.items():
-            setattr(responder, prop, int(getattr(responder, prop, 0) or 0) + int(amount))
 
     def _discard_card(self, ps, card: CardInstance):
         reset_card_for_discard(card)

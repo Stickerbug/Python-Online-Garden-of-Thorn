@@ -135,9 +135,7 @@ class AllyCounterEngineTests(unittest.TestCase):
         target_prediction = engine.build_response_damage_prediction(2, [bubbles[2]])
 
         self.assertEqual(8, target_prediction['no_counter']['total'])
-        # 泡泡反制修正（2026-10-12）：反制授予的闪避不得闪避被反制的那张牌，
-        # 预测口径同步——反制后本次攻击仍全额结算（闪避留给后续攻击）。
-        self.assertEqual(8, target_prediction['counters'][str(bubbles[2].instance_id)]['after']['total'])
+        self.assertEqual(0, target_prediction['counters'][str(bubbles[2].instance_id)]['after']['total'])
 
     def test_replay_response_requests_are_partitioned_by_responder(self):
         engine, attack, _bubbles = self.engine_with_bubbles(2)
