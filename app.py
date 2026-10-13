@@ -38264,7 +38264,9 @@ def coop_demo_run_get():
     except (TypeError, ValueError):
         seat = 0
     seat = max(0, min(seat, len(entry['state'].get('players') or [{}]) - 1))
-    from story_coop_engine import coop_coord_summary, mount_coop_reward_view
+    from story_coop_engine import (
+        coop_coord_summary, mount_coop_reward_view, mount_coop_room_view,
+    )
     # 联机房间成员：读写共享对局，席位以房间分配为准。
     room_code = _COOP_DEMO_USER_ROOM.get(int(user['id']))
     invite_code = None
@@ -38279,6 +38281,7 @@ def coop_demo_run_get():
     # 奖励协调期间给观看席投影本席待选奖励（否则 state['reward'] 为空，
     # 前端只能看到"跳过"，另一席无法选择）。
     mount_coop_reward_view(entry['state'], seat)
+    mount_coop_room_view(entry['state'], seat)
     # 可玩牌/伤害预测按"当前挂载席的手牌"计算（共享键）：读视角必须为观看席
     # 重算，否则拿到的是队友动作时刷新的列表，本席部分手牌会被误禁用。
     # _refresh_combat_projections 已实证不消耗 RNG，读路径重算安全。
@@ -38346,8 +38349,11 @@ def coop_demo_story_action():
         entry['version'] = int(entry.get('version') or 0) + 1
         _mount_seat(state, seat)
         # 行动者自己可能还有多项奖励未领完（金币+卡牌等），响应同样投影本席余下奖励。
-        from story_coop_engine import coop_coord_summary, mount_coop_reward_view
+        from story_coop_engine import (
+            coop_coord_summary, mount_coop_reward_view, mount_coop_room_view,
+        )
         mount_coop_reward_view(state, seat)
+        mount_coop_room_view(state, seat)
         # 动作链路末尾（如敌方回合+新一轮开始）挂载的可能是另一席：为行动者
         # 重算可玩牌/伤害预测，保证响应里的列表对应本席手牌。
         if state.get('phase') == 'combat':

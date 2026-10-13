@@ -14280,6 +14280,16 @@
 
     function renderRoom(state) {
         const room = state.room || {};
+        if (STORY_COOP_DEMO && !Object.keys(room).length) {
+            // 合作房间协调期：本席已完成（或房间副本未挂载）→ 等待其余席位。
+            const pendingSeats = (activeRun?.coopCoord?.room_pending_seats) || [];
+            if (pendingSeats.length) {
+                setText('story-room-copy',
+                    `等待队友处理房间…（待处理席位：${pendingSeats.map((s) => `席${s}`).join('、')}）`);
+                showView('story-room');
+                return;
+            }
+        }
         const player = state.player || {};
         const upgradableCards = (player.deck || [])
             .filter((card) => storyCardIsUpgradable(card));

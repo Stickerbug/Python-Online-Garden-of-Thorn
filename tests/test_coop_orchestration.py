@@ -171,6 +171,37 @@ def test_reward_view_projection_for_waiting_seat():
     assert not state['coord'].get('rewards_by_seat')
 
 
+def test_room_per_seat_choices_and_independent_leave():
+    """房间（休息/事件/商店）逐席独立（2026-10-13 重写）：
+    修复前动作直通共享房间——第一人的选择即消费房间（他人无法选择），
+    第一人离场即全员被踢出。"""
+    state = _dual_state('orch-room')
+    state['phase'] = 'room'
+    state['room'] = {'type': 'rest', 'choices': [{'id': 'heal'}, {'id': 'gold'}]}
+    state['players'][0]['health'] = 30  # 先扣血，治疗才可观测
+    health0 = int(state['players'][0]['health'])
+    # 席0 选择治疗后，席1 仍可选择
+    state, _ = apply_coop_action(state, 0, 'resolve_room', {'option': 'heal'}, 'orch-room')
+    assert state['phase'] == 'room', '席1未完成时保持房间阶段'
+    assert sorted(state['coord']['rooms_by_seat'].keys()) == ['1']
+    assert int(state['players'][0]['health']) > health0, '席0的治疗只作用于席0'
+    state, _ = apply_coop_action(state, 1, 'resolve_room', {'option': 'gold'}, 'orch-room')
+    assert state['phase'] != 'room', '全员完成后应推进'
+    assert not state['coord'].get('rooms_by_seat')
+
+
+def test_room_shop_one_seat_leave_does_not_kick_other():
+    state = _dual_state('orch-shop')
+    state['phase'] = 'room'
+    state['room'] = {'type': 'shop', 'choices': [{'id': 'leave'}], 'wares': []}
+    state, _ = apply_coop_action(state, 0, 'resolve_room', {'option': 'leave'}, 'orch-shop')
+    assert state['phase'] == 'room', '一人离场不应把另一人踢出房间'
+    assert sorted(state['coord']['rooms_by_seat'].keys()) == ['1']
+    state, _ = apply_coop_action(state, 1, 'resolve_room', {'option': 'leave'}, 'orch-shop')
+    assert state['phase'] != 'room'
+    assert not state['coord'].get('rooms_by_seat')
+
+
 def test_seat1_reward_lands_in_seat1_deck_only():
     """席1的奖励必须写进席1：normalize 无战斗分支曾把别名绑回 players[0]，
     导致席1选卡/金币进席0（2026-10-12 修复）。"""

@@ -193,23 +193,70 @@ def apply_coop_action(state, seat, action_type, payload, seed):
         return state, events
 
     if action_type == 'resolve_room':
+        # 逐席房间（2026-10-13 重写，同奖励模式）：首次交互把房间复制一份给
+        # 每席，各自独立选择/购物/休息；某席的房间被单人结算消掉（事件/休息
+        # 的一次性选择、商店离场）即该席完成；全员完成后节点推进恰好一次
+        # （由最终席的单人结算完成）。修复：此前动作直通共享房间——第一人
+        # 选择即消费房间（他人无法选择），第一人离场即全员被踢出。
+        rooms = coord.get('rooms_by_seat')
+        if rooms is None:
+            shared_room = state.get('room')
+            if not isinstance(shared_room, dict) or not shared_room:
+                raise StoryActionError('NO_ROOM', '当前没有待处理的房间')
+            rooms = {
+                str(s): copy.deepcopy(shared_room)
+                for s in range(_seat_count(state))
+            }
+            coord['rooms_by_seat'] = rooms
+            coord['room_done'] = []
+        coord = _coord(state)
+        rooms = coord.get('rooms_by_seat') or {}
         done = set(coord.get('room_done') or [])
-        room = state.get('room') or {}
-        # 商店/事件等可多次交互的房间只在"离场"时记完成：以 payload.option
-        # 为 leave/confirm 类或房间已消尽为准——由调用方用 {finish:true} 显式
-        # 标记离场（演示层约定）。
-        if payload.get('finish'):
-            done.add(seat)
+        if str(seat) in done:
+            raise StoryActionError('ROOM_ALREADY_DONE', '本席已完成该房间')
+        own = rooms.get(str(seat))
+        if not isinstance(own, dict) or not own:
+            raise StoryActionError('NO_ROOM', '本席没有待处理的房间')
+        state['room'] = copy.deepcopy(own)
+        state, events = apply_story_action(state, 'resolve_room', payload, seed)
+        coord = _coord(state)
+        rooms = coord.get('rooms_by_seat') or {}
+        done = set(coord.get('room_done') or [])
+        remaining_room = state.get('room')
+        seat_finished = (
+            not isinstance(remaining_room, dict)
+            or not remaining_room
+            or str(state.get('phase') or '') != 'room'
+        )
+        if seat_finished:
+            done.add(str(seat))
             coord['room_done'] = sorted(done)
-            if _all_seats_acted(state, done):
-                coord['room_done'] = []
-                state, events = apply_story_action(state, 'resolve_room', payload, seed)
-                return state, events
-            return state, [{'type': 'room_seat_done', 'seat': seat}]
-        return apply_story_action(state, 'resolve_room', payload, seed)
+            rooms.pop(str(seat), None)
+        else:
+            rooms[str(seat)] = remaining_room
+        state['room'] = None
+        if rooms:
+            # 还有席位没完成：保持房间阶段（读视角由 mount_coop_room_view 投影）。
+            state['phase'] = 'room'
+            return state, events
+        coord.pop('rooms_by_seat', None)
+        coord['room_done'] = []
+        return state, events
 
     # 其余未知动作：透传（单人语义，按行动席挂载）。
     return apply_story_action(state, action_type, payload, seed)
+
+
+def mount_coop_room_view(state, seat):
+    """观看席视角投影：房间协调期间把本席的房间副本挂到 state['room']。
+
+    只在读路径（GET / 动作响应投影）调用；行动路径 resolve_room 结算前会用
+    本席副本覆盖 state['room']，结算后按剩余情况落账并清空。"""
+    if state.get('phase') != 'room':
+        return
+    own = (state.get('coord') or {}).get('rooms_by_seat', {}).get(str(seat))
+    if isinstance(own, dict) and own:
+        state['room'] = copy.deepcopy(own)
 
 
 def mount_coop_reward_view(state, seat):
@@ -239,4 +286,7 @@ def coop_coord_summary(state):
             int(s) for s in (coord.get('rewards_by_seat') or {}).keys()
         ),
         'room_done': coord.get('room_done') or [],
+        'room_pending_seats': sorted(
+            int(s) for s in (coord.get('rooms_by_seat') or {}).keys()
+        ),
     }
