@@ -12084,13 +12084,18 @@
     function ensureCoopDemoControls() {
         if (!STORY_COOP_DEMO) return;
         if (!$('story-coop-demo-bar')) {
-        const bar = document.createElement('div');
+        const hud = $('story-persistent-hud');
+        const hudActions = hud?.querySelector('.story-persistent-actions');
+        // 队友面板嵌入常驻 HUD 中栏（玩家信息与快捷操作之间）：
+        // 固定悬浮右上会盖住 HUD 的快捷操作按钮（地图/牌库/存档等）。
+        const bar = document.createElement('section');
         bar.id = 'story-coop-demo-bar';
-        bar.style.cssText = 'position:fixed;top:60px;right:12px;z-index:9999;display:flex;flex-direction:column;gap:6px;font-size:12.5px;background:rgba(20,26,18,.92);padding:8px 10px;border-radius:10px;border:1px solid #6b7d4f;max-width:190px;';
+        bar.className = 'story-coop-hud';
+        bar.setAttribute('aria-label', '联机队友信息');
         const exitBtn = document.createElement('button');
         exitBtn.type = 'button';
         exitBtn.textContent = '退出合作演示';
-        exitBtn.style.cssText = 'padding:6px 10px;border-radius:6px;border:1px solid #b03a2e;background:#3a1e1a;color:#f0c9c0;cursor:pointer;';
+        exitBtn.className = 'story-coop-exit';
         exitBtn.addEventListener('click', async () => {
             try { await fetch('/api/coop-demo/leave', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); } catch (err) { /* 忽略 */ }
             localStorage.removeItem('gtv_coop_demo');
@@ -12098,7 +12103,7 @@
         });
         const codeEl = document.createElement('div');
         codeEl.id = 'story-coop-demo-code';
-        codeEl.style.cssText = 'color:#d8b84a;font-weight:700;text-align:center;letter-spacing:2px;cursor:pointer;display:none;';
+        codeEl.className = 'story-coop-code';
         codeEl.title = '点击复制邀请码';
         codeEl.addEventListener('click', async () => {
             const code = codeEl.dataset.code || '';
@@ -12114,7 +12119,11 @@
         seats.style.color = '#e8e4d8';
         bar.appendChild(seats);
         bar.appendChild(exitBtn);
-        document.body.appendChild(bar);
+        if (hud && hudActions) {
+            hud.insertBefore(bar, hudActions);
+        } else {
+            document.body.appendChild(bar);
+        }
         }
         const seatsEl = $('story-coop-demo-seats');
     const codeEl = $('story-coop-demo-code');
@@ -12122,7 +12131,7 @@
     if (codeEl && inviteCode && codeEl.dataset.code !== inviteCode) {
         codeEl.dataset.code = inviteCode;
         codeEl.textContent = `邀请码 ${inviteCode}`;
-        codeEl.style.display = '';
+        codeEl.style.display = 'block';
     }
     if (seatsEl && activeRun && activeRun.state) {
         const state = activeRun.state;
