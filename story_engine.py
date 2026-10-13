@@ -358,7 +358,13 @@ def _normalize_legacy_story_state(state):
         _sync_mounted_seat(state)
         _mount_seat(state, int(mounted))
     else:
-        state['player'] = players[0]
+        # 无战斗阶段：保留现有别名指向（apply_coop_action 已挂载行动席——
+        # 2026-10-12 修复：此前无条件绑回 players[0]，导致合作模式席1在
+        # 奖励/赐福/商店等旅程阶段的卡组与数值变更写进席0）。
+        # 别名不在 players 内（旧档反序列化/损坏）时才回退席0（单人语义）。
+        current = state.get('player')
+        if not any(current is player for player in players):
+            state['player'] = players[0]
 
 
 def _book_instance(state, instance_id):

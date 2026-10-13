@@ -167,3 +167,22 @@ def test_reward_view_projection_for_waiting_seat():
     # 席1基于投影后的状态正常离场完成 → 全员完成。
     state, _ = apply_coop_action(state, 1, 'choose_reward', {'reward_type': 'leave'}, 'orch-t6')
     assert not state['coord'].get('rewards_by_seat')
+
+
+def test_seat1_reward_lands_in_seat1_deck_only():
+    """席1的奖励必须写进席1：normalize 无战斗分支曾把别名绑回 players[0]，
+    导致席1选卡/金币进席0（2026-10-12 修复）。"""
+    state = _dual_state('orch-t7')
+    len0 = len(state['players'][0]['deck'])
+    len1 = len(state['players'][1]['deck'])
+    gold0 = int(state['players'][0]['gold'] or 0)
+    gold1 = int(state['players'][1]['gold'] or 0)
+    state['phase'] = 'reward'
+    state['reward'] = {'gold': 25, 'cards': ['basic'], 'claims': {}, 'source': 'combat'}
+    state, _ = apply_coop_action(state, 1, 'choose_reward', {'reward_type': 'gold'}, 'orch-t7')
+    state, _ = apply_coop_action(
+        state, 1, 'choose_reward', {'reward_type': 'card', 'card_id': 'basic'}, 'orch-t7')
+    assert len(state['players'][0]['deck']) == len0, '席0卡组被席1的奖励改动'
+    assert int(state['players'][0]['gold'] or 0) == gold0, '席1的金币进了席0'
+    assert len(state['players'][1]['deck']) == len1 + 1, '席1未拿到所选卡牌'
+    assert int(state['players'][1]['gold'] or 0) > gold1, '席1未领到金币'
