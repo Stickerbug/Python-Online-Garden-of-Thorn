@@ -255,7 +255,7 @@ _load_achievement_i18n()
 ACHIEVEMENT_DEF_MAP = {item['id']: item for item in ACHIEVEMENT_DEFS}
 _DM_MARK_READ_LAST_AT = {}
 AUTO_FRIEND_REQUESTER_NAMES = {'stickerbug', 'netherdog', 'eric'}
-ROLE_TYPES = {'admin', 'staff', 'contributor', 'sponsor', 'none'}
+ROLE_TYPES = {'admin', 'staff', 'tester', 'contributor', 'sponsor', 'none'}
 ROLE_COLOR_TOKENS = {'admin', 'bloom', 'guard', 'thorn', 'root', 'neutral'}
 ADMIN_ROLE_USERNAME_KEYS = frozenset({'stickerbug', 'eric', 'netherdog', 'champion'})
 TITLE_COLOR_TOKENS = TITLE_STYLE_COLOR_TOKENS
@@ -286,11 +286,19 @@ ROLE_DEFAULTS = {
         'can_direct_friend': True,
         'chat_exempt': True,
     },
+    'tester': {
+        'role_key': 'tester',
+        'title': '测试人员',
+        'color': 'thorn',
+        'sort_order': 2,
+        'can_direct_friend': False,
+        'chat_exempt': False,
+    },
     'contributor': {
         'role_key': 'contributor',
         'title': '',
         'color': 'guard',
-        'sort_order': 2,
+        'sort_order': 3,
         'can_direct_friend': False,
         'chat_exempt': False,
     },
@@ -298,7 +306,7 @@ ROLE_DEFAULTS = {
         'role_key': 'sponsor',
         'title': '',
         'color': 'bloom',
-        'sort_order': 3,
+        'sort_order': 4,
         'can_direct_friend': False,
         'chat_exempt': False,
     },
@@ -11233,7 +11241,7 @@ def admin_set_user_role(identifier, role_type):
         return None, None, '账号不存在'
     normalized_type = _normalize_role_type(role_type)
     if not normalized_type:
-        return None, None, '身份类型必须是 admin/staff/contributor/sponsor/none'
+        return None, None, '身份类型必须是 admin/staff/tester/contributor/sponsor/none'
     user_key = normalize_username_key(user['username'])
     if normalized_type == 'admin' and user_key not in ADMIN_ROLE_USERNAME_KEYS:
         return None, None, '管理员身份只能授予 Stickerbug、Eric、NetherDog 或 Champion'
@@ -11269,7 +11277,8 @@ def admin_set_user_role(identifier, role_type):
                 user['id'],
                 normalized_type,
                 role_key_text,
-                '',
+                # 默认称号来自角色默认值（如测试人员），管理员可另行覆盖。
+                str(defaults.get('title') or ''),
                 color_text,
                 order_value,
                 1 if direct else 0,

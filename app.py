@@ -16069,7 +16069,7 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
                     'output': command_error(
                         raw,
                         len(raw),
-                        'account identity set <ID|注册顺序|用户名> <admin|staff|contributor|sponsor>',
+                        'account identity set <ID|注册顺序|用户名> <admin|staff|tester|contributor|sponsor>',
                     ) + '\n身份不再设置称号、颜色或自定义权限；请使用 account title 管理称号。',
                 }
             user, profile, error = admin_set_user_role(
@@ -21834,7 +21834,8 @@ def _story_dev_tools_allowed(user_id):
     if not STORY_DEV_TOOLS_ENABLED or not user_id:
         return False
     try:
-        return bool(feedback_is_staff(user_id))
+        # 测试人员（tester）也可使用故事开发工具（2026-10-13）。
+        return user_role_type(user_id) in {'admin', 'staff', 'tester'}
     except Exception as exc:
         app.logger.warning('failed to resolve story developer permission for user %s: %s', user_id, exc)
         return False
@@ -21844,7 +21845,8 @@ def _story_coop_allowed(user_id):
     if not STORY_COOP_ENABLED or not user_id:
         return False
     try:
-        return bool(feedback_is_staff(user_id))
+        # 测试人员（tester）也可进入合作爬塔演示（2026-10-13）。
+        return user_role_type(user_id) in {'admin', 'staff', 'tester'}
     except Exception as exc:
         app.logger.warning('failed to resolve cooperative story permission for user %s: %s', user_id, exc)
         return False
