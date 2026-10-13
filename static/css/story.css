@@ -8340,26 +8340,23 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 
 .story-coop-exit:hover { background: #4a2620; }
 
-/* 队友 H/E/M/G 四格：与玩家主块 dl 同款 */
-.coop-teammate-row dl {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 4px;
-  margin: 3px 0 0;
+/* 队友块与玩家主块完全统一（复用 .story-persistent-player 全套样式），
+   仅去掉自身面板边框并加块间分隔。 */
+.story-coop-teammates .story-persistent-player {
+  width: auto;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
-.coop-teammate-row dl > div {
-  display: flex;
-  justify-content: space-between;
-  gap: 5px;
-  padding: 3px 5px;
-  border-radius: 4px;
-  background: var(--story-surface-muted);
-  font-size: 10px;
+.coop-teammate-block + .coop-teammate-block {
+  border-top: 1px solid color-mix(in srgb, var(--story-line) 70%, transparent);
+  padding-top: 6px;
 }
 
-.coop-teammate-row dt { color: var(--story-muted); font-weight: 800; margin: 0; }
-.coop-teammate-row dd { font-variant-numeric: tabular-nums; font-weight: 800; margin: 0; }
+.coop-seat-badge.is-ready { background: #8a6d1f; }
+.coop-seat-badge.is-down { background: #8e2d26; }
 
 @media (max-width: 720px) {
   .story-coop-left-column { width: min(248px, calc(100vw - 164px)); }

@@ -12148,26 +12148,22 @@
         (state.players || []).forEach((p, seat) => {
             if (seat === mySeat) return; // 我的信息在合并面板上方主块
             teammateCount += 1;
-            const row = document.createElement('div');
-            row.className = 'coop-teammate-row'
-                + (Number(p.health) <= 0 ? ' is-down' : '')
-                + (ready.has(seat) ? ' is-ready' : '');
             const health = Math.max(0, Number(p.health) || 0);
             const maxHealth = Number(p.max_health) || 1;
             const seatState = seatStates[seat] || {};
             const elixir = seatState.elixir ?? p.elixir ?? p.max_elixir ?? 0;
             const magic = seatState.magic ?? p.magic ?? 0;
-            const title = document.createElement('div');
-            title.className = 'coop-teammate-title';
-            title.textContent = `席${seat}`
-                + (Number(p.health) <= 0 ? ' 💀' : '')
-                + (ready.has(seat) ? ' ✓就绪' : '');
-            const hpBar = document.createElement('div');
-            hpBar.className = 'coop-teammate-hpbar';
-            const fill = document.createElement('i');
-            fill.style.width = `${Math.round(100 * health / maxHealth)}%`;
-            hpBar.append(fill);
-            // H/E/M/G 与玩家信息主块同款四格
+            // 与玩家主块完全同构同款：名字/状态徽标/副信息行/H-E-M-G 四格
+            const row = document.createElement('section');
+            row.className = 'story-persistent-player coop-teammate-block';
+            const name = document.createElement('strong');
+            name.textContent = `席${seat}`;
+            const badge = document.createElement('b');
+            badge.className = 'story-hud-difficulty coop-seat-badge'
+                + (Number(p.health) <= 0 ? ' is-down' : ready.has(seat) ? ' is-ready' : '');
+            badge.textContent = Number(p.health) <= 0 ? '倒地' : (ready.has(seat) ? '就绪' : '存活');
+            const sub = document.createElement('span');
+            sub.textContent = `盾${Number(seatState.shield) || 0} · 手牌${(seatState.hand || []).length}`;
             const stats = document.createElement('dl');
             [
                 ['H', `${health}/${maxHealth}`],
@@ -12183,10 +12179,7 @@
                 cell.append(dt, dd);
                 stats.append(cell);
             });
-            const extra = document.createElement('div');
-            extra.className = 'coop-teammate-stats';
-            extra.textContent = `盾${Number(seatState.shield) || 0} · 手牌${(seatState.hand || []).length}`;
-            row.append(title, hpBar, stats, extra);
+            row.append(name, badge, sub, stats);
             seatsEl.append(row);
         });
         if (!teammateCount) {
