@@ -3020,9 +3020,8 @@ def _player_attack_effect_segment(state, effect, target, context):
 
 
 def _player_power_bonus(state, effect=None):
-    """威力（力量）加成：与多人模式同口径（设计 2026-10-07）——全部加在
-    该笔伤害的第一段上，由调用方决定是否是第一段。power_scale=0 的
-    效果（如珍珠装备伤）不享受威力。"""
+    """威力（力量）加成（2026-10-13 设计）：加在每一攻击段上（此前只加
+    首段）。power_scale=0 的效果（如珍珠装备伤）不享受威力。"""
     effect = effect or {}
     power_scale = int(effect['power_scale']) if 'power_scale' in effect else 1
     if power_scale <= 0:
@@ -3043,8 +3042,8 @@ def _player_attack_hit_amount(
     """Apply shared player-side and target-side modifiers to one physical hit."""
     combat = state['combat']
     effect = effect or {}
-    # 威力不再默认折进每一段：调用方只在第一段传入 power_bonus
-    # （与多人模式「全部加在该笔伤害的第一段」同口径）。
+    # 威力（力量）按 2026-10-13 设计加在每一段：调用方对全部段传入
+    # power_bonus（power_scale=0 的效果由 _player_power_bonus 返回 0）。
     amount = max(0, int(base_amount) + max(0, int(power_bonus)))
     amount = math.floor(amount * float(attack_multiplier or 1))
     amount = math.floor(amount * float(combat.get('turn_damage_multiplier') or 1))
@@ -3144,7 +3143,7 @@ def _enemy_physical_damage(
     hit_count = max(0, int(hits))
     if hit_count <= 0:
         return 0
-    # 威力全部加在该笔伤害的第一段上（与多人模式同口径，设计 2026-10-07）。
+    # 力量加在每一段攻击伤害上（2026-10-13 设计：增强全部段，不再只加首段）。
     power_bonus = _player_power_bonus(state, values)
     base_hit_amount = _player_attack_hit_amount(
         state,
@@ -3152,19 +3151,9 @@ def _enemy_physical_damage(
         base_amount,
         values,
         attack_multiplier=attack_multiplier,
+        power_bonus=power_bonus,
     )
-    first_hit_amount = (
-        _player_attack_hit_amount(
-            state,
-            enemy,
-            base_amount,
-            values,
-            attack_multiplier=attack_multiplier,
-            power_bonus=power_bonus,
-        )
-        if power_bonus > 0
-        else base_hit_amount
-    )
+    first_hit_amount = base_hit_amount
     tags = _card_tags(values)
     precise = 'precise' in tags
     total = 0
@@ -6814,22 +6803,19 @@ def _card_damage_prediction(state, card, enemy):
             effect,
             attack_multiplier=context.get('attack_multiplier', 1),
         )
-        # 威力加在第一段（与实际结算同口径）：预测首段加成、后续段不加。
+        # 力量加在每一段（与实际结算同口径，2026-10-13）。
         power_bonus = _player_power_bonus(state, effect)
-        first_value = (
-            _player_attack_hit_amount(
-                state,
-                simulated_enemy,
-                base_amount,
-                effect,
-                attack_multiplier=context.get('attack_multiplier', 1),
-                power_bonus=power_bonus,
-            )
-            if power_bonus > 0
-            else raw_value
+        first_value = _player_attack_hit_amount(
+            state,
+            simulated_enemy,
+            base_amount,
+            effect,
+            attack_multiplier=context.get('attack_multiplier', 1),
+            power_bonus=power_bonus,
         )
+        raw_value = first_value
         for hit_index in range(max(0, hits)):
-            hit_value = first_value if hit_index == 0 else raw_value
+            hit_value = first_value
             if dodge > 0:
                 dodge -= 1
                 if precise:

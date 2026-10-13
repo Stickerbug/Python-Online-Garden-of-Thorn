@@ -2202,10 +2202,9 @@ def test_player_damage_applies_power_before_multiplier_and_vulnerable_last():
     assert [event['amount'] for event in damage] == [27]
 
 
-def test_player_power_only_boosts_the_first_hit_of_a_multi_hit_attack():
-    """平衡 2026-10-07：威力与多人模式同口径——全部加在该笔伤害的第一段，
-    多段攻击的后续段不再吃威力。"""
-    seed = 'story-power-first-hit-only'
+def test_player_power_boosts_every_hit_of_a_multi_hit_attack():
+    """设计 2026-10-13：力量增强全部攻击段（此前 2026-10-07 口径只加首段）。"""
+    seed = 'story-power-every-hit'
     state, _ = _begin_combat(seed)
     state['combat']['power'] = 3
     card = _inject_hand_card(state, 'sand')  # 2D×4（沙）
@@ -2216,8 +2215,7 @@ def test_player_power_only_boosts_the_first_hit_of_a_multi_hit_attack():
 
     prediction = state['combat']['damage_predictions'][card['instance_id']]
     hits = prediction['by_target'][target['id']]['hits']
-    assert hits[0] == 2 + 3  # 第一段吃满威力
-    assert hits[1:] == [2, 2, 2]  # 后续段不加
+    assert hits == [2 + 3, 2 + 3, 2 + 3, 2 + 3]  # 每一段都吃满力量
 
     state, events = apply_story_action(
         state,
@@ -2226,7 +2224,7 @@ def test_player_power_only_boosts_the_first_hit_of_a_multi_hit_attack():
         seed,
     )
     damage = [event['amount'] for event in events if event['type'] == 'enemy_damage']
-    assert damage == [5, 2, 2, 2]
+    assert damage == [5, 5, 5, 5]
 
 
 def test_acid_actively_discarding_azalea_runs_azalea_effect():
