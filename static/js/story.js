@@ -5937,8 +5937,7 @@
                         details.push((lang === 'en' ? 'Cards: ' : '获得卡牌：') + names.join('、'));
                     }
                     if (node.final) details.push(lang === 'en' ? 'Journey ended here' : '旅程在此结束');
-                    if (details.length) chip.title = details.join('
-');
+                    if (details.length) chip.title = details.join('\n');
                     routeEl.appendChild(chip);
                 });
             }
