@@ -5960,7 +5960,9 @@
                 label.textContent = (lang === 'en' ? 'Stage ' : '第 ') + (section.stage || index + 1) + (lang === 'en' ? '' : ' 幕');
                 mapEl.appendChild(label);
                 const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-                svg.setAttribute('viewBox', '0 0 100 100');
+                // 与活地图 #story-map 同一坐标系（760x1040）：此前误用 100x100
+                // 导致全部节点画在可视区外，地图不可见。
+                svg.setAttribute('viewBox', '0 0 760 1040');
                 svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
                 svg.classList.add('story-history-map-svg');
                 mapEl.appendChild(svg);
