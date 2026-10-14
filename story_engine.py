@@ -10345,14 +10345,17 @@ def _start_journey(state, payload, seed, events):
     ):
         _gain_deck_card(state, 'corruption', events, source='difficulty')
     if journey_mode == 'boss_rush':
-        amulet = next(
-            (
-                card for card in state['player'].get('deck', [])
-                if card.get('def_id') == 'amulet'
-            ),
-            None,
-        )
-        state['player']['deck'] = [amulet or _new_card(state, 'amulet')]
+        # Boss Rush 从零构筑：只保留角色初始卡组里的「特色卡」（非基本/玫瑰），
+        # 卡组其余部分由 10 轮选牌重建。普通的花花=护身符（原行为不变）；
+        # 2026-10-14 修复：此前所有角色一律被换成护身符——轨道使的轨道玻璃/
+        # 更快、魔法师的专属卡等全部丢失。
+        signature = [
+            card for card in state['player'].get('deck', [])
+            if card.get('def_id') not in ('basic', 'rose')
+        ]
+        if not signature:
+            signature = [_new_card(state, 'amulet')]
+        state['player']['deck'] = signature
         first['status'] = 'locked'
     if difficulty == 'easy':
         _prepare_easy_relic_choice(state, seed)
