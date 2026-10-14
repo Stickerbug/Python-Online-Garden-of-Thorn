@@ -52,11 +52,27 @@ class SuikaGateTests(unittest.TestCase):
                 return {"role_type": "player"}
 
         svc.db_module = _Roles()
+        # 2026-10-14 门票门：进度接口（restart/sync）要求有效门票会话。
+        import leisure_ticket
+        from db import get_db_connection, utc_now
+        with get_db_connection() as conn:
+            leisure_ticket._session_table(conn)
+            conn.execute("DELETE FROM leisure_play_sessions WHERE user_id = 4342")
+            conn.commit()
         with mock.patch.object(gtn, "user_role_type", lambda uid: "player"):
             self.assertEqual(self.client.get("/minigame/suika").status_code, 200)
             self.assertEqual(self.client.get("/api/minigame/suika/state").status_code, 200)
             self.assertEqual(
                 self.client.get("/api/minigame/suika/leaderboard").status_code, 200)
+            restart = self.client.post("/api/minigame/suika/restart", json={})
+            self.assertEqual(restart.status_code, 403)
+            self.assertEqual((restart.get_json() or {}).get("code"), "LEISURE_TICKET_REQUIRED")
+            with get_db_connection() as conn:
+                conn.execute(
+                    "INSERT INTO leisure_play_sessions "
+                    "(user_id, started_at, elapsed_seconds, active, updated_at) "
+                    "VALUES (4342, ?, 0, 1, ?)", (utc_now(), utc_now()))
+                conn.commit()
             self.assertEqual(
                 self.client.post("/api/minigame/suika/restart", json={}).status_code, 200)
             # 休闲花园列表里普通账号也能看到合成大花花的入口

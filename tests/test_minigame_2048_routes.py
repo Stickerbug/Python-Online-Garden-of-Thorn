@@ -51,6 +51,23 @@ class RouteAccessTests(unittest.TestCase):
         self.assertEqual(self.client.get("/minigame/2048").status_code, 200)
         if not getattr(gtn, "DB_AVAILABLE", False):
             self.skipTest("当前环境没有可用数据库：接口部分跳过")
+        # 2026-10-14 门票门：进度接口（sync/restart）要求有效门票会话。
+        # 无票 → 403 LEISURE_TICKET_REQUIRED；用票进入后 → 200。
+        import leisure_ticket
+        from db import get_db_connection, utc_now
+        with get_db_connection() as conn:
+            leisure_ticket._session_table(conn)
+            conn.execute("DELETE FROM leisure_play_sessions WHERE user_id = 4242")
+            conn.commit()
+        restart = self.client.post("/api/minigame/2048/restart", json={})
+        self.assertEqual(restart.status_code, 403)
+        self.assertEqual((restart.get_json() or {}).get("code"), "LEISURE_TICKET_REQUIRED")
+        with get_db_connection() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO leisure_play_sessions "
+                "(user_id, started_at, elapsed_seconds, active, updated_at) "
+                "VALUES (4242, ?, 0, 1, ?)", (utc_now(), utc_now()))
+            conn.commit()
         self.assertEqual(self.client.get("/api/minigame/2048/state").status_code, 200)
         self.assertEqual(
             self.client.post("/api/minigame/2048/restart", json={}).status_code, 200)
@@ -67,6 +84,17 @@ class RouteAccessTests(unittest.TestCase):
                 return {"role_type": "staff"}
 
         svc.db_module = _Roles()
+        # 2026-10-14 门票门：进度接口同样要求门票会话（staff 不豁免）。
+        import leisure_ticket
+        from db import get_db_connection, utc_now
+        with get_db_connection() as conn:
+            leisure_ticket._session_table(conn)
+            conn.execute("DELETE FROM leisure_play_sessions WHERE user_id = 4243")
+            conn.execute(
+                "INSERT INTO leisure_play_sessions "
+                "(user_id, started_at, elapsed_seconds, active, updated_at) "
+                "VALUES (4243, ?, 0, 1, ?)", (utc_now(), utc_now()))
+            conn.commit()
         # 合成大花花 2026-09-23 起对全员开放（_minigame_suika_guard 只剩登录校验）：
         # 普通账号的 hub 里也必须渲染 suika 卡片与入口。
         self.assertEqual(self.client.get("/minigame/2048").status_code, 200)

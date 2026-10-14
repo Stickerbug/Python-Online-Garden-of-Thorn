@@ -82,6 +82,9 @@
     if (reason === 'minigame_denied' || reason === 'minigame_login_required') {
       state.identityRejected = true;
       status(message || '身份或权限失效，请重新进入。', 'denied');
+    } else if (reason === 'leisure_ticket_required') {
+      state.identityRejected = true;
+      status(message || '休闲花园需要门票：请回主页使用门票进入', 'denied');
     } else if (reason === 'minigame_lower_priority') {
       status(message || '正在对局 / 观战 / 重连中，小游戏状态未生效', 'denied');
     }

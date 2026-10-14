@@ -38687,6 +38687,34 @@ def api_minigame_history():
     return jsonify({'success': True, 'records': records})
 
 
+def _leisure_ticket_gate_ok(user_id):
+    """休闲分数同步/开局的门票校验（2026-10-14 修复免费游玩漏洞）。
+
+    此前门票只在页面进门时扣、结算时发奖，分数同步/重开完全不查——无票或
+    10 分钟游玩期用完的玩家可以无限继续游玩。本校验只读（高频同步安全）：
+    登录玩家必须有剩余游玩期的门票会话；游客（user_id None）与免费时段
+    不受限（游客本就不发奖励）。校验异常按无票处理（fail-closed）。"""
+    if user_id is None:
+        return True
+    try:
+        if leisure_ticket.is_free_entry_now():
+            return True
+        with get_db_connection() as conn:
+            remaining = leisure_ticket.session_remaining_seconds(conn, int(user_id))
+        return remaining is not None and float(remaining) > 0
+    except Exception as exc:
+        admin_event('error', f'leisure sync ticket check failed: {exc}')
+        return False
+
+
+def _leisure_ticket_gate_denied():
+    return _json_error(
+        '游玩时间已用完或门票未生效：请回休闲花园主页重新进入',
+        403,
+        code='LEISURE_TICKET_REQUIRED',
+    )
+
+
 @app.route('/api/minigame/heartbeat', methods=['POST'])
 def api_minigame_heartbeat():
     """休闲对局心跳（客户端 10 秒一次）；断联由服务器清扫线程强制结算。"""
@@ -38734,6 +38762,8 @@ def api_minigame_suika_sync():
     identity, denied = _minigame_suika_guard()
     if denied is not None:
         return denied
+    if not _leisure_ticket_gate_ok(identity[0] if identity else None):
+        return _leisure_ticket_gate_denied()
     if _minigame_2048_rate_limited(f'u{identity[0]}', 'minigame_suika_sync', limit=600):
         return _json_error('操作太频繁，请稍后再试', 429)
     payload = request.get_json(silent=True) or {}
@@ -38780,6 +38810,8 @@ def api_minigame_suika_restart():
     identity, denied = _minigame_suika_guard()
     if denied is not None:
         return denied
+    if not _leisure_ticket_gate_ok(identity[0] if identity else None):
+        return _leisure_ticket_gate_denied()
     # 每次调用都会关一行 + 插一行，不加按账号限流就是白送的库表膨胀口子
     if _minigame_2048_rate_limited(f'u{identity[0]}', 'minigame_suika_restart', limit=60):
         return _json_error('操作太频繁，请稍后再试', 429)
@@ -39034,6 +39066,8 @@ def api_minigame_2048_sync():
     identity, denied = _minigame_2048_guard()
     if denied is not None:
         return denied
+    if not _leisure_ticket_gate_ok(identity[0] if identity else None):
+        return _leisure_ticket_gate_denied()
     if _minigame_2048_rate_limited(
             f'u{identity[0]}', 'minigame2048_sync', limit=3000):
         return _json_error('请求过于频繁，请稍后再试', 429)
@@ -39118,6 +39152,8 @@ def api_minigame_2048_restart():
     identity, denied = _minigame_2048_guard()
     if denied is not None:
         return denied
+    if not _leisure_ticket_gate_ok(identity[0] if identity else None):
+        return _leisure_ticket_gate_denied()
     # 与 suika 同口径：每次调用都写库（关一行 + 插一行），按账号限流防灌表
     if _minigame_2048_rate_limited(f'u{identity[0]}', 'minigame2048_restart', limit=60):
         return _json_error('请求过于频繁，请稍后再试', 429)

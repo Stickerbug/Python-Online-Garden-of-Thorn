@@ -971,6 +971,11 @@ function connectPresence() {
       setSyncText((payload && payload.message) || '撤回失败：消息可能已被撤回，或你没有权限', 'error');
       return;
     }
+    if (reason === 'leisure_ticket_required') {
+      identityRejected = true;
+      setSyncText((payload && payload.message) || '休闲花园需要门票：请回主页使用门票进入（本地进度仍在）', 'denied');
+      return;
+    }
     if (reason === 'minigame_denied' || reason === 'minigame_login_required') {
       identityRejected = true;
       setSyncText((payload && payload.message) || lt({ zh: '身份或权限失效（本地进度仍在）', en: 'Session invalid (progress saved locally)', fr: 'Session invalide (progression sauvegardée)', ja: 'セッション無効（ローカル保存済み）' }), 'denied');
