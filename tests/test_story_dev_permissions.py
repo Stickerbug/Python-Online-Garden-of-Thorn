@@ -32,7 +32,8 @@ class StoryDeveloperPermissionTests(unittest.TestCase):
     def test_staff_account_receives_developer_controls(self):
         with (
             mock.patch.object(gtn, "_current_account_user", return_value=self.user),
-            mock.patch.object(gtn, "feedback_is_staff", return_value=True),
+            # 2026-10-14：故事开发工具门禁改为 user_role_type（admin/staff/tester）。
+            mock.patch.object(gtn, "user_role_type", return_value="staff"),
             mock.patch.object(gtn, "STORY_DEV_TOOLS_ENABLED", True),
         ):
             response = self.client.get("/story")
@@ -71,7 +72,8 @@ class StoryDeveloperPermissionTests(unittest.TestCase):
     def test_staff_reset_abandons_the_run_and_returns_to_character_selection(self):
         with (
             mock.patch.object(gtn, "_require_account_json", return_value=(41, "StoryTester", None)),
-            mock.patch.object(gtn, "feedback_is_staff", return_value=True),
+            # 2026-10-14：故事开发工具门禁改为 user_role_type（admin/staff/tester）。
+            mock.patch.object(gtn, "user_role_type", return_value="staff"),
             mock.patch.object(gtn, "STORY_DEV_TOOLS_ENABLED", True),
             mock.patch.object(gtn, "abandon_story_run", return_value=True) as abandon,
             mock.patch.object(gtn, "_list_story_discoveries_without_blocking", return_value=[]),

@@ -10026,8 +10026,68 @@ def _unlock_from_node(state, node_id):
             nodes[target_id]['status'] = 'available'
 
 
+def _route_log_entered(state):
+    """旅程路线日志（2026-10-14，旅程历史用）：进入节点时记录
+    幕/层/类型/敌人/事件等细节，完成时由 _route_log_completed 补卡牌获取。"""
+    node_id = str(state.get('current_node_id') or '')
+    if not node_id:
+        return
+    node = _node_lookup(state).get(node_id) or {}
+    combat = state.get('combat') if isinstance(state.get('combat'), dict) else None
+    room = state.get('room') if isinstance(state.get('room'), dict) else {}
+    entry = {
+        'stage': int(state.get('stage') or 1),
+        'floor': int(node.get('floor') or state.get('current_floor') or 0),
+        'type': str(node.get('type') or 'unknown'),
+        'node_id': node_id,
+        'enemies': (
+            [str(enemy.get('def_id') or '') for enemy in combat.get('enemies') or []]
+            if combat else []
+        ),
+        'event_id': str(room.get('event_id') or '') or None,
+        'cards_gained': [],
+        'completed': False,
+    }
+    entry['deck_ids'] = sorted(
+        str(card.get('instance_id') or '')
+        for card in state.get('player', {}).get('deck') or []
+    )
+    state.setdefault('journey_route', []).append(entry)
+
+
+def _route_log_completed(state):
+    """节点完成：对最后一个未完成条目落账（本节点新增的卡牌奖励）。"""
+    route = state.get('journey_route')
+    if not isinstance(route, list):
+        return
+    for entry in reversed(route):
+        if isinstance(entry, dict) and not entry.get('completed'):
+            before = set(entry.get('deck_ids') or [])
+            entry['cards_gained'] = [
+                str(card.get('def_id') or '') + ('+' if card.get('upgraded') else '')
+                for card in state.get('player', {}).get('deck') or []
+                if str(card.get('instance_id') or '') not in before
+            ]
+            entry.pop('deck_ids', None)
+            entry['completed'] = True
+            break
+
+
+def _archive_current_map(state):
+    """换幕时归档当前地图（旅程历史显示全段路线用，2026-10-14）。"""
+    story_map = state.get('map')
+    if not isinstance(story_map, dict) or not story_map.get('floors'):
+        return
+    state.setdefault('past_maps', []).append({
+        'stage': int(state.get('stage') or 1),
+        'biome': str(state.get('biome') or ''),
+        'map': copy.deepcopy(story_map),
+    })
+
+
 def _complete_current_node(state, events, seed=None):
     from story_mode import STORY_STAGES
+    _route_log_completed(state)
 
     nodes = _node_lookup(state)
     node = nodes[state['current_node_id']]
@@ -11226,6 +11286,7 @@ def _resolve_stage_choice(state, payload, seed, events):
     state['stage'] = stage
     state['biome'] = biome
     state['stage_normal_battles'] = 0
+    _archive_current_map(state)
     if boss_rush:
         state['map'] = generate_boss_rush_map(
             seed,
@@ -13377,6 +13438,8 @@ def apply_story_action(source_state, action_type, payload, seed):
     if not handler:
         _fail('UNKNOWN_ACTION', '未知故事操作')
     handler()
+    if action_type == 'enter_node':
+        _route_log_entered(state)
     # A checkpoint restored by this action can itself come from an older run.
     _normalize_legacy_story_state(state)
     _refresh_combat_projections(state)

@@ -365,6 +365,8 @@ def build_initial_story_state(seed, character_id='common_flower'):
             'elite': {},
             'event': [],
         },
+        'journey_route': [],
+        'past_maps': [],
         'shop_removals': 0,
         'shop_upgrades': 0,
         'completed': False,

@@ -8382,3 +8382,24 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 .story-codex-dev-hand:hover { border-color: #d8b84a; color: #d8b84a; }
 
 .story-codex-card-tile { position: relative; }
+
+/* 旅程历史：多幕地图与细节 */
+.story-history-map-stage {
+  margin: 10px 0 4px;
+  color: var(--story-muted);
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.story-history-map-divider {
+  margin: 14px 0 2px;
+  text-align: center;
+  color: var(--story-line);
+  letter-spacing: 6px;
+}
+
+.story-history-map-svg {
+  width: 100%;
+  height: auto;
+  max-height: 340px;
+}

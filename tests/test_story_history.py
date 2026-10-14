@@ -142,11 +142,14 @@ class StoryHistoryServiceTests(_TempDbCase):
         self.assertIsNone(missing)
         self.assertEqual(detail['summary']['result'], 'defeat')
         self.assertEqual(len(detail['deck']), 3)
-        self.assertEqual(detail['deck'][1], {'def_id': 'web', 'upgraded': True})
+        self.assertEqual(detail['deck'][1], {'def_id': 'web', 'upgraded': True, 'modifiers': {}})
         self.assertEqual(detail['relics'], ['orbital_surround', 'energetic'])
         self.assertEqual(detail['map']['current_node_id'], 'n-1')
         self.assertEqual(detail['route']['completed_nodes'], 1)
-        self.assertEqual(detail['route']['visited'], [{'floor': 1, 'type': 'combat', 'final': False}])
+        self.assertEqual(detail['route']['visited'], [
+            {'stage': 2, 'floor': 1, 'type': 'combat', 'final': False,
+             'enemies': [], 'event_id': None, 'cards_gained': []},
+        ])
 
     def test_detail_appends_unfinished_final_node(self):
         state = _make_state(phase='game_over')
@@ -157,8 +160,11 @@ class StoryHistoryServiceTests(_TempDbCase):
             detail = story_history.get_history_detail(conn, self.uid_a, run['id'])
         self.assertEqual(detail['route']['completed_nodes'], 1)
         self.assertEqual(detail['route']['visited'], [
-            {'floor': 1, 'type': 'combat', 'final': False},
-            {'floor': 1, 'type': 'elite', 'final': True},
+            # 2026-10-14：路线条目带幕号（及战斗/事件/卡牌细节字段）。
+            {'stage': 2, 'floor': 1, 'type': 'combat', 'final': False,
+             'enemies': [], 'event_id': None, 'cards_gained': []},
+            {'stage': 2, 'floor': 1, 'type': 'elite', 'final': True,
+             'enemies': [], 'event_id': None, 'cards_gained': []},
         ])
 
 

@@ -184,6 +184,10 @@ def get_history_detail(conn, user_id, run_id) -> Optional[Dict[str, object]]:
         {
             'def_id': str(card.get('def_id') or ''),
             'upgraded': bool(card.get('upgraded')),
+            # 额外标签（钟爱/横扫之刃等）挂在 modifiers：随卡返回供前端渲染。
+            'modifiers': (
+                card.get('modifiers') if isinstance(card.get('modifiers'), dict) else {}
+            ),
         }
         for card in (player.get('deck') or [])
         if isinstance(card, dict) and card.get('def_id')
@@ -192,17 +196,43 @@ def get_history_detail(conn, user_id, run_id) -> Optional[Dict[str, object]]:
     story_map = state.get('map') if isinstance(state.get('map'), dict) else {}
     visited = []
     current_node_id = str(state.get('current_node_id') or '')
-    for floor in story_map.get('floors') or []:
-        for node in floor.get('nodes') or []:
-            if not isinstance(node, dict):
+    journey_route = state.get('journey_route') if isinstance(state.get('journey_route'), list) else []
+    if journey_route:
+        # 2026-10-14：优先引擎记录的路线日志——跨幕全段路线 + 每层细节
+        # （敌人、事件、该节点获得的卡牌）。
+        for entry in journey_route:
+            if not isinstance(entry, dict):
                 continue
-            if node.get('status') == 'completed':
-                visited.append({
-                    'floor': int(node.get('floor') or 0),
-                    'type': str(node.get('type') or 'unknown'),
-                    'final': False,
-                })
-    visited.sort(key=lambda item: item['floor'])
+            visited.append({
+                'stage': int(entry.get('stage') or 1),
+                'floor': int(entry.get('floor') or 0),
+                'type': str(entry.get('type') or 'unknown'),
+                'final': False,
+                'enemies': [
+                    str(item) for item in (entry.get('enemies') or []) if item
+                ],
+                'event_id': entry.get('event_id') or None,
+                'cards_gained': [
+                    str(item) for item in (entry.get('cards_gained') or []) if item
+                ],
+            })
+    else:
+        stage_default = int(state.get('stage') or 1)
+        for floor in story_map.get('floors') or []:
+            for node in floor.get('nodes') or []:
+                if not isinstance(node, dict):
+                    continue
+                if node.get('status') == 'completed':
+                    visited.append({
+                        'stage': stage_default,
+                        'floor': int(node.get('floor') or 0),
+                        'type': str(node.get('type') or 'unknown'),
+                        'final': False,
+                        'enemies': [],
+                        'event_id': None,
+                        'cards_gained': [],
+                    })
+        visited.sort(key=lambda item: item['floor'])
     # 终点（战败/结束所在节点）：若尚未计入（房间没打完），补在末尾并标记。
     if current_node_id and not any(
         node.get('id') == current_node_id
@@ -214,20 +244,40 @@ def get_history_detail(conn, user_id, run_id) -> Optional[Dict[str, object]]:
             for node in floor.get('nodes') or []:
                 if isinstance(node, dict) and str(node.get('id') or '') == current_node_id:
                     visited.append({
+                        'stage': int(state.get('stage') or 1),
                         'floor': int(node.get('floor') or 0),
                         'type': str(node.get('type') or 'unknown'),
                         'final': True,
+                        'enemies': [],
+                        'event_id': None,
+                        'cards_gained': [],
                     })
                     break
-    return {
-        'summary': _row_to_summary(summary_row),
-        'deck': deck,
-        'relics': relics,
+    maps = []
+    past_maps = state.get('past_maps') if isinstance(state.get('past_maps'), list) else []
+    for archived in past_maps:
+        if not isinstance(archived, dict) or not isinstance(archived.get('map'), dict):
+            continue
+        maps.append({
+            'stage': int(archived.get('stage') or 1),
+            'biome': str(archived.get('biome') or ''),
+            'map': archived['map'],
+        })
+    maps.append({
+        'stage': int(state.get('stage') or 1),
+        'biome': str(state.get('biome') or ''),
         'map': {
             'floors': story_map.get('floors') or [],
             'edges': story_map.get('edges') or [],
             'current_node_id': str(state.get('current_node_id') or ''),
         },
+    })
+    return {
+        'summary': _row_to_summary(summary_row),
+        'deck': deck,
+        'relics': relics,
+        'map': maps[-1]['map'],
+        'maps': maps,
         'route': {
             'completed_nodes': sum(1 for item in visited if not item['final']),
             'visited': visited,

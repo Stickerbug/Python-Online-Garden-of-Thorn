@@ -5904,6 +5904,7 @@
             if (!visited.length) {
                 routeEl.textContent = lang === 'en' ? 'No nodes visited' : '尚未走过节点';
             } else {
+                const multiStage = new Set(visited.map((n) => n.stage || 1)).size > 1;
                 visited.forEach((node, index) => {
                     if (index) {
                         const arrow = document.createElement('span');
@@ -5913,17 +5914,61 @@
                     }
                     const chip = document.createElement('span');
                     chip.className = 'story-history-route-chip' + (node.final ? ' story-history-route-chip-final' : '');
-                    chip.textContent = `${node.floor}·${t.rooms?.[node.type] || node.type}`;
-                    if (node.final) chip.title = lang === 'en' ? 'Journey ended here' : '旅程在此结束';
+                    const stagePrefix = multiStage ? `S${node.stage || 1}·` : '';
+                    chip.textContent = `${stagePrefix}${node.floor}·${t.rooms?.[node.type] || node.type}`;
+                    const details = [];
+                    if (Array.isArray(node.enemies) && node.enemies.length) {
+                        const names = node.enemies
+                            .map((id) => localize(storyContent?.enemies?.[String(id)]?.name) || String(id))
+                            .filter(Boolean);
+                        if (names.length) details.push((lang === 'en' ? 'Enemies: ' : '敌人：') + names.join('、'));
+                    }
+                    if (node.event_id) {
+                        details.push((lang === 'en' ? 'Event: ' : '事件：')
+                            + (localize(storyContent?.events?.[String(node.event_id)]?.name) || String(node.event_id)));
+                    }
+                    if (Array.isArray(node.cards_gained) && node.cards_gained.length) {
+                        const names = node.cards_gained.map((id) => {
+                            const upgraded = String(id).endsWith('+');
+                            const base = upgraded ? String(id).slice(0, -1) : String(id);
+                            const label = localize(storyContent?.cards?.[base]?.name) || base;
+                            return label + (upgraded ? '+' : '');
+                        });
+                        details.push((lang === 'en' ? 'Cards: ' : '获得卡牌：') + names.join('、'));
+                    }
+                    if (node.final) details.push(lang === 'en' ? 'Journey ended here' : '旅程在此结束');
+                    if (details.length) chip.title = details.join('
+');
                     routeEl.appendChild(chip);
                 });
             }
         }
         const mapEl = $('story-history-map');
         if (mapEl) {
-            renderMap(detail.map || { floors: [], edges: [] }, detail.map?.current_node_id || '', {
-                readOnly: true,
-                target: mapEl,
+            mapEl.replaceChildren();
+            const maps = Array.isArray(detail.maps) && detail.maps.length
+                ? detail.maps
+                : [{ stage: 1, map: detail.map || { floors: [], edges: [] } }];
+            maps.forEach((section, index) => {
+                if (index) {
+                    const divider = document.createElement('div');
+                    divider.className = 'story-history-map-divider';
+                    divider.textContent = '— — —';
+                    mapEl.appendChild(divider);
+                }
+                const label = document.createElement('div');
+                label.className = 'story-history-map-stage';
+                label.textContent = (lang === 'en' ? 'Stage ' : '第 ') + (section.stage || index + 1) + (lang === 'en' ? '' : ' 幕');
+                mapEl.appendChild(label);
+                const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                svg.setAttribute('viewBox', '0 0 100 100');
+                svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+                svg.classList.add('story-history-map-svg');
+                mapEl.appendChild(svg);
+                renderMap(section.map || { floors: [], edges: [] }, section.map?.current_node_id || '', {
+                    readOnly: true,
+                    target: svg,
+                });
             });
         }
         const relicsEl = $('story-history-relics');
@@ -5958,7 +6003,12 @@
             for (const card of deck) {
                 try {
                     deckEl.appendChild(createStoryCard(
-                        { def_id: card.def_id, instance_id: `h-${card.def_id}`, upgraded: card.upgraded, modifiers: {} },
+                        {
+                            def_id: card.def_id,
+                            instance_id: `h-${card.def_id}`,
+                            upgraded: card.upgraded,
+                            modifiers: card.modifiers || {},
+                        },
                         { interactive: false, compact: true },
                     ));
                 } catch (_) {
