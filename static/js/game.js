@@ -16956,6 +16956,8 @@ function connectSocket(serverUrl) {
             updateStatus(UI.reconnecting || UI.reconnect_title || '正在重连…');
         }
         emitSocketLogin();
+        // 强制更新检测：部署重启后 socket 必然重连，立即核对版本。
+        window.__gtnCheckForceUpdate?.();
     });
     bindSocketEvent('disconnect', (reason) => {
         debugLog('[client] socket disconnected reason=', reason);
@@ -41571,3 +41573,54 @@ if (window.__GTN_CARD_EXPORTER_RENDERER__) {
     document.addEventListener('focusout', onBattleMobileInputFocusOut, true);
     debugLog('[LOAD] game.js loaded, onEndTurn=', typeof onEndTurn);
 }
+
+
+/* 强制更新检测（2026-10-14）：页面加载时的静态版本与服务端 /api/version
+   不一致（部署后旧页面仍开着）→ 遮罩提示并自动刷新；防循环：30 秒内最多
+   自动刷一次，超出则提示手动刷新。 */
+(function setupForceUpdateCheck() {
+    const bootVersion = String(window.__GTN_STATIC_VERSION__ || window.__GTN_APP_VERSION__ || '').trim();
+    if (!bootVersion) return;
+    const OVERLAY_ID = 'gtn-force-update-overlay';
+    const RELOAD_KEY = 'gtn_force_update_reloaded_at';
+
+    function showOverlay(manual) {
+        if (document.getElementById(OVERLAY_ID)) return;
+        const overlay = document.createElement('div');
+        overlay.id = OVERLAY_ID;
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:rgba(10,12,8,.94);color:#e8e4d8;font:600 16px/1.6 system-ui,sans-serif;text-align:center;padding:24px;';
+        overlay.textContent = manual
+            ? lt({ zh: '游戏已更新，请手动刷新页面（Ctrl+F5）', en: 'The game has been updated. Please refresh manually (Ctrl+F5).' })
+            : lt({ zh: '游戏已更新，正在刷新…', en: 'The game has been updated. Refreshing…' });
+        (document.body || document.documentElement).appendChild(overlay);
+    }
+
+    let checking = false;
+    async function check() {
+        if (checking) return;
+        checking = true;
+        try {
+            const resp = await fetch('/api/version', { credentials: 'same-origin' });
+            const body = await resp.json();
+            const serverVersion = String(body && body.version || '').trim();
+            if (!serverVersion || serverVersion === bootVersion) return;
+            let reloadedAt = 0;
+            try { reloadedAt = Number(sessionStorage.getItem(RELOAD_KEY)) || 0; } catch (_) {}
+            if (Date.now() - reloadedAt > 30000) {
+                try { sessionStorage.setItem(RELOAD_KEY, String(Date.now())); } catch (_) {}
+                showOverlay(false);
+                setTimeout(() => location.reload(), 1200);
+            } else {
+                showOverlay(true);
+            }
+        } catch (_) {
+            // 网络失败静默：下个周期再查。
+        } finally {
+            checking = false;
+        }
+    }
+
+    window.__gtnCheckForceUpdate = check;
+    setInterval(check, 60000);
+    window.addEventListener('load', check);
+})();

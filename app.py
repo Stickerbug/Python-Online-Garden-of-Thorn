@@ -23951,6 +23951,18 @@ def _afdian_orders_payload(user_id):
     return out
 
 
+@app.route('/api/version')
+def api_version():
+    """客户端强制更新检测：页面加载时的版本与当前服务端版本不一致则强制刷新。
+
+    版本口径 = GTN_STATIC_VERSION（每次部署都会追加分隔符，部署重启后
+    socket 重连/轮询触发检查，旧页面立即被要求刷新）。"""
+    return jsonify({
+        'success': True,
+        'version': GTN_STATIC_VERSION,
+    })
+
+
 @app.route('/api/afdian/status')
 def api_afdian_status():
     if not DB_AVAILABLE:

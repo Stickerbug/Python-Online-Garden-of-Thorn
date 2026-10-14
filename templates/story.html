@@ -989,6 +989,7 @@
     window.__STORY_ACCOUNT__ = {{ account|tojson }};
     window.__STORY_DEV_TOOLS__ = {{ story_dev_tools|tojson }};
     window.__STORY_COOP_ACCESS__ = {{ story_coop_access|tojson }};
+    window.__GTN_STATIC_VERSION__ = {{ static_version|tojson }};
     window.GTN_STORAGE = window.GTN_STORAGE || (() => {
       const memory = new Map();
       let storage = null;

@@ -16534,3 +16534,40 @@
     startStoryPresence();
     loadRun();
 })();
+
+
+/* 强制更新检测（2026-10-14，与 game.js 同款）：版本不一致则遮罩+自动刷新。 */
+(function setupStoryForceUpdateCheck() {
+    const bootVersion = String(window.__GTN_STATIC_VERSION__ || '').trim();
+    if (!bootVersion) return;
+    const RELOAD_KEY = 'gtn_force_update_reloaded_at';
+    let checking = false;
+    async function check() {
+        if (checking) return;
+        checking = true;
+        try {
+            const resp = await fetch('/api/version', { credentials: 'same-origin' });
+            const body = await resp.json();
+            const serverVersion = String(body && body.version || '').trim();
+            if (!serverVersion || serverVersion === bootVersion) return;
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:rgba(10,12,8,.94);color:#e8e4d8;font:600 16px/1.6 system-ui,sans-serif;text-align:center;padding:24px;';
+            let reloadedAt = 0;
+            try { reloadedAt = Number(sessionStorage.getItem(RELOAD_KEY)) || 0; } catch (_) {}
+            if (Date.now() - reloadedAt > 30000) {
+                overlay.textContent = '游戏已更新，正在刷新…';
+                document.body.appendChild(overlay);
+                try { sessionStorage.setItem(RELOAD_KEY, String(Date.now())); } catch (_) {}
+                setTimeout(() => location.reload(), 1200);
+            } else {
+                overlay.textContent = '游戏已更新，请手动刷新页面（Ctrl+F5）';
+                document.body.appendChild(overlay);
+            }
+        } catch (_) {
+        } finally {
+            checking = false;
+        }
+    }
+    setInterval(check, 60000);
+    window.addEventListener('load', check);
+})();
