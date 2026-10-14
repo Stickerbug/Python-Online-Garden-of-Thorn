@@ -38155,7 +38155,12 @@ _COOP_DEMO_LOCK = threading.Lock()
 
 def _coop_demo_allowed(user_id):
     try:
-        return DB_AVAILABLE and user_id and feedback_is_staff(int(user_id))
+        # 与 _story_dev_tools_allowed / _story_coop_allowed 同口径：
+        # 测试人员（tester）也可使用合作爬塔演示（2026-10-14 修复——此前
+        # 本函数仍只认 admin/staff，测试人员看得到入口但所有联机接口 403）。
+        return DB_AVAILABLE and user_id and user_role_type(int(user_id)) in {
+            'admin', 'staff', 'tester',
+        }
     except Exception:
         return False
 
