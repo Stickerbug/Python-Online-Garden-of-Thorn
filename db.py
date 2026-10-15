@@ -11954,6 +11954,94 @@ def rebuild_card_draft_win_stats_from_matches():
     }
 
 
+def rebuild_opening_event_win_stats_from_matches():
+    """Rebuild opening-event win stats from persisted match summaries.
+
+    与 rebuild_card_draft_win_stats_from_matches 同口径：只重建
+    opening_event_win_stats(_weekly)（picked/win/draw 计数），不触碰
+    opening_event_pick_stats（shown/picked 次数）。
+    """
+    now = utc_now()
+    totals = {}
+    weekly_totals = {}
+    with get_db_connection() as conn:
+        rows = conn.execute('SELECT * FROM matches ORDER BY id ASC').fetchall()
+        scanned_matches = len(rows)
+        counted_matches = 0
+        skipped_matches = 0
+        for row in rows:
+            mode = str(row['mode'] or '').strip()
+            if mode not in ('1v1', '2v2'):
+                skipped_matches += 1
+                continue
+            raw_result = str(row['result'] or '').lower()
+            if raw_result not in ('win', 'draw', 'finished'):
+                skipped_matches += 1
+                continue
+            week_start = week_start_for_iso(row['ended_at'] or row['started_at'])
+            summary = _safe_json_loads(row['summary_json'], {})
+            event_ids = summary.get('opening_event_ids_by_player')
+            if not isinstance(event_ids, (list, tuple)) or not event_ids:
+                skipped_matches += 1
+                continue
+            winner_indices, is_draw = _match_winner_player_indices_for_card_stats(row, summary)
+            winner_set = set(winner_indices)
+            added = False
+            for pidx, raw_event_id in enumerate(event_ids):
+                event_id = str(raw_event_id or '').strip()
+                if not event_id or event_id.lower() == 'none':
+                    continue
+                added = True
+                key = (mode, event_id)
+                picked, wins, draws = totals.get(key, (0, 0, 0))
+                picked += 1
+                if is_draw:
+                    draws += 1
+                elif pidx in winner_set:
+                    wins += 1
+                totals[key] = (picked, wins, draws)
+                weekly_key = (week_start, mode, event_id)
+                week_picked, week_wins, week_draws = weekly_totals.get(weekly_key, (0, 0, 0))
+                week_picked += 1
+                if is_draw:
+                    week_draws += 1
+                elif pidx in winner_set:
+                    week_wins += 1
+                weekly_totals[weekly_key] = (week_picked, week_wins, week_draws)
+            if added:
+                counted_matches += 1
+            else:
+                skipped_matches += 1
+        conn.execute('DELETE FROM opening_event_win_stats')
+        conn.execute('DELETE FROM opening_event_win_stats_weekly')
+        if totals:
+            conn.executemany(
+                'INSERT INTO opening_event_win_stats (mode, event_id, picked_games, win_games, draw_games, updated_at) '
+                'VALUES (?, ?, ?, ?, ?, ?)',
+                [
+                    (mode, event_id, picked, wins, draws, now)
+                    for (mode, event_id), (picked, wins, draws) in totals.items()
+                ],
+            )
+        if weekly_totals:
+            conn.executemany(
+                'INSERT INTO opening_event_win_stats_weekly (week_start, mode, event_id, picked_games, win_games, draw_games, updated_at) '
+                'VALUES (?, ?, ?, ?, ?, ?, ?)',
+                [
+                    (week_start, mode, event_id, picked, wins, draws, now)
+                    for (week_start, mode, event_id), (picked, wins, draws) in weekly_totals.items()
+                ],
+            )
+        conn.commit()
+    return {
+        'matches': scanned_matches,
+        'counted_matches': counted_matches,
+        'skipped_matches': skipped_matches,
+        'events': len(totals),
+        'weekly_events': len(weekly_totals),
+    }
+
+
 def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, offset=0, merge_modes=False, scope='total', week_start=None, winner_only=False, card_ids=None, rank_min=None, rank_max=None):
     mode_key = str(mode or '').strip()
     # 卡牌 ID 白名单（卡牌统计按模组筛选用）；空集合表示选中模组没有任何卡牌。
