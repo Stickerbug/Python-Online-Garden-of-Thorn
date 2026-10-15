@@ -91,6 +91,78 @@ ACCOUNT_LINK_RULE_VERSION = '2'
 ACCOUNT_LINK_SHARED_NETWORK_USERS = 8
 THORN_DEW_TIMEZONE = timezone(timedelta(hours=8))
 THORN_DEW_SIGNIN_REWARDS = (40, 45, 50, 55, 60, 70, 100)
+THORN_DEW_SIGNIN_REWARDS = (40, 45, 50, 55, 60, 70, 100)
+
+# 每日签到全局修正（2026-10-16 控制台调控）：
+# 最终收益 = (基础收益 + 加算修正) × 乘算修正 + 最终加算修正
+_SIGNIN_MOD_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS daily_checkin_modifiers (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    additive INTEGER NOT NULL DEFAULT 0,
+    multiplicative REAL NOT NULL DEFAULT 1.0,
+    final_additive INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL
+)
+"""
+
+
+def ensure_signin_mod_table(conn):
+    conn.execute(_SIGNIN_MOD_TABLE_SQL)
+    conn.execute(
+        'INSERT OR IGNORE INTO daily_checkin_modifiers (id, additive, multiplicative, final_additive, updated_at) '
+        "VALUES (1, 0, 1.0, 0, '1970-01-01T00:00:00Z')"
+    )
+
+
+def get_signin_modifiers():
+    """读取签到修正（不存在时为恒等：0/1.0/0）。"""
+    with get_db_connection() as conn:
+        ensure_signin_mod_table(conn)
+        row = conn.execute('SELECT * FROM daily_checkin_modifiers WHERE id = 1').fetchone()
+    return {
+        'additive': int(row['additive'] or 0),
+        'multiplicative': float(row['multiplicative'] or 1.0),
+        'final_additive': int(row['final_additive'] or 0),
+        'updated_at': str(row['updated_at'] or ''),
+    }
+
+
+def set_signin_modifiers(additive, multiplicative, final_additive):
+    """写入签到修正。返回 (modifiers, error)。"""
+    try:
+        add = int(additive)
+        fin = int(final_additive)
+        mult = float(multiplicative)
+    except (TypeError, ValueError):
+        return None, '修正值必须是数字'
+    if not -10000 <= add <= 10000:
+        return None, '加算修正超出范围（-10000 ~ 10000）'
+    if not -10000 <= fin <= 10000:
+        return None, '最终加算修正超出范围（-10000 ~ 10000）'
+    if not 0.0 <= mult <= 100.0:
+        return None, '乘算修正超出范围（0.0 ~ 100.0）'
+    now = utc_now()
+    with get_db_connection() as conn:
+        ensure_signin_mod_table(conn)
+        conn.execute(
+            'UPDATE daily_checkin_modifiers SET additive = ?, multiplicative = ?, final_additive = ?, updated_at = ? WHERE id = 1',
+            (add, mult, fin, now),
+        )
+        conn.commit()
+    return get_signin_modifiers(), None
+
+
+def _apply_signin_modifiers_conn(conn, base):
+    """应用签到修正公式：(基础 + 加算) × 乘算 + 最终加算。下限 0。"""
+    ensure_signin_mod_table(conn)
+    row = conn.execute('SELECT * FROM daily_checkin_modifiers WHERE id = 1').fetchone()
+    if row is None:
+        return max(0, int(base))
+    add = int(row['additive'] or 0)
+    mult = float(row['multiplicative'] or 1.0)
+    fin = int(row['final_additive'] or 0)
+    return max(0, int((int(base) + add) * mult + fin))
+
 THORN_DEW_MODE_REWARDS = {
     '1v1': 60,
     '2v2': 60,
@@ -5940,7 +6012,7 @@ def get_user_thorn_dew_center(user_id):
             'today': today,
             'checked_in_today': checkin is not None,
             'streak_day': int(checkin['streak_day'] or 0) if checkin else int(next_streak),
-            'next_checkin_reward': _earned_dew_amount_conn(conn, uid, THORN_DEW_SIGNIN_REWARDS[reward_index]),
+            'next_checkin_reward': _apply_signin_modifiers_conn(conn, _earned_dew_amount_conn(conn, uid, THORN_DEW_SIGNIN_REWARDS[reward_index])),
             'checkin_rewards': list(THORN_DEW_SIGNIN_REWARDS),
             'match_rewards': dict(THORN_DEW_MODE_REWARDS),
             'win_bonus': int(THORN_DEW_WIN_BONUS),
@@ -5974,8 +6046,10 @@ def claim_user_daily_checkin(user_id):
             (uid, yesterday),
         ).fetchone()
         streak = int(prev['streak_day'] or 0) + 1 if prev is not None else 1
-        reward = int(THORN_DEW_SIGNIN_REWARDS[(streak - 1) % len(THORN_DEW_SIGNIN_REWARDS)])
-        reward = _earned_dew_amount_conn(conn, uid, reward)
+        base = int(THORN_DEW_SIGNIN_REWARDS[(streak - 1) % len(THORN_DEW_SIGNIN_REWARDS)])
+        base = _earned_dew_amount_conn(conn, uid, base)
+        # 2026-10-16 控制台调控：最终收益 = (基础 + 加算) × 乘算 + 最终加算
+        reward = _apply_signin_modifiers_conn(conn, base)
         free_before = max(0, int(user['thorn_dew_free'] or 0))
         paid_before = max(0, int(user['thorn_dew_paid'] or 0))
         free_after = free_before + reward

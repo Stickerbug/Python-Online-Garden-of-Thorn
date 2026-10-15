@@ -11708,6 +11708,7 @@ ADMIN_COMMAND_TREE = {
             'draftstats': {'summary': '查看卡牌选取统计', 'usage': 'data draftstats [1v1|2v2]'},
             'openingstats': {'summary': '查看配装倾向选取统计', 'usage': 'data openingstats [1v1|2v2]'},
             'draftwins': {'summary': '补齐卡牌和配装胜率统计', 'usage': 'data draftwins confirm'},
+        'signinmod': {'summary': '查看/设置每日签到修正（加算 乘算 最终加算）', 'usage': 'data signinmod [set <加算> <乘算> <最终加算> | reset]'},
             'storage': {
                 'summary': '清理回放与数据库存储',
                 'usage': 'data storage <cleanup-old|cleanup-orphans|vacuum|community-list|community-delete> ...',
@@ -12007,6 +12008,7 @@ ADMIN_COMMAND_DIRECT_TRANSLATIONS = {
     ('data', 'draftstats'): 'draftstats',
     ('data', 'openingstats'): 'openingstats',
     ('data', 'draftwins'): 'draftwins',
+    ('data', 'signinmod'): 'signinmod',
     ('data', 'rebuildstats'): 'rebuildstats',
     ('data', 'dewbackfill'): 'dewbackfill',
     ('data', 'legacydew'): 'legacydew',
@@ -15695,6 +15697,46 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
             f"卡牌：{result.get('cards', 0)}\n"
             f"配装：{result.get('opening_events', result.get('events', 0))}"
         )}
+
+    if cmd == 'signinmod':
+        if not DB_AVAILABLE:
+            return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
+        from db import get_signin_modifiers, set_signin_modifiers, THORN_DEW_SIGNIN_REWARDS
+        mods = get_signin_modifiers()
+        action = parts[1].lower() if len(parts) > 1 else 'show'
+        if action == 'set':
+            if len(parts) < 5:
+                return {'success': False, 'output': (
+                    '用法：data signinmod set <加算修正> <乘算修正> <最终加算修正>\n'
+                    '例如：data signinmod set 10 1.5 5'
+                )}
+            mods, error = set_signin_modifiers(parts[2], parts[3], parts[4])
+            if error:
+                return {'success': False, 'output': error}
+            admin_event('admin', f'signin modifiers set: add={mods["additive"]} mult={mods["multiplicative"]} final={mods["final_additive"]}')
+        elif action == 'reset':
+            mods, error = set_signin_modifiers(0, 1.0, 0)
+            if error:
+                return {'success': False, 'output': error}
+            admin_event('admin', 'signin modifiers reset')
+        elif action != 'show':
+            return {'success': False, 'output': '用法：data signinmod [set <加算> <乘算> <最终加算> | reset]'}
+        try:
+            samples = ', '.join(
+                f'{b}→{max(0, int((b + mods["additive"]) * mods["multiplicative"] + mods["final_additive"]))}'
+                for b in (THORN_DEW_SIGNIN_REWARDS[0], THORN_DEW_SIGNIN_REWARDS[3], THORN_DEW_SIGNIN_REWARDS[6])
+            )
+        except Exception:
+            samples = '-'
+        return {'success': True, 'output': (
+            '每日签到修正（公式：最终收益 = (基础 + 加算) × 乘算 + 最终加算）\n'
+            f'  加算修正：{mods["additive"]}\n'
+            f'  乘算修正：{mods["multiplicative"]}\n'
+            f'  最终加算修正：{mods["final_additive"]}\n'
+            f'  最近更新：{mods["updated_at"] or "-"}\n'
+            f'  效果示例：{samples}\n'
+            '调整：data signinmod set <加算> <乘算> <最终加算> | 重置：data signinmod reset'
+        )}
     if cmd == 'storagesummary':
         return {'success': True, 'output': admin_storage_summary_output()}
     if cmd == 'storage-community-list':
@@ -17496,6 +17538,8 @@ def admin_completions(line):
                 return filtered(['preview', 'confirm']) if storage_action != 'community-delete' else []
             if position == 4 and len(parts) > 2 and parts[2].lower() == 'community-delete':
                 return filtered(['confirm'])
+        if sub == 'signinmod' and position == 2:
+            return filtered(['set', 'reset'])
         if sub in ('rebuildstats', 'dewbackfill', 'achievementbackfill', 'cardsbackfill') and position == 2:
             return filtered(['preview', 'confirm'] if sub != 'rebuildstats' else ['confirm'])
         if sub == 'cardsbackfill' and position == 3:
