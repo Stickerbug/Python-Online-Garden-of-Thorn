@@ -188,8 +188,9 @@ def test_story_chat_ui_is_collapsible_and_uses_shared_socket_history():
     ):
         assert f'id="{element_id}"' in STORY_TEMPLATE
     assert '/static/vendor/socket.io.min.js' in STORY_TEMPLATE
-    assert "storyChatSocket.emit('story_chat_join'" in STORY_JS
-    assert "storyChatSocket.emit('story_chat_send'" in STORY_JS
+    # 2026-10-14：合作模式走队伍频道（coop_chat_join），单人仍用 story_chat_join。
+    assert "storyChatSocket.emit(STORY_COOP_DEMO ? 'coop_chat_join' : 'story_chat_join'" in STORY_JS
+    assert "storyChatSocket.emit(STORY_COOP_DEMO ? 'coop_chat_send' : 'story_chat_send'" in STORY_JS
     assert "storyChatSocket.on('lobby_chat_history', renderStoryChatHistory);" in STORY_JS
     assert 'function setStoryChatOpen(open)' in STORY_JS
     assert 'width: min(640px, calc(100vw - 32px));' in STORY_CSS

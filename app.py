@@ -31787,6 +31787,146 @@ def on_chat_check_replay_refs(data=None):
         emit('chat_check_replay_refs_result', {'refs': validity})
 
 
+def _coop_chat_room_key(code):
+    return f'coop-team:{str(code or "")}'
+
+
+def _coop_chat_room_entry(user):
+    """当前用户的联机对局（含聊天环形缓冲）。"""
+    if not user:
+        return None, None
+    uid = int(user.get('id'))
+    with _COOP_DEMO_LOCK:
+        code = _COOP_DEMO_USER_ROOM.get(uid)
+        if not code or code not in _COOP_DEMO_ROOMS:
+            return None, None
+        room = _COOP_DEMO_ROOMS[code]
+        if uid not in (room.get('members') or {}):
+            return None, None
+        room.setdefault('chat', [])
+        return code, room
+
+
+def _coop_chat_history_payload(room):
+    items = list(room.get('chat') or [])[-50:]
+    return {
+        'items': items,
+        'team_chat': True,
+        'title': '队伍',
+    }
+
+
+@socketio.on('coop_chat_join')
+def on_coop_chat_join(data=None):
+    """合作爬塔队伍聊天：进入房间（仅同队成员收到）。"""
+    user = _current_account_user()
+    if not user:
+        emit('server_error', {'message': '请先登录账号'})
+        return
+    code, room = _coop_chat_room_entry(user)
+    if room is None:
+        emit('server_error', {'message': '没有进行中的联机对局', 'reason': 'no_coop_room'})
+        return
+    join_room(_coop_chat_room_key(code))
+    emit('lobby_chat_history', _coop_chat_history_payload(room))
+    emit('story_chat_ready', {'success': True, 'team_chat': True})
+
+
+@socketio.on('coop_chat_send')
+def on_coop_chat_send(data=None):
+    """合作爬塔队伍聊天：与故事聊天同一套审核管线（禁言/限速/违禁/升级），
+    但只广播给同队成员；消息保留在房间内存（对局存续期可见）。"""
+    sid = request.sid
+    if not isinstance(data, dict):
+        emit('server_error', {'message': '聊天内容无效'})
+        return
+    user = _current_account_user()
+    if not user:
+        emit('server_error', {'message': '请先登录账号'})
+        return
+    code, room = _coop_chat_room_entry(user)
+    if room is None:
+        emit('server_error', {'message': '没有进行中的联机对局'})
+        return
+    profile = _story_chat_sender_profile(user)
+    user_id = profile.get('user_id')
+    nickname = profile.get('nickname', '?')
+    mute_key = chat_mute_key(sid, profile)
+    if is_muted(mute_key):
+        emit('server_error', muted_error_payload(mute_remaining_seconds(mute_key)))
+        return
+    if DB_AVAILABLE and user_id:
+        try:
+            muted, mute_info = is_user_muted_db(user_id)
+        except Exception:
+            muted, mute_info = False, {}
+        if muted:
+            remaining = 0
+            try:
+                until_dt = datetime.fromisoformat(str(mute_info.get('muted_until') or '').replace('Z', '+00:00'))
+                remaining = max(0, int((until_dt - datetime.now(timezone.utc)).total_seconds()))
+            except Exception:
+                remaining = 0
+            emit('server_error', muted_error_payload(remaining))
+            return
+    exempt = is_chat_limit_exempt(profile)
+    if not exempt:
+        if not rate_limiter(f'chat-fast:{mute_key}', limit=1, window=2):
+            emit('server_error', {'message': '聊天发送过快'})
+            return
+        if not rate_limiter(f'chat-burst:{mute_key}', limit=5, window=10):
+            emit('server_error', {'message': '聊天发送过快'})
+            return
+    try:
+        text, chat_risk = _validate_chat_text_for_sender(data.get('text', ''), exempt=exempt)
+    except ValueError as exc:
+        emit('server_error', {'message': str(exc)})
+        return
+    if not text:
+        return
+    risk = chat_risk.get('risk') or {}
+    risk_level = int(chat_risk.get('risk_level') or 0)
+    if risk_level >= 4:
+        emit('server_error', muted_error_payload(
+            CHAT_VIOLATION_MUTE_SECONDS, message='消息包含高风险内容，已被拦截并临时禁言',
+        ))
+        return
+    escalation = record_chat_violation(
+        f'user:{user_id}' if user_id else f'sid:{sid}',
+        risk_level,
+        user_id=user_id,
+        username=nickname,
+        source='coop_chat',
+    )
+    if escalation == 'mute':
+        emit('server_error', muted_error_payload(
+            CHAT_VIOLATION_MUTE_SECONDS, message='多次发送违禁内容，已被临时禁言',
+        ))
+        return
+    if escalation == 'warn':
+        emit('server_broadcast', {'message': '你短时间内多次发送违禁内容，已被记录'})
+    chat_data = {
+        'nickname': nickname,
+        'text': text,
+        'is_spectator': False,
+        'risk_level': risk_level,
+        'risk_action': str(chat_risk.get('risk_action') or ''),
+        'user_id': user_id,
+        'chat_origin': 'coop_team',
+        'time': datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z'),
+    }
+    chat_data.update(special_public_fields(profile))
+    chat_data['sender_role'] = _chat_role_for_account(profile.get('user_id'), profile)
+    message_id = secrets.token_hex(8)
+    chat_data['message_id'] = message_id
+    with _COOP_DEMO_LOCK:
+        buffer = room.setdefault('chat', [])
+        buffer.append(chat_data)
+        del buffer[:-50]
+    socketio.emit('lobby_chat_history', _coop_chat_history_payload(room),
+                  room=_coop_chat_room_key(code))
+
+
 @socketio.on('story_chat_send')
 def on_story_chat_send(data=None):
     sid = request.sid

@@ -5348,6 +5348,10 @@
     function renderStoryChatHistory(data = {}, options = {}) {
         const log = $('story-chat-log');
         if (!log) return;
+        if (data.team_chat) {
+            const heading = document.querySelector('#story-chat-title');
+            if (heading) heading.textContent = '队伍';
+        }
         storyMentionDirectory = Array.isArray(data.mention_candidates)
             ? data.mention_candidates.map((item) => ({ ...item }))
             : [];
@@ -5414,7 +5418,8 @@
         storyChatSocket.on('connect', () => {
             storyChatConnected = false;
             updateStoryChatConnectionUi();
-            storyChatSocket.emit('story_chat_join', {
+            // 合作模式：聊天走队伍频道（仅同队成员可见）。
+            storyChatSocket.emit(STORY_COOP_DEMO ? 'coop_chat_join' : 'story_chat_join', {
                 client_id: STORY_PRESENCE_CLIENT_ID,
             });
         });
@@ -5464,7 +5469,7 @@
         const input = $('story-chat-input');
         const text = String(input?.value || '').trim();
         if (!text || !storyChatConnected || !storyChatSocket) return;
-        storyChatSocket.emit('story_chat_send', {
+        storyChatSocket.emit(STORY_COOP_DEMO ? 'coop_chat_send' : 'story_chat_send', {
             text: text.slice(0, 200),
             client_id: STORY_PRESENCE_CLIENT_ID,
         });
@@ -7049,6 +7054,10 @@
         const svg = options.target || $('story-map');
         if (!svg || !map || !Array.isArray(map.floors)) return;
         svg.replaceChildren();
+        const voteByNode = {};
+        Object.entries(options.votes || {}).forEach(([seat, nodeId]) => {
+            voteByNode[String(nodeId)] = seat;
+        });
         const floorBounds = storyMapFloorBounds(map);
         const nodes = new Map();
         map.floors.forEach((floor) => floor.nodes.forEach((node) => nodes.set(node.id, node)));
@@ -7102,6 +7111,28 @@
             const title = svgElement('title');
             title.textContent = roomLabel;
             group.append(title);
+            if (voteByNode[node.id] !== undefined) {
+                // 合作投票标记（2026-10-14）：队友/自己投票的房间在节点上方
+                // 显示席位徽标（自己=金色实底，队友=描边）。
+                const voteSeat = voteByNode[node.id];
+                const isMine = options.mySeat !== undefined && Number(voteSeat) === Number(options.mySeat);
+                const badge = svgElement('g', {
+                    transform: `translate(0 ${-STORY_MAP_NODE_RADIUS - 9})`,
+                });
+                const rectEl = svgElement('rect', {
+                    x: -17, y: -8, width: 34, height: 15, rx: 7,
+                    fill: isMine ? '#d8b84a' : 'rgba(24,30,18,.92)',
+                    stroke: '#d8b84a', 'stroke-width': 1,
+                });
+                const textEl = svgElement('text', {
+                    'text-anchor': 'middle', y: 3,
+                    fill: isMine ? '#241d08' : '#d8b84a',
+                    style: 'font-size:10px;font-weight:700;',
+                });
+                textEl.textContent = `席${voteSeat}${isMine ? '·你' : ''}`;
+                badge.append(rectEl, textEl);
+                group.append(badge);
+            }
             if (!roomIconUrl) {
                 group.append(svgElement('circle', {
                     cx: 0,
@@ -12584,7 +12615,14 @@
                     : ({ zh: '返回旅程', en: 'Return to Journey', fr: 'Retour au voyage', ja: '旅に戻る' }[lang] || t.close),
             );
         }
-        renderMap(state.map, state.current_node_id, { readOnly: combatPreview });
+        const coopVotes = (STORY_COOP_DEMO
+            && state.phase === 'map'
+            && activeRun?.coopCoord?.votes) || {};
+        renderMap(state.map, state.current_node_id, {
+            readOnly: combatPreview,
+            votes: coopVotes,
+            mySeat: STORY_COOP_DEMO ? storyCoopDemoSeat() : undefined,
+        });
         showView('story-run');
         renderStoryPersistentHud(activeRun);
     }
