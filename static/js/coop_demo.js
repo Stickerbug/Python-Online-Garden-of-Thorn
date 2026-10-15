@@ -23,7 +23,7 @@ function render() {
   snap.seats.forEach((s, i) => {
     const d = document.createElement('div');
     d.className = 'panel seat' + (i === snap.active_seat ? ' active' : '') + (s.hp <= 0 ? ' down' : '');
-    d.innerHTML = `<h3>席${i}${i === snap.active_seat ? '（你在操控）' : ''}${s.ready ? '<span class="badge ready">已就绪</span>' : ''}${s.hp <= 0 ? '<span class="badge">倒地</span>' : ''}</h3>
+    d.innerHTML = `<h3>玩家${i}${i === snap.active_seat ? '（你在操控）' : ''}${s.ready ? '<span class="badge ready">已就绪</span>' : ''}${s.hp <= 0 ? '<span class="badge">倒地</span>' : ''}</h3>
       <div class="stats">H ${s.hp}/${s.max_hp} · E ${s.elixir} · 盾 ${s.shield}<br>手牌 ${s.hand_count} 张</div>`;
     board.appendChild(d);
   });
@@ -61,7 +61,7 @@ function bindActs() {
   const gold = document.querySelector('button.act.gold');
   if (gold) gold.addEventListener('click', start);
   const acts = [...document.querySelectorAll('button.act')];
-  acts.find((b) => (b.textContent || '').includes('切换操控席位'))?.addEventListener('click', switchSeat);
+  acts.find((b) => (b.textContent || '').includes('切换操控玩家'))?.addEventListener('click', switchSeat);
   acts.find((b) => (b.textContent || '').includes('结束回合'))?.addEventListener('click', endTurn);
   acts.find((b) => (b.textContent || '').includes('撤回就绪'))?.addEventListener('click', cancelReady);
 }

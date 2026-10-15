@@ -1673,7 +1673,7 @@
 
             const seatLabel = document.createElement('span');
             seatLabel.className = 'story-coop-seat';
-            seatLabel.textContent = `席位 ${seat + 1}`;
+            seatLabel.textContent = `玩家 ${seat + 1}`;
             row.appendChild(seatLabel);
 
             const identity = document.createElement('span');
@@ -2290,7 +2290,7 @@
         const member = (snapshot?.party?.members || []).find(
             (item) => Number(item?.seat) === Number(seat),
         );
-        return String(member?.display_name || member?.username || `席位 ${Number(seat) + 1}`);
+        return String(member?.display_name || member?.username || `玩家 ${Number(seat) + 1}`);
     }
 
     function storyCoopDifficultyLabel(difficulty) {
@@ -6721,7 +6721,7 @@
             const target = $('story-player-target');
             // 合作演示：敌方打到其他席位时浮字标注席位号。
             if (STORY_COOP_DEMO && event.seat != null && event.seat !== storyCoopDemoSeat()) {
-                spawnStoryFloat(target, `席${event.seat} -${Math.max(0, Number(event.amount) || 0)}H`, 'damage');
+                spawnStoryFloat(target, `玩家${event.seat} -${Math.max(0, Number(event.amount) || 0)}H`, 'damage');
                 return;
             }
             if (Number(event.amount) > 0) triggerStoryPlayerDamageMood();
@@ -7129,7 +7129,7 @@
                     fill: isMine ? '#241d08' : '#d8b84a',
                     style: 'font-size:10px;font-weight:700;',
                 });
-                textEl.textContent = `席${voteSeat}${isMine ? '·你' : ''}`;
+                textEl.textContent = `玩家${voteSeat}${isMine ? '·你' : ''}`;
                 badge.append(rectEl, textEl);
                 group.append(badge);
             }
@@ -12131,7 +12131,7 @@
         dlg.style.cssText = 'border:1px solid #6b7d4f;border-radius:12px;background:#222a1e;color:#e8e4d8;padding:22px;min-width:300px;';
         dlg.innerHTML = `
             <h3 style="margin:0 0 14px;font-size:16px;">多人爬塔（开发中）</h3>
-            <button type="button" id="coop-demo-host-btn" style="width:100%;padding:10px;margin-bottom:12px;border-radius:8px;border:1px solid #d8b84a;background:#3a321a;color:#f0e0b0;cursor:pointer;font-size:14px;">创建对局（我是席0）</button>
+            <button type="button" id="coop-demo-host-btn" style="width:100%;padding:10px;margin-bottom:12px;border-radius:8px;border:1px solid #d8b84a;background:#3a321a;color:#f0e0b0;cursor:pointer;font-size:14px;">创建对局（我是玩家0）</button>
             <div style="display:flex;gap:6px;">
                 <input id="coop-demo-join-code" placeholder="邀请码" maxlength="6"
                     style="flex:1;padding:9px;border-radius:8px;border:1px solid #6b7d4f;background:#1a2116;color:#e8e4d8;font-size:14px;text-transform:uppercase;">
@@ -12265,7 +12265,7 @@
             const row = document.createElement('section');
             row.className = 'story-persistent-player coop-teammate-block';
             const name = document.createElement('strong');
-            name.textContent = `席${seat}`;
+            name.textContent = `玩家${seat}`;
             const badge = document.createElement('b');
             badge.className = 'story-hud-difficulty coop-seat-badge'
                 + (Number(p.health) <= 0 ? ' is-down' : ready.has(seat) ? ' is-ready' : '');
@@ -12576,11 +12576,11 @@
         const voteCount = Object.keys(votes).length;
         const mine = votes[mySeat];
         if (voteCount === 0) {
-            overlay.textContent = `点击节点投票（${seatCount} 席都投票后进入）`;
+            overlay.textContent = `点击节点投票（${seatCount} 名玩家都投票后进入）`;
         } else if (voteCount < seatCount) {
             overlay.textContent = mine
-                ? `你已投票，等待其他席位（${voteCount}/${seatCount}）…`
-                : `席${Object.keys(votes).join('/')} 已投票，等待中（${voteCount}/${seatCount}）`;
+                ? `你已投票，等待其他玩家（${voteCount}/${seatCount}）…`
+                : `玩家${Object.keys(votes).join('/')} 已投票，等待中（${voteCount}/${seatCount}）`;
         } else {
             overlay.textContent = '投票完成，正在进入…';
         }
@@ -13884,7 +13884,7 @@
                     badge.textContent = '→你';
                     badge.classList.add('is-me');
                 } else {
-                    badge.textContent = `→席${targetSeat}`;
+                    badge.textContent = `→玩家${targetSeat}`;
                 }
             }
             intentLabel.append(badge);
@@ -14400,7 +14400,7 @@
             const pendingSeats = (activeRun?.coopCoord?.room_pending_seats) || [];
             if (pendingSeats.length) {
                 setText('story-room-copy',
-                    `等待队友处理房间…（待处理席位：${pendingSeats.map((s) => `席${s}`).join('、')}）`);
+                    `等待队友处理房间…（待处理玩家：${pendingSeats.map((s) => `玩家${s}`).join('、')}）`);
                 showView('story-room');
                 return;
             }
@@ -15056,7 +15056,7 @@
                 leaveButton?.classList.add('hidden');
                 continueButton?.classList.add('hidden');
                 setText('story-reward-copy',
-                    `等待队友选择奖励…（待选席位：${pendingSeats.map((s) => `席${s}`).join('、')}）`);
+                    `等待队友选择奖励…（待选玩家：${pendingSeats.map((s) => `玩家${s}`).join('、')}）`);
             }
         }
         showView('story-reward');
