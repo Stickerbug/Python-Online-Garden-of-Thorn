@@ -44,7 +44,9 @@ NICKNAME_BLOCK_LEVEL = 3
 GUEST_NICKNAME_BLOCK_LEVEL = 2
 NICKNAME_ALWAYS_BLOCK_CATEGORIES = {'sexual', 'political', 'abusive'}
 
-_RESERVED_LONG_NICKNAMES = ('phelren', 'stickerbug', 'netherdog')
+# 2026-10-14：stickerbug 应用户要求移出保留名（用户名本身仍受唯一性保护，
+# 无法被注册冒用；仅昵称可使用该词）。phelren/netherdog/eric 仍为保留名。
+_RESERVED_LONG_NICKNAMES = ('phelren', 'netherdog')
 _RESERVED_NICKNAME_DISPLAY = {
     'phelren': 'Phelren',
     'stickerbug': 'Stickerbug',

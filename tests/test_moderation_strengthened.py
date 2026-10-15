@@ -130,9 +130,11 @@ def test_ascii_term_masking_keeps_the_whole_token():
 
 
 def test_reserved_owner_name_is_not_reported_as_abusive():
+    # 2026-10-14：stickerbug 已移出保留名——昵称可用、不再触发 reserved/abusive。
     result = moderation.check_nickname_risk('Stickerbug')
     assert 'abusive' not in set(result.get('matched_categories') or [])
-    assert result.get('reserved_name') == 'Stickerbug'
+    assert result.get('reserved_name') is None
+    assert result['blocked'] is False
 
 
 def test_homoglyph_evasion_is_folded_before_matching():

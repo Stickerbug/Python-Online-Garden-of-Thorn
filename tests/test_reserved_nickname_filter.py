@@ -14,13 +14,8 @@ from moderation import check_nickname_risk, match_reserved_nickname
         ('Phelrenn', 'Phelren'),
         ('Phelrne', 'Phelren'),
         ('PhelrenV1', 'Phelren'),
-        ('STICKERBUG', 'Stickerbug'),
-        ('sticker_bug', 'Stickerbug'),
-        ('5t1ck3r8ug', 'Stickerbug'),
-        ('ѕtіckerbug', 'Stickerbug'),
-        ('Stikerbug', 'Stickerbug'),
-        ('Stcikerbug', 'Stickerbug'),
-        ('OfficialStickerbug', 'Stickerbug'),
+        # 2026-10-14：stickerbug 应用户要求移出保留名（仅昵称可自由使用；
+        # 用户名仍受唯一性保护）。变体不再被保留名拦截。
         ('NETHERDOG', 'NetherDog'),
         ('nether_dog', 'NetherDog'),
         ('n3th3rd0g', 'NetherDog'),
