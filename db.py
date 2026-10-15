@@ -11481,7 +11481,7 @@ CARD_DRAFT_STAT_SORTS = {
     'win_games': 'win_games',
     'draw_games': 'draw_games',
     'card_win_rate': 'CASE WHEN picked_games > 0 THEN CAST(win_games AS REAL) / picked_games ELSE 0 END',
-    'winner_pick_rate': 'CASE WHEN picked_count > 0 THEN CAST(win_games AS REAL) / picked_count ELSE 0 END',
+    'winner_pick_rate': 'winner_pick_rate',
     'updated_at': 'updated_at',
 }
 
@@ -11496,7 +11496,7 @@ OPENING_EVENT_STAT_SORTS = {
     'win_games': 'win_games',
     'draw_games': 'draw_games',
     'event_win_rate': 'CASE WHEN picked_games > 0 THEN CAST(win_games AS REAL) / picked_games ELSE 0 END',
-    'winner_pick_rate': 'CASE WHEN picked_count > 0 THEN CAST(win_games AS REAL) / picked_count ELSE 0 END',
+    'winner_pick_rate': 'winner_pick_rate',
     'updated_at': 'updated_at',
 }
 
@@ -12029,6 +12029,29 @@ def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, of
             mode_params = [lo, hi]
     order_clause = f'{sort_expr} {direction}, shown_count DESC, card_id ASC'
     with get_db_connection() as conn:
+        # 胜者选取率分母（2026-10-14 修正）：该模式/范围内的胜者选取总量
+        # SUM(win_games)——旧公式 win_games/picked_count 分子分母口径混杂（局数/
+        # 选取次数），数值上退化为重复的胜率列。只按 模式+周 过滤（卡牌/段位
+        # 筛选不影响分母：占比始终相对全体胜者）。
+        winner_pool_where = ''
+        winner_pool_params = []
+        if scope_key == 'week':
+            winner_pool_where = 'WHERE week_start = ?'
+            winner_pool_params = [selected_week]
+            if mode_filter:
+                winner_pool_where += ' AND mode = ?'
+                winner_pool_params.append(mode_filter)
+        elif mode_filter:
+            winner_pool_where = 'WHERE mode = ?'
+            winner_pool_params = [mode_filter]
+        total_winner_picks = 0
+        try:
+            total_winner_picks = int(conn.execute(
+                f'SELECT COALESCE(SUM(win_games), 0) FROM {win_table} {winner_pool_where}',
+                winner_pool_params,
+            ).fetchone()[0] or 0)
+        except Exception:
+            total_winner_picks = 0
         if merge:
             base_query = f'''
                 WITH draft AS (
@@ -12066,7 +12089,7 @@ def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, of
                     COALESCE(wins.win_updated_at, '') AS win_updated_at,
                     CASE WHEN COALESCE(draft.shown_count, 0) > 0 THEN CAST(COALESCE(draft.picked_count, 0) AS REAL) / draft.shown_count * 100 ELSE 0 END AS pick_rate,
                     CASE WHEN COALESCE(wins.picked_games, 0) > 0 THEN CAST(wins.win_games AS REAL) / wins.picked_games * 100 ELSE 0 END AS card_win_rate,
-                    CASE WHEN COALESCE(draft.picked_count, 0) > 0 THEN CAST(COALESCE(wins.win_games, 0) AS REAL) / draft.picked_count * 100 ELSE 0 END AS winner_pick_rate
+                    CASE WHEN COALESCE(wins.win_games, 0) > 0 AND {total_winner_picks} > 0 THEN CAST(wins.win_games AS REAL) / {total_winner_picks} * 100 ELSE 0 END AS winner_pick_rate
                 FROM {'wins LEFT JOIN draft ON draft.card_id = wins.card_id WHERE wins.win_games > 0' if winner_filter else 'draft LEFT JOIN wins ON wins.card_id = draft.card_id'}
             '''
             total = conn.execute(f'SELECT COUNT(*) FROM ({base_query})', mode_params + mode_params).fetchone()[0]
@@ -12096,7 +12119,7 @@ def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, of
                         COALESCE(wins.updated_at, '') AS win_updated_at,
                         CASE WHEN COALESCE(draft.shown_count, 0) > 0 THEN CAST(COALESCE(draft.picked_count, 0) AS REAL) / draft.shown_count * 100 ELSE 0 END AS pick_rate,
                         CASE WHEN COALESCE(wins.picked_games, 0) > 0 THEN CAST(wins.win_games AS REAL) / wins.picked_games * 100 ELSE 0 END AS card_win_rate,
-                        CASE WHEN COALESCE(draft.picked_count, 0) > 0 THEN CAST(COALESCE(wins.win_games, 0) AS REAL) / draft.picked_count * 100 ELSE 0 END AS winner_pick_rate
+                        CASE WHEN COALESCE(wins.win_games, 0) > 0 AND {total_winner_picks} > 0 THEN CAST(wins.win_games AS REAL) / {total_winner_picks} * 100 ELSE 0 END AS winner_pick_rate
                     FROM {win_table} AS wins
                     LEFT JOIN {draft_table} AS draft
                         ON draft.mode = wins.mode AND draft.card_id = wins.card_id
@@ -12117,7 +12140,7 @@ def list_card_draft_stats(mode='', sort='pick_rate', order='desc', limit=300, of
                         COALESCE(wins.updated_at, '') AS win_updated_at,
                         CASE WHEN draft.shown_count > 0 THEN CAST(draft.picked_count AS REAL) / draft.shown_count * 100 ELSE 0 END AS pick_rate,
                         CASE WHEN COALESCE(wins.picked_games, 0) > 0 THEN CAST(wins.win_games AS REAL) / wins.picked_games * 100 ELSE 0 END AS card_win_rate,
-                        CASE WHEN draft.picked_count > 0 THEN CAST(COALESCE(wins.win_games, 0) AS REAL) / draft.picked_count * 100 ELSE 0 END AS winner_pick_rate
+                        CASE WHEN COALESCE(wins.win_games, 0) > 0 AND {total_winner_picks} > 0 THEN CAST(wins.win_games AS REAL) / {total_winner_picks} * 100 ELSE 0 END AS winner_pick_rate
                     FROM {draft_table} AS draft
                     LEFT JOIN {win_table} AS wins
                         ON wins.mode = draft.mode AND wins.card_id = draft.card_id
@@ -12183,6 +12206,7 @@ def list_opening_event_stats(mode='', sort='pick_rate', order='desc', limit=300,
     scope_key = 'week' if str(scope or '').lower() in ('week', 'weekly') else 'total'
     pick_table = 'opening_event_pick_stats_weekly' if scope_key == 'week' else 'opening_event_pick_stats'
     win_table = 'opening_event_win_stats_weekly' if scope_key == 'week' else 'opening_event_win_stats'
+
     winner_filter = bool(winner_only)
     selected_week = week_start_for_iso(week_start) if scope_key == 'week' else ''
     if scope_key == 'week':
@@ -12194,6 +12218,27 @@ def list_opening_event_stats(mode='', sort='pick_rate', order='desc', limit=300,
             mode_params = [selected_week]
     order_clause = f'{sort_expr} {direction}, shown_count DESC, event_id ASC'
     with get_db_connection() as conn:
+        # 胜者选取率分母（2026-10-14 修正，与卡牌统计同口径）：胜者选取总量
+        # SUM(win_games)。配装口径下各事件占比之和=100%。
+        winner_pool_where = ''
+        winner_pool_params = []
+        if scope_key == 'week':
+            winner_pool_where = 'WHERE week_start = ?'
+            winner_pool_params = [selected_week]
+            if mode_filter:
+                winner_pool_where += ' AND mode = ?'
+                winner_pool_params.append(mode_filter)
+        elif mode_filter:
+            winner_pool_where = 'WHERE mode = ?'
+            winner_pool_params = [mode_filter]
+        total_winner_picks = 0
+        try:
+            total_winner_picks = int(conn.execute(
+                f'SELECT COALESCE(SUM(win_games), 0) FROM {win_table} {winner_pool_where}',
+                winner_pool_params,
+            ).fetchone()[0] or 0)
+        except Exception:
+            total_winner_picks = 0
         if merge:
             base_query = f'''
                 WITH picks AS (
@@ -12231,7 +12276,7 @@ def list_opening_event_stats(mode='', sort='pick_rate', order='desc', limit=300,
                     COALESCE(wins.win_updated_at, '') AS win_updated_at,
                     CASE WHEN COALESCE(picks.shown_count, 0) > 0 THEN CAST(COALESCE(picks.picked_count, 0) AS REAL) / picks.shown_count * 100 ELSE 0 END AS pick_rate,
                     CASE WHEN COALESCE(wins.picked_games, 0) > 0 THEN CAST(wins.win_games AS REAL) / wins.picked_games * 100 ELSE 0 END AS event_win_rate,
-                    CASE WHEN COALESCE(picks.picked_count, 0) > 0 THEN CAST(COALESCE(wins.win_games, 0) AS REAL) / picks.picked_count * 100 ELSE 0 END AS winner_pick_rate
+                    CASE WHEN COALESCE(wins.win_games, 0) > 0 AND {total_winner_picks} > 0 THEN CAST(wins.win_games AS REAL) / {total_winner_picks} * 100 ELSE 0 END AS winner_pick_rate
                 FROM {'wins LEFT JOIN picks ON picks.event_id = wins.event_id WHERE wins.win_games > 0' if winner_filter else 'picks LEFT JOIN wins ON wins.event_id = picks.event_id'}
             '''
             params = mode_params + mode_params
@@ -12253,7 +12298,7 @@ def list_opening_event_stats(mode='', sort='pick_rate', order='desc', limit=300,
                         COALESCE(wins.updated_at, '') AS win_updated_at,
                         CASE WHEN COALESCE(picks.shown_count, 0) > 0 THEN CAST(COALESCE(picks.picked_count, 0) AS REAL) / picks.shown_count * 100 ELSE 0 END AS pick_rate,
                         CASE WHEN COALESCE(wins.picked_games, 0) > 0 THEN CAST(wins.win_games AS REAL) / wins.picked_games * 100 ELSE 0 END AS event_win_rate,
-                        CASE WHEN COALESCE(picks.picked_count, 0) > 0 THEN CAST(COALESCE(wins.win_games, 0) AS REAL) / picks.picked_count * 100 ELSE 0 END AS winner_pick_rate
+                        CASE WHEN COALESCE(wins.win_games, 0) > 0 AND {total_winner_picks} > 0 THEN CAST(wins.win_games AS REAL) / {total_winner_picks} * 100 ELSE 0 END AS winner_pick_rate
                     FROM {win_table} AS wins
                     LEFT JOIN {pick_table} AS picks
                         ON picks.mode = wins.mode AND picks.event_id = wins.event_id
@@ -12274,7 +12319,7 @@ def list_opening_event_stats(mode='', sort='pick_rate', order='desc', limit=300,
                         COALESCE(wins.updated_at, '') AS win_updated_at,
                         CASE WHEN picks.shown_count > 0 THEN CAST(picks.picked_count AS REAL) / picks.shown_count * 100 ELSE 0 END AS pick_rate,
                         CASE WHEN COALESCE(wins.picked_games, 0) > 0 THEN CAST(wins.win_games AS REAL) / wins.picked_games * 100 ELSE 0 END AS event_win_rate,
-                        CASE WHEN picks.picked_count > 0 THEN CAST(COALESCE(wins.win_games, 0) AS REAL) / picks.picked_count * 100 ELSE 0 END AS winner_pick_rate
+                        CASE WHEN COALESCE(wins.win_games, 0) > 0 AND {total_winner_picks} > 0 THEN CAST(wins.win_games AS REAL) / {total_winner_picks} * 100 ELSE 0 END AS winner_pick_rate
                     FROM {pick_table} AS picks
                     LEFT JOIN {win_table} AS wins
                         ON wins.mode = picks.mode AND wins.event_id = picks.event_id
