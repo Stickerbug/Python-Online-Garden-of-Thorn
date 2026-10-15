@@ -72,7 +72,8 @@ def test_blessing_waits_for_all_seats():
     assert state['coord']['blessing_done'] == [0]
     state, _ = apply_coop_action(state, 1, 'choose_blessing', {'blessing_id': pick}, 'orch-t1')
     assert state['phase'] == 'map'
-    assert state['coord']['blessing_done'] == [0, 1]
+    # 2026-10-14：全员完成后清完成名单（残留会让下一幕赐福全员已选）。
+    assert state['coord']['blessing_done'] == []
 
 
 def test_blessing_cannot_choose_twice():
