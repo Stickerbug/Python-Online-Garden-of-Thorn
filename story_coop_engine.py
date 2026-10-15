@@ -102,6 +102,10 @@ def apply_coop_action(state, seat, action_type, payload, seed):
             # 并恢复选项供其余席选择。
             _restore_pending_blessing(state)
             state['blessing_options'] = options_before
+        else:
+            # 全员完成：清完成名单（2026-10-14 修复——残留会让第二幕/Boss Rush
+            # 下一块的赐福全员报 BLESSING_ALREADY_CHOSEN）。
+            coord['blessing_done'] = []
         return state, events
 
     if action_type == 'enter_node':
@@ -134,8 +138,11 @@ def apply_coop_action(state, seat, action_type, payload, seed):
 
     if action_type == 'choose_reward':
         rewards_by_seat = coord.get('rewards_by_seat')
-        if rewards_by_seat is None:
-            # 首次进入：把胜利奖励复制一份给每席，主 reward 位清空待各席挂载。
+        if not rewards_by_seat:
+            # 首次进入（或上一轮奖励完成后残留的空账本）：把胜利奖励复制一份
+            # 给每席，主 reward 位清空待各席挂载。2026-10-14 修复：此前只认
+            # None——上一轮完成后残留空字典+旧完成名单，第二次奖励全员
+            # REWARD_ALREADY_DONE 卡死。
             base = state.get('reward')
             rewards_by_seat = {
                 str(s): copy.deepcopy(base) for s in range(_seat_count(state))
@@ -190,6 +197,10 @@ def apply_coop_action(state, seat, action_type, payload, seed):
         if coord.get('rewards_by_seat'):
             # 还有席位没完成：保持奖励阶段。
             state['phase'] = 'reward'
+        else:
+            # 全员完成：彻底清账（空字典与完成名单残留会卡死下一轮奖励）。
+            coord.pop('rewards_by_seat', None)
+            coord['reward_done'] = []
         return state, events
 
     if action_type == 'resolve_room':
@@ -199,7 +210,7 @@ def apply_coop_action(state, seat, action_type, payload, seed):
         # （由最终席的单人结算完成）。修复：此前动作直通共享房间——第一人
         # 选择即消费房间（他人无法选择），第一人离场即全员被踢出。
         rooms = coord.get('rooms_by_seat')
-        if rooms is None:
+        if not rooms:
             shared_room = state.get('room')
             if not isinstance(shared_room, dict) or not shared_room:
                 raise StoryActionError('NO_ROOM', '当前没有待处理的房间')
