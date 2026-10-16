@@ -9625,13 +9625,21 @@
         }
         scheduleStoryCardEffectFit(element);
         if (options.note) {
-            const wrapper = document.createElement('div');
-            wrapper.className = 'story-card-with-note';
-            const note = document.createElement('span');
-            note.className = 'story-card-note';
-            note.textContent = options.note;
-            wrapper.append(element, note);
-            return wrapper;
+            // 2026-10-16 终版：价格作为标签显示在所有 tag 下方（卡内标签行末尾），
+            // 与精准/消耗等 tag 同视觉、不受 overflow 影响。
+            const flagsZone = element.querySelector(':scope > .card-bottom-zone > .card-flags');
+            if (flagsZone) {
+                const note = document.createElement('span');
+                note.className = 'card-flag story-card-price-flag';
+                note.textContent = options.note;
+                flagsZone.append(note);
+            } else {
+                // 兜底：没有标签行时在卡底追加
+                const note = document.createElement('span');
+                note.className = 'card-flag story-card-price-flag';
+                note.textContent = options.note;
+                element.append(note);
+            }
         }
         return element;
     }
