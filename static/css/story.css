@@ -8592,7 +8592,7 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  width: 200px;
+  width: 220px;
   pointer-events: none;
 }
 
