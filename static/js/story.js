@@ -12215,9 +12215,9 @@
         if (!STORY_COOP_DEMO) return;
         const codeBtn = $('story-hud-coop-code');
         const exitBtn = $('story-hud-coop-exit');
-        if (!exitBtn?._coopBound) {
-            exitBtn?._coopBound = true;
-            exitBtn?.addEventListener('click', async () => {
+        if (exitBtn && !exitBtn._coopBound) {
+            exitBtn._coopBound = true;
+            exitBtn.addEventListener('click', async () => {
                 try { await fetch('/api/coop-demo/leave', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -12227,9 +12227,9 @@
                 location.href = '/story';
             });
         }
-        if (!codeBtn?._coopBound) {
-            codeBtn?._coopBound = true;
-            codeBtn?.addEventListener('click', async () => {
+        if (codeBtn && !codeBtn._coopBound) {
+            codeBtn._coopBound = true;
+            codeBtn.addEventListener('click', async () => {
                 const code = codeBtn?.dataset.code || '';
                 if (!code) return;
                 try {
