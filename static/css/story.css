@@ -3732,18 +3732,24 @@ button.story-settings-row:hover:not(:disabled) { border-color: var(--story-green
   font-size: 8.6cqi;
   font-weight: 700;
 }
-/* 有价格条（note）的卡（2026-10-12 终版）：保持原始固定尺寸与内容裁剪，
-   价格条外挂在卡牌下方——overflow:clip + clip-margin 允许 note 画出界显示。 */
-.story-card.has-note {
-  overflow: clip;
-  overflow-clip-margin: 30px;
-  margin-bottom: 22px;
-}
-
-.story-card.has-note .story-card-note {
-  top: 100%;
-  bottom: auto;
+/* 有价格条（note）的卡（2026-10-16 修复：overflow-clip-margin 仅 Firefox
+   生效，Chrome/Edge 上 note 被 overflow:hidden 裁掉。改为 note 不再放在
+   卡牌内部——由 createStoryCard 包一层 wrapper，note 是 wrapper 的子元素，
+   不受卡牌 overflow 影响）。 */
+.story-card-note {
+  position: static;
+  display: block;
   margin-top: 4px;
+  padding: 3px 6px;
+  z-index: 9;
+  border: 1px solid var(--card-frame-color, var(--border-color));
+  border-radius: 3px;
+  color: var(--story-text);
+  background: var(--bg-card, #1a1a2e);
+  font-weight: 700;
+  font-size: 11px;
+  text-align: center;
+  line-height: 1.4;
 }
 
 .story-card-note {

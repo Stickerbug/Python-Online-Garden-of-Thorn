@@ -9580,14 +9580,10 @@
             enablePrediction,
         );
         if (bottom) element.append(bottom);
-        if (options.note) {
-            const note = document.createElement('span');
-            note.className = 'story-card-note';
-            note.textContent = options.note;
-            element.append(note);
-            // 价格条绝对定位在卡底，会盖住底部的标签行——加类让标签让位。
-            element.classList.add('has-note');
-        }
+        /* 2026-10-16 修复：note（价格条）不再放在卡牌内部（overflow:hidden
+           会裁掉绝对定位的 note），改为 return 时用 wrapper 包一层——note 是
+           wrapper 的子元素，完全不受卡牌 overflow 影响。 */
+
         if (options.disabled) element.disabled = true;
         if (typeof options.onClick === 'function') element.addEventListener('click', options.onClick);
         if (!blinded && options.previewUpgradeOnHover && storyCardIsUpgradable(card)) {
@@ -9628,6 +9624,16 @@
             });
         }
         scheduleStoryCardEffectFit(element);
+        if (options.note) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'story-card-with-note';
+            wrapper.style.cssText = 'display:flex;flex-direction:column;align-items:center;';
+            const note = document.createElement('span');
+            note.className = 'story-card-note';
+            note.textContent = options.note;
+            wrapper.append(element, note);
+            return wrapper;
+        }
         return element;
     }
 
