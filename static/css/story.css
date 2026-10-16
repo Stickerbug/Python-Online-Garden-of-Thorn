@@ -8694,3 +8694,39 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   flex-basis: 100%;
   order: 99;
 }
+
+/* 合作按钮独立竖排列（2026-10-16：不在flex nav里挤，单独一行显示） */
+.story-hud-coop-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+  pointer-events: auto;
+}
+
+.story-hud-coop-row.hidden { display: none; }
+
+.story-hud-coop-row button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 68px;
+  height: 32px;
+  padding: 4px 10px;
+  border: 1px solid var(--story-line-soft);
+  border-radius: 6px;
+  color: var(--story-text);
+  background: var(--story-surface-muted);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.story-hud-coop-row button span {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+}

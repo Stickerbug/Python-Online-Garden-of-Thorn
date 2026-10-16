@@ -12238,8 +12238,7 @@
                 } catch (err) { /* 剪贴板不可用 */ }
             });
         }
-        codeBtn?.classList.remove('hidden');
-        exitBtn?.classList.remove('hidden');
+        $('story-hud-coop-row')?.classList.remove('hidden');
         // 邀请码更新
         const inviteCode = String(window.__coop_invite_code || (activeRun && activeRun.invite_code) || '').trim();
         if (codeBtn && inviteCode && codeBtn.dataset.code !== inviteCode) {
