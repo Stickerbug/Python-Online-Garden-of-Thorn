@@ -8575,40 +8575,12 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 }
 
 /* 等待提示 */
-.coop-ally-waiting {
-  padding: 10px;
-  text-align: center;
-  font-size: 12px;
-  color: var(--story-muted, #8a9a7e);
-}
 
 
 /* 合作队友角色显示（与玩家并排，2026-10-16 终版） */
-#story-coop-ally {
-  position: fixed;
-  top: 129px;
-  left: 350px;
-  z-index: 14;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  width: 220px;
-  pointer-events: none;
-}
 
-#story-coop-ally .story-actor {
-  width: 100%;
-}
 
-#story-coop-ally.hidden { display: none; }
 
-#story-coop-ally .story-actor-ally {
-  display: grid;
-  justify-items: center;
-  gap: 5px;
-  opacity: .95;
-  transition: opacity .3s ease;
-}
 
 #story-coop-ally .story-actor-ally.is-down { opacity: .5; filter: grayscale(.7); }
 #story-coop-ally .story-actor-ally.is-ready .story-actor-name::after { content: ' ✓'; color: #d8b84a; }
@@ -8617,27 +8589,13 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 
 
 /* 就绪/倒地角标 */
-.coop-ally-state-badge {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  z-index: 5;
-  font-size: 16px;
-  filter: drop-shadow(0 1px 2px rgba(0,0,0,.5));
-}
 
 /* 血条缩小一号 */
 #story-coop-ally .story-health-wrap { transform: scale(.85); transform-origin: center; }
 #story-coop-ally .story-fighter-piles { transform: scale(.85); transform-origin: center; }
 #story-coop-ally .story-effect-list { transform: scale(.85); transform-origin: center; }
 
-.cop-ally-waiting, .coop-ally-waiting {
-  padding: 10px;
-  text-align: center;
-  font-size: 12px;
-  color: var(--story-muted);
-}
-
+.cop-ally-waiting, 
 /* 合作模式按钮：图标按钮是 46px 方块，纯文字按钮需要更宽 */
 .story-persistent-actions button#story-hud-coop-code,
 .story-persistent-actions button#story-hud-coop-exit {

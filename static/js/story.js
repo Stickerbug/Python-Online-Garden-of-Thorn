@@ -12509,106 +12509,90 @@
 
     function renderCoopAllySidebar(state) {
         if (!STORY_COOP_DEMO) return;
-        const sidebar = $('story-coop-ally');
-        if (!sidebar) return;
+        const arena = document.querySelector('.story-arena');
+        if (!arena) return;
         const combat = state.combat || {};
         const ready = new Set(combat.ready_seats || []);
         const mySeat = storyCoopDemoSeat();
         const seatStates = combat.seat_states || {};
-        sidebar.replaceChildren();
-        let count = 0;
+        const playerArticle = document.getElementById('story-player-target');
+        // 移除旧队友
+        arena.querySelectorAll('[data-coop-ally-seat]').forEach((el) => el.remove());
+        const inCombat = state.phase === 'combat';
+        if (!inCombat || !playerArticle) return;
+
         (state.players || []).forEach((p, seat) => {
             if (seat === mySeat) return;
-            count += 1;
             const ss = seatStates[seat] || {};
             const health = Math.max(0, Number(p.health) || 0);
             const maxH = Number(p.max_health) || 100;
             const down = health <= 0;
 
-            // 与玩家 story-actor-player 完全同构的 article
-            const actor = document.createElement('article');
-            actor.className = 'story-actor story-actor-player classic-fighter'
-                + (down ? ' is-down' : '');
+            // 完全克隆玩家 article → 同类名同结构同布局约束 = 同大小
+            const clone = playerArticle.cloneNode(true);
+            clone.removeAttribute('id');
+            clone.dataset.coopAllySeat = String(seat);
+            clone.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));
 
-            // 名字（同款 story-actor-name）
-            const nameEl = document.createElement('div');
-            nameEl.className = 'story-actor-name classic-fighter-name';
-            nameEl.innerHTML = `<span class="player-name-value">玩家${seat}${ready.has(seat) ? ' ✓' : ''}</span>`;
-            actor.append(nameEl);
+            // 名字
+            const nameEl = clone.querySelector('.player-name-value');
+            if (nameEl) nameEl.textContent = `玩家${seat}${ready.has(seat) ? ' ✓' : ''}${down ? ' 💀' : ''}`;
 
-            // avatar-stack 包裹（玩家同款：portrait 在内）
-            const avatarStack = document.createElement('div');
-            avatarStack.className = 'story-avatar-stack';
-            const portrait = document.createElement('div');
-            portrait.className = 'story-portrait story-player-portrait player-avatar has-skin';
-            portrait.setAttribute('aria-label', `玩家${seat}`);
-            const avatar = document.createElement('div');
-            avatar.className = 'skin-avatar skin-eye-shape-oval';
-            avatar.style.setProperty('--skin-main', '#78b37f');
-            avatar.style.setProperty('--skin-border', '#5a9a62');
-            avatar.innerHTML = `
-                <div class="skin-eye skin-eye-left"><span class="skin-pupil"></span></div>
-                <div class="skin-eye skin-eye-right"><span class="skin-pupil"></span></div>
-                <svg class="skin-mouth" viewBox="0 0 100 56" aria-hidden="true" focusable="false">
-                    <path class="skin-mouth-line" d="M 30 28 Q 50 44 70 28"></path>
-                </svg>`;
-            portrait.append(avatar);
-            if (down) {
-                const skull = document.createElement('span');
-                skull.textContent = '💀';
-                skull.style.cssText = 'position:absolute;top:-4px;right:-4px;font-size:16px;z-index:5;';
-                portrait.append(skull);
+            // 皮肤（替换为队友颜色）
+            const skin = clone.querySelector('.skin-avatar');
+            if (skin) {
+                skin.style.setProperty('--skin-main', '#78b37f');
+                skin.style.setProperty('--skin-border', '#5a9a62');
             }
-            avatarStack.append(portrait);
-            // 空装备列表（保持结构一致）
-            const equipment = document.createElement('div');
-            equipment.className = 'story-equipment-list';
-            equipment.setAttribute('aria-label', '装备');
-            avatarStack.append(equipment);
-            actor.append(avatarStack);
+            const portrait = clone.querySelector('.story-portrait');
+            if (portrait) {
+                portrait.style.setProperty('--skin-main', '#78b37f');
+                portrait.style.setProperty('--skin-border', '#5a9a62');
+            }
 
-            // 血条（玩家同款 story-health-wrap）
-            const hpWrap = document.createElement('div');
-            hpWrap.className = 'story-health-wrap';
-            hpWrap.innerHTML = `
-                <img src="/static/assets/ui-icons/hit-point.svg" alt="">
-                <div class="story-health-body">
-                    <div class="story-health-track"><div class="story-health-fill" style="width:${Math.round(100 * health / maxH)}%"></div></div>
-                    <b>${health}/${maxH}</b>
-                </div>`;
-            actor.append(hpWrap);
+            // 血条
+            const hpFill = clone.querySelector('.story-health-fill');
+            if (hpFill) hpFill.style.width = `${Math.round(100 * health / maxH)}%`;
+            const hpText = clone.querySelector('.story-health-body b');
+            if (hpText) hpText.textContent = `${health}/${maxH}`;
 
-            // 牌堆数（玩家同款 story-fighter-piles）
-            const piles = document.createElement('div');
-            piles.className = 'story-fighter-piles';
-            piles.setAttribute('aria-label', '牌堆数量');
-            [
-                ['total-pile.svg', (ss.hand || []).length],
-                ['draw-pile.svg', (ss.draw_pile || []).length],
-                ['discard-pile.svg', (ss.discard_pile || []).length],
-                ['exile-pile.svg', (ss.exile_pile || []).length],
-            ].forEach(([icon, num]) => {
-                piles.insertAdjacentHTML('beforeend',
-                    `<span class="story-icon-counter"><img src="/static/assets/ui-icons/${icon}" alt=""><b>${num}</b></span>`);
-            });
-            actor.append(piles);
+            // 牌堆数
+            const piles = clone.querySelectorAll('.story-fighter-piles b');
+            const counts = [
+                (ss.hand || []).length,
+                (ss.draw_pile || []).length,
+                (ss.discard_pile || []).length,
+                (ss.exile_pile || []).length,
+            ];
+            piles.forEach((b, i) => { if (counts[i] !== undefined) b.textContent = String(counts[i]); });
 
-            // 状态效果（玩家同款 story-effect-list）
-            const effects = document.createElement('div');
-            effects.className = 'story-effect-list';
-            const power = Number(ss.power) || 0;
-            const shield = Number(ss.shield) || 0;
-            if (power > 0) effects.insertAdjacentHTML('beforeend', `<span class="story-effect-tag">力量${power}</span>`);
-            if (shield > 0) effects.insertAdjacentHTML('beforeend', `<span class="story-effect-tag">盾${shield}</span>`);
-            if (effects.childElementCount) actor.append(effects);
+            // 装备区清空（队友装备暂不显示）
+            const equip = clone.querySelector('.story-equipment-list');
+            if (equip) equip.replaceChildren();
 
-            sidebar.append(actor);
+            // 轨道清空
+            const orbit = clone.querySelector('.story-orbit-track');
+            if (orbit) orbit.hidden = true;
+            const summons = clone.querySelector('.story-summon-slots');
+            if (summons) summons.hidden = true;
+
+            // 状态效果
+            const effects = clone.querySelector('.story-effect-list');
+            if (effects) {
+                effects.replaceChildren();
+                const power = Number(ss.power) || 0;
+                const shield = Number(ss.shield) || 0;
+                if (power > 0) effects.insertAdjacentHTML('beforeend', `<span class="story-effect-tag">力量${power}</span>`);
+                if (shield > 0) effects.insertAdjacentHTML('beforeend', `<span class="story-effect-tag">盾${shield}</span>`);
+            }
+
+            // 倒地样式
+            clone.style.opacity = down ? '0.5' : '';
+            clone.style.filter = down ? 'grayscale(0.7)' : '';
+
+            // 插入 arena（紧跟玩家右侧，同 grid 上下文）
+            playerArticle.insertAdjacentElement('afterend', clone);
         });
-        if (!count) {
-            sidebar.append(Object.assign(document.createElement('div'),
-                { className: 'coop-ally-waiting', textContent: '等待队友加入…' }));
-        }
-        sidebar.classList.toggle('hidden', state.phase !== 'combat');
     }
 
     function renderCoopVoteOverlay(state) {
