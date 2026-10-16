@@ -8677,3 +8677,13 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   padding: 5px 10px;
   white-space: nowrap;
 }
+
+/* 合作按钮的文字可见（通用HUD按钮span是sr-only隐藏的，因为通常有图标） */
+.story-persistent-actions button#story-hud-coop-code span,
+.story-persistent-actions button#story-hud-coop-exit span {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+}
