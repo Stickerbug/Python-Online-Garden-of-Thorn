@@ -8583,16 +8583,12 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 
 
 /* 合作队友角色显示（与玩家并排，2026-10-16 终版） */
-/* 合作玩家并排容器（2026-10-16）：玩家+队友在同一 flex 行，共享 arena grid 第1列 */
-.story-players-row {
-  display: flex;
-  flex-direction: row;
-  align-items: flex-end;
-  gap: 12px;
-  justify-self: start;
-}
-
+/* 合作队友：固定定位（2026-10-16 用户指定坐标） */
 #story-coop-ally {
+  position: fixed;
+  left: 450px;
+  top: 189px;
+  z-index: 14;
   display: flex;
   flex-direction: column;
   align-items: center;
