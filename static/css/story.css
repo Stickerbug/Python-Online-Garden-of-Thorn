@@ -3734,6 +3734,12 @@ button.story-settings-row:hover:not(:disabled) { border-color: var(--story-green
 }
 /* 价格标签（2026-10-16 终版）：显示在卡牌标签行内（所有 tag 下方），
    与其他 card-flag 同视觉。 */
+.story-card .story-card-price-row {
+  padding: 0 3cqi 3cqi;
+  display: flex;
+  justify-content: center;
+}
+
 .story-card .card-flag.story-card-price-flag {
   border-color: var(--story-card-rarity-color, var(--border-color));
   color: var(--story-card-rarity-color, #D4AC0D);

@@ -9641,10 +9641,14 @@
                 bottomZone.append(flagsZone);
             }
             flagsZone.classList.remove('card-flags-empty');
-            const note = document.createElement('span');
-            note.className = 'card-flag story-card-price-flag';
-            note.textContent = options.note;
-            flagsZone.append(note);
+            // 价格独立一行，显示在所有标签行的下方
+            const note = document.createElement('div');
+            note.className = 'card-flags story-card-price-row';
+            const priceTag = document.createElement('span');
+            priceTag.className = 'card-flag story-card-price-flag';
+            priceTag.textContent = options.note;
+            note.append(priceTag);
+            flagsZone.insertAdjacentElement('afterend', note);
         }
         return element;
     }
