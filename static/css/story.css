@@ -8412,28 +8412,6 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 .story-coop-ally.hidden { display: none; }
 
 /* ============ 合作爬塔队友侧栏（严格复刻 2v2 teammate-sidebar，2026-10-16） ============ */
-#story-coop-ally {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  z-index: 15;
-  width: clamp(190px, 24vw, 292px);
-  min-width: 184px;
-  max-height: calc(100% - 12px);
-  overflow: hidden auto;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 7px 10px;
-  border-left: 1px solid var(--story-line, #3a4a34);
-  border-radius: 6px;
-  background: rgba(26, 188, 156, 0.04);
-  backdrop-filter: blur(6px);
-  pointer-events: auto;
-}
-
-#story-coop-ally.hidden { display: none; }
-
 /* —— 头部：头像 + 名字（teammate-sidebar-header 同款） —— */
 .coop-ally-header {
   display: flex;
