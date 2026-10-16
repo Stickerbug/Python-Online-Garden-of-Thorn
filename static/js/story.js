@@ -12508,7 +12508,7 @@
 
             // 花朵立绘：与玩家 renderPlayerSkin 完全同款的皮肤结构
             const portrait = document.createElement('div');
-            portrait.className = 'story-portrait story-ally-portrait player-avatar has-skin';
+            portrait.className = 'story-portrait story-player-portrait player-avatar has-skin';
             portrait.setAttribute('aria-label', `玩家${seat}`);
             const avatar = document.createElement('div');
             avatar.className = 'skin-avatar skin-eye-shape-oval';

@@ -8605,15 +8605,16 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 
 
 /* 合作队友角色显示（与玩家并排，2026-10-16 终版） */
+/* 合作队友：与玩家 actor 同款同尺寸（2026-10-16 终版） */
 #story-coop-ally {
   position: absolute;
-  bottom: 180px;
+  bottom: 0;
   left: 25vw;
   z-index: 14;
   display: flex;
   flex-direction: row;
   align-items: flex-end;
-  gap: 14px;
+  gap: 10px;
   pointer-events: none;
 }
 
@@ -8622,42 +8623,17 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 #story-coop-ally .story-actor-ally {
   display: grid;
   justify-items: center;
-  gap: 5px;
+  gap: 7px;
   opacity: .95;
   transition: opacity .3s ease;
 }
 
 #story-coop-ally .story-actor-ally.is-down { opacity: .5; filter: grayscale(.7); }
-#story-coop-ally .story-actor-ally.is-ready .story-actor-name::after { content: ' ✓'; color: #d8b84a; }
+#story-coop-ally .story-actor-ally.is-ready .story-actor-name::after { content: ' ¹3'; color: #d8b84a; }
 
-/* 队友花朵：与玩家完全同尺寸同皮肤系统 */
-.story-ally-portrait {
-  width: clamp(122px, 16vw, 210px);
-  aspect-ratio: 1;
-  display: grid;
-  place-items: center;
-}
-
+/* 队友花：完全继承 .story-portrait 默认尺寸（与玩家同款，不加自定义宽高） */
 .story-ally-portrait .skin-avatar {
-  --skin-main: #78b37f;
-  --skin-border: #5a9a62;
-  --skin-feature: #111;
-  --skin-pupil: #fff;
-  --skin-look-x: 0%;
-  --skin-look-y: 0%;
-  position: relative;
-  width: 100%;
-  height: 100%;
-  box-sizing: border-box;
-  overflow: hidden;
-  border: 7.5cqi solid var(--skin-border);
-  border-radius: 50%;
-  background: var(--skin-main);
-  box-shadow:
-    inset 0 4px 12px rgba(255, 255, 255, .18),
-    inset 0 -8px 20px rgba(0, 0, 0, .08),
-    0 10px 20px var(--story-shadow);
-  container-type: inline-size;
+  /* 继承 .story-player-portrait .skin-avatar 全部样式 */
 }
 
 /* 就绪/倒地角标 */
@@ -8670,9 +8646,12 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   filter: drop-shadow(0 1px 2px rgba(0,0,0,.5));
 }
 
-/* 与玩家同高度显示（不再缩放偏移） */
-
-.cop-ally-waiting, .coop-ally-waiting {
+.coop-ally-waiting {
+  padding: 10px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--story-muted);
+}
   padding: 10px;
   text-align: center;
   font-size: 12px;
