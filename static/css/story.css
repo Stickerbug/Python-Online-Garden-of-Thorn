@@ -8591,9 +8591,13 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   z-index: 14;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 4px;
+  align-items: stretch;
+  width: 200px;
   pointer-events: none;
+}
+
+#story-coop-ally .story-actor {
+  width: 100%;
 }
 
 #story-coop-ally.hidden { display: none; }
