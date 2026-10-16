@@ -8587,7 +8587,7 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 #story-coop-ally {
   position: fixed;
   top: 30px;
-  left: 350px;
+  left: 197px;
   z-index: 14;
   display: flex;
   flex-direction: column;
