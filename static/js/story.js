@@ -12212,8 +12212,40 @@
     }
 
     function ensureCoopDemoControls() {
-        // 2026-10-16：取消 HUD 左上角的联机 UI（邀请码/退出/左列容器），
-        // 队友状态在战斗画面中与玩家并排显示。
+        if (!STORY_COOP_DEMO) return;
+        const codeBtn = $('story-hud-coop-code');
+        const exitBtn = $('story-hud-coop-exit');
+        if (!exitBtn?._coopBound) {
+            exitBtn?._coopBound = true;
+            exitBtn?.addEventListener('click', async () => {
+                try { await fetch('/api/coop-demo/leave', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: '{}',
+                }); } catch (err) { /* 忽略 */ }
+                localStorage.removeItem('gtv_coop_demo');
+                location.href = '/story';
+            });
+        }
+        if (!codeBtn?._coopBound) {
+            codeBtn?._coopBound = true;
+            codeBtn?.addEventListener('click', async () => {
+                const code = codeBtn?.dataset.code || '';
+                if (!code) return;
+                try {
+                    await navigator.clipboard.writeText(code);
+                    showToast(`邀请码 ${code} 已复制`);
+                } catch (err) { /* 剪贴板不可用 */ }
+            });
+        }
+        codeBtn?.classList.remove('hidden');
+        exitBtn?.classList.remove('hidden');
+        // 邀请码更新
+        const inviteCode = String(window.__coop_invite_code || (activeRun && activeRun.invite_code) || '').trim();
+        if (codeBtn && inviteCode && codeBtn.dataset.code !== inviteCode) {
+            codeBtn.dataset.code = inviteCode;
+            setText('story-hud-coop-code-label', inviteCode);
+        }
     }
 
     function renderBlessing(state) {
