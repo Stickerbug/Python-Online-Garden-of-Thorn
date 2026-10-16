@@ -12480,6 +12480,12 @@
         if (!STORY_COOP_DEMO) return;
         const sidebar = $('story-coop-ally');
         if (!sidebar) return;
+        // 2026-10-16：队友放进与玩家同一 grid 单元格（story-player-target 的父级），
+        // 与玩家共享同一布局约束 = 同一高度、同一尺寸。
+        const playerArticle = document.getElementById('story-player-target');
+        if (playerArticle?.parentElement && sidebar.parentElement !== playerArticle.parentElement) {
+            playerArticle.parentElement.appendChild(sidebar);
+        }
         const combat = state.combat || {};
         const ready = new Set(combat.ready_seats || []);
         const mySeat = storyCoopDemoSeat();

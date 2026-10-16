@@ -8605,16 +8605,12 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 
 
 /* 合作队友角色显示（与玩家并排，2026-10-16 终版） */
-/* 合作队友：与玩家 actor 同款同尺寸（2026-10-16 终版） */
+/* 合作队友：与玩家同列同高（2026-10-16 终版）——放进 arena grid 的玩家列 */
 #story-coop-ally {
-  position: absolute;
-  bottom: 0;
-  left: 25vw;
-  z-index: 14;
   display: flex;
-  flex-direction: row;
-  align-items: flex-end;
-  gap: 10px;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
   pointer-events: none;
 }
 
