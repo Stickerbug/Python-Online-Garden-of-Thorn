@@ -31863,13 +31863,21 @@ def _coop_chat_history_payload(room):
 @socketio.on('coop_chat_join')
 def on_coop_chat_join(data=None):
     """合作爬塔队伍聊天：进入房间（仅同队成员收到）。"""
+    if not rate_limiter(f'coop-chat-join:{request.sid}', limit=5, window=10):
+        return
     user = _current_account_user()
     if not user:
         emit('server_error', {'message': '请先登录账号'})
         return
     code, room = _coop_chat_room_entry(user)
     if room is None:
-        emit('server_error', {'message': '没有进行中的联机对局', 'reason': 'no_coop_room'})
+        # 没有联机房间时回退到公共故事聊天（否则前端永远卡在 connecting）
+        beta_mode = bool(is_beta_instance())
+        join_room(_story_lobby_chat_room(beta_mode))
+        with _lock:
+            payload = _lobby_chat_history_payload_locked(LOBBY_CHAT_VISIBLE_LIMIT, beta_mode)
+        emit('lobby_chat_history', payload)
+        emit('story_chat_ready', {'success': True})
         return
     join_room(_coop_chat_room_key(code))
     emit('lobby_chat_history', _coop_chat_history_payload(room))
