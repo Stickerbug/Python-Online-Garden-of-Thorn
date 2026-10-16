@@ -3745,6 +3745,8 @@ button.story-settings-row:hover:not(:disabled) { border-color: var(--story-green
   color: var(--story-card-rarity-color, #D4AC0D);
   background: transparent;
   font-weight: 700;
+  font-size: calc(var(--card-flag-font-scale) * 2);
+  padding: .8cqi 4cqi;
 }
 
 
