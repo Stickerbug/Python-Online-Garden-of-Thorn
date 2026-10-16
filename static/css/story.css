@@ -8667,3 +8667,13 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   font-size: 12px;
   color: var(--story-muted);
 }
+
+/* 合作模式按钮：图标按钮是 46px 方块，纯文字按钮需要更宽 */
+.story-persistent-actions button#story-hud-coop-code,
+.story-persistent-actions button#story-hud-coop-exit {
+  width: auto;
+  min-width: 62px;
+  height: 46px;
+  padding: 5px 10px;
+  white-space: nowrap;
+}
