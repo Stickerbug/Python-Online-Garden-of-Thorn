@@ -8394,125 +8394,6 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   max-height: 340px;
 }
 
-/* 合作模式队友面板（2v2侧栏风格，2026-10-16） */
-.coop-ally-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 8px 10px;
-  border: 1px solid color-mix(in srgb, var(--story-line) 82%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--story-surface) 88%, transparent);
-}
-
-.coop-ally-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.coop-ally-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: #2a3a26;
-  border: 2px solid #4a6a3e;
-  display: grid;
-  place-items: center;
-  font: 700 13px system-ui;
-  color: #b8d4a0;
-  flex-shrink: 0;
-}
-
-.coop-ally-name {
-  font-weight: 700;
-  font-size: 13px;
-  color: #1abc9c;
-}
-
-.coop-ally-badge {
-  margin-left: auto;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 700;
-  background: #2a4026;
-  color: #7fae6a;
-}
-
-.coop-ally-badge.is-ready { background: #3a321a; color: #d8b84a; }
-.coop-ally-badge.is-down { background: #3a1e1a; color: #b03a2e; }
-
-.coop-ally-hpbar {
-  height: 8px;
-  border-radius: 4px;
-  background: #3a2222;
-  overflow: hidden;
-}
-
-.coop-ally-hpbar i {
-  display: block;
-  height: 100%;
-  border-radius: 4px;
-  background: linear-gradient(90deg, #c0392b, #e74c3c);
-  transition: width .3s ease;
-}
-
-.coop-ally-hptext {
-  font: 800 11px/1 system-ui;
-  color: var(--story-muted);
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-
-.coop-ally-res {
-  display: flex;
-  gap: 6px;
-}
-
-.coop-ally-res-cell {
-  flex: 1;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 3px 8px;
-  border-radius: 5px;
-  background: var(--story-surface-muted);
-  font-size: 11px;
-}
-
-.coop-ally-res-cell b { color: var(--story-muted); font-weight: 800; }
-.coop-ally-res-cell i { color: var(--story-text); font-weight: 800; font-style: normal; font-variant-numeric: tabular-nums; }
-
-.coop-ally-status {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  min-height: 0;
-}
-
-.coop-ally-tag {
-  padding: 2px 7px;
-  border-radius: 5px;
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.coop-ally-tag.is-power { background: #2a2a3e; color: #7c8ce0; }
-.coop-ally-tag.is-shield { background: #2a3a3e; color: #5daed0; }
-
-.coop-ally-info {
-  font-size: 10.5px;
-  color: var(--story-muted);
-}
-
-.coop-ally-waiting {
-  padding: 10px;
-  text-align: center;
-  font-size: 12px;
-  color: var(--story-muted);
-}
-
 /* 战斗画面右侧队友侧栏（2v2风格，2026-10-16） */
 .story-coop-ally {
   position: absolute;
@@ -8529,3 +8410,196 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 }
 
 .story-coop-ally.hidden { display: none; }
+
+/* ============ 合作爬塔队友侧栏（严格复刻 2v2 teammate-sidebar，2026-10-16） ============ */
+#story-coop-ally {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 15;
+  width: clamp(190px, 24vw, 292px);
+  min-width: 184px;
+  max-height: calc(100% - 12px);
+  overflow: hidden auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 7px 10px;
+  border-left: 1px solid var(--story-line, #3a4a34);
+  border-radius: 6px;
+  background: rgba(26, 188, 156, 0.04);
+  backdrop-filter: blur(6px);
+  pointer-events: auto;
+}
+
+#story-coop-ally.hidden { display: none; }
+
+/* —— 头部：头像 + 名字（teammate-sidebar-header 同款） —— */
+.coop-ally-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--story-line, #3a4a34);
+}
+
+.coop-ally-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid #4a6a3e;
+  background: #2a3a26;
+  display: grid;
+  place-items: center;
+  font: 700 11px system-ui;
+  color: #b8d4a0;
+  flex-shrink: 0;
+}
+
+.coop-ally-name {
+  color: #1abc9c;
+  font-size: 13px;
+}
+
+.coop-ally-badge {
+  margin-left: auto;
+  padding: 1px 7px;
+  border: 1px solid var(--border-color, #4a5a4e);
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+  color: #7fae6a;
+}
+
+.coop-ally-badge.is-ready { color: #d8b84a; border-color: #d8b84a; }
+.coop-ally-badge.is-down  { color: #b03a2e; border-color: #b03a2e; }
+
+/* —— H/E/M 资源条（teammate-sidebar .bars-row 同款 bar-track） —— */
+.coop-ally-bars {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  width: 100%;
+  padding: 2px 0;
+}
+
+.coop-ally-bar {
+  height: 14px;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border-color, #4a5a4e);
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  position: relative;
+}
+
+.coop-ally-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 1px;
+  transition: width .3s ease;
+}
+
+.coop-ally-bar.is-h i { background: #2ECC71; }
+.coop-ally-bar.is-e i { background: #F1C40F; }
+.coop-ally-bar.is-m i { background: #3498DB; }
+
+.coop-ally-bar b {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 10px;
+  font-weight: 700;
+  color: #e8e4d8;
+  white-space: nowrap;
+  z-index: 1;
+  text-shadow: 0 0 3px rgba(0, 0, 0, 0.7);
+}
+
+/* —— 状态标签（teammate-sidebar .status-tag 同款） —— */
+.coop-ally-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  min-height: 0;
+  padding: 1px 0;
+}
+
+.coop-ally-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border: 1px solid var(--border-color, #4a5a4e);
+  border-radius: 2px;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--story-text, #e8e4d8);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.coop-ally-tag.is-power   { color: #7c8ce0; border-color: #7c8ce0; }
+.coop-ally-tag.is-shield  { color: #5daed0; border-color: #5daed0; }
+.coop-ally-tag.is-weak    { color: #e07c7c; border-color: #e07c7c; }
+.coop-ally-tag.is-poison  { color: #7ce0a0; border-color: #7ce0a0; }
+
+/* —— 分节标题（teammate-sidebar-section 同款） —— */
+.coop-ally-section {
+  font-size: 10px;
+  color: var(--story-muted, #8a9a7e);
+  padding: 3px 0;
+  border-top: 1px solid var(--story-line, #3a4a34);
+}
+
+/* —— 手牌区（teammate-hand-row 同款） —— */
+.coop-ally-hand {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 4px;
+  padding: 2px 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.coop-ally-hand-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  max-width: 96px;
+  min-height: 22px;
+  padding: 2px 7px;
+  border: 1px solid var(--border-light, #5a6a5e);
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--story-text, #e8e4d8);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.12;
+  text-align: center;
+  user-select: none;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* —— 信息行（teammate-sidebar .info-extra 同款） —— */
+.coop-ally-info {
+  font-size: 10px;
+  color: var(--text-muted, var(--story-muted, #8a9a7e));
+  white-space: nowrap;
+  padding: 1px 0;
+}
+
+/* 等待提示 */
+.coop-ally-waiting {
+  padding: 10px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--story-muted, #8a9a7e);
+}
+
