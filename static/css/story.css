@@ -8605,7 +8605,15 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 
 
 /* 合作队友角色显示（与玩家并排，2026-10-16 终版） */
-/* 合作队友：与玩家同列同高（2026-10-16 终版）——放进 arena grid 的玩家列 */
+/* 合作玩家并排容器（2026-10-16）：玩家+队友在同一 flex 行，共享 arena grid 第1列 */
+.story-players-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 12px;
+  justify-self: start;
+}
+
 #story-coop-ally {
   display: flex;
   flex-direction: column;

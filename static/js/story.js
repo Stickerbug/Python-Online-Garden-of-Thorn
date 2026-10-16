@@ -12480,11 +12480,20 @@
         if (!STORY_COOP_DEMO) return;
         const sidebar = $('story-coop-ally');
         if (!sidebar) return;
-        // 2026-10-16：队友放进与玩家同一 grid 单元格（story-player-target 的父级），
-        // 与玩家共享同一布局约束 = 同一高度、同一尺寸。
+        // 2026-10-16：把玩家和队友包进同一 wrapper（共享 arena grid 第1列），
+        // flex-direction:row 并排、align-items:flex-end 底部对齐 = 同一高度。
         const playerArticle = document.getElementById('story-player-target');
-        if (playerArticle?.parentElement && sidebar.parentElement !== playerArticle.parentElement) {
-            playerArticle.parentElement.appendChild(sidebar);
+        if (playerArticle?.parentElement) {
+            const arena = playerArticle.parentElement;
+            let wrapper = arena.querySelector('.story-players-row');
+            if (!wrapper) {
+                wrapper = document.createElement('div');
+                wrapper.className = 'story-players-row';
+                arena.insertBefore(wrapper, playerArticle);
+                wrapper.append(playerArticle, sidebar);
+            } else if (sidebar.parentElement !== wrapper) {
+                wrapper.append(sidebar);
+            }
         }
         const combat = state.combat || {};
         const ready = new Set(combat.ready_seats || []);
