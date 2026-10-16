@@ -16645,6 +16645,7 @@
     bind();
     startStoryChat();
     startStoryPresence();
+    ensureCoopDemoControls();
     loadRun();
 })();
 
