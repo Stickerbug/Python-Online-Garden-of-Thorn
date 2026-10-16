@@ -9627,7 +9627,6 @@
         if (options.note) {
             const wrapper = document.createElement('div');
             wrapper.className = 'story-card-with-note';
-            wrapper.style.cssText = 'display:flex;flex-direction:column;align-items:center;';
             const note = document.createElement('span');
             note.className = 'story-card-note';
             note.textContent = options.note;
