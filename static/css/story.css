@@ -8632,20 +8632,7 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 #story-coop-ally .story-actor-ally.is-ready .story-actor-name::after { content: ' ✓'; color: #d8b84a; }
 
 /* 队友花朵（比玩家小一号） */
-.story-ally-portrait {
-  width: clamp(80px, 10vw, 130px) !important;
-  border: 1px solid var(--story-line-soft) !important;
-  background: #78b37f !important;
-  box-shadow: 0 6px 14px var(--story-shadow) !important;
-}
 
-.story-ally-portrait .skin-avatar {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  overflow: hidden;
-}
 
 /* 就绪/倒地角标 */
 .coop-ally-state-badge {
