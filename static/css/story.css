@@ -8621,3 +8621,11 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   flex-basis: 100%;
   order: 99;
 }
+
+/* 队友克隆体：与玩家共享 arena grid 第1列（玩家=左端，队友=右端） */
+[data-coop-ally-seat] {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: end;
+  margin-left: 12px;
+}
