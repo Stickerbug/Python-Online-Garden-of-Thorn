@@ -8630,20 +8630,34 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 #story-coop-ally .story-actor-ally.is-down { opacity: .5; filter: grayscale(.7); }
 #story-coop-ally .story-actor-ally.is-ready .story-actor-name::after { content: ' ✓'; color: #d8b84a; }
 
-/* 队友花朵（比玩家小一号） */
+/* 队友花朵：与玩家完全同尺寸同皮肤系统 */
 .story-ally-portrait {
-  width: clamp(80px, 10vw, 130px) !important;
-  border: 1px solid var(--story-line-soft) !important;
-  background: #78b37f !important;
-  box-shadow: 0 6px 14px var(--story-shadow) !important;
+  width: clamp(122px, 16vw, 210px);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
 }
 
 .story-ally-portrait .skin-avatar {
+  --skin-main: #78b37f;
+  --skin-border: #5a9a62;
+  --skin-feature: #111;
+  --skin-pupil: #fff;
+  --skin-look-x: 0%;
+  --skin-look-y: 0%;
   position: relative;
   width: 100%;
   height: 100%;
-  border-radius: 50%;
+  box-sizing: border-box;
   overflow: hidden;
+  border: 7.5cqi solid var(--skin-border);
+  border-radius: 50%;
+  background: var(--skin-main);
+  box-shadow:
+    inset 0 4px 12px rgba(255, 255, 255, .18),
+    inset 0 -8px 20px rgba(0, 0, 0, .08),
+    0 10px 20px var(--story-shadow);
+  container-type: inline-size;
 }
 
 /* 就绪/倒地角标 */

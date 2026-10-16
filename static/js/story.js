@@ -12506,20 +12506,21 @@
             nameEl.textContent = `玩家${seat}` + (down ? ' \u{1F480}' : '') + (ready.has(seat) ? ' \u2713' : '');
             actor.append(nameEl);
 
-            // 花朵立绘（与玩家 portrait 同款圆形花）
+            // 花朵立绘：与玩家 renderPlayerSkin 完全同款的皮肤结构
             const portrait = document.createElement('div');
             portrait.className = 'story-portrait story-ally-portrait player-avatar has-skin';
             portrait.setAttribute('aria-label', `玩家${seat}`);
             const avatar = document.createElement('div');
-            avatar.className = 'skin-avatar';
-            avatar.style.cssText = 'width:100%;height:100%;';
-            // 用 CSS 画一朵花（与 player-avatar 同视觉：绿底圆+表情）
+            avatar.className = 'skin-avatar skin-eye-shape-oval';
+            avatar.style.setProperty('--skin-main', '#78b37f');
+            avatar.style.setProperty('--skin-border', '#5a9a62');
             avatar.innerHTML = `
-                <div class="skin-face" style="position:absolute;inset:0;">
-                    <span class="skin-eye skin-eye-left" style="position:absolute;left:33%;top:38%;width:7%;height:11%;border-radius:50%;background:#1a2a16;"></span>
-                    <span class="skin-eye skin-eye-right" style="position:absolute;right:33%;top:38%;width:7%;height:11%;border-radius:50%;background:#1a2a16;"></span>
-                    <span style="position:absolute;left:50%;top:55%;transform:translateX(-50%);width:18%;height:9%;border-bottom:2px solid #1a2a16;border-radius:0 0 50% 50%;"></span>
-                </div>`;
+                <div class="skin-eye skin-eye-left"><span class="skin-pupil"></span></div>
+                <div class="skin-eye skin-eye-right"><span class="skin-pupil"></span></div>
+                <svg class="skin-mouth" viewBox="0 0 100 56" aria-hidden="true" focusable="false">
+                    <path class="skin-mouth-line" d="M 30 28 Q 50 44 70 28"></path>
+                </svg>
+            `;
             portrait.append(avatar);
             // 就绪/倒地标记
             const stateBadge = document.createElement('span');
