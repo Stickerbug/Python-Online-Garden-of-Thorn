@@ -8687,3 +8687,9 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   overflow: visible;
   clip: auto;
 }
+
+/* 退出多人按钮换行显示（防止与邀请码重叠） */
+.story-persistent-actions button#story-hud-coop-exit {
+  flex-basis: 100%;
+  order: 99;
+}
