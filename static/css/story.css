@@ -563,6 +563,7 @@ a { font: inherit; }
 
 .story-persistent-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   padding: 5px;
 }
