@@ -8522,3 +8522,20 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   font-size: 12px;
   color: var(--story-muted);
 }
+
+/* 战斗画面右侧队友侧栏（2v2风格，2026-10-16） */
+.story-coop-ally {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: clamp(160px, 200px, 200px);
+  max-height: calc(100% - 16px);
+  overflow-y: auto;
+  pointer-events: none;
+}
+
+.story-coop-ally.hidden { display: none; }
