@@ -5020,6 +5020,10 @@ def load_story_manual_save(
             conn.rollback()
             return _story_run_payload(run_row), 'invalid_save'
         restored = _story_manual_save_snapshot(restored)
+        # 2026-10-16 修复：银行无限存钱——回档时清空银行余额，防止
+        # 「存钱→存档→取钱→回档→再取钱」的无限循环。
+        if int(restored.get('event_bank') or 0) > 0:
+            restored['event_bank'] = 0
         state_json = json.dumps(
             restored, ensure_ascii=False, separators=(',', ':'),
         )

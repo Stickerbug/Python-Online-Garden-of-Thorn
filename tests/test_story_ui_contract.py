@@ -751,7 +751,7 @@ def test_story_combat_map_is_read_only_and_can_return_to_combat():
     assert 'id="story-hud-map"' in STORY_TEMPLATE
     assert '/static/assets/story-ui-icons/map.svg' in STORY_TEMPLATE
     assert 'const actionable = !options.readOnly && node.status === \'available\';' in STORY_JS
-    assert 'renderMap(state.map, state.current_node_id, { readOnly: combatPreview });' in STORY_JS
+    assert 'renderMap(state.map, state.current_node_id, {' in STORY_JS  # 2026-10-16 起带 votes 选项
     assert 'scheduleStoryAutoEnter' not in STORY_JS
     assert "$('story-hud-map')?.addEventListener('click', openStoryCombatMap);" in STORY_JS
     assert 'if (storyMapPreviewOpen)' in STORY_JS

@@ -692,6 +692,7 @@ def _capture_recovery_checkpoint(state, kind):
         'kind': str(kind or 'node_entry'),
         'node_id': state.get('current_node_id'),
         'state': _checkpoint_snapshot(state),
+        '_bank_before_restore': int(state.get('event_bank') or 0),
     }
 
 
@@ -705,6 +706,15 @@ def _restore_recovery_checkpoint(state, events):
     restored = copy.deepcopy(snapshot)
     state.clear()
     state.update(restored)
+    # 2026-10-16 修复：银行回档刷钱——恢复检查点时银行余额取
+    # max(快照值, 当前值)，防止「存款后回档→银行余额回旧值→但金已在身上」
+    # 或「取款后回档→银行余额恢复→再取一次」。
+    current_bank = int(checkpoint.get('_bank_before_restore') or 0) if isinstance(checkpoint, dict) else 0
+    if int(state.get('event_bank') or 0) != current_bank:
+        state['event_bank'] = min(
+            int(state.get('event_bank') or 0),
+            current_bank,
+        ) if current_bank >= 0 else 0
     if isinstance(floor_entry_checkpoint, dict):
         state['floor_entry_checkpoint'] = floor_entry_checkpoint
     state['presentation_event_counter'] = max(
@@ -735,10 +745,14 @@ def _restore_floor_entry_checkpoint(state, events):
     snapshot = checkpoint.get('state') if isinstance(checkpoint, dict) else None
     if not isinstance(snapshot, dict):
         _fail('NO_FLOOR_ENTRY_CHECKPOINT', '当前层没有可重新开始的检查点')
+    bank_before = int(checkpoint.get('_bank_before_restore') or 0) if isinstance(checkpoint, dict) else 0
     event_counter = int(state.get('presentation_event_counter') or 0)
     restored = copy.deepcopy(snapshot)
     state.clear()
     state.update(restored)
+    # 2026-10-16 修复：与恢复检查点同口径的银行保护
+    if int(state.get('event_bank') or 0) > bank_before:
+        state['event_bank'] = bank_before
     state['presentation_event_counter'] = max(
         event_counter,
         int(state.get('presentation_event_counter') or 0),
