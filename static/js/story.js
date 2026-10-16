@@ -9626,20 +9626,25 @@
         scheduleStoryCardEffectFit(element);
         if (options.note) {
             // 2026-10-16 终版：价格作为标签显示在所有 tag 下方（卡内标签行末尾），
-            // 与精准/消耗等 tag 同视觉、不受 overflow 影响。
-            const flagsZone = element.querySelector(':scope > .card-bottom-zone > .card-flags');
-            if (flagsZone) {
-                const note = document.createElement('span');
-                note.className = 'card-flag story-card-price-flag';
-                note.textContent = options.note;
-                flagsZone.append(note);
-            } else {
-                // 兜底：没有标签行时在卡底追加
-                const note = document.createElement('span');
-                note.className = 'card-flag story-card-price-flag';
-                note.textContent = options.note;
-                element.append(note);
+            // 与精准/消耗等 tag 同视觉。无 tag 的卡也创建标签行保证统一显示。
+            let flagsZone = element.querySelector(':scope > .card-bottom-zone > .card-flags');
+            if (!flagsZone) {
+                // 没有 bottom-zone 时创建一个（与 createStoryCardBottom 同结构）
+                let bottomZone = element.querySelector(':scope > .card-bottom-zone');
+                if (!bottomZone) {
+                    bottomZone = document.createElement('div');
+                    bottomZone.className = 'card-bottom-zone';
+                    element.append(bottomZone);
+                }
+                flagsZone = document.createElement('div');
+                flagsZone.className = 'card-flags';
+                bottomZone.append(flagsZone);
             }
+            flagsZone.classList.remove('card-flags-empty');
+            const note = document.createElement('span');
+            note.className = 'card-flag story-card-price-flag';
+            note.textContent = options.note;
+            flagsZone.append(note);
         }
         return element;
     }
