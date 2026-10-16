@@ -12212,66 +12212,8 @@
     }
 
     function ensureCoopDemoControls() {
-        if (!STORY_COOP_DEMO) return;
-        if (!$('story-coop-demo-bar')) {
-        const hud = $('story-persistent-hud');
-        const bar = document.createElement('section');
-        bar.id = 'story-coop-demo-bar';
-        bar.className = 'story-coop-teammates';
-        bar.setAttribute('aria-label', '联机队友信息');
-        const exitBtn = document.createElement('button');
-        exitBtn.type = 'button';
-        exitBtn.textContent = '退出合作演示';
-        exitBtn.className = 'story-coop-exit';
-        exitBtn.addEventListener('click', async () => {
-            try { await fetch('/api/coop-demo/leave', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); } catch (err) { /* 忽略 */ }
-            localStorage.removeItem('gtv_coop_demo');
-            location.href = '/story';
-        });
-        const codeEl = document.createElement('div');
-        codeEl.id = 'story-coop-demo-code';
-        codeEl.className = 'story-coop-code';
-        codeEl.title = '点击复制邀请码';
-        codeEl.addEventListener('click', async () => {
-            const code = codeEl.dataset.code || '';
-            if (!code) return;
-            try {
-                await navigator.clipboard.writeText(code);
-                codeEl.textContent = `邀请码 ${code}（已复制）`;
-            } catch (err) { /* 剪贴板不可用：保持展示原码 */ }
-        });
-        bar.appendChild(codeEl);
-        const seats = document.createElement('span');
-        seats.id = 'story-coop-demo-seats';
-        seats.style.color = '#e8e4d8';
-        bar.appendChild(seats);
-        bar.appendChild(exitBtn);
-        const playerEl = hud?.querySelector('.story-persistent-player');
-        if (hud && playerEl) {
-            // 左列容器：玩家信息在上、队友面板在其下方（2026-10-12 用户指定），
-            // 快捷操作仍独占右侧，结构确定不依赖 flex 换行技巧。
-            const leftCol = document.createElement('div');
-            leftCol.className = 'story-coop-left-column';
-            hud.insertBefore(leftCol, playerEl);
-            leftCol.appendChild(playerEl);
-            leftCol.appendChild(bar);
-        } else {
-            document.body.appendChild(bar);
-        }
-        }
-        const seatsEl = $('story-coop-demo-seats');
-    const codeEl = $('story-coop-demo-code');
-    const inviteCode = String(window.__coop_invite_code || (activeRun && activeRun.invite_code) || '').trim();
-    if (codeEl && inviteCode && codeEl.dataset.code !== inviteCode) {
-        codeEl.dataset.code = inviteCode;
-        codeEl.textContent = `邀请码 ${inviteCode}`;
-        codeEl.style.display = 'block';
-    }
-    if (seatsEl && activeRun && activeRun.state) {
-        // 2026-10-16：队友状态移到战斗画面的右侧侧栏（story-coop-ally），
-        // HUD 面板不再重复显示。
-        seatsEl.replaceChildren();
-    }
+        // 2026-10-16：取消 HUD 左上角的联机 UI（邀请码/退出/左列容器），
+        // 队友状态在战斗画面中与玩家并排显示。
     }
 
     function renderBlessing(state) {
