@@ -8412,6 +8412,28 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 .story-coop-ally.hidden { display: none; }
 
 /* ============ 合作爬塔队友侧栏（严格复刻 2v2 teammate-sidebar，2026-10-16） ============ */
+#story-coop-ally {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 15;
+  width: clamp(190px, 24vw, 292px);
+  min-width: 184px;
+  max-height: calc(100% - 12px);
+  overflow: hidden auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 7px 10px;
+  border-left: 1px solid var(--story-line, #3a4a34);
+  border-radius: 6px;
+  background: rgba(26, 188, 156, 0.04);
+  backdrop-filter: blur(6px);
+  pointer-events: auto;
+}
+
+#story-coop-ally.hidden { display: none; }
+
 /* —— 头部：头像 + 名字（teammate-sidebar-header 同款） —— */
 .coop-ally-header {
   display: flex;
@@ -8583,16 +8605,15 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 
 
 /* 合作队友角色显示（与玩家并排，2026-10-16 终版） */
-/* 合作队友：固定定位（2026-10-16 用户指定坐标） */
 #story-coop-ally {
-  position: fixed;
-  left: 450px;
-  top: 189px;
+  position: absolute;
+  bottom: 180px;
+  left: calc(clamp(122px, 16vw, 210px) + 30px);
   z-index: 14;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 14px;
   pointer-events: none;
 }
 
@@ -8601,17 +8622,28 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 #story-coop-ally .story-actor-ally {
   display: grid;
   justify-items: center;
-  gap: 7px;
+  gap: 5px;
   opacity: .95;
   transition: opacity .3s ease;
 }
 
 #story-coop-ally .story-actor-ally.is-down { opacity: .5; filter: grayscale(.7); }
-#story-coop-ally .story-actor-ally.is-ready .story-actor-name::after { content: ' ¹3'; color: #d8b84a; }
+#story-coop-ally .story-actor-ally.is-ready .story-actor-name::after { content: ' ✓'; color: #d8b84a; }
 
-/* 队友花：完全继承 .story-portrait 默认尺寸（与玩家同款，不加自定义宽高） */
+/* 队友花朵（比玩家小一号） */
+.story-ally-portrait {
+  width: clamp(80px, 10vw, 130px) !important;
+  border: 1px solid var(--story-line-soft) !important;
+  background: #78b37f !important;
+  box-shadow: 0 6px 14px var(--story-shadow) !important;
+}
+
 .story-ally-portrait .skin-avatar {
-  /* 继承 .story-player-portrait .skin-avatar 全部样式 */
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
 }
 
 /* 就绪/倒地角标 */
@@ -8624,12 +8656,12 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   filter: drop-shadow(0 1px 2px rgba(0,0,0,.5));
 }
 
-.coop-ally-waiting {
-  padding: 10px;
-  text-align: center;
-  font-size: 12px;
-  color: var(--story-muted);
-}
+/* 血条缩小一号 */
+#story-coop-ally .story-health-wrap { transform: scale(.85); transform-origin: center; }
+#story-coop-ally .story-fighter-piles { transform: scale(.85); transform-origin: center; }
+#story-coop-ally .story-effect-list { transform: scale(.85); transform-origin: center; }
+
+.cop-ally-waiting, .coop-ally-waiting {
   padding: 10px;
   text-align: center;
   font-size: 12px;
