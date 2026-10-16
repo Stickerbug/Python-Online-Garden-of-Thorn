@@ -8403,3 +8403,122 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   height: auto;
   max-height: 340px;
 }
+
+/* 合作模式队友面板（2v2侧栏风格，2026-10-16） */
+.coop-ally-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--story-line) 82%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--story-surface) 88%, transparent);
+}
+
+.coop-ally-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.coop-ally-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #2a3a26;
+  border: 2px solid #4a6a3e;
+  display: grid;
+  place-items: center;
+  font: 700 13px system-ui;
+  color: #b8d4a0;
+  flex-shrink: 0;
+}
+
+.coop-ally-name {
+  font-weight: 700;
+  font-size: 13px;
+  color: #1abc9c;
+}
+
+.coop-ally-badge {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  background: #2a4026;
+  color: #7fae6a;
+}
+
+.coop-ally-badge.is-ready { background: #3a321a; color: #d8b84a; }
+.coop-ally-badge.is-down { background: #3a1e1a; color: #b03a2e; }
+
+.coop-ally-hpbar {
+  height: 8px;
+  border-radius: 4px;
+  background: #3a2222;
+  overflow: hidden;
+}
+
+.coop-ally-hpbar i {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #c0392b, #e74c3c);
+  transition: width .3s ease;
+}
+
+.coop-ally-hptext {
+  font: 800 11px/1 system-ui;
+  color: var(--story-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.coop-ally-res {
+  display: flex;
+  gap: 6px;
+}
+
+.coop-ally-res-cell {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: var(--story-surface-muted);
+  font-size: 11px;
+}
+
+.coop-ally-res-cell b { color: var(--story-muted); font-weight: 800; }
+.coop-ally-res-cell i { color: var(--story-text); font-weight: 800; font-style: normal; font-variant-numeric: tabular-nums; }
+
+.coop-ally-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 0;
+}
+
+.coop-ally-tag {
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.coop-ally-tag.is-power { background: #2a2a3e; color: #7c8ce0; }
+.coop-ally-tag.is-shield { background: #2a3a3e; color: #5daed0; }
+
+.coop-ally-info {
+  font-size: 10.5px;
+  color: var(--story-muted);
+}
+
+.coop-ally-waiting {
+  padding: 10px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--story-muted);
+}

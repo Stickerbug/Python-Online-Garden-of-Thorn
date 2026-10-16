@@ -12254,46 +12254,79 @@
         seatsEl.replaceChildren();
         let teammateCount = 0;
         (state.players || []).forEach((p, seat) => {
-            if (seat === mySeat) return; // 我的信息在合并面板上方主块
+            if (seat === mySeat) return;
             teammateCount += 1;
             const health = Math.max(0, Number(p.health) || 0);
             const maxHealth = Number(p.max_health) || 1;
             const seatState = seatStates[seat] || {};
             const elixir = seatState.elixir ?? p.elixir ?? p.max_elixir ?? 0;
             const magic = seatState.magic ?? p.magic ?? 0;
-            // 与玩家主块完全同构同款：名字/状态徽标/副信息行/H-E-M-G 四格
-            const row = document.createElement('section');
-            row.className = 'story-persistent-player coop-teammate-block';
-            const name = document.createElement('strong');
-            name.textContent = `玩家${seat}`;
-            const badge = document.createElement('b');
-            badge.className = 'story-hud-difficulty coop-seat-badge'
+            // 2026-10-16: 2v2 队友侧栏风格
+            const row = document.createElement('div');
+            row.className = 'coop-ally-panel';
+            const header = document.createElement('div');
+            header.className = 'coop-ally-header';
+            const avatar = document.createElement('span');
+            avatar.className = 'coop-ally-avatar';
+            avatar.textContent = String(seat);
+            const nameEl = document.createElement('span');
+            nameEl.className = 'coop-ally-name';
+            nameEl.textContent = `玩家${seat}`;
+            const badge = document.createElement('span');
+            badge.className = 'coop-ally-badge'
                 + (Number(p.health) <= 0 ? ' is-down' : ready.has(seat) ? ' is-ready' : '');
-            badge.textContent = Number(p.health) <= 0 ? '倒地' : (ready.has(seat) ? '就绪' : '存活');
-            const sub = document.createElement('span');
-            sub.textContent = `盾${Number(seatState.shield) || 0} · 手牌${(seatState.hand || []).length}`;
-            const stats = document.createElement('dl');
+            badge.textContent = Number(p.health) <= 0 ? '倒地' : (ready.has(seat) ? '✓就绪' : '存活');
+            header.append(avatar, nameEl, badge);
+            const hpBar = document.createElement('div');
+            hpBar.className = 'coop-ally-hpbar';
+            const hpFill = document.createElement('i');
+            hpFill.style.width = `${Math.round(100 * health / maxHealth)}%`;
+            hpBar.append(hpFill);
+            const hpText = document.createElement('div');
+            hpText.className = 'coop-ally-hptext';
+            hpText.textContent = `H ${health}/${maxHealth}`;
+            const resRow = document.createElement('div');
+            resRow.className = 'coop-ally-res';
             [
-                ['H', `${health}/${maxHealth}`],
-                ['E', `${Number(elixir) || 0}`],
-                ['M', `${Number(magic) || 0}`],
-                ['G', `${Number(p.gold) || 0}`],
-            ].forEach(([label, value]) => {
-                const cell = document.createElement('div');
-                const dt = document.createElement('dt');
-                dt.textContent = label;
-                const dd = document.createElement('dd');
-                dd.textContent = value;
-                cell.append(dt, dd);
-                stats.append(cell);
+                ['E', Number(elixir) || 0],
+                ['M', Number(magic) || 0],
+                ['G', Number(p.gold) || 0],
+            ].forEach(([label, cur]) => {
+                const cell = document.createElement('span');
+                cell.className = 'coop-ally-res-cell';
+                const lab = document.createElement('b');
+                lab.textContent = label;
+                const val = document.createElement('i');
+                val.textContent = String(cur);
+                cell.append(lab, val);
+                resRow.append(cell);
             });
-            row.append(name, badge, sub, stats);
+            const statusRow = document.createElement('div');
+            statusRow.className = 'coop-ally-status';
+            const power = Number(seatState.power) || 0;
+            if (power > 0) {
+                const tag = document.createElement('span');
+                tag.className = 'coop-ally-tag is-power';
+                tag.textContent = `力量${power}`;
+                statusRow.append(tag);
+            }
+            const shieldVal = Number(seatState.shield) || 0;
+            if (shieldVal > 0) {
+                const tag = document.createElement('span');
+                tag.className = 'coop-ally-tag is-shield';
+                tag.textContent = `盾${shieldVal}`;
+                statusRow.append(tag);
+            }
+            const infoRow = document.createElement('div');
+            infoRow.className = 'coop-ally-info';
+            infoRow.textContent = `\u624B\u724C${(seatState.hand || []).length} \u00B7 \u62BD\u724C\u5806${(seatState.draw_pile || []).length} \u00B7 \u5F03\u724C\u5806${(seatState.discard_pile || []).length}`;
+            row.append(header, hpBar, hpText, resRow, statusRow, infoRow);
             seatsEl.append(row);
         });
         if (!teammateCount) {
             const waiting = document.createElement('div');
-            waiting.className = 'coop-teammate-stats';
-            waiting.textContent = '等待队友加入…（右上角邀请码）';
+            waiting.className = 'coop-ally-waiting';
+            waiting.textContent = '等待队友加入…'
             seatsEl.append(waiting);
         }
     }
