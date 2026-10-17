@@ -8622,18 +8622,18 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   order: 99;
 }
 
-/* 队友克隆体：与玩家共享 arena grid 第1列（玩家=左端，队友=右端） */
+/* 玩家与队友克隆体共享 arena grid 第1列：双方显式定位，
+   防止克隆体参与自动布局把敌人挤到第2行 */
+#story-player-target,
 [data-coop-ally-seat] {
   grid-column: 1;
   grid-row: 1;
-  justify-self: end;
-  margin-left: 12px;
 }
 
-/* 队友克隆体：与玩家共享 arena grid 第1列（玩家=左端，队友=右端） */
+/* 双人时玩家靠左端、队友克隆体靠右端，避免重叠 */
+#story-player-target.story-actor-player-coop { justify-self: start; }
+
 [data-coop-ally-seat] {
-  grid-column: 1;
-  grid-row: 1;
   justify-self: end;
   margin-left: 12px;
 }

@@ -12519,7 +12519,10 @@
         // 移除旧队友
         arena.querySelectorAll('[data-coop-ally-seat]').forEach((el) => el.remove());
         const inCombat = state.phase === 'combat';
-        if (!inCombat || !playerArticle) return;
+        if (!inCombat || !playerArticle) {
+            if (playerArticle) playerArticle.classList.remove('story-actor-player-coop');
+            return;
+        }
 
         (state.players || []).forEach((p, seat) => {
             if (seat === mySeat) return;
@@ -12593,6 +12596,8 @@
             // 插入 arena（紧跟玩家右侧，同 grid 上下文）
             playerArticle.insertAdjacentElement('afterend', clone);
         });
+        // 玩家靠列左端，为共享第1列的队友克隆体让出右半边
+        playerArticle.classList.add('story-actor-player-coop');
     }
 
     function renderCoopVoteOverlay(state) {
