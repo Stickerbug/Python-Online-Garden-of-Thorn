@@ -14,6 +14,7 @@
 
 import copy
 import hashlib
+import math
 
 from story_engine import (
     StoryActionError,
@@ -31,6 +32,67 @@ _PASS_THROUGH = {
     'surrender', 'dev_set_values', 'dev_give_card', 'dev_spawn_boss',
     'dev_jump_node', 'restart_floor', 'resume_node', 'choose_stage',
 }
+
+
+def _seat_seed(seed, seat):
+    """席位后缀种子：同一场旅程里各席的随机流相互独立（奖励/商店内容不同）。"""
+    return f'{seed}:seat{seat}'
+
+
+def _differentiate_reward_per_seat(state, base, seat, seed):
+    """胜利奖励的随机内容按席位重掷：金币区间/卡牌三选/遗物/附魔书。
+
+    只重掷基础奖励里实际存在的字段（结构与其余字段原样保留）。
+    调用前需已挂载对应席位（卡池/遗物池依赖该席的角色与遗物）。
+    """
+    from story_engine import (
+        _boss_relic_choices, _difficulty, _random_enchantment_book,
+        _random_relic, _reward_choices, _rng,
+    )
+    if not isinstance(base, dict):
+        return copy.deepcopy(base)
+    reward = copy.deepcopy(base)
+    room_type = str(reward.get('room_type') or 'combat')
+    seat_seed = _seat_seed(seed, seat)
+    if isinstance(reward.get('gold'), int) and int(reward['gold']) > 0:
+        # 乘区奖励（秘密通道×N等）保持原值只按比例换算；普通奖励按区间重掷。
+        multiplied = str(reward.get('source') or '') in ('secret_passage', 'snatch') \
+            or int(reward.get('round_total') or 0) >= 2
+        rng = _rng(state, seat_seed, 'coop_seat_reward_gold')
+        low, high = {'boss': (100, 120), 'elite': (25, 35)}.get(room_type, (10, 20))
+        gold = rng.randint(low, high)
+        if _difficulty(state) in ('hard', 'lunatic'):
+            gold = math.floor(gold * 0.75)
+        if multiplied:
+            # 按原值与区间中点的比例换算，保持乘区量级
+            gold = max(1, round(gold * int(reward['gold']) / max(1, (low + high) // 2)))
+        reward['gold'] = gold
+        if isinstance(reward.get('claims'), dict):
+            reward['claims']['gold'] = gold <= 0
+    if isinstance(reward.get('cards'), list):
+        reward['cards'] = _reward_choices(state, seat_seed, room_type)
+    base_relic = reward.get('relic')
+    if isinstance(base_relic, list) and base_relic:
+        reward['relic'] = _boss_relic_choices(state, seat_seed)
+    elif base_relic:
+        reward['relic'] = _random_relic(state, seat_seed)
+    if reward.get('enchantment_book'):
+        reward['enchantment_book'] = _random_enchantment_book(
+            state, seat_seed, f'coop_seat_book:{room_type}')
+    return reward
+
+
+def _per_seat_rewards(state, base, seed):
+    """按席位挂载并重掷各自奖励（不同角色/遗物的席位拿各自的卡池与遗物池）。"""
+    combat = state.get('combat')
+    previous = int(combat.get('mounted_seat') or 0) if isinstance(combat, dict) else None
+    rewards = {}
+    for seat in range(_seat_count(state)):
+        _mount_seat(state, seat)
+        rewards[str(seat)] = _differentiate_reward_per_seat(state, base, seat, seed)
+    if previous is not None:
+        _mount_seat(state, previous)
+    return rewards
 
 
 def _coord(state):
@@ -139,14 +201,12 @@ def apply_coop_action(state, seat, action_type, payload, seed):
     if action_type == 'choose_reward':
         rewards_by_seat = coord.get('rewards_by_seat')
         if not rewards_by_seat:
-            # 首次进入（或上一轮奖励完成后残留的空账本）：把胜利奖励复制一份
-            # 给每席，主 reward 位清空待各席挂载。2026-10-14 修复：此前只认
-            # None——上一轮完成后残留空字典+旧完成名单，第二次奖励全员
-            # REWARD_ALREADY_DONE 卡死。
+            # 首次进入（或上一轮奖励完成后残留的空账本）：按席位重掷随机内容
+            # （金币/卡牌/遗物/附魔书——两席不再拿同一份奖励）。2026-10-14 修复：
+            # 此前只认 None——上一轮完成后残留空字典+旧完成名单，第二次奖励
+            # 全员 REWARD_ALREADY_DONE 卡死。
             base = state.get('reward')
-            rewards_by_seat = {
-                str(s): copy.deepcopy(base) for s in range(_seat_count(state))
-            }
+            rewards_by_seat = _per_seat_rewards(state, base, seed)
             coord['rewards_by_seat'] = rewards_by_seat
             coord['reward_done'] = []
             state['reward'] = None
@@ -214,10 +274,22 @@ def apply_coop_action(state, seat, action_type, payload, seed):
             shared_room = state.get('room')
             if not isinstance(shared_room, dict) or not shared_room:
                 raise StoryActionError('NO_ROOM', '当前没有待处理的房间')
-            rooms = {
-                str(s): copy.deepcopy(shared_room)
-                for s in range(_seat_count(state))
-            }
+            if shared_room.get('type') == 'shop':
+                # 商店按席位重新生成（库存/价格各自随机；依赖各席角色与遗物）
+                from story_engine import _make_shop
+                combat = state.get('combat')
+                previous = int(combat.get('mounted_seat') or 0) if isinstance(combat, dict) else None
+                rooms = {}
+                for s in range(_seat_count(state)):
+                    _mount_seat(state, s)
+                    rooms[str(s)] = _make_shop(state, _seat_seed(seed, s))
+                if previous is not None:
+                    _mount_seat(state, previous)
+            else:
+                rooms = {
+                    str(s): copy.deepcopy(shared_room)
+                    for s in range(_seat_count(state))
+                }
             coord['rooms_by_seat'] = rooms
             coord['room_done'] = []
         coord = _coord(state)
@@ -229,7 +301,8 @@ def apply_coop_action(state, seat, action_type, payload, seed):
         if not isinstance(own, dict) or not own:
             raise StoryActionError('NO_ROOM', '本席没有待处理的房间')
         state['room'] = copy.deepcopy(own)
-        state, events = apply_story_action(state, 'resolve_room', payload, seed)
+        # 席位后缀种子：房内随机（商店补货/抽奖机等）各席独立
+        state, events = apply_story_action(state, 'resolve_room', payload, _seat_seed(seed, seat))
         coord = _coord(state)
         rooms = coord.get('rooms_by_seat') or {}
         done = set(coord.get('room_done') or [])
