@@ -12581,15 +12581,9 @@
             const summons = clone.querySelector('.story-summon-slots');
             if (summons) summons.hidden = true;
 
-            // 状态效果
+            // 状态效果：与玩家同款完整列表（从该席扁平字段渲染）
             const effects = clone.querySelector('.story-effect-list');
-            if (effects) {
-                effects.replaceChildren();
-                const power = Number(ss.power) || 0;
-                const shield = Number(ss.shield) || 0;
-                if (power > 0) effects.insertAdjacentHTML('beforeend', `<span class="story-effect-tag">力量${power}</span>`);
-                if (shield > 0) effects.insertAdjacentHTML('beforeend', `<span class="story-effect-tag">盾${shield}</span>`);
-            }
+            if (effects) renderEffectsInto(effects, storySeatEffectValues(ss), { preferStatus: true });
 
             // 倒地样式
             clone.style.opacity = down ? '0.5' : '';
@@ -12734,6 +12728,50 @@
         updateStoryManualSaveControls(run);
         updateStorySurrenderControl(run);
         updateStorySettingsControls(run);
+    }
+
+    function storySeatEffectValues(actor) {
+        // 玩家与队友克隆体共用：从席位扁平字段构建状态效果列表
+        return [
+            { key: 'shield', label: t.shield, value: actor.shield },
+            { key: 'power', label: t.power, value: actor.power },
+            { key: 'temporary_power', label: t.power, value: actor.temporary_power },
+            { key: 'endurance', label: '耐力', value: actor.endurance },
+            { key: 'weak', label: t.weak, value: actor.weak },
+            { key: 'vulnerable', label: t.vulnerable, value: actor.vulnerable },
+            { key: 'fragile', label: '脆弱', value: actor.fragile },
+            { key: 'evade', label: '闪避', value: actor.evade },
+            { key: 'poison', label: '中毒', value: actor.poison },
+            { key: 'stun', label: '眩晕', value: actor.stun },
+            { key: 'broken', label: '破损', value: actor.broken },
+            { key: 'reflection', label: '反射', value: actor.reflection },
+            { key: 'wither', label: '凋萎', value: actor.wither },
+            { key: 'rockfall', label: '落石', value: actor.rockfall },
+            {
+                key: 'blind',
+                label: '失明',
+                value: Math.max(Number(actor.blind) || 0, actor.blind_active ? 1 : 0),
+            },
+            { key: 'entangle', label: '缠绕', value: actor.entangle },
+            { key: 'negative_status_immunity', label: '负面状态免疫', value: actor.negative_status_immunity },
+            { key: 'evil_eye', label: '邪眼', value: actor.evil_eye },
+            { key: 'sturdy', label: '坚固', value: actor.sturdy },
+            { key: 'regeneration', label: '再生', value: actor.regeneration },
+            {
+                key: 'disc',
+                label: '圆盘',
+                value: actor.disc_active
+                    ? Math.max(1, Number(actor.disc) || 1)
+                    : Number(actor.disc),
+            },
+            { key: 'invincible', label: '无敌', value: actor.invincible },
+            { key: 'toxic_poison', label: '剧毒', value: actor.toxic_poison },
+            { key: 'stagnation', label: '滞留', value: actor.stagnation },
+            { key: 'bleed', label: '流血', value: actor.bleed },
+            { key: 'fire', label: '灼烧', value: actor.fire },
+            { key: 'blockade', label: '封锁', value: actor.blockade },
+            { key: 'attack_blocked', label: '禁攻', value: actor.attack_blocked },
+        ];
     }
 
     function renderEffects(containerId, values) {
@@ -13997,46 +14035,7 @@
             selectedValues?.cost_m,
             'm',
         );
-        renderEffects('story-player-effects', [
-            { key: 'shield', label: t.shield, value: combat.shield },
-            { key: 'power', label: t.power, value: combat.power },
-            { key: 'temporary_power', label: t.power, value: combat.temporary_power },
-            { key: 'endurance', label: '耐力', value: combat.endurance },
-            { key: 'weak', label: t.weak, value: combat.weak },
-            { key: 'vulnerable', label: t.vulnerable, value: combat.vulnerable },
-            { key: 'fragile', label: '脆弱', value: combat.fragile },
-            { key: 'evade', label: '闪避', value: combat.evade },
-            { key: 'poison', label: '中毒', value: combat.poison },
-            { key: 'stun', label: '眩晕', value: combat.stun },
-            { key: 'broken', label: '破损', value: combat.broken },
-            { key: 'reflection', label: '反射', value: combat.reflection },
-            { key: 'wither', label: '凋萎', value: combat.wither },
-            { key: 'rockfall', label: '落石', value: combat.rockfall },
-            {
-                key: 'blind',
-                label: '失明',
-                value: Math.max(Number(combat.blind) || 0, blindActive ? 1 : 0),
-            },
-            { key: 'entangle', label: '缠绕', value: combat.entangle },
-            { key: 'negative_status_immunity', label: '负面状态免疫', value: combat.negative_status_immunity },
-            { key: 'evil_eye', label: '邪眼', value: combat.evil_eye },
-            { key: 'sturdy', label: '坚固', value: combat.sturdy },
-            { key: 'regeneration', label: '再生', value: combat.regeneration },
-            {
-                key: 'disc',
-                label: '圆盘',
-                value: combat.disc_active
-                    ? Math.max(1, Number(combat.disc) || 1)
-                    : Number(combat.disc),
-            },
-            { key: 'invincible', label: '无敌', value: combat.invincible },
-            { key: 'toxic_poison', label: '剧毒', value: combat.toxic_poison },
-            { key: 'stagnation', label: '滞留', value: combat.stagnation },
-            { key: 'bleed', label: '流血', value: combat.bleed },
-            { key: 'fire', label: '灼烧', value: combat.fire },
-            { key: 'blockade', label: '封锁', value: combat.blockade },
-            { key: 'attack_blocked', label: '禁攻', value: combat.attack_blocked },
-        ]);
+        renderEffects('story-player-effects', storySeatEffectValues(combat));
         renderStoryEquipment(combat.equipment);
         renderStoryOrbit(combat.orbit);
         renderStorySummons(combat.summons);
