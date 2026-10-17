@@ -31971,8 +31971,27 @@ def on_coop_chat_send(data=None):
     chat_data['sender_role'] = _chat_role_for_account(profile.get('user_id'), profile)
     message_id = secrets.token_hex(8)
     chat_data['message_id'] = message_id
+    # 与 append_lobby_chat_locked 相同的规范化：前端 appendStoryChatEntry 只渲染
+    # type=='chat' 的条目（缺 type 的消息会被静默丢弃），时间分隔条/去重字段同款。
+    now = time.time()
+    chat_data['type'] = 'chat'
+    chat_data['ts'] = now
+    chat_data['repeat_count'] = 1
     with _COOP_DEMO_LOCK:
         buffer = room.setdefault('chat', [])
+        room['chat_seq'] = int(room.get('chat_seq') or 0) + 1
+        chat_data['id'] = room['chat_seq']
+        last = buffer[-1] if buffer else None
+        last_chat = last if isinstance(last, dict) and last.get('type') == 'chat' else None
+        if last_chat is not None and now - float(last_chat.get('ts') or now) >= CHAT_IDLE_SEPARATOR_SECONDS:
+            room['chat_seq'] += 1
+            buffer.append({
+                'type': 'time',
+                'id': room['chat_seq'],
+                'time': chat_data['time'],
+                'display_time': _lobby_chat_time_label(now),
+                'ts': now,
+            })
         buffer.append(chat_data)
         del buffer[:-50]
     socketio.emit('lobby_chat_history', _coop_chat_history_payload(room),
