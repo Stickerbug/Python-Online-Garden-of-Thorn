@@ -38478,6 +38478,26 @@ def _coop_demo_event_lines(events):
     return lines[-12:]
 
 
+def _coop_demo_seat_skins(entry, user_id):
+    """各席账号皮肤投影：前端队友克隆体按席位渲染真实皮肤（仅展示，不入引擎结算）。"""
+    try:
+        state = entry.get('state') or {}
+        members = entry.get('members')
+        skins = {}
+        if members:
+            for uid, seat in members.items():
+                u = get_user_by_id_for_session(uid) if DB_AVAILABLE else None
+                skins[int(seat)] = public_skin_config(u.get('skin')) if u else {}
+        else:
+            # 非房间演示：所有席位同属当前账号（同键 dict 会互相覆盖，逐席平铺）
+            u = get_user_by_id_for_session(int(user_id)) if DB_AVAILABLE else None
+            skin = public_skin_config(u.get('skin')) if u else {}
+            skins = {seat: skin for seat in range(len(state.get('players') or []))}
+        state['seat_skins'] = skins
+    except Exception as exc:
+        admin_event('warning', f'coop seat skins projection failed: {exc}')
+
+
 @app.route('/api/coop-demo/run', methods=['GET'])
 def coop_demo_run_get():
     """合作演示：以单人 run API 的契约返回双席旅程（viewer 席位视角）。"""
@@ -38508,6 +38528,8 @@ def coop_demo_run_get():
             seat = member_seat
             invite_code = room_code
     _mount_seat(entry['state'], seat)
+    # 各席账号皮肤（队友克隆体渲染用）
+    _coop_demo_seat_skins(entry, user['id'])
     # 奖励协调期间给观看席投影本席待选奖励（否则 state['reward'] 为空，
     # 前端只能看到"跳过"，另一席无法选择）。
     mount_coop_reward_view(entry['state'], seat)
@@ -38584,6 +38606,8 @@ def coop_demo_story_action():
         )
         mount_coop_reward_view(state, seat)
         mount_coop_room_view(state, seat)
+        # 各席账号皮肤（队友克隆体渲染用；entry 可能是房间 dict）
+        _coop_demo_seat_skins(entry, user['id'])
         # 动作链路末尾（如敌方回合+新一轮开始）挂载的可能是另一席：为行动者
         # 重算可玩牌/伤害预测，保证响应里的列表对应本席手牌。
         if state.get('phase') == 'combat':

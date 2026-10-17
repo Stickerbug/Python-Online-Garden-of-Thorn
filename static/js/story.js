@@ -12541,16 +12541,18 @@
             const nameEl = clone.querySelector('.player-name-value');
             if (nameEl) nameEl.textContent = `玩家${seat}${ready.has(seat) ? ' ✓' : ''}${down ? ' 💀' : ''}`;
 
-            // 皮肤（替换为队友颜色）
+            // 皮肤：按席位应用队友账号皮肤（服务端 seat_skins 投影；无数据时保持绿色占位）
+            const seatSkin = normalizeSkin((state.seat_skins || {})[seat] || null);
             const skin = clone.querySelector('.skin-avatar');
             if (skin) {
-                skin.style.setProperty('--skin-main', '#78b37f');
-                skin.style.setProperty('--skin-border', '#5a9a62');
+                skin.className = `skin-avatar skin-eye-shape-${seatSkin.eyeShape}${skinIsDark(seatSkin.primaryColor) ? ' is-inverted' : ''}`;
+                skin.style.setProperty('--skin-main', seatSkin.primaryColor);
+                skin.style.setProperty('--skin-border', skinBorderColor(seatSkin.primaryColor));
             }
             const portrait = clone.querySelector('.story-portrait');
             if (portrait) {
-                portrait.style.setProperty('--skin-main', '#78b37f');
-                portrait.style.setProperty('--skin-border', '#5a9a62');
+                portrait.style.setProperty('--skin-main', seatSkin.primaryColor);
+                portrait.style.setProperty('--skin-border', skinBorderColor(seatSkin.primaryColor));
             }
 
             // 血条
