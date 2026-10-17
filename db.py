@@ -163,6 +163,82 @@ def _apply_signin_modifiers_conn(conn, base):
     fin = int(row['final_additive'] or 0)
     return max(0, int((int(base) + add) * mult + fin))
 
+
+# 荆露获取全局倍率（2026-10-18 控制台调控）：作用于玩家一切游戏内荆露获取
+# （对局奖励/签到/成就/赛季活动/故事通关/休闲花园与小游戏结算/段位结算），
+# 不影响管理员直发、充值荆露与消费扣减。入账 = round(数量 × 倍率)，下限 0。
+_DEW_GAIN_MOD_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS dew_gain_modifiers (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    multiplicative REAL NOT NULL DEFAULT 1.0,
+    updated_at TEXT NOT NULL
+)
+"""
+
+
+def ensure_dew_gain_mod_table(conn):
+    conn.execute(_DEW_GAIN_MOD_TABLE_SQL)
+    conn.execute(
+        'INSERT OR IGNORE INTO dew_gain_modifiers (id, multiplicative, updated_at) '
+        "VALUES (1, 1.0, '1970-01-01T00:00:00Z')"
+    )
+
+
+def get_dew_gain_modifiers():
+    """读取荆露获取倍率（不存在时为恒等 1.0）。"""
+    with get_db_connection() as conn:
+        ensure_dew_gain_mod_table(conn)
+        row = conn.execute('SELECT * FROM dew_gain_modifiers WHERE id = 1').fetchone()
+    return {
+        'multiplicative': float(row['multiplicative'] or 1.0),
+        'updated_at': str(row['updated_at'] or ''),
+    }
+
+
+def set_dew_gain_modifiers(multiplicative):
+    """写入荆露获取倍率。返回 (modifiers, error)。"""
+    try:
+        mult = float(multiplicative)
+    except (TypeError, ValueError):
+        return None, '倍率必须是数字'
+    if not 0.0 <= mult <= 100.0:
+        return None, '倍率超出范围（0.0 ~ 100.0）'
+    now = utc_now()
+    with get_db_connection() as conn:
+        ensure_dew_gain_mod_table(conn)
+        conn.execute(
+            'UPDATE dew_gain_modifiers SET multiplicative = ?, updated_at = ? WHERE id = 1',
+            (mult, now),
+        )
+        conn.commit()
+    return get_dew_gain_modifiers(), None
+
+
+def dew_gain_multiplier_conn(conn):
+    """当前荆露获取倍率（带 conn 读取，事务内一致）。"""
+    try:
+        ensure_dew_gain_mod_table(conn)
+        row = conn.execute('SELECT multiplicative FROM dew_gain_modifiers WHERE id = 1').fetchone()
+        if row is not None:
+            return float(row['multiplicative'] or 1.0)
+    except Exception:
+        pass
+    return 1.0
+
+
+def scale_dew_gain_conn(conn, amount):
+    """按全局倍率换算玩家荆露获取（round，下限 0）。倍率 1.0 时原样返回。"""
+    try:
+        amount = int(amount or 0)
+    except (TypeError, ValueError):
+        return 0
+    if amount <= 0:
+        return 0
+    mult = dew_gain_multiplier_conn(conn)
+    if mult == 1.0:
+        return amount
+    return max(0, int(round(amount * mult)))
+
 THORN_DEW_MODE_REWARDS = {
     '1v1': 60,
     '2v2': 60,
@@ -5819,6 +5895,16 @@ def adjust_user_thorn_dew(user_id, free_delta=0, paid_delta=0, reason='', source
         row = conn.execute('SELECT * FROM users WHERE id = ?', (uid,)).fetchone()
         if row is None:
             return None, '账号不存在'
+        # 荆露获取全局倍率（控制台调控）：仅作用于玩家游戏内正向获取，
+        # 管理员直发/补偿/充值等来源保持原值。
+        if (
+            free_delta > 0
+            and not str(admin_username or '').strip()
+            and str(source_type or '') not in {
+                'admin_command', 'legacy_compensation', 'afdian', 'afdian_redeem',
+            }
+        ):
+            free_delta = scale_dew_gain_conn(conn, free_delta)
         free_before = max(0, int(row['thorn_dew_free'] or 0)) if 'thorn_dew_free' in row.keys() else 0
         paid_before = max(0, int(row['thorn_dew_paid'] or 0)) if 'thorn_dew_paid' in row.keys() else 0
         free_after = free_before + free_delta
@@ -6054,6 +6140,8 @@ def claim_user_daily_checkin(user_id):
         base = _earned_dew_amount_conn(conn, uid, base)
         # 2026-10-16 控制台调控：最终收益 = (基础 + 加算) × 乘算 + 最终加算
         reward = _apply_signin_modifiers_conn(conn, base)
+        # 2026-10-18 控制台调控：荆露获取全局倍率
+        reward = scale_dew_gain_conn(conn, reward)
         free_before = max(0, int(user['thorn_dew_free'] or 0))
         paid_before = max(0, int(user['thorn_dew_paid'] or 0))
         free_after = free_before + reward
@@ -6451,6 +6539,10 @@ def _award_achievement_reward_conn(conn, user_id, defn, now=None):
     reward = int(defn.get('reward_dew') or 0)
     already_awarded = _achievement_currency_awarded(conn, uid, defn['id'])
     reward_delta = max(0, reward - already_awarded)
+    if reward_delta <= 0:
+        return False
+    # 荆露获取全局倍率（控制台调控）
+    reward_delta = scale_dew_gain_conn(conn, reward_delta)
     if reward_delta <= 0:
         return False
     now = now or utc_now()
@@ -7409,6 +7501,10 @@ def _award_gr_season_activity_reward_for_conn(
     if reward <= 0:
         return 0
     if _currency_source_exists(conn, uid, 'season_activity_reward', previous_key):
+        return 0
+    # 荆露获取全局倍率（控制台调控）
+    reward = scale_dew_gain_conn(conn, reward)
+    if reward <= 0:
         return 0
     user = conn.execute(
         'SELECT thorn_dew_free, thorn_dew_paid FROM users WHERE id = ?',

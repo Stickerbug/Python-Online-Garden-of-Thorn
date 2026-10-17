@@ -140,6 +140,10 @@ def settle_story_clear_conn(conn, *, user_id, run_id, state):
     if dev_used:
         total = 0
     if total > 0:
+        # 荆露获取全局倍率（控制台调控）
+        from db import scale_dew_gain_conn
+        total = scale_dew_gain_conn(conn, total)
+    if total > 0:
         user_row = conn.execute(
             'SELECT thorn_dew_free, thorn_dew_paid FROM users WHERE id = ?', (int(user_id),),
         ).fetchone()

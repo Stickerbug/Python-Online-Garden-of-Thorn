@@ -173,6 +173,8 @@ def settle_conn(conn,match_id,summary,award_time=None):
         casual_amount=math.floor((base+streak_bonus)*(0.75 if casual else 1))
         amount=math.floor(casual_amount*profile['reward_multiplier']*multiplier)
         amount=integrity.reward_amount_conn(conn,uid,amount)
+        # 荆露获取全局倍率（控制台调控）
+        amount=db.scale_dew_gain_conn(conn,amount)
         allowed=integrity.match_reward_allowed_conn(conn,uid,registered,int(data.get('duration_seconds') or 0),same_count)
         if early or not allowed:
             amount=0

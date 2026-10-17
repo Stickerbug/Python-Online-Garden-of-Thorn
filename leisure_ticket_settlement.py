@@ -31,6 +31,8 @@ def _grant_dew(conn, user_id, amount, reason):
     ).fetchone()
     if row is None:
         return False
+    # 荆露获取全局倍率（控制台调控）
+    amount = db.scale_dew_gain_conn(conn, amount)
     free = max(0, int(row['thorn_dew_free'] or 0)) + int(amount)
     paid = max(0, int(row['thorn_dew_paid'] or 0))
     conn.execute('UPDATE users SET thorn_dew_free = ? WHERE id = ?', (free, int(user_id)))

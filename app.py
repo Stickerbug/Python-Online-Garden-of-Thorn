@@ -11709,6 +11709,7 @@ ADMIN_COMMAND_TREE = {
             'openingstats': {'summary': '查看配装倾向选取统计', 'usage': 'data openingstats [1v1|2v2]'},
             'draftwins': {'summary': '补齐卡牌和配装胜率统计', 'usage': 'data draftwins confirm'},
         'signinmod': {'summary': '查看/设置每日签到修正（加算 乘算 最终加算）', 'usage': 'data signinmod [set <加算> <乘算> <最终加算> | reset]'},
+        'dewmod': {'summary': '查看/设置荆露获取全局倍率（对局/签到/成就/赛季/故事/休闲/段位）', 'usage': 'data dewmod [set <倍率> | reset]'},
             'storage': {
                 'summary': '清理回放与数据库存储',
                 'usage': 'data storage <cleanup-old|cleanup-orphans|vacuum|community-list|community-delete> ...',
@@ -12009,6 +12010,7 @@ ADMIN_COMMAND_DIRECT_TRANSLATIONS = {
     ('data', 'openingstats'): 'openingstats',
     ('data', 'draftwins'): 'draftwins',
     ('data', 'signinmod'): 'signinmod',
+    ('data', 'dewmod'): 'dewmod',
     ('data', 'rebuildstats'): 'rebuildstats',
     ('data', 'dewbackfill'): 'dewbackfill',
     ('data', 'legacydew'): 'legacydew',
@@ -15737,6 +15739,40 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
             f'  效果示例：{samples}\n'
             '调整：data signinmod set <加算> <乘算> <最终加算> | 重置：data signinmod reset'
         )}
+
+    if cmd == 'dewmod':
+        if not DB_AVAILABLE:
+            return {'success': False, 'output': f'数据库不可用：{DB_INIT_ERROR or "-"}'}
+        from db import get_dew_gain_modifiers, set_dew_gain_modifiers
+        mods = get_dew_gain_modifiers()
+        action = parts[1].lower() if len(parts) > 1 else 'show'
+        if action == 'set':
+            if len(parts) < 3:
+                return {'success': False, 'output': (
+                    '用法：data dewmod set <倍率>\n'
+                    '例如：data dewmod set 1.5（0.0~100.0，1.0 为不调整）'
+                )}
+            mods, error = set_dew_gain_modifiers(parts[2])
+            if error:
+                return {'success': False, 'output': error}
+            admin_event('admin', f'dew gain multiplier set: {mods["multiplicative"]}')
+        elif action == 'reset':
+            mods, error = set_dew_gain_modifiers(1.0)
+            if error:
+                return {'success': False, 'output': error}
+            admin_event('admin', 'dew gain multiplier reset')
+        elif action != 'show':
+            return {'success': False, 'output': '用法：data dewmod [set <倍率> | reset]'}
+        mult = mods['multiplicative']
+        return {'success': True, 'output': (
+            '荆露获取全局倍率（入账 = round(获取量 × 倍率)，下限 0）\n'
+            f'  当前倍率：{mult}\n'
+            f'  最近更新：{mods["updated_at"] or "-"}\n'
+            f'  生效范围：对局奖励 / 每日签到 / 成就 / 赛季活跃 / 故事通关 / 休闲花园与小游戏 / 段位结算\n'
+            f'  不影响：管理员直发、充值荆露、消费扣减\n'
+            f'  效果示例：100 → {max(0, int(round(100 * mult)))}，60 → {max(0, int(round(60 * mult)))}\n'
+            '调整：data dewmod set <倍率> | 重置：data dewmod reset'
+        )}
     if cmd == 'storagesummary':
         return {'success': True, 'output': admin_storage_summary_output()}
     if cmd == 'storage-community-list':
@@ -17539,6 +17575,8 @@ def admin_completions(line):
             if position == 4 and len(parts) > 2 and parts[2].lower() == 'community-delete':
                 return filtered(['confirm'])
         if sub == 'signinmod' and position == 2:
+            return filtered(['set', 'reset'])
+        if sub == 'dewmod' and position == 2:
             return filtered(['set', 'reset'])
         if sub in ('rebuildstats', 'dewbackfill', 'achievementbackfill', 'cardsbackfill') and position == 2:
             return filtered(['preview', 'confirm'] if sub != 'rebuildstats' else ['confirm'])

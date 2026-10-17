@@ -860,7 +860,11 @@ def prize_amounts(entries: List[Dict[str, object]]) -> Dict[int, int]:
 def _credit_dew(conn, user_id: int, amount: int, *, period_key: str, reason: str,
                 now=None) -> bool:
     """荆露入账（与奖期写在同一个事务里）；重复调用不会重复入账。"""
-
+    # 荆露获取全局倍率（控制台调控）
+    from db import scale_dew_gain_conn
+    amount = scale_dew_gain_conn(conn, amount)
+    if amount <= 0:
+        return False
     cursor = conn.execute(
         "INSERT OR IGNORE INTO minigame_2048_rewards (period_key, user_id, amount, created_at)"
         " VALUES (?, ?, ?, ?)",
@@ -898,6 +902,11 @@ def credit_game_over_dew(conn, user_id: int, game_id: int, score: int, *,
     """
 
     amount = max(0, int(score)) // max(1, int(divisor))
+    if amount <= 0:
+        return 0
+    # 荆露获取全局倍率（控制台调控）
+    from db import scale_dew_gain_conn
+    amount = scale_dew_gain_conn(conn, amount)
     if amount <= 0:
         return 0
     period_key = f"gameover-{game_key}-{int(game_id)}"
