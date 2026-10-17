@@ -8634,6 +8634,6 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
 #story-player-target.story-actor-player-coop { justify-self: start; }
 
 [data-coop-ally-seat] {
-  justify-self: end;
-  margin-left: 12px;
+  justify-self: start;
+  /* 屏幕x坐标由JS按实测校准（见renderCoopAllySidebar） */
 }

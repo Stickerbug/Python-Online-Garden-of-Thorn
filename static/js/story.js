@@ -12595,6 +12595,10 @@
 
             // 插入 arena（紧跟玩家右侧，同 grid 上下文）
             playerArticle.insertAdjacentElement('afterend', clone);
+            // 按屏幕x坐标校准（列起点随视口宽度漂移，纯CSS无法锚定屏幕坐标）
+            const baseX = clone.getBoundingClientRect().x;
+            clone.style.position = 'relative';
+            clone.style.left = `${Math.round(400 - baseX)}px`;
         });
         // 玩家靠列左端，为共享第1列的队友克隆体让出右半边
         playerArticle.classList.add('story-actor-player-coop');
