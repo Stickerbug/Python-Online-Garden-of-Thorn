@@ -12215,6 +12215,21 @@
         if (!STORY_COOP_DEMO) return;
         const codeBtn = $('story-hud-coop-code');
         const exitBtn = $('story-hud-coop-exit');
+        // 底部栏"退出多人模式"：退出房间/演示对局并回到单人故事
+        const footerExit = $('story-coop-exit');
+        if (footerExit && !footerExit._coopBound) {
+            footerExit._coopBound = true;
+            footerExit.addEventListener('click', async () => {
+                try { await fetch('/api/coop-demo/leave', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: '{}',
+                }); } catch (err) { /* 忽略 */ }
+                localStorage.removeItem('gtv_coop_demo');
+                location.href = '/story';
+            });
+            footerExit.classList.remove('hidden');
+        }
         if (exitBtn && !exitBtn._coopBound) {
             exitBtn._coopBound = true;
             exitBtn.addEventListener('click', async () => {
