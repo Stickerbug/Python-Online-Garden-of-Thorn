@@ -11354,10 +11354,11 @@ ADMIN_COMMAND_TREE = {
             'restore': {'summary': '恢复已注销账号（数据保留，原密码可登录）', 'usage': 'account restore <账号>'},
             'rank': {
                 'summary': '段位系统（玩家可见的进度）',
-                'usage': 'account rank <info|set|reset|list|find|history|settle|next>',
+                'usage': 'account rank <info|set|streak|reset|list|find|history|settle|next>',
                 'children': {
                     'info': {'summary': '查看账号段位与特殊修正', 'usage': 'account rank info <ID|注册顺序|用户名>'},
                     'set': {'summary': '直接设置段位与段位分', 'usage': 'account rank set <ID|注册顺序|用户名> <段位序号1-44> [段位分]'},
+                    'streak': {'summary': '查看或设置账号连胜次数', 'usage': 'account rank streak <ID|注册顺序|用户名> [连胜次数0-99]'},
                     'reset': {'summary': '重置账号段位到初始（Common Basic 0分）', 'usage': 'account rank reset <ID|注册顺序|用户名>'},
                     'list': {'summary': '段位排行榜前N', 'usage': 'account rank list [数量]'},
                     'find': {'summary': '按昵称/用户名模糊搜索段位', 'usage': 'account rank find <关键词>'},
@@ -11977,6 +11978,7 @@ ADMIN_COMMAND_DIRECT_TRANSLATIONS = {
     ('account', 'rating', 'snapshot'): 'rating-snapshot',
     ('account', 'rank', 'info'): 'rank-info',
     ('account', 'rank', 'set'): 'rankset',
+    ('account', 'rank', 'streak'): 'rank-streak',
     ('account', 'rank', 'reset'): 'rank-reset',
     ('account', 'rank', 'list'): 'rank-list',
     ('account', 'rank', 'find'): 'rank-find',
@@ -13050,6 +13052,44 @@ def _rank_console_command(cmd, parts, raw):
         return {'success': True, **console_out(
             ('已设置：', 'ok'), (payload["label"], 'rank'),
             (f" {payload['points']}/{payload['cap']}", 'num'),
+        )}
+    if cmd == 'rank-streak':
+        if len(parts) < 2:
+            return {'success': False, 'output': command_error(raw, len(raw), 'account rank streak <账号> [连胜次数0-99]')}
+        user = find_user_for_admin(parts[1])
+        if not user:
+            return {'success': False, 'output': '账号不存在'}
+        uid = int(user['id'])
+        payload = None
+        with db_module.get_db_connection() as conn:
+            if len(parts) >= 3:
+                try:
+                    streak = max(0, min(99, int(parts[2])))
+                except (TypeError, ValueError):
+                    return {'success': False, 'output': '连胜次数必须是 0-99 的整数'}
+                conn.execute(
+                    'UPDATE users SET rank_streak = ? WHERE id = ?',
+                    (streak, uid),
+                )
+                conn.commit()
+                admin_event('admin', f'rank streak set {user["username"]}#{uid} streak={streak}')
+                row = conn.execute(
+                    'SELECT rank_tier, rank_points, rank_streak FROM users WHERE id = ?', (uid,),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    'SELECT rank_tier, rank_points, rank_streak FROM users WHERE id = ?', (uid,),
+                ).fetchone()
+                streak = int(row['rank_streak'] or 0) if row is not None else 0
+            if row is not None:
+                payload = rank_system.rank_payload(
+                    int(row['rank_tier'] or 1), int(row['rank_points'] or 0),
+                    streak=int(row['rank_streak'] or 0),
+                )
+        label = payload.get('label') if isinstance(payload, dict) else None
+        return {'success': True, **console_out(
+            ('连胜次数：', 'ok'), (str(streak), 'num'),
+            (label or '', 'rank'),
         )}
     return {'success': False, 'output': '未知段位命令'}
 
@@ -15684,7 +15724,7 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
             return {'success': False, 'output': error}
         admin_event('admin', f"GR snapshot written for {user.get('username')}#{user.get('id')}")
         return {'success': True, 'output': f'已写入今天的花阶分曲线快照。\n{format_rating_user(user)}'}
-    if cmd in ('rankmod', 'rankset', 'rank-info', 'rank-list', 'rank-find', 'rank-reset', 'rank-history', 'rank-next'):
+    if cmd in ('rankmod', 'rankset', 'rank-streak', 'rank-info', 'rank-list', 'rank-find', 'rank-reset', 'rank-history', 'rank-next'):
         return _rank_console_command(cmd, parts, raw)
     if cmd == 'rank-settle':
         # 手动触发段位月度结算（默认结算上个月；幂等）。
@@ -17308,7 +17348,7 @@ def admin_completions(line):
                 return filtered(['season', 'total', 'both'])
         if sub == 'rank':
             if position == 2:
-                return filtered(['info', 'set', 'reset', 'list', 'find', 'history', 'settle', 'next'])
+                return filtered(['info', 'set', 'streak', 'reset', 'list', 'find', 'history', 'settle', 'next'])
             action = parts[2].lower() if len(parts) > 2 else ''
             if action in ('info', 'set', 'reset', 'history') and position == 3:
                 return filtered(account_values())
