@@ -38636,9 +38636,11 @@ def coop_demo_story_action():
             seat = max(0, min(seat, len(state.get('players') or [{}]) - 1))
         entry['active_seat'] = seat
         _mount_seat(state, seat)
+        # 每局随机种子（2026-10-18）：旧对局无 seed 字段时回退演示通道名。
+        run_seed = str(entry.get('seed') or 'coop-demo')
         try:
             state, events = apply_coop_action(
-                state, seat, action_type, data.get('payload') or {}, 'coop-demo')
+                state, seat, action_type, data.get('payload') or {}, run_seed)
         except StoryActionError as exc:
             _mount_seat(state, seat)
             return _json_error(exc.message, 400, code=exc.code)
@@ -38686,31 +38688,28 @@ def coop_demo_page():
 
 @app.route('/api/coop-demo/host', methods=['POST'])
 def coop_demo_host():
-    """创建联机对局：房主=席0，返回邀请码。"""
+    """创建联机对局：房主=席0，返回邀请码。与单人一致从区域/难度/模式选择
+    开始（phase=journey_setup），种子每局随机（地图与随机流不再固定）。"""
     user = _coop_demo_session_user()
     if not user or not _coop_demo_allowed(user.get('id')):
         return _json_error('仅工作人员可见的引擎演示', 403)
     import copy as _copy
     import secrets as _secrets
     import story_mode as _sm
-    from story_engine import _prepare_blessing as _pb
-    state = _sm.build_initial_story_state('coop-demo', 'common_flower')
+    seed = f'coop-{_secrets.token_hex(6)}'
+    state = _sm.build_initial_story_state(seed, 'common_flower')
     state['players'] = [_copy.deepcopy(state['player']), _copy.deepcopy(state['player'])]
     state['coord'] = {}
-    state['room'] = None
-    state['phase'] = 'map'
-    state['current_floor'] = 1
-    first = state['map']['floors'][0]['nodes'][0]
-    state['current_node_id'] = first['id']
-    _pb(state, 'coop-demo', 'stage:1')
     code = ''.join(_secrets.choice('ABCDEFGHJKMNPQRSTUVWXYZ23456789') for _ in range(6))
     with _COOP_DEMO_LOCK:
         _COOP_DEMO_ROOMS[code] = {
-            'state': state, 'version': 1, 'members': {int(user['id']): 0},
+            'state': state, 'version': 1, 'members': {int(user['id']): 0}, 'seed': seed,
         }
         _COOP_DEMO_USER_ROOM[int(user['id'])] = code
         # 房主同时拥有单人演示入口（兼容原 ?coopdemo 通道）。
-        _COOP_DEMO_RUNS[int(user['id'])] = {'state': state, 'active_seat': 0, 'version': 1}
+        _COOP_DEMO_RUNS[int(user['id'])] = {
+            'state': state, 'active_seat': 0, 'version': 1, 'seed': seed,
+        }
     return jsonify({'success': True, 'invite_code': code, 'seat': 0})
 
 
@@ -38762,21 +38761,18 @@ def coop_demo_start():
     if not user or not _coop_demo_allowed(user.get('id')):
         return _json_error('仅工作人员可见的引擎演示', 403)
     import copy as _copy
+    import secrets as _secrets
     import story_mode as _sm
-    from story_engine import _prepare_blessing as _pb
-    state = _sm.build_initial_story_state('coop-demo', 'common_flower')
+    # 与单人一致从难度选择开始，种子每局随机。
+    seed = f'coop-{_secrets.token_hex(6)}'
+    state = _sm.build_initial_story_state(seed, 'common_flower')
     state['players'] = [_copy.deepcopy(state['player']), _copy.deepcopy(state['player'])]
     state['coord'] = {}
-    # 完整旅程：直接进入赐福（跳过难度选择，按普通难度开局）。
-    state['room'] = None
-    state['phase'] = 'map'
-    state['current_floor'] = 1
-    first = state['map']['floors'][0]['nodes'][0]
-    state['current_node_id'] = first['id']
-    _pb(state, 'coop-demo', 'stage:1')
     events = [{'type': 'combat_start', 'enemy_ids': []}]
     with _COOP_DEMO_LOCK:
-        _COOP_DEMO_RUNS[int(user['id'])] = {'state': state, 'active_seat': 0, 'version': 1}
+        _COOP_DEMO_RUNS[int(user['id'])] = {
+            'state': state, 'active_seat': 0, 'version': 1, 'seed': seed,
+        }
     return jsonify({'success': True, 'snapshot': _coop_demo_snapshot(user['id']),
                     'events': _coop_demo_event_lines(events)})
 

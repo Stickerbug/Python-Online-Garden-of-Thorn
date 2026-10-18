@@ -149,6 +149,51 @@ def apply_coop_action(state, seat, action_type, payload, seed):
     if action_type in _PASS_THROUGH:
         return apply_story_action(state, action_type, payload, seed)
 
+    if action_type == 'start_journey':
+        # 难度选择（任一席选定即全员生效）：共享参数由行动席结算一次，
+        # 玩家层难度效果（困难/疯狂腐化卡、Boss Rush 特色卡组）逐席补齐。
+        if state.get('phase') != 'journey_setup':
+            raise StoryActionError('JOURNEY_ALREADY_STARTED', '旅程已经开始')
+        state, events = apply_story_action(state, 'start_journey', payload, seed)
+        difficulty = str(state.get('difficulty') or 'normal')
+        journey_mode = str(state.get('journey_mode') or 'standard')
+        if difficulty in ('hard', 'lunatic') or journey_mode == 'boss_rush':
+            from story_engine import _gain_deck_card, _new_card
+            for s in range(_seat_count(state)):
+                if s == seat:
+                    continue
+                _mount_seat(state, s)
+                player = state['player']
+                if difficulty in ('hard', 'lunatic') and not any(
+                    card.get('def_id') == 'corruption' for card in player.get('deck', [])
+                ):
+                    _gain_deck_card(state, 'corruption', events, source='difficulty')
+                if journey_mode == 'boss_rush':
+                    signature = [
+                        card for card in player.get('deck', [])
+                        if card.get('def_id') not in ('basic', 'rose')
+                    ]
+                    player['deck'] = signature or [_new_card(state, 'amulet')]
+            _mount_seat(state, seat)
+        return state, events
+
+    if action_type == 'choose_easy_relic':
+        # 简单难度天赋逐席独立选：首席选定后回到天赋阶段等其余席，全员完成才推进。
+        options_before = list(state.get('easy_relic_options') or [])
+        done = set(coord.get('easy_relic_done') or [])
+        if seat in done:
+            raise StoryActionError('EASY_RELIC_ALREADY_CHOSEN', '本席已选择天赋')
+        state, events = apply_story_action(state, 'choose_easy_relic', payload, seed)
+        coord = _coord(state)
+        done = set(coord.get('easy_relic_done') or []) | {seat}
+        if not _all_seats_acted(state, done):
+            coord['easy_relic_done'] = sorted(done)
+            state['phase'] = 'easy_relic'
+            state['easy_relic_options'] = options_before
+        else:
+            coord['easy_relic_done'] = []
+        return state, events
+
     if action_type == 'choose_blessing':
         # apply_story_action 会深拷贝 state：选项与协调簿需要在返回后的新 state 上读写。
         options_before = list(state.get('blessing_options') or [])
