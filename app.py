@@ -280,6 +280,7 @@ from db import (
     record_user_ip_event,
     record_card_draft_counts,
     record_card_draft_win_result,
+    get_user_rank_states,
     get_user_rank_tiers,
     record_opening_event_pick_counts,
     record_opening_event_win_result,
@@ -449,7 +450,9 @@ RANKED_MATCH_MODES = ('ranked_1v1', 'ranked_2v2')
 MOD_DRAW_MATCH_MODES = ('ranked_1v1', 'ranked_2v2')
 MOD_DRAW_CANDIDATE_LIMIT = 4   # 设计 2026-10-02：天梯抽选 4 个候选（原版恒开兜底 ban 空场景）
 MOD_DRAW_TIMEOUT_SECONDS = 40
-MOD_DRAW_BAN_LIMITS = {'1v1': 2, '2v2': 1}
+MOD_DRAW_BAN_LIMITS = {'1v1': 3, '2v2': 2}
+# 2026-10-18：每人可保留 1 个模组（阻止其被任何人禁用）。
+MOD_DRAW_PROTECT_LIMIT = 1
 CHAT_CACHE_LIMIT = 1000
 LOBBY_CHAT_VISIBLE_LIMIT = 300
 ADMIN_GAME_CHAT_VISIBLE_LIMIT = 500
@@ -8987,14 +8990,51 @@ def _rank_tier_of_player(player):
     return tier if tier > 0 else 1
 
 
-def _rank_match_blocked(player_a, player_b):
-    """设计 2026-10-02：legendary 及以上不得与 common 对战（防新手刚来就被打爆）。
+def _rank_state_of_player(player):
+    """(段位序号, 段位分)：升段局/0分局段位差规则用。player 缓存段位，分数查库。"""
+    tier = _rank_tier_of_player(player)
+    uid = player.get('user_id') or player.get('id')
+    try:
+        if DB_AVAILABLE and uid:
+            states = get_user_rank_states([int(uid)])
+            state = states.get(int(uid))
+            if state:
+                return int(state[0] or tier), int(state[1] or 0)
+    except Exception:
+        pass
+    return tier, 0
+
+
+def _rank_match_block_reason(player_a, player_b):
+    """排位段位差拦截原因：None=允许。
+
+    - rank_tier_gap（2026-10-02）：legendary 及以上不得与 common 对战（双向）。
+    - rank_risk_gap（2026-10-18）：升段局（段位分打满）或 0分局（段位分为0）
+      不得与低于自己超过 2 小段的对战——低段方主动邀请同样拦截。
     1v1 直比；2v2 由调用方取「双方最高与最低」两侧各比一次。"""
     import rank_system as _rs
     legendary_start = _rs.MAJOR_TIERS.index('legendary') * len(_rs.SUB_TIERS) + 1
     common_end = _rs.MAJOR_TIERS.index('unusual') * len(_rs.SUB_TIERS)
     ta, tb = _rank_tier_of_player(player_a), _rank_tier_of_player(player_b)
-    return (ta >= legendary_start and tb <= common_end) or (tb >= legendary_start and ta <= common_end)
+    if (ta >= legendary_start and tb <= common_end) or (tb >= legendary_start and ta <= common_end):
+        return 'rank_tier_gap'
+    sa, sb = _rank_state_of_player(player_a), _rank_state_of_player(player_b)
+    for (my_tier, my_points), (opp_tier, _opp_points) in ((sa, sb), (sb, sa)):
+        at_risk = my_points >= _rs.rank_cap(my_tier) or my_points <= 0
+        if at_risk and my_tier - opp_tier > 2:
+            return 'rank_risk_gap'
+    return None
+
+
+def _rank_match_blocked(player_a, player_b):
+    return _rank_match_block_reason(player_a, player_b) is not None
+
+
+def _rank_match_block_message(reason):
+    return {
+        'rank_tier_gap': '段位差距过大：传奇及以上不能与普通段位对战',
+        'rank_risk_gap': '升段局与0分局不能与低于自己超过2小段的玩家对战',
+    }.get(str(reason or ''), '段位差距过大，无法开始对局')
 
 
 def same_match_mod_preference(match_mode, players_or_sids):
@@ -9216,6 +9256,30 @@ def mod_draw_ban_limit(room):
     return int(MOD_DRAW_BAN_LIMITS.get(getattr(room, 'mode', '1v1'), 1))
 
 
+def mod_draw_protect_limit(room):
+    return int(MOD_DRAW_PROTECT_LIMIT)
+
+
+def _normalize_mod_draw_selection(room, raw_bans, raw_protections, pidx):
+    """归一化禁用/保留选择：候选内去重、限上限；同一模组同席不可既禁又留（保留优先）。"""
+    candidates = set(getattr(room, 'mod_draw_candidates', []) or [])
+    protections = []
+    for item in (raw_protections if isinstance(raw_protections, (list, tuple)) else ()):
+        name = str(item or '').strip()
+        if not name or name not in candidates or name in protections:
+            continue
+        protections.append(name)
+    protections = protections[:mod_draw_protect_limit(room)]
+    banned = []
+    for item in (raw_bans if isinstance(raw_bans, (list, tuple)) else ()):
+        name = str(item or '').strip()
+        if not name or name not in candidates or name in banned or name in protections:
+            continue
+        banned.append(name)
+    banned = banned[:mod_draw_ban_limit(room)]
+    return banned, protections
+
+
 def mod_draw_mod_payload(filename):
     name = filename
     name_cn = filename
@@ -9247,6 +9311,7 @@ def mod_draw_state_payload(room, pidx, *, skipped=False, only_vanilla=False, now
     if deadline is not None:
         remaining = int(math.ceil(max(0.0, float(deadline) - now)))
     bans = getattr(room, 'mod_draw_bans', {}) or {}
+    protections = getattr(room, 'mod_draw_protections', {}) or {}
     submitted = getattr(room, 'mod_draw_submitted', {}) or {}
     return {
         'room_id': room.room_id,
@@ -9268,12 +9333,21 @@ def mod_draw_state_payload(room, pidx, *, skipped=False, only_vanilla=False, now
             str(index): len(list(values or []))
             for index, values in bans.items()
         },
+        'protections': {
+            str(pidx): list(protections.get(pidx, []) or []),
+        },
+        'protection_counts': {
+            str(index): len(list(values or []))
+            for index, values in protections.items()
+        },
         'submitted': {
             str(index): bool(value)
             for index, value in submitted.items()
         },
         'max_bans': mod_draw_ban_limit(room),
+        'max_protections': mod_draw_protect_limit(room),
         'your_bans': list(bans.get(pidx, []) or []),
+        'your_protections': list(protections.get(pidx, []) or []),
         'remaining': remaining,
         'total': MOD_DRAW_TIMEOUT_SECONDS,
         'paused': _room_has_blocking_disconnect(room),
@@ -9387,6 +9461,11 @@ def _complete_mod_draw_locked(room):
     banned = set()
     for values in (getattr(room, 'mod_draw_bans', {}) or {}).values():
         banned.update(str(name) for name in (values or []) if name)
+    # 2026-10-18：任一玩家保留的模组不可被禁用（保留优先于禁用）
+    protected = set()
+    for values in (getattr(room, 'mod_draw_protections', {}) or {}).values():
+        protected.update(str(name) for name in (values or []) if name)
+    banned -= protected
     official_enabled = [name for name in candidates if name not in banned]
     shared_profile = casual_room_shared_profile_for_room(room)
     try:
@@ -9398,6 +9477,7 @@ def _complete_mod_draw_locked(room):
     room.mod_draw_active = False
     room.mod_draw_candidates = []
     room.mod_draw_bans = {}
+    room.mod_draw_protections = {}
     room.mod_draw_submitted = {}
     room.mod_draw_last_tick = 0.0
     if hasattr(room, 'pregame_deadlines'):
@@ -9405,12 +9485,14 @@ def _complete_mod_draw_locked(room):
     room.mod_draw_last_result = {
         'official_mods': list(official_enabled),
         'banned_mods': sorted(banned),
+        'protected_mods': sorted(protected),
         'completed_at': iso_now(),
     }
     for pidx, sid in enumerate(room.player_sids):
         emit_room_game_phase(room, sid, 'mod_draw_complete', **{
             'official_mods': list(official_enabled),
             'banned_mods': sorted(banned),
+            'protected_mods': sorted(protected),
         })
     _casual_room_begin_event_select(room)
     return True
@@ -9492,6 +9574,7 @@ def start_casual_room_or_event_select(room, shared_profile=None, *, rematch=Fals
     room.mod_draw_active = True
     room.mod_draw_candidates = drawn
     room.mod_draw_bans = {pidx: [] for pidx in range(len(room.player_sids))}
+    room.mod_draw_protections = {pidx: [] for pidx in range(len(room.player_sids))}
     room.mod_draw_submitted = {pidx: False for pidx in range(len(room.player_sids))}
     room.mod_draw_started_at = now
     if not hasattr(room, 'pregame_deadlines'):
@@ -15665,7 +15748,7 @@ def execute_admin_command(line, _internal=False, actor='adminconsole'):
         lines = ['模式  配装  选取/展示  选取率  胜率']
         for item in rows:
             event_id = item.get('event_id')
-            event = GameEngine.OPENING_EVENTS.get(int(event_id)) if str(event_id).isdigit() else None
+            event = (GameEngine.OPENING_EVENTS.get(int(event_id)) or GameEngine.LEGACY_OPENING_EVENTS.get(int(event_id))) if str(event_id).isdigit() else None
             event_name = (
                 (event or {}).get('name_cn')
                 or (event or {}).get('name')
@@ -25390,7 +25473,7 @@ def admin_opening_event_stats():
         log_admin_api_timing('/api/admin/opening-event-stats', (time.perf_counter() - started) * 1000, error=type(exc).__name__)
         return jsonify({'success': False, 'error': '配装统计数据库不可用'}), 500
     for item in data.get('items', []):
-        event = GameEngine.OPENING_EVENTS.get(int(item.get('event_id'))) if str(item.get('event_id')).isdigit() else None
+        event = (GameEngine.OPENING_EVENTS.get(int(item.get('event_id'))) or GameEngine.LEGACY_OPENING_EVENTS.get(int(item.get('event_id')))) if str(item.get('event_id')).isdigit() else None
         if not event:
             event = {'name_cn': item.get('event_id'), 'name_en': item.get('event_id')}
         item['name_cn'] = event.get('name_cn') or event.get('name') or item.get('event_id')
@@ -30057,15 +30140,12 @@ def on_mod_draw_update_bans(data):
         if (getattr(room, 'mod_draw_submitted', {}) or {}).get(pidx):
             emit('server_error', {'message': '已提交禁用选择，无法再修改', 'reason': 'mod_draw_already_submitted'})
             return
-        candidates = set(getattr(room, 'mod_draw_candidates', []) or [])
-        normalized = []
-        for item in raw_bans:
-            name = str(item or '').strip()
-            if not name or name not in candidates or name in normalized:
-                continue
-            normalized.append(name)
-        normalized = normalized[:mod_draw_ban_limit(room)]
-        room.mod_draw_bans[pidx] = normalized
+        banned, protections = _normalize_mod_draw_selection(
+            room, raw_bans, (data or {}).get('protections'), pidx)
+        room.mod_draw_bans[pidx] = banned
+        if not hasattr(room, 'mod_draw_protections'):
+            room.mod_draw_protections = {}
+        room.mod_draw_protections[pidx] = protections
         send_mod_draw_state(room)
 
 
@@ -30088,15 +30168,13 @@ def on_mod_draw_submit(data):
             emit('server_error', {'message': '已提交禁用选择，无法再修改', 'reason': 'mod_draw_already_submitted'})
             return
         raw_bans = (data or {}).get('bans')
-        if isinstance(raw_bans, (list, tuple)):
-            candidates = set(getattr(room, 'mod_draw_candidates', []) or [])
-            normalized = []
-            for item in raw_bans:
-                name = str(item or '').strip()
-                if not name or name not in candidates or name in normalized:
-                    continue
-                normalized.append(name)
-            room.mod_draw_bans[pidx] = normalized[:mod_draw_ban_limit(room)]
+        if isinstance(raw_bans, (list, tuple)) or isinstance((data or {}).get('protections'), (list, tuple)):
+            banned, protections = _normalize_mod_draw_selection(
+                room, raw_bans, (data or {}).get('protections'), pidx)
+            room.mod_draw_bans[pidx] = banned
+            if not hasattr(room, 'mod_draw_protections'):
+                room.mod_draw_protections = {}
+            room.mod_draw_protections[pidx] = protections
         room.mod_draw_submitted[pidx] = True
         send_mod_draw_state(room)
         submitted = getattr(room, 'mod_draw_submitted', {}) or {}
@@ -30558,11 +30636,14 @@ def on_invite_team(data):
         if (
             team_a_players and team_b_players
             and (
-                _rank_match_blocked(max(team_a_players, key=_rank_tier_of_player), min(team_b_players, key=_rank_tier_of_player))
-                or _rank_match_blocked(max(team_b_players, key=_rank_tier_of_player), min(team_a_players, key=_rank_tier_of_player))
+                _rank_match_block_reason(max(team_a_players, key=_rank_tier_of_player), min(team_b_players, key=_rank_tier_of_player))
+                or _rank_match_block_reason(max(team_b_players, key=_rank_tier_of_player), min(team_a_players, key=_rank_tier_of_player))
             )
         ):
-            emit_match_start_failed(all_match_sids, '段位差距过大：传奇及以上不能与普通段位匹配')
+            emit_match_start_failed(
+                all_match_sids,
+                _rank_match_block_message(_rank_match_block_reason(max(team_a_players, key=_rank_tier_of_player), min(team_b_players, key=_rank_tier_of_player))
+                    or _rank_match_block_reason(max(team_b_players, key=_rank_tier_of_player), min(team_a_players, key=_rank_tier_of_player))))
             return
         if not same_match_mod_preference(match_mode, all_match_sids):
             reference_sid = my_team['leader']
@@ -30654,20 +30735,21 @@ def on_accept_team_match(data):
             # 邀请与接受之间段位可能变化，成局前再强制一次段位差规则（2v2 取双方最高与最低）。
             other_players = [players.get(msid, {}) for msid in other_team['members']]
             my_players = [players.get(msid, {}) for msid in my_team['members']]
-            if other_players and my_players and (
-                _rank_match_blocked(
+            _rank_reason = (
+                _rank_match_block_reason(
                     max(other_players, key=_rank_tier_of_player),
                     min(my_players, key=_rank_tier_of_player),
                 )
-                or _rank_match_blocked(
+                or _rank_match_block_reason(
                     max(my_players, key=_rank_tier_of_player),
                     min(other_players, key=_rank_tier_of_player),
                 )
-            ):
+            ) if other_players and my_players else None
+            if _rank_reason:
                 emit_match_start_failed(
                     all_sids,
-                    '段位差距过大：传奇及以上不能与普通段位对战',
-                    reason='rank_tier_gap',
+                    _rank_match_block_message(_rank_reason),
+                    reason=_rank_reason,
                 )
                 return
         blocked_mod_unlock_sids = [
@@ -30692,7 +30774,11 @@ def on_accept_team_match(data):
             me = players.get(all_sids[0], {})
             pair_blocked = any(_rank_match_blocked(me, other) for other in others)
         if pair_blocked:
-            emit_match_start_failed(all_sids, '段位差距过大：传奇及以上不能与普通段位匹配')
+            pair_reason = next(
+                (_rank_match_block_reason(me, other) for other in others if _rank_match_block_reason(me, other)),
+                'rank_tier_gap',
+            )
+            emit_match_start_failed(all_sids, _rank_match_block_message(pair_reason), reason=pair_reason)
             return
         if not same_match_mod_preference(match_mode, all_sids):
             reference_sid = all_sids[0]
@@ -31489,10 +31575,11 @@ def on_invite(data):
                 emit('server_error', {'message': '当前玩家或模组配置不符合天梯资格', 'reason': reason})
                 return
             # 设计 2026-10-02 段位差规则同样覆盖 1v1 直接邀请（挑战）路径。
-            if _rank_match_blocked(inviter, target):
+            _rank_reason = _rank_match_block_reason(inviter, target)
+            if _rank_reason:
                 emit('server_error', {
-                    'message': '段位差距过大：传奇及以上不能与普通段位对战',
-                    'reason': 'rank_tier_gap',
+                    'message': _rank_match_block_message(_rank_reason),
+                    'reason': _rank_reason,
                 })
                 return
         if not same_match_mod_preference(inviter_match_mode, [inviter, target]):
@@ -31574,10 +31661,11 @@ def on_invite(data):
                 emit('server_error', {'message': '当前玩家或模组配置不符合天梯资格', 'reason': reason})
                 return
             # 设计 2026-10-02 段位差规则同样覆盖 1v1 直接邀请（挑战）路径。
-            if _rank_match_blocked(inviter, target):
+            _rank_reason = _rank_match_block_reason(inviter, target)
+            if _rank_reason:
                 emit('server_error', {
-                    'message': '段位差距过大：传奇及以上不能与普通段位对战',
-                    'reason': 'rank_tier_gap',
+                    'message': _rank_match_block_message(_rank_reason),
+                    'reason': _rank_reason,
                 })
                 return
         if not same_match_mod_preference(inviter_match_mode, [inviter, target]):
@@ -31666,11 +31754,12 @@ def on_accept_invite(data):
                 emit_match_start_failed([inviter_sid, sid], '当前玩家或模组配置不符合天梯资格', reason=reason)
                 return
             # 邀请与接受之间段位可能变化，成局前再强制一次段位差规则。
-            if _rank_match_blocked(inviter, accepter):
+            _rank_reason = _rank_match_block_reason(inviter, accepter)
+            if _rank_reason:
                 emit_match_start_failed(
                     [inviter_sid, sid],
-                    '段位差距过大：传奇及以上不能与普通段位对战',
-                    reason='rank_tier_gap',
+                    _rank_match_block_message(_rank_reason),
+                    reason=_rank_reason,
                 )
                 return
         if not same_runtime_scope_players(inviter, accepter):

@@ -6004,6 +6004,7 @@ const LEGACY_DEFAULT_SERVER_KEYS = new Set([
 let phase = 'connecting';
 let modDrawState = null;
 let modDrawLocalBans = [];
+let modDrawLocalProtections = [];
 let modDrawLocalEditAt = 0;
 let modDrawNoticeShown = false;
 let modUnlockState = null;
@@ -8029,6 +8030,7 @@ function clearNetworkMatchStateForLobby() {
     eventSelectData = {};
     modDrawState = null;
     modDrawLocalBans = [];
+    modDrawLocalProtections = [];
     modDrawLocalEditAt = 0;
     modDrawNoticeShown = false;
     isSpectating = false;
@@ -10003,7 +10005,7 @@ function getAllStatusDefs() {
         { key: 'toxic', label: UI.status_toxic, desc: termLib.toxic ? termLib.toxic.desc : '', color: '#6C3483' },
         /* 三角形状态已随改版废弃（2026-09-29）：图鉴移除，模组变量「三角形层数」
            不再同步 triangle_stacks（写了也只是普通数值）。 */
-        { key: 'nazar', label: UI.status_nazar, desc: '护甲结算后，自己受到的1~9点物理伤害变为1；受到≥10点物理伤害时，伤害-9，且层数-1。', color: COLORS.magic },
+        { key: 'nazar', label: UI.status_nazar, desc: '护甲结算后，自己受到的1~9点物理伤害变为1；受到≥10点物理伤害时，伤害-9，且层数-1。自己回合结束时层数-1。', color: COLORS.magic },
         { key: 'magic_nazar', label: '魔法邪眼', desc: '存在时，敌方实际消耗E≤1的技能牌无效，然后减少1层。', color: COLORS.magic },
         { key: 'equip_protect', label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
         { key: 'dodge', label: UI.status_dodge || '闪避', desc: '受到物理伤害时，减少1层，免除本次伤害。若伤害的来源牌带有精准标签，则免除一半伤害。自己回合开始时清空层数。状态免疫存在时，闪避可以叠层，但不会生效或被消耗。', color: COLORS.guard },
@@ -16001,7 +16003,7 @@ function getStatusIntroItem(statusInfo) {
         fire: { label: UI.status_fire, desc: getTermIntroLibrary().F.desc, color: COLORS.fire },
         toxic: { label: UI.status_toxic, desc: getTermIntroLibrary().toxic.desc, color: '#6C3483' },
         armor: { label: UI.status_armor || '护甲', desc: getTermIntroLibrary().A.desc, color: COLORS.armor_text },
-        nazar: { label: UI.status_nazar, desc: '护甲结算后，自己受到的1~9点物理伤害变为1；受到≥10点物理伤害时，伤害-9，且层数-1。', color: COLORS.magic },
+        nazar: { label: UI.status_nazar, desc: '护甲结算后，自己受到的1~9点物理伤害变为1；受到≥10点物理伤害时，伤害-9，且层数-1。自己回合结束时层数-1。', color: COLORS.magic },
         magic_nazar: { label: '魔法邪眼', desc: '存在时，敌方实际消耗E≤1的技能牌无效，然后减少1层。', color: COLORS.magic },
         equip_protect: { label: UI.status_equip_protect, desc: '保护装备不被摧毁效果破坏，常用于应对污水这类摧毁装备的牌。', color: COLORS.indestructible },
         invincible: { label: UI.status_invincible, desc: getTermIntroLibrary().invincible.desc, color: COLORS.elixir, iconKey: 'invincible' },
@@ -27948,12 +27950,13 @@ function renderModDrawState(data = {}) {
     const confirmBtn = $('btn-mod-draw-confirm');
     if (title) title.textContent = lt({ zh: '模组抽取', en: 'Mod Draw', fr: 'Tirage des mods', ja: 'Mod抽選' });
     const maxBans = Number(data.max_bans || 0);
+    const maxProtections = Number(data.max_protections || 0);
     if (info) {
         info.textContent = lt({
-            zh: `从双方共同解锁的官方模组中抽取了 ${(data.candidates || []).length} 个。每人最多禁用 ${maxBans} 个；原版始终可用。`,
-            en: `${(data.candidates || []).length} official mod(s) were drawn from the shared unlocked pool. Each player may ban up to ${maxBans}; vanilla is always enabled.`,
-            fr: `${(data.candidates || []).length} mod(s) officiel(s) tirés du pool partagé. Chaque joueur peut en bannir jusqu’à ${maxBans} ; la vanille reste toujours active.`,
-            ja: `共通解放プールから公式Modを ${(data.candidates || []).length} 個抽選しました。各プレイヤーは最大 ${maxBans} 個まで禁止できます。原版は常に有効です。`,
+            zh: `从双方共同解锁的官方模组中抽取了 ${(data.candidates || []).length} 个。每人最多禁用 ${maxBans} 个${maxProtections ? `、可保留 ${maxProtections} 个（被任意玩家保留的模组不会被禁用）` : ''}；原版始终可用。`,
+            en: `${(data.candidates || []).length} official mod(s) drawn from the shared unlocked pool. Each player may ban up to ${maxBans}${maxProtections ? ` and protect ${maxProtections} (a protected mod cannot be banned)` : ''}; vanilla is always enabled.`,
+            fr: `${(data.candidates || []).length} mod(s) tirés du pool partagé. Chaque joueur peut en bannir jusqu’à ${maxBans}${maxProtections ? ` et en protéger ${maxProtections} (un mod protégé ne peut pas être banni)` : ''} ; la vanille reste toujours active.`,
+            ja: `共通解放プールから公式Modを ${(data.candidates || []).length} 個抽選。各プレイヤーは最大 ${maxBans} 個まで禁止${maxProtections ? `、${maxProtections} 個を保護（保護されたModは禁止されません）` : ''}できます。原版は常に有効です。`,
         });
     }
     if (timer) {
@@ -27963,21 +27966,27 @@ function renderModDrawState(data = {}) {
     const submittedByIndex = data.submitted || {};
     const yourSubmitted = !!submittedByIndex[String(playerId)] || !!submittedByIndex[playerId];
     const serverBans = Array.isArray(data.your_bans) ? data.your_bans.map(String) : [];
+    const serverProtections = Array.isArray(data.your_protections) ? data.your_protections.map(String) : [];
     const keepLocalSelection = !yourSubmitted
         && Date.now() - Number(modDrawLocalEditAt || 0) < 1500
-        && modDrawLocalBans.every(filename => (data.candidates || []).some(candidate => candidate.filename === filename));
+        && modDrawLocalBans.every(filename => (data.candidates || []).some(candidate => candidate.filename === filename))
+        && modDrawLocalProtections.every(filename => (data.candidates || []).some(candidate => candidate.filename === filename));
     modDrawLocalBans = keepLocalSelection
-        ? modDrawLocalBans.slice(0, maxBans)
+        ? modDrawLocalBans.filter(f => !modDrawLocalProtections.includes(f)).slice(0, maxBans)
         : serverBans.slice(0, maxBans);
+    modDrawLocalProtections = keepLocalSelection
+        ? modDrawLocalProtections.slice(0, Math.max(1, maxProtections))
+        : serverProtections.slice(0, Math.max(1, maxProtections));
     if (optionsEl) {
         optionsEl.innerHTML = '';
         (data.candidates || []).forEach(candidate => {
             const filename = String(candidate.filename || '');
             const selected = modDrawLocalBans.includes(filename);
+            const protectedSel = modDrawLocalProtections.includes(filename);
             const button = document.createElement('button');
             button.type = 'button';
-            button.className = 'mod-draw-card' + (selected ? ' selected-banned' : '');
-            button.disabled = yourSubmitted || (modDrawLocalBans.length >= maxBans && !selected);
+            button.className = 'mod-draw-card' + (selected ? ' selected-banned' : '') + (protectedSel ? ' selected-protected' : '');
+            button.disabled = yourSubmitted || ((!selected && modDrawLocalBans.length >= maxBans) || protectedSel);
             if (button.disabled && !yourSubmitted) button.classList.add('disabled-choice');
             const name = document.createElement('div');
             name.className = 'mod-draw-card-name';
@@ -27995,6 +28004,12 @@ function renderModDrawState(data = {}) {
                 badge.textContent = lt({ zh: '已禁', en: 'Banned', fr: 'Banni', ja: '禁止' });
                 button.appendChild(badge);
             }
+            if (protectedSel) {
+                const badge = document.createElement('span');
+                badge.className = 'mod-draw-badge mod-draw-badge-protect';
+                badge.textContent = lt({ zh: '已保留', en: 'Protected', fr: 'Protégé', ja: '保護' });
+                button.appendChild(badge);
+            }
             button.onclick = () => {
                 if (yourSubmitted || !socket) return;
                 const next = modDrawLocalBans.slice();
@@ -28003,10 +28018,38 @@ function renderModDrawState(data = {}) {
                 else if (next.length < maxBans) next.push(filename);
                 modDrawLocalBans = next;
                 modDrawLocalEditAt = Date.now();
-                renderModDrawState({ ...data, your_bans: next });
-                socket.emit('mod_draw_update_bans', { bans: next });
+                renderModDrawState({ ...data, your_bans: next, your_protections: modDrawLocalProtections });
+                socket.emit('mod_draw_update_bans', { bans: next, protections: modDrawLocalProtections });
             };
-            optionsEl.appendChild(button);
+            const wrap = document.createElement('div');
+            wrap.className = 'mod-draw-card-wrap';
+            wrap.appendChild(button);
+            if (maxProtections) {
+                const protectBtn = document.createElement('button');
+                protectBtn.type = 'button';
+                protectBtn.className = 'mod-draw-protect-toggle' + (protectedSel ? ' active' : '');
+                protectBtn.disabled = yourSubmitted;
+                protectBtn.textContent = lt({ zh: '保留', en: 'Protect', fr: 'Protéger', ja: '保護' });
+                protectBtn.onclick = (event) => {
+                    event.stopPropagation();
+                    if (yourSubmitted || !socket) return;
+                    const nextP = modDrawLocalProtections.slice();
+                    const idx = nextP.indexOf(filename);
+                    if (idx >= 0) {
+                        nextP.splice(idx, 1);
+                    } else {
+                        if (nextP.length >= Math.max(1, maxProtections)) nextP.shift();
+                        nextP.push(filename);
+                    }
+                    modDrawLocalProtections = nextP;
+                    modDrawLocalBans = modDrawLocalBans.filter(f => !nextP.includes(f));
+                    modDrawLocalEditAt = Date.now();
+                    renderModDrawState({ ...data, your_bans: modDrawLocalBans, your_protections: nextP });
+                    socket.emit('mod_draw_update_bans', { bans: modDrawLocalBans, protections: nextP });
+                };
+                wrap.appendChild(protectBtn);
+            }
+            optionsEl.appendChild(wrap);
         });
     }
     if (playersEl) {
@@ -41194,7 +41237,7 @@ async function init() {
         if (!socket || !modDrawState || phase !== 'mod_draw') return;
         const submitted = modDrawState.submitted || {};
         if (submitted[String(playerId)] || submitted[playerId]) return;
-        socket.emit('mod_draw_submit', { bans: modDrawLocalBans.slice() });
+        socket.emit('mod_draw_submit', { bans: modDrawLocalBans.slice(), protections: modDrawLocalProtections.slice() });
     });
     if ($('btn-mod-unlock-close')) $('btn-mod-unlock-close').addEventListener('click', closeModUnlockModal);
     if ($('settings-tab-appearance')) $('settings-tab-appearance').addEventListener('click', () => setSettingsTab('appearance'));

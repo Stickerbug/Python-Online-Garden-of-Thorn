@@ -22731,3 +22731,40 @@ html[data-ui-style="minimal"] .card.card-skin-no-corner::before,
   background-clip: text;
   color: var(--skin-ink-color, inherit);
 }
+
+/* 模组抽选：保留按钮（2026-10-18 保留机制） */
+.mod-draw-card-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mod-draw-card.selected-protected {
+  border-color: #4caf7d;
+  background: color-mix(in srgb, #4caf7d 16%, var(--bg-card, #222));
+}
+
+.mod-draw-protect-toggle {
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid #4caf7d;
+  background: transparent;
+  color: #8fd8b0;
+  font: 600 12px/1 var(--font-main, sans-serif);
+  cursor: pointer;
+}
+
+.mod-draw-protect-toggle.active {
+  background: #2e6b4d;
+  color: #fff;
+}
+
+.mod-draw-protect-toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.mod-draw-badge-protect {
+  background: #2e6b4d;
+  color: #fff;
+}

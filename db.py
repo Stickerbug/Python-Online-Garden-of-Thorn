@@ -15903,6 +15903,36 @@ def get_user_rank_tiers(user_ids):
     return {int(row['id']): int(row['rank_tier'] or 1) for row in rows}
 
 
+def get_user_rank_states(user_ids):
+    """批量取用户 (段位序号, 段位分)。无记录/异常 → (1, 0)。
+
+    排位对战限制（升段局/0分局段位差规则）用。"""
+    ids = []
+    for raw in user_ids or []:
+        try:
+            value = int(raw or 0)
+        except (TypeError, ValueError):
+            continue
+        if value > 0 and value not in ids:
+            ids.append(value)
+    fallback = {uid: (1, 0) for uid in ids}
+    if not ids:
+        return {}
+    try:
+        with get_db_connection() as conn:
+            rows = conn.execute(
+                f'SELECT id, COALESCE(rank_tier, 1) AS rank_tier, COALESCE(rank_points, 0) AS rank_points '
+                f'FROM users WHERE id IN ({",".join(["?"] * len(ids))})',
+                ids,
+            ).fetchall()
+        return {
+            int(row['id']): (int(row['rank_tier'] or 1), int(row['rank_points'] or 0))
+            for row in rows
+        } or fallback
+    except Exception:
+        return fallback
+
+
 def get_rank_global_special(conn=None) -> float:
     """全局特殊修正（控制台可调；与玩家自身的特殊修正叠加）。"""
     import rank_system as _rank  # noqa: F401  保持导入口径一致

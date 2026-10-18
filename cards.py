@@ -648,7 +648,7 @@ _reg(CardDef('Bubble', 'Bubble', '泡泡', 2, 0, 'guard', 10, 'Common',
              response_trigger='thorn'))
 
 _reg(CardDef('Nazar', 'Nazar', '邪眼护符', 5, 0, 'guard', 3, 'Common',
-             '邪眼的力量似乎为你减免了大部分伤害。', '使自己获得2层邪眼  响应：被作为攻击牌目标',
+             '邪眼的力量似乎为你减免了大部分伤害。', '使自己获得3层邪眼  响应：被作为攻击牌目标',
              response_trigger='thorn'))
 
 _reg(CardDef('MagicNazar', 'Magic Nazar', '魔法邪眼', 2, 0, 'guard', 3, 'Common',

@@ -1047,7 +1047,7 @@ class GameEngine:
             'position': 3,
         },
         7: {'id': 7, 'name': '先手压制', 'desc': '尽可能获得先手（多人同选时随机一人），第一回合多4E，起手多1张牌', 'position': 3},
-        9: {'id': 9, 'name': '多重瓣', 'desc': '多子瓣牌子瓣+1，将3张[[card:Dust|flag=exile]]随机洗入抽牌堆', 'position': 1},
+        # 9 多重瓣 已移除可选（2026-10-18 设计调整）；结算逻辑保留供历史回放。
         10: {'id': 10, 'name': '魔力加速', 'desc': '每回合打出的第奇数张不消耗[[icon:M]]的牌，回复1[[icon:M]]', 'position': 1},
         11: {'id': 11, 'name': '花序编排', 'desc': '调整自己抽牌堆的顺序；本局始终可见抽牌堆顺序', 'position': 2},
         12: {'id': 12, 'name': '众生平等', 'desc': '自己回合结束时，对自己造成5[[icon:D]]，并对每名其他可选中玩家造成8[[icon:D]]', 'position': 3},
@@ -1055,6 +1055,10 @@ class GameEngine:
     OPENING_EVENT_ORDER = {
         1: 10, 2: 20, 3: 30, 8: 40,
         9: 45, 10: 48, 12: 49, 4: 50, 5: 60, 11: 65, 6: 70, 7: 80,
+    }
+    # 已移除可选的历史配装：名称保留供统计/回放显示
+    LEGACY_OPENING_EVENTS = {
+        9: {'id': 9, 'name': '多重瓣', 'desc': '多子瓣牌子瓣+1，将3张[[card:Dust|flag=exile]]随机洗入抽牌堆'},
     }
     OPENING_EVENT_COLORS = {
         1: '#3FA66B',
@@ -14783,6 +14787,12 @@ class GameEngine:
             ps.weakness = max(0, ps.weakness - 1)
             if ps.weakness == 0:
                 self.log_msg(f"{self.pn(player_id)}的虚弱效果消失")
+        # Nazar: 自己回合结束时层数-1（2026-10-18 设计）。
+        nazar_layers = self._nazar_status_value(player_id)
+        if nazar_layers > 0:
+            self._set_nazar_status_value(player_id, nazar_layers - 1)
+            if nazar_layers - 1 <= 0:
+                self.log_msg(f"{self.pn(player_id)}的邪眼效果消失")
         # Bleed: halve at end of turn.
         if ps.bleed > 0:
             ps.bleed = max(0, ps.bleed // 2)
