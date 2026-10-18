@@ -82,16 +82,17 @@ def _differentiate_reward_per_seat(state, base, seat, seed):
     return reward
 
 
-def _per_seat_rewards(state, base, seed):
-    """按席位挂载并重掷各自奖励（不同角色/遗物的席位拿各自的卡池与遗物池）。"""
-    combat = state.get('combat')
-    previous = int(combat.get('mounted_seat') or 0) if isinstance(combat, dict) else None
+def _per_seat_rewards(state, base, seed, actor_seat=0):
+    """按席位挂载并重掷各自奖励（不同角色/遗物的席位拿各自的卡池与遗物池）。
+
+    结束后必须恢复行动席挂载：combat 为 None（奖励阶段）时 _mount_seat 只切
+    state['player'] 别名，漏恢复会让后续单人结算写进最后一席的账户。
+    """
     rewards = {}
     for seat in range(_seat_count(state)):
         _mount_seat(state, seat)
         rewards[str(seat)] = _differentiate_reward_per_seat(state, base, seat, seed)
-    if previous is not None:
-        _mount_seat(state, previous)
+    _mount_seat(state, actor_seat)
     return rewards
 
 
@@ -206,7 +207,7 @@ def apply_coop_action(state, seat, action_type, payload, seed):
             # 此前只认 None——上一轮完成后残留空字典+旧完成名单，第二次奖励
             # 全员 REWARD_ALREADY_DONE 卡死。
             base = state.get('reward')
-            rewards_by_seat = _per_seat_rewards(state, base, seed)
+            rewards_by_seat = _per_seat_rewards(state, base, seed, actor_seat=seat)
             coord['rewards_by_seat'] = rewards_by_seat
             coord['reward_done'] = []
             state['reward'] = None
@@ -275,16 +276,15 @@ def apply_coop_action(state, seat, action_type, payload, seed):
             if not isinstance(shared_room, dict) or not shared_room:
                 raise StoryActionError('NO_ROOM', '当前没有待处理的房间')
             if shared_room.get('type') == 'shop':
-                # 商店按席位重新生成（库存/价格各自随机；依赖各席角色与遗物）
+                # 商店按席位重新生成（库存/价格各自随机；依赖各席角色与遗物）。
+                # 结束后恢复行动席挂载（商店阶段 combat 为 None，漏恢复会让
+                # 后续购买结算写进最后一席的账户）。
                 from story_engine import _make_shop
-                combat = state.get('combat')
-                previous = int(combat.get('mounted_seat') or 0) if isinstance(combat, dict) else None
                 rooms = {}
                 for s in range(_seat_count(state)):
                     _mount_seat(state, s)
                     rooms[str(s)] = _make_shop(state, _seat_seed(seed, s))
-                if previous is not None:
-                    _mount_seat(state, previous)
+                _mount_seat(state, seat)
             else:
                 rooms = {
                     str(s): copy.deepcopy(shared_room)

@@ -124,12 +124,16 @@ def test_reward_per_seat_and_completion():
     gold_before = [p['gold'] for p in state['players']]
     state, _ = apply_coop_action(state, 0, 'choose_reward', {'reward_type': 'gold'}, 'orch-t5')
     assert state['phase'] == 'reward'
-    assert state['players'][0]['gold'] > gold_before[0]
+    assert state['players'][0]['gold'] > gold_before[0], '行动席（席0）的金币必须进席0'
     assert state['players'][1]['gold'] == gold_before[1]
     assert sorted(state['coord']['rewards_by_seat'].keys()) == ['0', '1']
+    # 2026-10-18 双席奖励区分：各席随机内容独立重掷（金币区间/卡牌三选）。
+    own_cards_0 = state['coord']['rewards_by_seat']['0']['cards']
+    assert isinstance(own_cards_0[0], dict), '卡牌奖励已重掷为标准选项结构'
+    claim_id_0 = (own_cards_0[0].get('card_id') if isinstance(own_cards_0[0], dict) else own_cards_0[0])
     # 席0选卡：领完不等于完成（2026-10-13 口径），要点「继续」才出队
     state, _ = apply_coop_action(
-        state, 0, 'choose_reward', {'reward_type': 'card', 'card_id': 'rose'}, 'orch-t5')
+        state, 0, 'choose_reward', {'reward_type': 'card', 'card_id': claim_id_0}, 'orch-t5')
     assert sorted(state['coord']['rewards_by_seat'].keys()) == ['0', '1']
     state, _ = apply_coop_action(state, 0, 'choose_reward', {'reward_type': 'continue'}, 'orch-t5')
     assert sorted(state['coord']['rewards_by_seat'].keys()) == ['1']
@@ -152,18 +156,23 @@ def test_reward_view_projection_for_waiting_seat():
     }
     # 席0领金币+选卡+继续 → 完成；共享 reward 被清空、仅席1待选。
     state, _ = apply_coop_action(state, 0, 'choose_reward', {'reward_type': 'gold'}, 'orch-t6')
+    cards0 = state['coord']['rewards_by_seat']['0']['cards']
+    claim0 = cards0[0].get('card_id') if isinstance(cards0[0], dict) else cards0[0]
     state, _ = apply_coop_action(
-        state, 0, 'choose_reward', {'reward_type': 'card', 'card_id': 'rose'}, 'orch-t6')
+        state, 0, 'choose_reward', {'reward_type': 'card', 'card_id': claim0}, 'orch-t6')
     state, _ = apply_coop_action(state, 0, 'choose_reward', {'reward_type': 'continue'}, 'orch-t6')
     assert state['reward'] is None
     assert sorted(state['coord']['rewards_by_seat'].keys()) == ['1']
-    # 席1读视角投影：看到本席待选奖励（含未领金币与卡牌选项）。
+    # 席1读视角投影：看到本席待选奖励（2026-10-18 起为本席重掷副本）。
     mount_coop_reward_view(state, 1)
     projected = state.get('reward')
-    assert projected and projected.get('gold') == 30
-    assert set(projected.get('cards') or []) == {'basic', 'rose'}
+    own = state['coord']['rewards_by_seat']['1']
+    assert projected and projected.get('gold') == own.get('gold')
+    def _card_ids(items):
+        return {i.get('card_id') if isinstance(i, dict) else i for i in (items or [])}
+    assert _card_ids(projected.get('cards')) == _card_ids(own.get('cards'))
     # 投影是副本：不影响协调账本里席1的正本。
-    assert 'rose' in state['coord']['rewards_by_seat']['1']['cards']
+    assert _card_ids(own.get('cards')) == _card_ids(state['coord']['rewards_by_seat']['1']['cards'])
     # 已完成的席0读视角：清空（不残留席1的投影副本，等待 UI 由前端负责）。
     mount_coop_reward_view(state, 0)
     assert state['reward'] is None
@@ -214,8 +223,10 @@ def test_seat1_reward_lands_in_seat1_deck_only():
     state['phase'] = 'reward'
     state['reward'] = {'gold': 25, 'cards': ['basic'], 'claims': {}, 'source': 'combat'}
     state, _ = apply_coop_action(state, 1, 'choose_reward', {'reward_type': 'gold'}, 'orch-t7')
+    cards1 = state['coord']['rewards_by_seat']['1']['cards']
+    claim1 = cards1[0].get('card_id') if isinstance(cards1[0], dict) else cards1[0]
     state, _ = apply_coop_action(
-        state, 1, 'choose_reward', {'reward_type': 'card', 'card_id': 'basic'}, 'orch-t7')
+        state, 1, 'choose_reward', {'reward_type': 'card', 'card_id': claim1}, 'orch-t7')
     assert len(state['players'][0]['deck']) == len0, '席0卡组被席1的奖励改动'
     assert int(state['players'][0]['gold'] or 0) == gold0, '席1的金币进了席0'
     assert len(state['players'][1]['deck']) == len1 + 1, '席1未拿到所选卡牌'

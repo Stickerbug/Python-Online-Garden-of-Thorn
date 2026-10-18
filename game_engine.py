@@ -11626,8 +11626,10 @@ class GameEngine:
 
     # Round 24：``clear_buffs`` / ``clear_debuffs`` / ``clear_all_effects`` 合并成
     # ``clear_statuses(preset=...)``。三张名单原封不动搬到这里，默认战报逐字一致。
+    # 2026-10-18 设计：护甲不再是状态而是属性（与生命上限同类）——清正面效果
+    # 不再误清护甲；指向性移除（破甲类卡牌按名移除）不受影响。
     CLEAR_STATUS_PRESETS = {
-        'buffs': ('armor', 'dodge', 'invincible', 'equipment_protection'),
+        'buffs': ('dodge', 'invincible', 'equipment_protection'),
         'debuffs': ('poison', 'fire', 'toxic', 'stagnation', 'blind'),
     }
     CLEAR_STATUS_PRESET_LABELS = {
