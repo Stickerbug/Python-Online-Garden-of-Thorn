@@ -49,7 +49,8 @@ class RankMathTests(unittest.TestCase):
         self.assertTrue(r1['promoted'])
         self.assertEqual(2, r1['tier_index'])
         self.assertEqual(0, r1['points'])
-        self.assertEqual(0, r1['streak'])
+        # 2026-10-18：升段不再清零连胜（跨段继续累计，仅负/平清零）
+        self.assertEqual(1, r1['streak'])
 
     def test_promote_when_win_fills_to_cap(self):
         """未满段的一胜只打到满（48+5 → 50/50），不升段；下一胜升。"""

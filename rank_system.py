@@ -240,7 +240,8 @@ def apply_match_result(
     loss_shield: 保分卡——本局失败不扣分；但段位分为 0 时无法阻止掉段
     （2026-10-11 平衡：0 分时保分卡不再拦截降段，卡照常消耗）。
     common 大段失败不掉分（含降段）；unusual 扣分减半向上取整。
-    streak：普通连胜计数（展示用），胜 +1、负/平清零，升段归零。
+    streak：普通连胜计数（展示用），胜 +1（升段不清零、跨段继续累计）、
+    负/平清零。
     """
     tier_index = clamp_tier(tier_index)
     cap = rank_cap(tier_index)
@@ -282,7 +283,8 @@ def apply_match_result(
             else:
                 result['tier_index'] = tier_index + 1
                 result['points'] = 0
-                result['streak'] = 0
+                # 2026-10-18：升段不再清零连胜（连胜跨段继续累计，仅负/平清零）
+                result['streak'] = streak + 1
                 result['promoted'] = True
         else:
             result['streak'] = streak + 1
