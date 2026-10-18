@@ -8637,3 +8637,31 @@ body[data-action-in-flight='true'] #story-end-turn { pointer-events: none; }
   justify-self: start;
   /* 屏幕x坐标由JS按实测校准（见renderCoopAllySidebar） */
 }
+
+/* 合作模式聊天频道切换（队伍/全局） */
+.story-chat-channel-switch {
+  display: inline-flex;
+  gap: 0;
+  margin-left: 6px;
+  border: 1px solid #6b7d4f;
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.story-chat-channel-switch button {
+  border: 0;
+  background: transparent;
+  color: #b8c4a8;
+  font: 600 11px/1 var(--font-main);
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.story-chat-channel-switch button[aria-pressed='true'] {
+  background: #4a5a3e;
+  color: #fff;
+}
+
+.story-chat-channel-switch button[aria-pressed='false']:hover {
+  background: rgba(74, 90, 62, .4);
+}

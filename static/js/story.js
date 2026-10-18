@@ -81,6 +81,8 @@
     let storyChatOpen = false;
     let storyChatConnected = false;
     let storyChatInitialized = false;
+    // 合作模式聊天频道：'team'（默认）| 'global'（公共故事聊天）
+    let storyChatChannel = 'team';
     let storyChatEntries = [];
     let storyChatHistorySignature = '';
     let storyChatUnreadCount = 0;
@@ -5418,9 +5420,10 @@
         storyChatSocket.on('connect', () => {
             storyChatConnected = false;
             updateStoryChatConnectionUi();
-            // 合作模式：聊天走队伍频道（仅同队成员可见）。
+            // 合作模式：聊天走当前频道（默认队伍；无房间时服务端回退公共）。
             storyChatSocket.emit(STORY_COOP_DEMO ? 'coop_chat_join' : 'story_chat_join', {
                 client_id: STORY_PRESENCE_CLIENT_ID,
+                ...(STORY_COOP_DEMO ? { channel: storyChatChannel } : {}),
             });
         });
         storyChatSocket.on('story_chat_ready', () => {
@@ -5463,19 +5466,54 @@
         window.addEventListener('pagehide', () => {
             storyChatSocket?.disconnect();
         }, { once: true });
+        ensureStoryChatChannelSwitch();
     }
 
     function sendStoryChat() {
         const input = $('story-chat-input');
         const text = String(input?.value || '').trim();
         if (!text || !storyChatConnected || !storyChatSocket) return;
-        storyChatSocket.emit(STORY_COOP_DEMO ? 'coop_chat_send' : 'story_chat_send', {
+        // 合作模式按当前频道路由：global 走公共聊天管线，team 走队伍频道
+        const coopEvent = storyChatChannel === 'global' ? 'story_chat_send' : 'coop_chat_send';
+        storyChatSocket.emit(STORY_COOP_DEMO ? coopEvent : 'story_chat_send', {
             text: text.slice(0, 200),
             client_id: STORY_PRESENCE_CLIENT_ID,
         });
         input.value = '';
         storyMentionMenu?.classList.add('hidden');
         updateStoryChatConnectionUi();
+    }
+
+    function ensureStoryChatChannelSwitch() {
+        // 合作模式：显示 队伍/全局 频道切换
+        const wrap = $('story-chat-channel-switch');
+        if (!wrap) return;
+        wrap.classList.toggle('hidden', !STORY_COOP_DEMO);
+        if (!STORY_COOP_DEMO || wrap._channelBound) return;
+        wrap._channelBound = true;
+        const teamBtn = $('story-chat-channel-team');
+        const globalBtn = $('story-chat-channel-global');
+        const applyChannelUi = () => {
+            teamBtn?.setAttribute('aria-pressed', String(storyChatChannel === 'team'));
+            globalBtn?.setAttribute('aria-pressed', String(storyChatChannel === 'global'));
+        };
+        const switchChannel = (channel) => {
+            if (storyChatChannel === channel) return;
+            storyChatChannel = channel;
+            applyChannelUi();
+            // 重置本地记录，切换后的历史完整替换（避免两频道消息混排）
+            storyChatEntries = [];
+            storyChatHistorySignature = '';
+            const log = $('story-chat-log');
+            log?.replaceChildren();
+            storyChatSocket?.emit('coop_chat_join', {
+                client_id: STORY_PRESENCE_CLIENT_ID,
+                channel,
+            });
+        };
+        teamBtn?.addEventListener('click', () => switchChannel('team'));
+        globalBtn?.addEventListener('click', () => switchChannel('global'));
+        applyChannelUi();
     }
 
     function scheduleStoryPresence(delayMs = storyPresenceIntervalMs) {

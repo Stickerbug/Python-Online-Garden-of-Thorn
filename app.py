@@ -31900,23 +31900,30 @@ def _coop_chat_history_payload(room):
 
 @socketio.on('coop_chat_join')
 def on_coop_chat_join(data=None):
-    """合作爬塔队伍聊天：进入房间（仅同队成员收到）。"""
-    if not rate_limiter(f'coop-chat-join:{request.sid}', limit=5, window=10):
+    """合作爬塔队伍聊天：进入房间（仅同队成员收到）。
+
+    channel='team'（默认）进队伍频道（无房间时回退公共）；channel='global'
+    切到公共故事聊天。切换时会离开另一频道，避免同时收到两边的消息。"""
+    if not rate_limiter(f'coop-chat-join:{request.sid}', limit=10, window=10):
         return
     user = _current_account_user()
     if not user:
         emit('server_error', {'message': '请先登录账号'})
         return
+    channel = str((data or {}).get('channel') or 'team').strip().lower()
+    beta_mode = bool(is_beta_instance())
     code, room = _coop_chat_room_entry(user)
-    if room is None:
-        # 没有联机房间时回退到公共故事聊天（否则前端永远卡在 connecting）
-        beta_mode = bool(is_beta_instance())
+    if room is None or channel == 'global':
+        # 全局频道（或没有联机房间时回退）：离开队伍频道，进公共聊天。
+        if code:
+            leave_room(_coop_chat_room_key(code))
         join_room(_story_lobby_chat_room(beta_mode))
         with _lock:
             payload = _lobby_chat_history_payload_locked(LOBBY_CHAT_VISIBLE_LIMIT, beta_mode)
         emit('lobby_chat_history', payload)
         emit('story_chat_ready', {'success': True})
         return
+    leave_room(_story_lobby_chat_room(beta_mode))
     join_room(_coop_chat_room_key(code))
     emit('lobby_chat_history', _coop_chat_history_payload(room))
     emit('story_chat_ready', {'success': True, 'team_chat': True})
