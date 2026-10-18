@@ -99,20 +99,22 @@ def test_map_vote_unanimous_enters_node():
 
 
 def test_map_vote_split_resolves_deterministically():
+    # 2026-10-18 设计：投票不一致→重投（清空票箱，全员重选直到一致）。
     state = _to_map('orch-t4')
     nodes = _available_nodes(state)
     assert len(nodes) >= 2
     apply_coop_action(state, 0, 'enter_node', {'node_id': nodes[0]}, 'orch-t4')
     state, ev = apply_coop_action(state, 1, 'enter_node', {'node_id': nodes[1]}, 'orch-t4')
+    assert [e for e in ev if e.get('type') == 'map_vote_revote'], '分歧必须产生重投事件'
+    assert not state['coord'].get('votes'), '分歧后票箱必须清空'
+    assert state['coord'].get('vote_revote_count') == 1
+    assert state['phase'] == 'map', '分歧后停留在地图等待重投'
+    # 重投达成一致 → 正常进入
+    state, ev = apply_coop_action(state, 0, 'enter_node', {'node_id': nodes[0]}, 'orch-t4')
+    state, ev = apply_coop_action(state, 1, 'enter_node', {'node_id': nodes[0]}, 'orch-t4')
     resolved = [e for e in ev if e.get('type') == 'map_vote_resolved'][0]
-    assert resolved['winner'] in (nodes[0], nodes[1])
-    # 同 seed 重放一致
-    state2 = _to_map('orch-t4')
-    nodes2 = _available_nodes(state2)
-    apply_coop_action(state2, 0, 'enter_node', {'node_id': nodes2[0]}, 'orch-t4')
-    state2, ev2 = apply_coop_action(state2, 1, 'enter_node', {'node_id': nodes2[1]}, 'orch-t4')
-    resolved2 = [e for e in ev2 if e.get('type') == 'map_vote_resolved'][0]
-    assert resolved2['winner'] == resolved['winner']
+    assert resolved['winner'] == nodes[0]
+    assert state['phase'] in ('combat', 'room', 'map')
 
 
 def test_reward_per_seat_and_completion():

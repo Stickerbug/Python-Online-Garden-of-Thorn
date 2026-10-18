@@ -226,11 +226,13 @@ def apply_coop_action(state, seat, action_type, payload, seed):
             # 等其余席投票：本动作不产生事件，轮询可见 coord.votes。
             return state, [{'type': 'map_vote_cast', 'seat': seat,
                             'node_id': votes[seat]}]
-        winner = (
-            votes[seat]
-            if len(set(votes.values())) == 1
-            else _weighted_vote_pick(state, votes)
-        )
+        if len(set(votes.values())) != 1:
+            # 2026-10-18 设计：投票不一致→重投（清空票箱，全员重选直到一致）。
+            # vote_revote_count 递增供轮询方（先投票的玩家）感知并提示。
+            coord['votes'] = {}
+            coord['vote_revote_count'] = int(coord.get('vote_revote_count') or 0) + 1
+            return state, [{'type': 'map_vote_revote', 'votes': votes}]
+        winner = votes[seat]
         _mount_seat(state, 0)
         state, events = apply_story_action(
             state, 'enter_node', {'node_id': winner}, seed)
@@ -410,6 +412,7 @@ def coop_coord_summary(state):
     coord = state.get('coord') or {}
     return {
         'votes': coord.get('votes') or {},
+        'vote_revote_count': int(coord.get('vote_revote_count') or 0),
         'blessing_done': coord.get('blessing_done') or [],
         'reward_pending_seats': sorted(
             int(s) for s in (coord.get('rewards_by_seat') or {}).keys()

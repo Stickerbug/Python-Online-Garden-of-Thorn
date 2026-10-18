@@ -6965,6 +6965,10 @@
                 }),
             });
             const nextRun = result.run || activeRun;
+            // 合作地图投票不一致→重投：提示双方（事件不走战斗动画管线）
+            if ((result.events || []).some((e) => e && e.type === 'map_vote_revote')) {
+                showToast(lang === 'zh' ? '投票不一致，请重新投票' : 'Votes split — revote');
+            }
             const enteringCombat = previousPhase !== 'combat'
                 && String(nextRun?.state?.phase || '') === 'combat';
             const entranceRun = enteringCombat
@@ -12670,13 +12674,21 @@
         const voteCount = Object.keys(votes).length;
         const mine = votes[mySeat];
         if (voteCount === 0) {
-            overlay.textContent = `点击节点投票（${seatCount} 名玩家都投票后进入）`;
+            overlay.textContent = `点击节点投票（${seatCount} 名玩家都投票后进入；需投同一节点）`;
         } else if (voteCount < seatCount) {
             overlay.textContent = mine
                 ? `你已投票，等待其他玩家（${voteCount}/${seatCount}）…`
                 : `玩家${Object.keys(votes).join('/')} 已投票，等待中（${voteCount}/${seatCount}）`;
         } else {
             overlay.textContent = '投票完成，正在进入…';
+        }
+        // 重投感知（先投票的一方通过轮询看到计数递增）：提示不一致需重投
+        const revoteCount = Number(coord.vote_revote_count || 0) || 0;
+        if (revoteCount > (renderCoopVoteOverlay._revoteSeen || 0)) {
+            if (renderCoopVoteOverlay._revoteSeen !== undefined) {
+                showToast(lang === 'zh' ? '投票不一致，请重新投票' : 'Votes split — revote');
+            }
+            renderCoopVoteOverlay._revoteSeen = revoteCount;
         }
         // 已投票节点打标记
         document.querySelectorAll('.story-map-node.is-coop-voted').forEach((n) => n.classList.remove('is-coop-voted'));
