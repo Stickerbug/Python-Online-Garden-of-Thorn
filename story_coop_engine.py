@@ -39,6 +39,47 @@ def _seat_seed(seed, seat):
     return f'{seed}:seat{seat}'
 
 
+def _mount_coop_deck_ops(state, seat):
+    """待选牌操作（裂解选牌/升级/删除/变化/附魔等窗口）按席位隔离。
+
+    引擎的 state['pending_deck_operations'] 是旅程级共享队列——若不过滤，
+    队友拾取"裂解"等遗物时另一席也会弹出选牌窗口（且能用自己 unrelated 的
+    牌结算别人的操作）。完整队列保存在 coord['deck_ops_by_seat']，行动/读取
+    前只把本席队列挂到 state 键上（引擎其余读写不用改）。"""
+    coord = _coord(state)
+    by_seat = coord.get('deck_ops_by_seat')
+    if by_seat is None:
+        by_seat = {}
+        for op in list(state.get('pending_deck_operations') or []):
+            key = str(op.get('seat', 0)) if isinstance(op, dict) else '0'
+            by_seat.setdefault(key, []).append(op)
+        coord['deck_ops_by_seat'] = by_seat
+    state['pending_deck_operations'] = list(by_seat.get(str(seat)) or [])
+
+
+def _sync_coop_deck_ops(state, seat):
+    """行动后把本席队列（可能被结算移除/追加了新操作）写回 coord 账本。"""
+    coord = _coord(state)
+    by_seat = coord.get('deck_ops_by_seat')
+    if by_seat is None:
+        return
+    by_seat[str(seat)] = list(state.get('pending_deck_operations') or [])
+
+
+def mount_coop_deck_ops_view(state, seat):
+    """读视角投影：只看本席的待选牌操作窗口（run GET/动作响应用）。
+
+    对局中途升级（旧共享队列）：按操作上的 seat 标记初始化分组。"""
+    if _seat_count(state) <= 1:
+        return
+    coord = _coord(state)
+    if coord.get('deck_ops_by_seat') is None:
+        _mount_coop_deck_ops(state, seat)
+        return
+    state['pending_deck_operations'] = copy.deepcopy(
+        (coord.get('deck_ops_by_seat') or {}).get(str(seat)) or [])
+
+
 def _differentiate_reward_per_seat(state, base, seat, seed):
     """胜利奖励的随机内容按席位重掷：金币区间/卡牌三选/遗物/附魔书。
 
@@ -138,8 +179,24 @@ def _restore_pending_blessing(state):
         floors[0]['nodes'][0]['status'] = 'available'
 
 
-def apply_coop_action(state, seat, action_type, payload, seed):
-    """双席协调入口：seat=行动席。返回 (state, events)。"""
+def apply_coop_action(source_state, seat, action_type, payload, seed):
+    """双席协调入口：seat=行动席。返回 (state, events)。
+
+    外层包一层"待选牌操作席位隔离"（裂解/升级/删除等窗口只属于行动席）：
+    行动前只挂本席队列，行动后写回 coord 账本。"""
+    state = source_state
+    multi = _seat_count(state) > 1
+    if multi:
+        _mount_coop_deck_ops(state, seat)
+    try:
+        state, events = _apply_coop_action_impl(state, seat, action_type, payload, seed)
+    finally:
+        if multi:
+            _sync_coop_deck_ops(state, seat)
+    return state, events
+
+
+def _apply_coop_action_impl(state, seat, action_type, payload, seed):
     action_type = str(action_type or '').strip().lower()
     payload = payload if isinstance(payload, dict) else {}
     seat = max(0, min(int(seat), _seat_count(state) - 1))

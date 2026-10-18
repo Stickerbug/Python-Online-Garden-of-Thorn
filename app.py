@@ -38572,6 +38572,7 @@ def coop_demo_run_get():
     seat = max(0, min(seat, len(entry['state'].get('players') or [{}]) - 1))
     from story_coop_engine import (
         coop_coord_summary, mount_coop_reward_view, mount_coop_room_view,
+        mount_coop_deck_ops_view,
     )
     # 联机房间成员：读写共享对局，席位以房间分配为准。
     room_code = _COOP_DEMO_USER_ROOM.get(int(user['id']))
@@ -38590,6 +38591,8 @@ def coop_demo_run_get():
     # 前端只能看到"跳过"，另一席无法选择）。
     mount_coop_reward_view(entry['state'], seat)
     mount_coop_room_view(entry['state'], seat)
+    # 待选牌操作窗口只投影本席（裂解/升级/删除等不串到队友）
+    mount_coop_deck_ops_view(entry['state'], seat)
     # 可玩牌/伤害预测按"当前挂载席的手牌"计算（共享键）：读视角必须为观看席
     # 重算，否则拿到的是队友动作时刷新的列表，本席部分手牌会被误禁用。
     # _refresh_combat_projections 已实证不消耗 RNG，读路径重算安全。
@@ -38664,6 +38667,9 @@ def coop_demo_story_action():
         )
         mount_coop_reward_view(state, seat)
         mount_coop_room_view(state, seat)
+        # 待选牌操作窗口只投影本席
+        from story_coop_engine import mount_coop_deck_ops_view
+        mount_coop_deck_ops_view(state, seat)
         # 各席账号皮肤（队友克隆体渲染用；entry 可能是房间 dict）
         _coop_demo_seat_skins(entry, user['id'])
         # 动作链路末尾（如敌方回合+新一轮开始）挂载的可能是另一席：为行动者
