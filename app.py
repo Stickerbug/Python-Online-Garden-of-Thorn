@@ -38524,21 +38524,32 @@ def _coop_demo_event_lines(events):
 
 
 def _coop_demo_seat_skins(entry, user_id):
-    """各席账号皮肤投影：前端队友克隆体按席位渲染真实皮肤（仅展示，不入引擎结算）。"""
+    """各席账号身份投影：皮肤 + 称号/信誉/名字样式（前端队友克隆体按席位
+    渲染真实身份；仅展示，不入引擎结算）。"""
     try:
         state = entry.get('state') or {}
         members = entry.get('members')
         skins = {}
+        identity = {}
         if members:
-            for uid, seat in members.items():
-                u = get_user_by_id_for_session(uid) if DB_AVAILABLE else None
-                skins[int(seat)] = public_skin_config(u.get('skin')) if u else {}
+            pairs = [(uid, int(s)) for uid, s in members.items()]
         else:
-            # 非房间演示：所有席位同属当前账号（同键 dict 会互相覆盖，逐席平铺）
-            u = get_user_by_id_for_session(int(user_id)) if DB_AVAILABLE else None
-            skin = public_skin_config(u.get('skin')) if u else {}
-            skins = {seat: skin for seat in range(len(state.get('players') or []))}
+            # 非房间演示：所有席位同属当前账号
+            pairs = [(int(user_id), seat) for seat in range(len(state.get('players') or []))]
+        for uid, seat in pairs:
+            u = get_user_by_id_for_session(uid) if DB_AVAILABLE else None
+            if u:
+                skins[seat] = public_skin_config(u.get('skin'))
+                profile = get_user_role_profile(uid) if DB_AVAILABLE else None
+                ident = special_public_fields(profile or {})
+                ident['reputation_profile'] = reputation_public_payload(uid) or None
+                ident['display_name'] = u.get('display_name') or u.get('username')
+                identity[seat] = ident
+            else:
+                skins[seat] = {}
+                identity[seat] = None
         state['seat_skins'] = skins
+        state['seat_identity'] = identity
     except Exception as exc:
         admin_event('warning', f'coop seat skins projection failed: {exc}')
 

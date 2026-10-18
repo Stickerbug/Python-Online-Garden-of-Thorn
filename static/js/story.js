@@ -12594,9 +12594,26 @@
             clone.dataset.coopAllySeat = String(seat);
             clone.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));
 
-            // 名字
-            const nameEl = clone.querySelector('.player-name-value');
-            if (nameEl) nameEl.textContent = `玩家${seat}${ready.has(seat) ? ' ✓' : ''}${down ? ' 💀' : ''}`;
+            // 名字+称号+信誉：按该席账号身份重建（服务端 seat_identity 投影）
+            const identity = (state.seat_identity || {})[seat] || null;
+            const nameContainer = clone.querySelector('.player-name-value')?.parentElement;
+            const nameText = `玩家${seat}${ready.has(seat) ? ' ✓' : ''}${down ? ' 💀' : ''}`;
+            if (nameContainer && identity) {
+                nameContainer.replaceChildren();
+                storyEquippedTitles(identity).forEach((title) => {
+                    appendStoryStyledTitle(nameContainer, title, true, 'story-player-title');
+                });
+                appendStoryReputationBadges(nameContainer, identity);
+                const rebuilt = document.createElement('span');
+                rebuilt.className = 'player-name-value story-player-name-value';
+                rebuilt.textContent = nameText;
+                const paint = storyPlayerNamePaint(identity);
+                if (paint) applyStoryTitlePaint(rebuilt, paint);
+                nameContainer.appendChild(rebuilt);
+            } else {
+                const nameEl = clone.querySelector('.player-name-value');
+                if (nameEl) nameEl.textContent = nameText;
+            }
 
             // 皮肤：按席位应用队友账号皮肤（服务端 seat_skins 投影；无数据时保持绿色占位）
             const seatSkin = normalizeSkin((state.seat_skins || {})[seat] || null);
