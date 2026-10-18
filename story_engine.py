@@ -2267,10 +2267,11 @@ def _enchantment_prevent_player_damage(state, dealt, blocked, events, source):
 
 def _player_physical_hit(state, base_amount, attacker, events, source, victim_seat=None):
     # 合作（多席位，2026-10-12）：敌方攻击（attacker 为敌、未指定受击席）
-    # 同时命中全部存活席。玩家侧自伤等 attacker=None 的调用不受影响。
+    # 同时命中全部存活席。玩家侧自伤/反射等 attacker=None（经 _player_damage
+    # 规范为空 dict，2026-10-18 修复：空 dict 为假值）不扇出。
     if (
         victim_seat is None
-        and attacker is not None
+        and attacker                            # 空 dict（无来源攻击）不扇出
         and _seat_count(state) > 1
     ):
         last = None
@@ -2402,10 +2403,11 @@ def _player_raw_damage(state, amount, events, source, victim_seat=None):
 
 def _player_damage(state, amount, hits, events, source, attacker=None, victim_seat=None):
     # 合作（多席位，2026-10-12）：敌方攻击（attacker 为敌、未指定受击席）
-    # 同时命中全部存活席。玩家侧自伤等 attacker=None 的调用不受影响。
+    # 同时命中全部存活席。玩家侧自伤/反射等 attacker=None 的调用不受影响
+    # （2026-10-18 修复：防止规范成空 dict 后被内层误判为敌方攻击而扇出）。
     if (
         victim_seat is None
-        and attacker is not None
+        and attacker                            # None 不扇出（反射/自伤）
         and _seat_count(state) > 1
     ):
         last = None
